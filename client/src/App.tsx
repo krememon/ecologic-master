@@ -62,6 +62,10 @@ import TermsOfService from "@/pages/TermsOfService";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import About from "@/pages/About";
 import Support from "@/pages/Support";
+import ContactSupport from "@/pages/ContactSupport";
+import ReportBug from "@/pages/ReportBug";
+import RequestFeature from "@/pages/RequestFeature";
+import FAQs from "@/pages/FAQs";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
@@ -285,6 +289,10 @@ function AuthenticatedRouter() {
         <Route path="/settings" component={Settings} />
         <Route path="/settings/about" component={About} />
         <Route path="/settings/support" component={Support} />
+        <Route path="/settings/support/contact" component={ContactSupport} />
+        <Route path="/settings/support/bug" component={ReportBug} />
+        <Route path="/settings/support/feature" component={RequestFeature} />
+        <Route path="/settings/support/faqs" component={FAQs} />
         <Route path="/settings/legal" component={Legal} />
         <Route path="/settings/legal/terms" component={TermsOfService} />
         <Route path="/settings/legal/privacy" component={PrivacyPolicy} />

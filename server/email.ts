@@ -298,3 +298,85 @@ export async function sendPaymentReceiptEmail({
     throw err;
   }
 }
+
+interface SupportEmailParams {
+  type: 'contact_support' | 'bug_report' | 'feature_request';
+  subject: string;
+  body: string;
+  urgency?: string | null;
+  stepsToReproduce?: string | null;
+  whyUseful?: string | null;
+  metadata?: Record<string, any> | null;
+  userEmail: string;
+  userName: string;
+}
+
+export async function sendSupportEmail(params: SupportEmailParams): Promise<string | null> {
+  const inboxEmail = process.env.SUPPORT_INBOX_EMAIL;
+
+  const typeLabels: Record<string, string> = {
+    contact_support: 'Support',
+    bug_report: 'Bug',
+    feature_request: 'Feature',
+  };
+
+  let emailSubject = '';
+  if (params.type === 'contact_support') {
+    emailSubject = `[EcoLogic Support] Contact: ${params.subject}`;
+  } else if (params.type === 'bug_report') {
+    emailSubject = `[EcoLogic Bug] ${(params.urgency || 'Medium').toUpperCase()} - ${params.subject}`;
+  } else {
+    emailSubject = `[EcoLogic Feature] ${params.subject}`;
+  }
+
+  const meta = params.metadata || {};
+  const metaLines = Object.entries(meta)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
+
+  const sections = [
+    `Type: ${typeLabels[params.type] || params.type}`,
+    `From: ${params.userName} (${params.userEmail})`,
+    params.urgency ? `Urgency: ${params.urgency}` : null,
+    `\n--- Message ---\n${params.body}`,
+    params.stepsToReproduce ? `\n--- Steps to Reproduce ---\n${params.stepsToReproduce}` : null,
+    params.whyUseful ? `\n--- Why Useful ---\n${params.whyUseful}` : null,
+    metaLines ? `\n--- Context ---\n${metaLines}` : null,
+  ].filter(Boolean).join('\n');
+
+  if (!inboxEmail) {
+    console.log(`[SupportEmail] SUPPORT_INBOX_EMAIL not set — logging instead`);
+    console.log(`[SupportEmail] Subject: ${emailSubject}`);
+    console.log(`[SupportEmail] Body:\n${sections}`);
+    return null;
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    console.log('[SupportEmail] RESEND_API_KEY not set — logging instead');
+    console.log(`[SupportEmail] Subject: ${emailSubject}`);
+    console.log(`[SupportEmail] Body:\n${sections}`);
+    return null;
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: getResendFrom(),
+      to: inboxEmail,
+      replyTo: params.userEmail,
+      subject: emailSubject,
+      text: sections,
+    });
+
+    if (error) {
+      console.error('[SupportEmail] Resend error:', error);
+      return null;
+    }
+
+    console.log('[SupportEmail] sent', { to: inboxEmail, subject: emailSubject, id: data?.id });
+    return data?.id || null;
+  } catch (err: any) {
+    console.error('[SupportEmail] failed:', err?.message || err);
+    return null;
+  }
+}

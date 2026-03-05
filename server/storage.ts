@@ -127,6 +127,9 @@ import {
   pushTokens,
   type PushToken,
   type InsertPushToken,
+  supportRequests,
+  type SupportRequest,
+  type InsertSupportRequest,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -457,6 +460,9 @@ export interface IStorage {
   getUserPushTokens(userId: string): Promise<PushToken[]>;
   deactivatePushToken(token: string): Promise<void>;
   deactivateUserPushTokens(userId: string): Promise<void>;
+
+  // Support request operations
+  createSupportRequest(data: InsertSupportRequest): Promise<SupportRequest>;
 
 }
 
@@ -4393,6 +4399,11 @@ export class DatabaseStorage implements IStorage {
     await db.update(pushTokens)
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(pushTokens.userId, userId));
+  }
+
+  async createSupportRequest(data: InsertSupportRequest): Promise<SupportRequest> {
+    const [request] = await db.insert(supportRequests).values(data).returning();
+    return request;
   }
 
 }

@@ -8,7 +8,7 @@ import passport from "passport";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOwners, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendPushToUser } from "./pushService";
 import { sendApnsPush, sendApnsPushToTokens } from "./apns";
-import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
+import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom, sendSupportEmail } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive } from "./invoiceRecompute";
 import { sendReceiptForPayment } from "./receiptService";
@@ -15697,6 +15697,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('[GooglePlaces] error response data:', error.response.data);
       }
       res.status(500).json({ error: 'Failed to fetch place details' });
+    }
+  });
+
+  // POST /api/support - Submit a support request (contact, bug, feature)
+  app.post('/api/support', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ error: 'User not found' });
+
+      const { type, subject, body, urgency, stepsToReproduce, whyUseful, metadata } = req.body;
+
+      if (!type || !subject || !body) {
+        return res.status(400).json({ error: 'type, subject, and body are required' });
+      }
+
+      const validTypes = ['contact_support', 'bug_report', 'feature_request'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid type' });
+      }
+
+      const member = await storage.getCompanyMemberByUserId(userId);
+      const companyId = member?.companyId || null;
+
+      const request = await storage.createSupportRequest({
+        type,
+        subject,
+        body,
+        urgency: urgency || null,
+        stepsToReproduce: stepsToReproduce || null,
+        whyUseful: whyUseful || null,
+        attachmentUrl: null,
+        metadata: metadata || null,
+        userId,
+        companyId,
+        status: 'new',
+      });
+
+      const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Unknown';
+
+      sendSupportEmail({
+        type,
+        subject,
+        body,
+        urgency,
+        stepsToReproduce,
+        whyUseful,
+        metadata,
+        userEmail: user.email || '',
+        userName,
+      }).catch(err => console.error('[Support] Email send error:', err));
+
+      console.log(`[Support] created id=${request.id} type=${type} userId=${userId}`);
+      res.json({ success: true, id: request.id });
+    } catch (error: any) {
+      console.error('[Support] Error:', error);
+      res.status(500).json({ error: 'Failed to submit support request' });
     }
   });
 

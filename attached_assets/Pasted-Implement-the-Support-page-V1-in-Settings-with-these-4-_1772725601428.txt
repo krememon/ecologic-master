@@ -1,0 +1,221 @@
+Implement the Support page V1 in Settings with these 4 options:
+
+Contact Support
+
+Report a Bug
+
+Request a Feature
+
+FAQs
+
+We are NOT building the internal “Support Inbox / Dev Tools” admin view yet — we’ll do that later when Dev Tools are built. For now, make sure submissions still get back to me via email, and are also saved for later use.
+
+1) Support page UI
+
+On the Support page, show the four rows (settings-style rows with chevrons), matching EcoLogic’s vibe:
+
+Contact Support
+
+Report a Bug
+
+Request a Feature
+
+FAQs
+
+Tapping each row navigates to its own screen/modal.
+
+2) Contact Support (V1)
+
+Create a simple form screen:
+
+Fields:
+
+Subject (required)
+
+Message (required)
+
+Behavior:
+
+Submit button sends the request
+
+On success: show a clean success toast/state (“Sent”)
+
+Clear the form after success
+
+Delivery requirements:
+
+Email me the submission (support inbox email we can set in env, placeholder for now)
+
+Also store the submission in the backend so we can surface it later in Dev Tools
+
+3) Report a Bug (V1)
+
+Create a bug report form screen:
+
+Fields:
+
+What happened? (required)
+
+Steps to reproduce (optional but encouraged)
+
+How urgent is this? (dropdown: Low / Medium / High)
+
+Screenshot attachment (optional) — only if we already have a simple upload pipeline; if not, add placeholder UI and skip upload for now
+
+Auto-captured context (not editable, but included in the payload/email):
+
+user id + email
+
+org/company id (if applicable)
+
+app version + build
+
+platform (web/iOS/Android) + device/browser info
+
+current route/screen when submitted
+
+timestamp
+
+Behavior:
+
+Submit sends the report
+
+Success confirmation + clears form
+
+Delivery requirements:
+
+Email me the report
+
+Also store the submission in the backend for Dev Tools later
+
+4) Request a Feature (V1)
+
+Create a feature request form screen:
+
+Fields:
+
+Feature title (required)
+
+Description (required)
+
+“Why is this useful?” (optional)
+
+Auto-captured context:
+
+user id + email
+
+org/company id (if applicable)
+
+platform + app version/build
+
+timestamp
+
+Delivery requirements:
+
+Email me the request
+
+Also store it in the backend for Dev Tools later
+
+5) FAQs (V1)
+
+Implement a simple FAQ screen:
+
+clean list of expandable Q&A items (accordion style)
+
+keep it short and not bloated
+
+include placeholder questions for now (we will refine copy later)
+
+Example placeholder FAQs:
+
+How do I clock in/out?
+
+How do job assignments work?
+
+How do notifications work?
+
+How do subscriptions work?
+
+What if I forget to clock out?
+
+Keep answers short placeholders for now.
+
+Backend / data storage requirements (important)
+
+Even though I won’t view the database directly, store all submissions so we can build a Dev Tools “Support Inbox” later.
+
+Create a table/model like support_requests (or similar) with:
+
+id
+
+type: contact_support | bug_report | feature_request
+
+subject/title
+
+message/body + extra fields (steps, urgency)
+
+optional attachment URL (if implemented)
+
+metadata JSON (device/app/route info)
+
+user_id, org_id
+
+created_at
+
+status (default new) for future admin tooling
+
+Make sure data is scoped correctly and secure.
+
+Email delivery requirements
+
+When any submission happens, send an email to a configurable support inbox:
+
+use an ENV var like SUPPORT_INBOX_EMAIL
+
+if missing in dev, fall back to logging the email payload clearly in server logs (so we can test without sending real emails)
+
+Email subject format examples:
+
+[EcoLogic Support] Contact: <subject>
+
+[EcoLogic Bug] <urgency> - <short summary>
+
+[EcoLogic Feature] <title>
+
+Include all captured context in the email body.
+
+UX requirements
+
+Keep EcoLogic vibe and Settings style
+
+Mobile-first, simple, clean
+
+Don’t overbuild a ticketing system UI yet
+
+Smooth validations and disabled submit until required fields are filled
+
+Clear success/error states
+
+Deliverables
+
+Full Support page V1 with the 4 options and navigation
+
+Forms for Contact/Bug/Feature that submit successfully
+
+Backend storage for submissions (future Dev Tools inbox)
+
+Email delivery (or dev fallback logging)
+
+Summary of:
+
+files changed
+
+DB table/model added
+
+endpoints added
+
+how email sending works + env var needed
+
+what metadata is captured
+
+Do NOT build the Dev Tools inbox UI yet — just store + email submissions so we can plug it into Dev Tools later.

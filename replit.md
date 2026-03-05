@@ -59,6 +59,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Stripe Payment Element**: In-app card payments using Stripe PaymentIntents, embedded directly without redirection, supporting partial payments.
 - **Invoice Payment Recompute**: Invoice totals (`paidAmountCents`, `balanceDueCents`, `status`) are dynamically computed from payment records, serving as the single source of truth.
 - **Legal Pages**: Settings > Legal hub with Terms of Service and Privacy Policy sub-pages. Routes: `/settings/legal`, `/settings/legal/terms`, `/settings/legal/privacy`.
+- **Support System**: Settings > Support hub with Contact Support, Report a Bug, Request a Feature, and FAQs. All submissions stored in `support_requests` table and emailed to `SUPPORT_INBOX_EMAIL`. Auto-captures device/platform/route metadata. Routes: `/settings/support`, `/settings/support/contact`, `/settings/support/bug`, `/settings/support/feature`, `/settings/support/faqs`. Endpoint: `POST /api/support`.
 
 **Mobile App (React Native + Expo)**:
 - Native iOS/Android app living in the `/mobile` directory.

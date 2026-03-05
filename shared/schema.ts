@@ -1923,6 +1923,47 @@ export const insertPushTokenSchema = createInsertSchema(pushTokens).omit({
 export type PushToken = typeof pushTokens.$inferSelect;
 export type InsertPushToken = z.infer<typeof insertPushTokenSchema>;
 
+export const supportRequestTypeEnum = pgEnum("support_request_type", [
+  "contact_support",
+  "bug_report",
+  "feature_request",
+]);
+
+export const supportRequestStatusEnum = pgEnum("support_request_status", [
+  "new",
+  "in_progress",
+  "resolved",
+  "closed",
+]);
+
+export const supportRequests = pgTable("support_requests", {
+  id: serial("id").primaryKey(),
+  type: supportRequestTypeEnum("type").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  urgency: varchar("urgency", { length: 20 }),
+  stepsToReproduce: text("steps_to_reproduce"),
+  whyUseful: text("why_useful"),
+  attachmentUrl: text("attachment_url"),
+  metadata: jsonb("metadata"),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
+  status: supportRequestStatusEnum("status").notNull().default("new"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_requests_user_idx").on(table.userId),
+  index("support_requests_company_idx").on(table.companyId),
+  index("support_requests_type_idx").on(table.type),
+]);
+
+export const insertSupportRequestSchema = createInsertSchema(supportRequests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SupportRequest = typeof supportRequests.$inferSelect;
+export type InsertSupportRequest = z.infer<typeof insertSupportRequestSchema>;
+
 export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   id: serial("id").primaryKey(),
   stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull().unique(),

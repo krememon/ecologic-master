@@ -1,5 +1,40 @@
 import { Link } from "wouter";
-import { ChevronLeft, Headphones } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquare, Bug, Lightbulb, HelpCircle } from "lucide-react";
+
+const supportItems = [
+  {
+    href: "/settings/support/contact",
+    icon: MessageSquare,
+    label: "Contact Support",
+    desc: "Send us a message",
+    color: "text-blue-500",
+    bg: "bg-blue-50 dark:bg-blue-900/30",
+  },
+  {
+    href: "/settings/support/bug",
+    icon: Bug,
+    label: "Report a Bug",
+    desc: "Let us know what went wrong",
+    color: "text-red-500",
+    bg: "bg-red-50 dark:bg-red-900/30",
+  },
+  {
+    href: "/settings/support/feature",
+    icon: Lightbulb,
+    label: "Request a Feature",
+    desc: "Suggest something new",
+    color: "text-amber-500",
+    bg: "bg-amber-50 dark:bg-amber-900/30",
+  },
+  {
+    href: "/settings/support/faqs",
+    icon: HelpCircle,
+    label: "FAQs",
+    desc: "Frequently asked questions",
+    color: "text-emerald-500",
+    bg: "bg-emerald-50 dark:bg-emerald-900/30",
+  },
+];
 
 export default function Support() {
   return (
@@ -12,14 +47,26 @@ export default function Support() {
           </button>
         </Link>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Support</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">How can we help?</p>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center">
-        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4">
-          <Headphones className="h-6 w-6 text-slate-400 dark:text-slate-500" />
-        </div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">How can we help?</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Support options coming soon.</p>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/50">
+        {supportItems.map((item) => (
+          <Link key={item.href} href={item.href}>
+            <div className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg ${item.bg} flex items-center justify-center`}>
+                  <item.icon className={`h-5 w-5 ${item.color}`} />
+                </div>
+                <div>
+                  <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">{item.label}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{item.desc}</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );
