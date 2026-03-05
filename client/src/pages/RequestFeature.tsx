@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "wouter";
-import { ChevronLeft, Lightbulb, CheckCircle } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ChevronLeft, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,11 +13,11 @@ import { getPlatform } from "@/lib/capacitor";
 export default function RequestFeature() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [whyUseful, setWhyUseful] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !submitting;
 
@@ -38,39 +38,14 @@ export default function RequestFeature() {
           timestamp: new Date().toISOString(),
         },
       });
-      setSent(true);
-      setTitle("");
-      setDescription("");
-      setWhyUseful("");
       toast({ title: "Feature request sent", description: "Thanks for the suggestion!" });
+      navigate("/settings/support");
     } catch {
       toast({ title: "Failed to send", description: "Please try again.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (sent) {
-    return (
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
-        <div className="mb-6">
-          <Link href="/settings/support">
-            <button className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors mb-3">
-              <ChevronLeft className="h-4 w-4" />
-              Support
-            </button>
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Request a Feature</h1>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center">
-          <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">Request Submitted</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">We'll review your idea.</p>
-          <Button variant="outline" size="sm" onClick={() => setSent(false)}>Suggest another</Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl pb-24">

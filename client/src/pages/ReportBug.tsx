@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "wouter";
-import { ChevronLeft, Bug, CheckCircle } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ChevronLeft, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,11 +29,11 @@ function getDeviceSummary(): string {
 export default function ReportBug() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [description, setDescription] = useState("");
   const [steps, setSteps] = useState("");
   const [urgency, setUrgency] = useState("Medium");
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
 
   const canSubmit = description.trim().length > 0 && !submitting;
 
@@ -60,39 +59,14 @@ export default function ReportBug() {
           screenHeight: window.innerHeight,
         },
       });
-      setSent(true);
-      setDescription("");
-      setSteps("");
-      setUrgency("Medium");
       toast({ title: "Bug report sent", description: "Thanks for letting us know." });
+      navigate("/settings/support");
     } catch {
       toast({ title: "Failed to send", description: "Please try again.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (sent) {
-    return (
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
-        <div className="mb-6">
-          <Link href="/settings/support">
-            <button className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors mb-3">
-              <ChevronLeft className="h-4 w-4" />
-              Support
-            </button>
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Report a Bug</h1>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center">
-          <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">Report Submitted</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">We'll investigate this issue.</p>
-          <Button variant="outline" size="sm" onClick={() => setSent(false)}>Report another</Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl pb-24">
