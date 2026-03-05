@@ -36,7 +36,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Price Book (Service Catalog)**: Owner-only customizable reusable line item templates with full CRUD operations and RBAC.
 - **Company Profile**: Owner-only feature for managing company identity and branding.
 - **Tax Management**: Owner-only feature for creating custom tax rates applied to invoices.
-- **Payment Collection**: Supports multi-method payment collection (Cash, Check, Card via Stripe) with idempotent processing and job-scoped RBAC.
+- **Payment Collection**: Supports multi-method payment collection (Cash, Check, Card via Stripe) with idempotent processing and job-scoped RBAC. Includes checkout discount feature (flat $ or % off) with toggle UI, real-time total updates, validation, persisted in payment `meta` jsonb, and shown on emailed receipts.
 - **Payment Receipt Emails**: Automatic receipt emails sent to customers post-payment, including partial payment details and PDF invoice attachments.
 - **Refund System**: Manual refund recording (Cash, Check, Card, Other) with RBAC, updating invoice totals.
 - **Payments Tracker**: Dashboard offering a real-time financial overview, filterable invoices, and support for partial payments.

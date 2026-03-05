@@ -13532,7 +13532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
 
-      const { invoiceId, method, checkNumber, amountCents: requestedAmountCents, paymentMethod } = req.body;
+      const { invoiceId, method, checkNumber, amountCents: requestedAmountCents, paymentMethod, discount } = req.body;
       const paymentMethodValue = paymentMethod || method;
       
       if (!invoiceId) {
@@ -13601,6 +13601,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const amountDollars = (amountCents / 100).toFixed(2);
 
+      const paymentMeta: any = {};
+      if (discount && discount.enabled && discount.amountCents > 0) {
+        paymentMeta.discount = {
+          enabled: true,
+          type: discount.type,
+          value: discount.value,
+          amountCents: discount.amountCents,
+          reason: discount.reason || null,
+        };
+      }
+
       const payment = await storage.createPayment({
         companyId: company.id,
         jobId: invoice.jobId || null,
@@ -13615,6 +13626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         checkNumber: paymentMethodValue.toLowerCase() === 'check' ? (checkNumber || null) : null,
         paidDate: new Date(),
         notes: `Manual ${paymentMethodValue.toLowerCase()} payment recorded`,
+        meta: Object.keys(paymentMeta).length > 0 ? paymentMeta : undefined,
       });
 
       const recomputed = await persistRecomputedTotals(invoiceId);
@@ -13878,7 +13890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to create payments" });
       }
 
-      const { invoiceId, amountCents: requestedAmountCents } = req.body;
+      const { invoiceId, amountCents: requestedAmountCents, discount } = req.body;
 
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
@@ -13924,7 +13936,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payment amount must be at least $0.50 (Stripe minimum)" });
       }
 
-      console.log('[create-intent]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: company.id, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents });
+      const stripeMeta: any = {};
+      if (discount && discount.enabled && discount.amountCents > 0) {
+        stripeMeta.discount = {
+          enabled: true,
+          type: discount.type,
+          value: discount.value,
+          amountCents: discount.amountCents,
+          reason: discount.reason || null,
+        };
+      }
+
+      console.log('[create-intent]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: company.id, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents, hasDiscount: !!stripeMeta.discount });
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
@@ -13935,6 +13958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyId: String(company.id),
           jobId: invoice.jobId ? String(invoice.jobId) : '',
           isPartialPayment: amountInCents < currentBalanceDueCents ? 'true' : 'false',
+          ...(stripeMeta.discount ? { discountType: stripeMeta.discount.type, discountValue: String(stripeMeta.discount.value), discountAmountCents: String(stripeMeta.discount.amountCents), discountReason: stripeMeta.discount.reason || '' } : {}),
         },
       });
 
@@ -13953,6 +13977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'processing',
           stripePaymentIntentId: paymentIntent.id,
           paidDate: new Date(),
+          meta: Object.keys(stripeMeta).length > 0 ? stripeMeta : undefined,
         });
         console.log(`[Stripe] Pre-inserted payment row for PI ${paymentIntent.id}`);
       }

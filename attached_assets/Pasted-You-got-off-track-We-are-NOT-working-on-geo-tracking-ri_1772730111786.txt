@@ -1,0 +1,116 @@
+You got off track. We are NOT working on geo-tracking right now. Ignore T001/T002/T003 and anything related to location/maps.
+
+✅ Current task: Add Discounts to the Checkout page (right under Partial Payment), with a toggle + dropdown input area, and ensure the discount is applied to totals and shows properly on the emailed receipt.
+
+0) Stop and re-focus
+
+Do not spend time auditing geo tracking.
+Open and work only on the checkout/payment flow files and the receipt/email generation path.
+
+1) Implement “Discount” UI under Partial Payment
+
+On the Checkout page, add a new row/card directly below Partial Payment:
+
+Title: Discount
+
+Helper text: “Apply a discount to this payment”
+
+Toggle on the right (same style as Partial Payment)
+
+When toggle is ON, expand a dropdown area with:
+
+Discount type selector: $ Amount / % Percent
+
+Discount value input
+
+(Optional) Reason/Note input (optional)
+
+Keep EcoLogic styling and smooth expand/collapse.
+
+2) Apply discount math correctly (real billing)
+
+Discount must update totals in real-time:
+
+Show Discount line item in the breakdown:
+
+Discount: -$XX.XX or Discount (YY%): -$XX.XX
+
+Ensure Total reflects the discount.
+
+Validation rules:
+
+No negative values
+
+% max 100
+
+Discount cannot reduce final total below $0.00
+
+Interaction with Partial Payment:
+
+Discount should apply to the invoice total first
+
+Then partial payment is chosen from the discounted total
+(If existing app logic uses a different order, follow the existing pattern, but document it in your summary.)
+
+3) Persist discount data through checkout
+
+This cannot be UI-only.
+
+Store enough to reconstruct later:
+
+discountEnabled (boolean)
+
+discountType (amount | percent)
+
+discountValue (number)
+
+discountAmountComputed (number)
+
+discountReason (optional)
+
+Ensure it’s included in:
+
+payment/checkout payload
+
+saved invoice/payment record (where the app stores checkout details)
+
+4) Receipt + emailed receipt MUST show the discount
+
+When the client gets the emailed receipt, it must clearly include:
+
+Subtotal
+
+Discount line (negative)
+
+Total after discount
+
+Amount paid (especially if partial payment is used)
+
+This must match the amount actually charged.
+
+If there is a receipt template generator, update it. If receipts are built from invoice/payment fields, ensure those fields exist and are used.
+
+5) Deliverables
+
+Discount toggle + dropdown right under Partial Payment
+
+Totals update correctly in checkout
+
+Discount persists and does not disappear on refresh/reopen
+
+Emailed receipt shows discount line and correct final totals
+
+Short summary:
+
+checkout UI file(s) touched
+
+backend fields/routes updated (if any)
+
+where discount is stored
+
+receipt/email code path updated
+
+Important
+
+Do NOT touch geo tracking code.
+Only touch checkout + payment + receipt/email paths.

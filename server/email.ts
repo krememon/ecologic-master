@@ -178,6 +178,12 @@ interface PaymentReceiptEmailParams {
   pdfAttachment?: { filename: string; content: Buffer } | null;
   balanceRemainingFormatted?: string;
   isPartial?: boolean;
+  discount?: {
+    type: 'amount' | 'percent';
+    value: number;
+    amountCents: number;
+    reason: string | null;
+  };
 }
 
 export async function sendPaymentReceiptEmail({
@@ -191,6 +197,7 @@ export async function sendPaymentReceiptEmail({
   pdfAttachment,
   balanceRemainingFormatted,
   isPartial,
+  discount,
 }: PaymentReceiptEmailParams): Promise<string | null> {
   const resendApiKey = process.env.RESEND_API_KEY;
 
@@ -238,6 +245,13 @@ export async function sendPaymentReceiptEmail({
               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Invoice</td>
               <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1f2937;">${invoiceNumber}</td>
             </tr>
+            ${discount && discount.amountCents > 0 ? `<tr>
+              <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">${discount.type === 'percent' ? `Discount (${discount.value}%)` : 'Discount'}</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #059669; font-size: 14px;">-$${(discount.amountCents / 100).toFixed(2)}</td>
+            </tr>${discount.reason ? `
+            <tr>
+              <td colspan="2" style="padding: 0 0 8px 0; color: #9ca3af; font-size: 12px; font-style: italic;">${discount.reason}</td>
+            </tr>` : ''}` : ''}
             <tr>
               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount Paid</td>
               <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #059669; font-size: 18px;">${amountFormatted}</td>

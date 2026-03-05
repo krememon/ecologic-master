@@ -82,7 +82,15 @@ export async function sendReceiptForPayment(paymentId: number): Promise<{ succes
       }
     }
 
-    console.log('[receipt] sending', { paymentId, invoiceId: effectiveInvoiceId, to: customerEmail, isPartial });
+    const meta = (payment.meta && typeof payment.meta === 'object') ? payment.meta as Record<string, any> : {};
+    const discountInfo = meta.discount && meta.discount.enabled ? {
+      type: meta.discount.type as 'amount' | 'percent',
+      value: meta.discount.value as number,
+      amountCents: meta.discount.amountCents as number,
+      reason: meta.discount.reason as string | null,
+    } : undefined;
+
+    console.log('[receipt] sending', { paymentId, invoiceId: effectiveInvoiceId, to: customerEmail, isPartial, hasDiscount: !!discountInfo });
 
     const messageId = await sendPaymentReceiptEmail({
       to: customerEmail,
@@ -95,6 +103,7 @@ export async function sendReceiptForPayment(paymentId: number): Promise<{ succes
       pdfAttachment,
       balanceRemainingFormatted: isPartial ? balanceRemainingFormatted : undefined,
       isPartial,
+      discount: discountInfo,
     });
 
     await db
