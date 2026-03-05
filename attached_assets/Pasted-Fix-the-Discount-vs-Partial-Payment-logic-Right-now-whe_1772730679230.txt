@@ -1,0 +1,103 @@
+Fix the Discount vs Partial Payment logic. Right now, when a discount is applied and the customer pays the discounted total, EcoLogic is incorrectly labeling/tracking the payment as Partial and showing “still owed” — even though it should be fully paid after discount.
+
+The bug
+
+Example: Original invoice $700. Discount applied so total due becomes $600. Customer pays $600.
+EcoLogic currently treats this as partial and says $100 still owed. That’s wrong.
+
+Goal
+
+A discount is not a partial payment. If the customer pays the final discounted amount due, the invoice should be marked Paid in Full (not Partial), and owed should be $0.
+
+Required correct behavior
+
+Discounts must reduce the invoice’s amount due / total due (the “source of truth” due amount).
+
+Payment status should be calculated against the discounted total due, not the original subtotal.
+
+If amountPaid >= discountedTotalDue, then:
+
+invoice status = Paid
+
+owed = $0.00
+
+do NOT show “Partial” badge anywhere
+
+Only label as “Partial” if amountPaid < discountedTotalDue.
+
+What to inspect and fix
+
+Please find where the system determines:
+
+invoice “amount due”
+
+“still owed” calculation
+
+status labels like Partial / Paid / etc.
+
+payment success screen owed logic
+
+Likely places:
+
+backend invoice/payment status calculation
+
+storage update when recording payment
+
+receipt/summary calculations
+
+any UI badges derived from invoice fields
+
+Data model direction
+
+Make sure the invoice record has a clear “final total due” after discount, such as:
+
+total (final amount after discount)
+
+or amountDue computed from subtotal - discount
+(Use the existing schema fields and conventions — but the key point is: status math must use the discounted due amount.)
+
+Implementation requirements
+
+Do not hack this just in the UI.
+
+Fix the source of truth calculation so:
+
+owed amounts are correct
+
+status is correct
+
+badges are correct
+
+payment success screen is correct
+
+receipts are correct
+
+Ensure the fix works for:
+
+full payments with discount (should be Paid)
+
+partial payments with discount (should be Partial until fully paid)
+
+no discount (existing behavior unchanged)
+
+Testing cases (must pass)
+
+Subtotal $700, discount $100 → due $600, pay $600 → Paid, owed $0
+
+Subtotal $700, discount 10% ($70) → due $630, pay $630 → Paid, owed $0
+
+Subtotal $700, discount $100 → due $600, pay $300 → Partial, owed $300
+
+Subtotal $700, no discount → pay $700 → Paid, owed $0 (no regression)
+
+Deliverables
+
+Fix the invoice/payment status logic so discount doesn’t cause “Partial” incorrectly
+
+Confirm which backend fields are now used for “amount due” and “owed”
+
+Confirm which files were changed
+
+Provide a short summary of the root cause (why it was treating discount like partial) and the exact fix
+
+This is critical — discount-paid invoices must show Paid, not Partial.

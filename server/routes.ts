@@ -13603,13 +13603,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const paymentMeta: any = {};
       if (discount && discount.enabled && discount.amountCents > 0) {
-        paymentMeta.discount = {
-          enabled: true,
-          type: discount.type,
-          value: discount.value,
-          amountCents: discount.amountCents,
-          reason: discount.reason || null,
-        };
+        const discCents = Math.min(parseInt(String(discount.amountCents), 10) || 0, currentBalanceDueCents);
+        if (discCents > 0) {
+          paymentMeta.discount = {
+            enabled: true,
+            type: discount.type,
+            value: discount.value,
+            amountCents: discCents,
+            reason: discount.reason || null,
+          };
+          const newTotalCents = Math.max(0, invoiceTotalCents - discCents);
+          await db.update(invoices).set({
+            totalCents: newTotalCents,
+            balanceDueCents: Math.max(0, newTotalCents - currentPaidAmountCents),
+            amount: (newTotalCents / 100).toFixed(2),
+            updatedAt: new Date(),
+          }).where(eq(invoices.id, invoice.id));
+          console.log(`[Payment] Invoice ${invoiceId} totalCents adjusted for discount: ${invoiceTotalCents} → ${newTotalCents} (discount=${discCents})`);
+        }
       }
 
       const payment = await storage.createPayment({
@@ -13938,13 +13949,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const stripeMeta: any = {};
       if (discount && discount.enabled && discount.amountCents > 0) {
-        stripeMeta.discount = {
-          enabled: true,
-          type: discount.type,
-          value: discount.value,
-          amountCents: discount.amountCents,
-          reason: discount.reason || null,
-        };
+        const discCents = Math.min(parseInt(String(discount.amountCents), 10) || 0, currentBalanceDueCents);
+        if (discCents > 0) {
+          stripeMeta.discount = {
+            enabled: true,
+            type: discount.type,
+            value: discount.value,
+            amountCents: discCents,
+            reason: discount.reason || null,
+          };
+          const newTotalCents = Math.max(0, invoiceTotalCents - discCents);
+          const currentPaidCents = computed.paidCents;
+          await db.update(invoices).set({
+            totalCents: newTotalCents,
+            balanceDueCents: Math.max(0, newTotalCents - currentPaidCents),
+            amount: (newTotalCents / 100).toFixed(2),
+            updatedAt: new Date(),
+          }).where(eq(invoices.id, invoice.id));
+          console.log(`[Stripe] Invoice ${invoiceId} totalCents adjusted for discount: ${invoiceTotalCents} → ${newTotalCents} (discount=${discCents})`);
+        }
       }
 
       console.log('[create-intent]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: company.id, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents, hasDiscount: !!stripeMeta.discount });
