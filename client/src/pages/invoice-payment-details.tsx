@@ -235,6 +235,20 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
   const showCollectButton = canCollect && isPartial && balanceCents > 0;
 
+  const discountMeta = (() => {
+    for (const p of payments) {
+      const d = p.meta?.discount;
+      if (d && d.enabled && d.amountCents > 0) return d;
+    }
+    return null;
+  })();
+  const hasDiscount = !!discountMeta;
+  const discountAmountCents = discountMeta?.amountCents || 0;
+  const originalSubtotalCents = hasDiscount ? totalCents + discountAmountCents : totalCents;
+  const discountLabel = discountMeta?.type === 'percent'
+    ? `Discount (${discountMeta.value}%)`
+    : 'Discount';
+
   const refundsByPaymentId: Record<number, any[]> = {};
   for (const r of refundsList) {
     const pid = r.paymentId;
@@ -261,7 +275,16 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
     ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
     ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
-    { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+    ...(hasDiscount
+      ? [
+          { icon: DollarSign, label: "Subtotal", value: formatCents(originalSubtotalCents) },
+          { icon: DollarSign, label: discountLabel, value: `-${formatCents(discountAmountCents)}`, valueColor: "text-emerald-600 dark:text-emerald-400" },
+          { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+        ]
+      : [
+          { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+        ]
+    ),
     ...(totalPaymentsCents > 0 ? [{ icon: DollarSign, label: "Total Payments", value: formatCents(totalPaymentsCents) }] : []),
     ...(totalRefundsCents > 0 ? [{ icon: RotateCcw, label: "Total Refunded", value: `-${formatCents(totalRefundsCents)}`, valueColor: "text-red-500 dark:text-red-400" }] : []),
     ...(pendingRefundsCents > 0 ? [{ icon: RotateCcw, label: "Pending Refund", value: formatCents(pendingRefundsCents), valueColor: "text-amber-500 dark:text-amber-400" }] : []),

@@ -93,12 +93,20 @@ export default function PaymentDetails({ paymentId }: PaymentDetailsProps) {
   const customerName = payment.customerName || "Unknown Customer";
   const invoiceNumber = payment.invoiceNumber || null;
 
+  const discountMeta = payment.meta?.discount;
+  const hasDiscount = discountMeta && discountMeta.enabled && discountMeta.amountCents > 0;
+  const discountAmountCents = hasDiscount ? discountMeta.amountCents : 0;
+  const discountLabel = hasDiscount && discountMeta.type === 'percent'
+    ? `Discount (${discountMeta.value}%)`
+    : 'Discount';
+
   const details = [
     { icon: User, label: "Customer", value: customerName },
     ...(invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${invoiceNumber}` }] : []),
     { icon: MethodIcon, label: "Method", value: methodLabel },
     ...(payment.checkNumber ? [{ icon: FileText, label: "Check #", value: payment.checkNumber }] : []),
     ...(payment.jobTitle ? [{ icon: Briefcase, label: "Job", value: payment.jobTitle }] : []),
+    ...(hasDiscount ? [{ icon: DollarSign, label: discountLabel, value: `-${formatCents(discountAmountCents)}`, valueColor: "text-emerald-600 dark:text-emerald-400" }] : []),
     { icon: Calendar, label: "Date", value: safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a") },
     ...(payment.collectedByName ? [{ icon: User, label: "Recorded By", value: payment.collectedByName }] : []),
     ...(payment.notes ? [{ icon: FileText, label: "Notes", value: payment.notes }] : []),
@@ -147,7 +155,7 @@ export default function PaymentDetails({ paymentId }: PaymentDetailsProps) {
                 <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">
                   {item.label}
                 </p>
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 break-words">
+                <p className={`text-sm font-medium break-words ${(item as any).valueColor || "text-slate-900 dark:text-slate-100"}`}>
                   {item.value}
                 </p>
               </div>
