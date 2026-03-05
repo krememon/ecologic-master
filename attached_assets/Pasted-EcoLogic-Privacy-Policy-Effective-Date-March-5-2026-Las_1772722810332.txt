@@ -1,0 +1,100 @@
+EcoLogic Privacy Policy
+Effective Date: [March 5 2026]
+Last Updated: [March 5 2026]
+EcoLogic LLC (“EcoLogic,” “we,” “us,” or “our”) respects your privacy. This Privacy Policy explains how we collect, use, disclose, and protect information when you use the EcoLogic website, mobile application, and related services (collectively, the “Services”).
+By accessing or using the Services, you acknowledge the practices described in this Privacy Policy.
+1. Information We Collect
+We may collect the following categories of information:
+A. Information You Provide to Us
+Information you submit directly, including:
+name
+email address
+phone number
+business name
+account login details
+billing and subscription information
+customer, employee, job, invoice, estimate, and scheduling data
+messages, documents, notes, and other content you upload or create through the Services
+B. Information Collected Automatically
+When you use the Services, we may automatically collect certain technical and usage information, such as:
+device type
+operating system
+browser type
+IP address
+app version
+crash logs and diagnostics
+usage activity within the Services
+approximate location derived from IP address
+C. Location Information
+If you enable location-based features, we may collect location data from your device, including while using time tracking, clock-in, dispatch, routing, map, or workforce tracking features.
+Location permissions are controlled by your device settings. You may disable location access, but some features may not function properly.
+D. Payment Information
+Payments may be processed through third-party payment providers. EcoLogic may receive billing-related details such as plan type, subscription status, transaction confirmations, and limited payment metadata, but we do not store full payment card numbers unless explicitly stated otherwise through an integrated payment provider workflow.
+E. Information from Third Parties
+We may receive information from third-party service providers, integrations, app stores, analytics providers, payment processors, email providers, and other connected tools you choose to use with the Services.
+2. How We Use Information
+We may use information we collect to:
+provide, operate, and maintain the Services
+create and manage user accounts
+process subscriptions, payments, and billing
+support scheduling, dispatching, messaging, time tracking, documents, and other product features
+personalize and improve the user experience
+send service-related communications, alerts, and notifications
+provide customer support
+monitor performance, diagnose bugs, and improve reliability
+prevent fraud, abuse, and unauthorized access
+enforce our Terms of Service
+comply with legal obligations
+3. How We Share Information
+We may share information in the following circumstances:
+A. Service Providers
+We may share information with vendors and service providers who perform services on our behalf, such as:
+cloud hosting providers
+payment processors
+email and messaging providers
+analytics providers
+customer support tools
+push notification and infrastructure providers
+These parties may access information only as needed to perform services for us.
+B. Within Your Organization
+If you use EcoLogic through a business account, information may be visible to authorized users within that organization based on roles, permissions, and account settings.
+C. Legal Compliance and Protection
+We may disclose information if we believe doing so is necessary to:
+comply with applicable law, regulation, legal process, or government request
+enforce our agreements
+protect the rights, safety, and property of EcoLogic, our users, or others
+investigate fraud, security issues, or technical problems
+D. Business Transfers
+If EcoLogic is involved in a merger, acquisition, financing, reorganization, sale of assets, or similar transaction, information may be transferred as part of that transaction.
+E. With Your Direction
+We may share information when you instruct us to do so or when you enable third-party integrations or connected services.
+4. Data Retention
+We retain information for as long as reasonably necessary to provide the Services, fulfill the purposes described in this Privacy Policy, comply with legal obligations, resolve disputes, and enforce our agreements.
+Retention periods may vary depending on the type of data, your account status, legal requirements, and operational needs.
+5. Data Security
+We use reasonable administrative, technical, and organizational measures to protect information. However, no method of transmission or storage is completely secure, and we cannot guarantee absolute security.
+You are responsible for maintaining the confidentiality of your account credentials and for using the Services in a secure manner.
+6. Your Choices and Controls
+Depending on how you use the Services, you may be able to:
+access, update, or correct certain account information
+manage notification preferences
+control location permissions through your device settings
+cancel a subscription
+request account deletion, subject to legal and operational retention requirements
+If you would like to make a privacy-related request, contact us using the details below.
+7. Children’s Privacy
+The Services are not directed to children under 13, and we do not knowingly collect personal information from children under 13. If we learn that we have collected such information, we will take reasonable steps to delete it.
+8. Third-Party Services and Links
+The Services may contain links to third-party websites, tools, or integrations. We are not responsible for the privacy practices of third parties. Your interactions with third-party services are governed by their own policies and terms.
+9. International Use
+If you access the Services from outside the United States, you understand that your information may be transferred to, processed in, and stored in the United States or other jurisdictions where our service providers operate.
+10. State Privacy Rights
+Depending on your state of residence, you may have certain privacy rights under applicable law, such as rights to request access to, correction of, or deletion of certain personal information.
+If applicable law requires us to provide additional disclosures or rights, we will honor those rights as required. To submit a request, contact us using the information below.
+11. Changes to This Privacy Policy
+We may update this Privacy Policy from time to time. If we make material changes, we may provide notice by updating the date above, posting the revised policy in the Services, or by other reasonable means. Your continued use of the Services after the updated policy becomes effective means you accept the updated policy.
+12. Contact Us
+If you have questions about this Privacy Policy or want to make a privacy-related request, contact us at:
+EcoLogic LLC
+[ppellegrino@ecologicc.com]
+[https://ecologicc.com]
