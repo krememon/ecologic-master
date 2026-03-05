@@ -1,0 +1,132 @@
+Add a new About page inside Settings. I want it to show the user’s current app/account/device info in a clean, simple layout similar to the example screenshot — but using the actual logged-in user/device data, not hardcoded sample text.
+
+Goal
+
+Create a native-feeling About page where the user can view helpful app and account information at a glance.
+
+What to add
+
+Add a new About row in Settings.
+
+Tapping it should open an About page.
+
+About page content
+
+The page should display a clean info section with items like:
+
+App version
+
+Email address
+
+Account time
+
+Device
+
+Use the real data available for the current user/session/device.
+
+What each field should show
+1) App version
+
+Show the current app version/build info available in the app.
+
+Examples:
+
+app version number
+
+build number (if available)
+
+If native build info is available on iOS/Android, use that cleanly.
+If only web/app package version is available, show the best available version info.
+
+2) Email address
+
+Show the logged-in user’s actual email address.
+
+3) Account time
+
+Show:
+
+the user’s current timezone
+
+the current local date/time for their account/device context
+
+Example format:
+
+timezone name
+
+readable current date + time
+
+Use the most accurate timezone source available.
+
+4) Device
+
+Show a readable device/platform summary, such as:
+
+Apple iPhone (iOS XX)
+
+Android device (Android XX)
+
+Web browser / desktop context if not in native app
+
+Do not make this ugly or overly technical. Keep it human-readable.
+
+Design / layout requirements
+
+Match EcoLogic’s settings aesthetic
+
+Simple, clean, native-feeling mobile layout
+
+Clear page title: About
+
+Standard back navigation
+
+Use a readable section title like:
+
+EcoLogic Information
+
+or App Information
+(choose the cleaner one that fits best)
+
+Clean spacing between labels and values
+
+Make it feel polished, not developer-ish or cluttered
+
+Important
+
+Do not hardcode fake example values
+
+Pull real data where possible
+
+If a field is unavailable in a given environment, show a graceful fallback
+
+Keep this page informational only (no editing controls)
+
+Suggested behavior / fallbacks
+
+If build number is unavailable, show version only
+
+If device details are limited, show the best readable platform name available
+
+If timezone cannot be determined, use a safe fallback but still present the field cleanly
+
+Deliverables
+
+Add About to Settings
+
+Build the About page
+
+Populate it with live app/account/device information
+
+Keep the layout clean and native-feeling
+
+Give me a short summary of:
+
+files changed
+
+where About was added in Settings
+
+what source is used for each field
+
+what fallbacks are used if certain info is unavailable
+
+Make it feel like a polished settings info page, not a debug screen.
