@@ -47,6 +47,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Geo-Tracking**: GPS tracking tied to clock-in/clock-out. On clock-in, requests location permission (non-blocking). If granted, tracks movement via `watchPosition` with 50m distance filter, 60s heartbeat, accuracy ≤100m, batched to `POST /api/location/batch` every 30s. Live crew positions shown on Schedule map as avatar markers (circular photo or initials). Polling every 12s. RBAC: Owner sees all, Supervisor sees shared-job techs, Technician sees self. 10-min stale filter server-side. Service: `client/src/services/geoTracking.ts`. Tables: `employee_location_pings`, `user_live_locations`.
 - **Timesheet Editing**: Manager-only timesheet editing with audit trails and RBAC.
 - **Archival**: Automatic archival for estimates and jobs based on conversion or full payment status, with a restore option.
+- **Schedule Month View**: Full monthly calendar grid on the Schedule page with job/estimate/event dot indicators, selected-day item list, swipe navigation, and smooth animated transitions.
 - **Schedule Events**: Manager-created company calendar events (holidays, meetings) with RBAC-enforced visibility and CRUD.
 - **Notifications System**: In-app notification system with various types, unread badges, and deep linking, targeting specific roles.
 - **QuickBooks Online Integration**: Owner-only QBO integration for customer mapping and invoice/payment synchronization.
@@ -57,6 +58,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Native Wrapper Google OAuth**: System-browser flow for Capacitor iOS/Android wrappers using deep links and one-time auth code exchange.
 - **Stripe Payment Element**: In-app card payments using Stripe PaymentIntents, embedded directly without redirection, supporting partial payments.
 - **Invoice Payment Recompute**: Invoice totals (`paidAmountCents`, `balanceDueCents`, `status`) are dynamically computed from payment records, serving as the single source of truth.
+- **Legal Pages**: Settings > Legal hub with Terms of Service and Privacy Policy sub-pages. Routes: `/settings/legal`, `/settings/legal/terms`, `/settings/legal/privacy`.
 
 **Mobile App (React Native + Expo)**:
 - Native iOS/Android app living in the `/mobile` directory.

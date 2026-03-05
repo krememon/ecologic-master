@@ -1,0 +1,138 @@
+Add a new Legal page inside Settings. This page should include two items:
+
+Terms of Service
+
+Privacy Policy
+
+For now, I want the full page structure and navigation built first. Once that is done, we can write the actual legal text afterward.
+
+Goal
+
+Create a clean, native-feeling Legal section in Settings where users can tap into:
+
+Terms of Service
+
+Privacy Policy
+
+This should feel polished, simple, and consistent with EcoLogic’s current settings design.
+
+What to build
+1) Add a Legal item in Settings
+
+Add a new row in the Settings area for Legal
+
+It should feel like a normal settings row item
+
+Tapping it should open the new Legal page
+
+Match the current EcoLogic settings style and spacing
+
+2) Build the Legal page
+
+The Legal page should have:
+
+a clean top header / nav bar
+
+title: Legal
+
+standard back navigation
+
+two tappable rows:
+
+Terms of Service
+
+Privacy Policy
+
+Each row should have the same clean settings-row feel:
+
+clear label
+
+right chevron
+
+good spacing
+
+mobile-friendly tap area
+
+Navigation behavior
+
+Tapping Legal from Settings opens the Legal page
+
+Tapping Terms of Service opens a dedicated Terms page/screen
+
+Tapping Privacy Policy opens a dedicated Privacy page/screen
+
+Important
+
+For now, the Terms and Privacy pages do not need final legal copy yet.
+
+Just create the proper structure/screens with placeholder content, such as:
+
+page title
+
+basic placeholder body area
+
+“Content coming soon” or similar temporary placeholder
+
+This way the navigation and page framework are fully ready, and we can fill in the actual legal text next.
+
+UX / design requirements
+
+Keep the same EcoLogic vibe and aesthetic
+
+Make it feel clean and native on mobile
+
+Match existing Settings page styling
+
+Keep spacing polished and easy to read
+
+Do not overdesign it — simple and professional
+
+Suggested structure
+
+Settings page
+
+Legal
+
+Legal page
+
+Terms of Service
+
+Privacy Policy
+
+Terms of Service page
+
+Privacy Policy page
+
+Important implementation notes
+
+Do not hardcode final legal copy yet
+
+Build proper routing/navigation for these pages now
+
+Keep this scalable in case we later add more legal items (ex: cookie policy, licenses, disclaimers)
+
+Deliverables
+
+Add Legal to Settings
+
+Build the Legal page
+
+Add working navigation to:
+
+Terms of Service
+
+Privacy Policy
+
+Create placeholder destination pages for both
+
+Give me a short summary of:
+
+files changed
+
+where Legal was added in Settings
+
+how navigation is wired
+
+where we will place the final legal text next
+
+Do not write the actual legal documents yet — just build the structure cleanly first.

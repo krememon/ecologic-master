@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send } from "lucide-react";
+import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send, Scale, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
 import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
@@ -18,6 +18,7 @@ import { ToastAction } from "@/components/ui/toast";
 
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
+import { Link } from "wouter";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
@@ -575,6 +576,26 @@ export default function Settings() {
             <BillingSection />
           </div>
         )}
+
+        {/* Legal */}
+        <Card className="lg:col-span-2">
+          <CardContent className="p-0">
+            <Link href="/settings/legal">
+              <div className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors rounded-xl">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                    <Scale className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">Legal</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Terms of Service &amp; Privacy Policy</div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-slate-400" />
+              </div>
+            </Link>
+          </CardContent>
+        </Card>
 
         {/* Security Settings */}
         <Card className="lg:col-span-2">

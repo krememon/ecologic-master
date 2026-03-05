@@ -57,6 +57,9 @@ import InvoicePaymentDetails from "@/pages/invoice-payment-details";
 import RefundScreen from "@/pages/refund-screen";
 import RefundOtherMethod from "@/pages/refund-other-method";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
+import Legal from "@/pages/Legal";
+import TermsOfService from "@/pages/TermsOfService";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
@@ -278,6 +281,9 @@ function AuthenticatedRouter() {
         <Route path="/employees" component={Employees} />
         <Route path="/timesheets" component={Timesheets} />
         <Route path="/settings" component={Settings} />
+        <Route path="/settings/legal" component={Legal} />
+        <Route path="/settings/legal/terms" component={TermsOfService} />
+        <Route path="/settings/legal/privacy" component={PrivacyPolicy} />
         <Route path="/customize" component={Customize} />
         <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
