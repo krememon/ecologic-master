@@ -61,6 +61,7 @@ import Legal from "@/pages/Legal";
 import TermsOfService from "@/pages/TermsOfService";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import About from "@/pages/About";
+import Support from "@/pages/Support";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
@@ -283,6 +284,7 @@ function AuthenticatedRouter() {
         <Route path="/timesheets" component={Timesheets} />
         <Route path="/settings" component={Settings} />
         <Route path="/settings/about" component={About} />
+        <Route path="/settings/support" component={Support} />
         <Route path="/settings/legal" component={Legal} />
         <Route path="/settings/legal/terms" component={TermsOfService} />
         <Route path="/settings/legal/privacy" component={PrivacyPolicy} />
