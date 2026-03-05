@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { 
-  Menu, X, Bell, Check, Trash2, Filter, Megaphone, AlertTriangle, ClipboardCheck, 
+  Menu, X, Bell, Filter, Megaphone, AlertTriangle, ClipboardCheck, 
   Calendar, RefreshCw, UserMinus, Timer,
   Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign,
   FolderOpen, MessageSquare, Settings, LogOut, Brain, UsersIcon, Wrench, Target, Clock
@@ -138,6 +138,8 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const { isOpen, toggle: toggleSidebar, close: closeSidebar } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [location, setLocation] = useLocation();
   const { can, canAny, role } = useCan();
   
@@ -171,28 +173,15 @@ export default function MobileNav({ user, company }: MobileNavProps) {
     },
   });
 
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest('POST', '/api/notifications/read-all');
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      return apiRequest('DELETE', '/api/notifications/bulk', { ids });
     },
     onSuccess: () => {
+      setSelectMode(false);
+      setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
-    },
-  });
-
-  const [clearError, setClearError] = useState<string | null>(null);
-  const clearAllMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest('DELETE', '/api/notifications');
-    },
-    onSuccess: () => {
-      setClearError(null);
-      queryClient.setQueryData(['/api/notifications', { view: 'home' }], []);
-      queryClient.setQueryData(['/api/notifications/unread-count', { view: 'home' }], { unreadCount: 0 });
-    },
-    onError: () => {
-      setClearError('Failed to clear notifications');
     },
   });
 
@@ -223,6 +212,18 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   }, [notifications]);
 
   const handleNotificationClick = (notification: Notification) => {
+    if (selectMode) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(notification.id)) {
+          next.delete(notification.id);
+        } else {
+          next.add(notification.id);
+        }
+        return next;
+      });
+      return;
+    }
     if (!notification.readAt) {
       markReadMutation.mutate(notification.id);
     }
@@ -230,6 +231,17 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       setNotificationsOpen(false);
       setLocation(notification.linkUrl);
     }
+  };
+
+  const handleClosePanel = () => {
+    setNotificationsOpen(false);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
   };
 
   const formatTime = (dateStr: string) => {
@@ -425,41 +437,57 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         </div>
       </div>
 
-      <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
-          <SheetHeader className="px-6 pt-6 pb-0 space-y-0">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-base font-semibold">Notifications</SheetTitle>
-              <div className="flex items-center gap-1">
-                {unreadCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => markAllReadMutation.mutate()}
-                    disabled={markAllReadMutation.isPending}
-                    className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <Check className="h-3.5 w-3.5 mr-1" />
-                    Mark all read
-                  </Button>
-                )}
-                {notifications.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => clearAllMutation.mutate()}
-                    disabled={clearAllMutation.isPending}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear all"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
+      <Sheet open={notificationsOpen} onOpenChange={(open) => { if (!open) handleClosePanel(); }}>
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" hideCloseButton>
+          <div className="px-5 pt-5 pb-0">
+            {selectMode ? (
+              <div className="flex items-center justify-between h-9">
+                <button
+                  onClick={exitSelectMode}
+                  className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+                  disabled={selectedIds.size === 0 || bulkDeleteMutation.isPending}
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    selectedIds.size > 0
+                      ? "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                  )}
+                >
+                  {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
-            </div>
-          </SheetHeader>
+            ) : (
+              <div className="flex items-center justify-between h-9">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Notifications</h2>
+                <div className="flex items-center gap-2">
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={() => setSelectMode(true)}
+                      className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                    >
+                      Select
+                    </button>
+                  )}
+                  <button
+                    onClick={handleClosePanel}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  >
+                    <X className="h-4.5 w-4.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
-          <div className="px-6 pt-3 pb-0">
+          <div className="px-5 pt-3 pb-0">
             <div className="flex gap-1">
               {([
                 { key: 'all' as FilterTab, label: 'All' },
@@ -492,15 +520,9 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             </div>
           </div>
 
-          <div className="border-b mx-6 mt-3" />
+          <div className="border-b mx-5 mt-3" />
           
-          {clearError && (
-            <div className="mx-6 mt-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
-              {clearError}
-            </div>
-          )}
-          
-          <div className="flex-1 overflow-y-auto px-6 pt-2 pb-6">
+          <div className="flex-1 overflow-y-auto px-5 pt-2 pb-6">
             {notificationsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-600" />
@@ -525,6 +547,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                 {sortedAndFiltered.map((notification) => {
                   const priority = getPriority(notification.type);
                   const isActivity = priority === 'activity';
+                  const isSelected = selectedIds.has(notification.id);
 
                   return (
                     <button
@@ -532,27 +555,46 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                       onClick={() => handleNotificationClick(notification)}
                       className={cn(
                         "w-full text-left px-3 py-2.5 rounded-lg transition-colors",
-                        notification.readAt
-                          ? "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
-                          : priority === 'action'
-                            ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                            : priority === 'update'
-                              ? "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800"
-                              : "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
+                        selectMode && isSelected
+                          ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-300 dark:ring-blue-700"
+                          : notification.readAt
+                            ? "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
+                            : priority === 'action'
+                              ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                              : priority === 'update'
+                                ? "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                : "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
                       )}
                     >
                       <div className="flex items-start gap-2.5">
-                        <div className="mt-0.5 flex-shrink-0 flex items-center gap-1.5">
-                          {!notification.readAt && (
-                            <span className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              priority === 'action' ? "bg-blue-600" : priority === 'update' ? "bg-slate-400" : "bg-slate-300"
-                            )} />
-                          )}
-                          <span className={cn(isActivity && notification.readAt && "opacity-50")}>
-                            {getNotificationIcon(notification.type)}
-                          </span>
-                        </div>
+                        {selectMode ? (
+                          <div className="mt-0.5 flex-shrink-0">
+                            <div className={cn(
+                              "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                              isSelected
+                                ? "bg-blue-600 border-blue-600"
+                                : "border-slate-300 dark:border-slate-600"
+                            )}>
+                              {isSelected && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 flex-shrink-0 flex items-center gap-1.5">
+                            {!notification.readAt && (
+                              <span className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                priority === 'action' ? "bg-blue-600" : priority === 'update' ? "bg-slate-400" : "bg-slate-300"
+                              )} />
+                            )}
+                            <span className={cn(isActivity && notification.readAt && "opacity-50")}>
+                              {getNotificationIcon(notification.type)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className={cn(
                             "text-sm truncate",

@@ -3951,6 +3951,18 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  async deleteNotificationsByIds(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .delete(notifications)
+      .where(and(
+        eq(notifications.recipientUserId, userId),
+        sql`${notifications.id} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`
+      ))
+      .returning({ id: notifications.id });
+    return result.length;
+  }
+
   async deleteAllNotifications(userId: string): Promise<void> {
     await db
       .delete(notifications)

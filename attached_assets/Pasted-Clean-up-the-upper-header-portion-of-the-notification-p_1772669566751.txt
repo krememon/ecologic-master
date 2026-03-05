@@ -1,0 +1,158 @@
+Clean up the upper header portion of the notification panel while keeping the existing 3 filter pills (All / Action Needed / Messages) exactly as they are. I want the top area to feel cleaner, more intentional, and less like a spam folder.
+
+Goal
+
+Redesign only the top header strip above the filter pills.
+
+Do not change:
+
+the 3 filter pills
+
+their styling
+
+their placement below the header
+
+New header behavior
+Normal mode
+
+The top row should be:
+
+Left: Notifications
+
+Right: Select and X
+
+So the header should simply show:
+
+title
+
+select action
+
+close action
+
+Remove these from the header
+
+Remove Mark all read
+
+Remove the always-visible trash/delete icon
+
+I do not want bulk read anymore. A notification should only become read when the user actually taps/open it.
+
+Select mode behavior
+
+When the user taps Select:
+
+the panel enters multi-select mode
+
+check/select controls appear for each notification row
+
+tapping notifications in this mode selects them instead of opening them
+
+The header should change to:
+
+Left: Cancel
+
+Center: selected count (example: 2 selected)
+
+Right: Delete
+
+Important select mode rules
+
+In select mode, the normal X close button should be hidden
+
+Cancel exits select mode and clears the current selection
+
+Delete should only be enabled when at least 1 notification is selected
+
+Tapping Delete should remove only the selected notifications
+
+Critical delete requirement
+
+When a notification is deleted, it must be truly removed so it does not come back after app refresh, reload, or reopening the app.
+
+I want to avoid this bad behavior:
+
+user deletes a notification
+
+app reloads / reopens
+
+the same notification appears again
+
+So make sure deletion is persistent:
+
+delete from the true data source
+
+ensure frontend cache/state refreshes correctly
+
+ensure deleted notifications are not re-fetched again from stale state
+
+if React Query / local cache is used, invalidate/refetch properly after delete
+
+Functional requirements
+
+Normal mode:
+
+tapping a notification opens it and marks it as read
+
+Select mode:
+
+tapping a notification selects/deselects it
+
+it should not open while selecting
+
+Deleting selected notifications:
+
+removes them from the panel immediately
+
+persists across refresh/reopen
+
+Existing read/unread logic should continue to work
+
+Keep the panel clean on both desktop and mobile
+
+UI/UX requirements
+
+Keep the header minimal and premium-feeling
+
+Do not make the top strip feel crowded
+
+Preserve current overall theme/style
+
+Keep the 3 filter pills untouched below the header
+
+Make select mode feel intentional and easy to understand
+
+Implementation notes
+
+If needed, add a new bulk-delete endpoint for selected notification IDs instead of only using “clear all”
+
+Or reuse existing deletion logic if it can safely support multi-delete
+
+But do not fake-delete only in the frontend — it must persist in the backend/database
+
+Deliverables
+
+Redesign the notification panel header to:
+
+normal mode = Notifications | Select | X
+
+select mode = Cancel | # selected | Delete
+
+Remove Mark all read
+
+Remove the always-visible trash icon
+
+Add multi-select deletion flow
+
+Ensure deleted notifications stay deleted after refresh/reopen
+
+Give me a short summary of:
+
+files changed
+
+how select mode works
+
+how deletion is persisted
+
+how stale/refetched deleted notifications are prevented
+
+Do not change the filter pills section — only the top header area and the deletion behavior.

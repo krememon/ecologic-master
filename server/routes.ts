@@ -14857,6 +14857,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/notifications/bulk - Delete specific notifications by IDs
+  app.delete('/api/notifications/bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: 'ids array is required' });
+      }
+      if (ids.length > 200) {
+        return res.status(400).json({ message: 'Cannot delete more than 200 at once' });
+      }
+      const numericIds = ids.map(Number).filter((n: number) => !isNaN(n));
+      const deleted = await storage.deleteNotificationsByIds(userId, numericIds);
+      res.json({ ok: true, deleted });
+    } catch (error: any) {
+      console.error('Error bulk deleting notifications:', error);
+      res.status(500).json({ message: 'Failed to delete notifications' });
+    }
+  });
+
   // DELETE /api/notifications - Clear all notifications for current user
   app.delete('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {
