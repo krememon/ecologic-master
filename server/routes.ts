@@ -4161,6 +4161,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const user = await storage.getUser(userId);
+      if (user?.subscriptionBypass) {
+        console.log(`[subscriptions] DEV BYPASS active for ${user.email}`);
+        return res.json({
+          active: true,
+          status: 'active',
+          planKey: 'bypass',
+          userLimit: 999,
+          currentPeriodEnd: null,
+          bypass: true,
+          reason: 'user_bypass',
+        });
+      }
+
       const company = await storage.getUserCompany(userId);
       if (!company) {
         return res.json({ active: false, status: 'no_company' });
