@@ -1008,6 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         country: company.country,
         licenseNumber: company.licenseNumber,
         defaultFooterText: company.defaultFooterText,
+        telnyxPhone: company.telnyxPhone || null,
       });
     } catch (error: any) {
       console.error('Error fetching company profile:', error);
@@ -1067,6 +1068,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error updating company profile:', error);
       res.status(500).json({ error: 'Failed to update company profile' });
+    }
+  });
+
+  // =====================
+  // Telnyx SMS Routes
+  // =====================
+
+  app.post('/api/company/telnyx-number', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER' && role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Only Owner or Admin can set the Telnyx number' });
+      }
+
+      const { telnyxPhone } = req.body;
+      if (!telnyxPhone || !/^\+\d{10,15}$/.test(telnyxPhone)) {
+        return res.status(400).json({ error: 'Invalid phone number. Use E.164 format (e.g. +13472840837)' });
+      }
+
+      const updated = await storage.updateCompany(company.id, { telnyxPhone });
+      console.log(`[telnyx] company telnyx phone set last4=${telnyxPhone.slice(-4)} companyId=${company.id}`);
+      res.json({ success: true, telnyxPhone: updated?.telnyxPhone || telnyxPhone });
+    } catch (error: any) {
+      console.error('[telnyx] Error setting telnyx number:', error);
+      res.status(500).json({ error: 'Failed to set Telnyx number' });
+    }
+  });
+
+  app.post('/api/sms/test-send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER' && role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Only Owner or Admin can send test SMS' });
+      }
+
+      const fromPhone = company.telnyxPhone;
+      if (!fromPhone) {
+        return res.status(400).json({ error: 'Set your Telnyx number first before sending SMS' });
+      }
+
+      const { toPhone, text } = req.body;
+      if (!toPhone || !text) {
+        return res.status(400).json({ error: 'toPhone and text are required' });
+      }
+
+      let normalizedTo = toPhone.replace(/[\s\-\(\)\.]/g, '');
+      if (!normalizedTo.startsWith('+')) {
+        normalizedTo = '+1' + normalizedTo;
+      }
+
+      if (!/^\+\d{10,15}$/.test(normalizedTo)) {
+        return res.status(400).json({ error: 'Invalid phone number format' });
+      }
+
+      const apiKey = process.env.TELNYX_API_KEY;
+      const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
+
+      if (!apiKey || !profileId) {
+        return res.status(500).json({ error: 'Telnyx not configured. Set TELNYX_API_KEY and TELNYX_MESSAGING_PROFILE_ID.' });
+      }
+
+      const telnyxRes = await fetch('https://api.telnyx.com/v2/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          from: fromPhone,
+          to: normalizedTo,
+          text,
+          messaging_profile_id: profileId,
+        }),
+      });
+
+      const telnyxBody = await telnyxRes.json().catch(() => ({}));
+
+      if (telnyxRes.ok) {
+        const msgId = (telnyxBody as any)?.data?.id || 'unknown';
+        console.log(`[telnyx] test-send to=***${normalizedTo.slice(-4)} status=sent msgId=${msgId}`);
+        res.json({ success: true, messageId: msgId });
+      } else {
+        const errMsg = (telnyxBody as any)?.errors?.[0]?.detail || `Telnyx API error (${telnyxRes.status})`;
+        console.log(`[telnyx] test-send FAILED to=***${normalizedTo.slice(-4)} status=${telnyxRes.status} error=${errMsg}`);
+        res.status(400).json({ error: errMsg });
+      }
+    } catch (error: any) {
+      console.error('[telnyx] Error sending test SMS:', error);
+      res.status(500).json({ error: 'Failed to send test SMS' });
     }
   });
 

@@ -154,6 +154,7 @@ export const companies = pgTable("companies", {
   qboRefreshToken: text("qbo_refresh_token"),
   qboTokenExpiresAt: timestamp("qbo_token_expires_at"),
   qboConnectedAt: timestamp("qbo_connected_at"),
+  telnyxPhone: varchar("telnyx_phone"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

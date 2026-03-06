@@ -1,0 +1,81 @@
+Add a simple “Telnyx SMS Test” setup so I can verify outbound + inbound works immediately.
+
+Context:
+- I already added Replit Secrets:
+  TELNYX_API_KEY
+  TELNYX_MESSAGING_PROFILE_ID
+- Telnyx number purchased & assigned to messaging profile: +13472840837
+- Webhook URL is set in Telnyx to /api/webhooks/telnyx/sms
+
+Goal:
+1) Store the company’s Telnyx “from” number in the database (for my company).
+2) Add a tiny UI area to send a test SMS to any phone number.
+3) Add a tiny endpoint to set/update my company’s telnyx number from the UI (Owner/Admin only).
+4) Add clear logs so we can confirm sends + webhook receives.
+
+----------------------------------------
+A) Database / Company setting
+----------------------------------------
+If companies table does NOT already have a field for this, add:
+- companies.telnyx_phone (text nullable)
+
+E.164 format required (ex: +13472840837).
+
+----------------------------------------
+B) Backend endpoints
+----------------------------------------
+1) POST /api/company/telnyx-number
+RBAC: Owner/Admin only
+Body: { telnyxPhone: string }
+- Validate E.164-ish format (+ then digits, length sanity)
+- Save to current company row (companies.telnyx_phone)
+- Return updated company
+- Log: [telnyx] company telnyx phone set last4=XXXX
+
+2) POST /api/sms/test-send
+RBAC: Owner/Admin only
+Body: { toPhone: string, text: string }
+- Load current company’s telnyx_phone as fromPhone
+- If missing, return 400 with message: “Set Telnyx number first”
+- Use existing Telnyx sendSms helper/service (or create minimal one) to send:
+  from = company.telnyx_phone
+  to = normalized to E.164 (basic sanitize)
+  text = provided
+- Log: [telnyx] test-send to=last4 status=...
+- Return success + telnyx message id if available
+
+----------------------------------------
+C) Frontend (simple test panel)
+----------------------------------------
+Add a small “SMS Test” panel somewhere easy to access for now:
+- Either on Settings page OR inside Contractor Network page under a “Dev Tools” accordion visible only to Owner/Admin.
+
+Fields:
+1) “Company Telnyx Number”
+- input (placeholder +13472840837)
+- Save button -> calls POST /api/company/telnyx-number
+- show toast success
+
+2) “Send Test SMS”
+- To phone input (placeholder your phone)
+- Message textarea
+- Send button -> calls POST /api/sms/test-send
+- show toast success/error
+
+Keep UI clean and minimal, match existing styling.
+
+----------------------------------------
+D) Inbound webhook sanity log
+----------------------------------------
+In existing Telnyx webhook route (/api/webhooks/telnyx/sms):
+- Add a concise log when a message is received:
+  [telnyx] inbound from=last4 to=last4 msgId=...
+- Do NOT log full body.
+
+----------------------------------------
+E) Deliverables
+----------------------------------------
+- companies.telnyx_phone stored and editable in-app (Owner/Admin)
+- test send endpoint + UI
+- clear logs for outbound + inbound
+- do not break existing DM messaging

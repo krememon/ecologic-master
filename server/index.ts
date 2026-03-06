@@ -911,6 +911,41 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
   res.json({ received: true });
 });
 
+// Telnyx webhook endpoint - uses raw body for signature verification
+app.post('/api/webhooks/telnyx/sms', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const rawBody = req.body?.toString?.() || '';
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      console.log('[telnyx] webhook parse error');
+      return res.status(400).send('Bad request');
+    }
+
+    const eventType = payload?.data?.event_type;
+    const msgData = payload?.data?.payload;
+
+    if (eventType === 'message.received') {
+      const fromPhone = msgData?.from?.phone_number || '';
+      const toPhone = msgData?.to?.[0]?.phone_number || msgData?.to || '';
+      const msgId = msgData?.id || '';
+      console.log(`[telnyx] inbound from=***${fromPhone.slice(-4)} to=***${toPhone.toString().slice(-4)} msgId=${msgId}`);
+    } else if (eventType === 'message.sent' || eventType === 'message.finalized') {
+      const msgId = msgData?.id || '';
+      const status = msgData?.to?.[0]?.status || msgData?.status || '';
+      console.log(`[telnyx] status update event=${eventType} msgId=${msgId} status=${status}`);
+    } else {
+      console.log(`[telnyx] webhook event=${eventType || 'unknown'}`);
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error('[telnyx] webhook error:', err.message);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin) {

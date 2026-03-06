@@ -21,8 +21,112 @@ import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import { Link } from "wouter";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
+import { Textarea } from "@/components/ui/textarea";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 import Disable2FAModal from "@/components/Disable2FAModal";
+import { MessageSquare } from "lucide-react";
+
+function SmsTestPanel() {
+  const { toast } = useToast();
+  const [telnyxPhone, setTelnyxPhone] = useState("");
+  const [toPhone, setToPhone] = useState("");
+  const [smsText, setSmsText] = useState("Hello from EcoLogic! This is a test message.");
+  const [savingNumber, setSavingNumber] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const companyQuery = useQuery<any>({
+    queryKey: ["/api/company/profile"],
+  });
+
+  useEffect(() => {
+    if (companyQuery.data?.telnyxPhone) {
+      setTelnyxPhone(companyQuery.data.telnyxPhone);
+    }
+  }, [companyQuery.data]);
+
+  const handleSaveNumber = async () => {
+    if (!telnyxPhone) return;
+    setSavingNumber(true);
+    try {
+      const res = await apiRequest("POST", "/api/company/telnyx-number", { telnyxPhone });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Telnyx number saved", description: `Set to ${telnyxPhone}` });
+        queryClient.invalidateQueries({ queryKey: ["/api/company/profile"] });
+      } else {
+        toast({ title: "Error", description: data.error, variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to save number", variant: "destructive" });
+    }
+    setSavingNumber(false);
+  };
+
+  const handleSendTest = async () => {
+    if (!toPhone || !smsText) return;
+    setSending(true);
+    try {
+      const res = await apiRequest("POST", "/api/sms/test-send", { toPhone, text: smsText });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "SMS sent!", description: `Message ID: ${data.messageId?.slice(0, 16)}...` });
+      } else {
+        toast({ title: "Send failed", description: data.error, variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Send failed", description: "Network error", variant: "destructive" });
+    }
+    setSending(false);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 mb-6">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            SMS Test (Telnyx)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Company Telnyx Number</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="+13472840837"
+                value={telnyxPhone}
+                onChange={(e) => setTelnyxPhone(e.target.value)}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={handleSaveNumber} disabled={savingNumber || !telnyxPhone}>
+                {savingNumber ? "Saving..." : "Save"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">E.164 format required (e.g. +13472840837)</p>
+          </div>
+
+          <div className="border-t pt-4 space-y-2">
+            <Label className="text-sm font-medium">Send Test SMS</Label>
+            <Input
+              placeholder="Recipient phone (e.g. +1234567890)"
+              value={toPhone}
+              onChange={(e) => setToPhone(e.target.value)}
+            />
+            <Textarea
+              placeholder="Message text"
+              value={smsText}
+              onChange={(e) => setSmsText(e.target.value)}
+              rows={2}
+            />
+            <Button size="sm" onClick={handleSendTest} disabled={sending || !toPhone || !smsText}>
+              {sending ? "Sending..." : "Send Test"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function PushTokenStatus() {
   const { data, isLoading } = useQuery<{ userId: number; count: number; tokens: any[] }>({
@@ -667,6 +771,8 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      {can("org.manage") && <SmsTestPanel />}
 
       <ChangePasswordModal
         open={changePasswordModalOpen}

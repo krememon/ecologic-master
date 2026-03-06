@@ -74,7 +74,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **ORM**: Drizzle ORM
 - **Authentication**: Passport.js, Replit Auth, Google OAuth, Apple Sign-In (`apple-signin-auth`)
 - **Email**: Resend
-- **SMS**: Twilio
+- **SMS**: Telnyx (primary), Twilio (legacy campaigns)
 - **File Uploads**: Multer
 - **WebSockets**: `ws` library
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI, Framer Motion
