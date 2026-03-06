@@ -1,0 +1,114 @@
+Polish + fix the **Contractor Network** page + **Send Job Offer** modal based on current UI screenshots.
+
+DO NOT add new features beyond what’s listed. Focus on correctness + UX polish. Keep existing styling vibe.
+
+---
+
+## 1) Fix “Select Contractor” dropdown (CRITICAL)
+
+Problem: the dropdown shows repeated names (ex: “Elijah Kelly” many times) and unclear identity.
+
+### Required behavior
+
+* Populate the dropdown from the **companies** table (company records), not users.
+* Show **company.name** as the primary label.
+* Under the company name (smaller text), show optional: company city/state OR owner email (whatever is available) but keep it subtle.
+* **Deduplicate** results (unique by company id).
+* **Exclude current user’s company** from the dropdown.
+* Keep the first option as placeholder: “Choose a contractor company”.
+* If no companies exist (besides self), show an empty state in dropdown: “No contractors available yet”.
+
+---
+
+## 2) Select Job picker improvements
+
+* Current job list item shows “Job for Brennan Synch” and then “Brennan Synch” again — make it cleaner:
+
+  * Primary: job.title (or a generated title like “Job – {customerName}”)
+  * Secondary: customer name + optional address/short location (if available)
+* Search should filter by job title + customer name.
+* Only show jobs that belong to the current company (already enforced in backend; keep frontend consistent).
+* If no jobs exist, show empty state: “No jobs to send yet. Create a job first.”
+
+---
+
+## 3) Form validation + button enablement
+
+Right now the form feels like it could submit incomplete data.
+
+### Required:
+
+* Disable “Send Job Offer” button until:
+
+  * job selected
+  * contractor selected
+  * referral type selected
+  * referral value valid
+* Validation rules:
+
+  * Percentage must be > 0 and <= 100
+  * Flat amount must be > 0
+* If invalid, show inline error under the field (not an alert).
+* Show loading state on submit and prevent double-submit.
+
+---
+
+## 4) Fee UI polish
+
+* When “Percentage” selected: label should be “Percentage (%)” and placeholder “e.g., 15”
+* When “Flat Amount” selected: label “Flat Amount ($)” and placeholder “e.g., 250”
+* Add a small “Summary” line under fee fields:
+
+  * “Referral: 10%” or “Referral: $250”
+* If job has a price available, add:
+
+  * “Estimated earnings: $X” (calculate from referral + job price)
+  * If job price is missing, hide estimated earnings.
+
+---
+
+## 5) Modal layout polish (mobile)
+
+* Ensure dropdown menus don’t overflow off-screen:
+
+  * Use a scrollable dropdown menu with max-height
+  * Ensure it anchors correctly within the modal
+* Reduce vertical spacing slightly so the submit button is always visible on smaller screens.
+* Keep the top title + close button aligned and consistent with existing modal system.
+
+---
+
+## 6) Incoming & Sent tabs list UI (small improvements)
+
+* Keep the good empty states.
+* When there ARE referrals, each card should show:
+
+  * Job title
+  * Customer name
+  * Sender/Receiver company
+  * Fee badge (ex: “10%” or “$250”)
+  * Status badge in Sent tab
+* After Accept/Decline:
+
+  * Optimistically remove/update the card
+  * Show toast success
+  * Ensure it refetches to stay consistent
+
+---
+
+## 7) RBAC visibility polish
+
+* Owner/Admin: full access (Send button visible)
+* Supervisor: can view Incoming/Sent but **cannot** open Send modal (hide “Send Job” button)
+* Technician: no access (keep existing gating)
+
+---
+
+## Deliverables
+
+* No backend changes unless necessary to fix dropdown data (but try to use existing endpoints/data first).
+* Fix duplicated contractor dropdown, company-based display, and form validation.
+* Clean modal layout + dropdown overflow.
+* Improve list cards for Incoming/Sent.
+
+After changes, add a short dev log describing what changed and where.
