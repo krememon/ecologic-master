@@ -14037,8 +14037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/invite/referral/:token', async (req, res) => {
     const { token } = req.params;
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
-    const deepLinkUrl = `${baseUrl.replace(/\/$/, '')}/invite/referral/${token}`;
+    const schemeUrl = `ecologic://invite/referral/${token}`;
     res.setHeader('Content-Type', 'text/html');
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -14055,6 +14054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     .icon { font-size: 48px; margin-bottom: 16px; }
     h2 { color: #1e293b; font-size: 20px; margin-bottom: 8px; }
     p { color: #64748b; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+    .hint { color: #94a3b8; font-size: 12px; margin-top: 8px; }
     .buttons { display: flex; flex-direction: column; gap: 12px; }
     .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; transition: transform 0.1s; }
     .btn:active { transform: scale(0.97); }
@@ -14072,7 +14072,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <h2>You've received a job offer!</h2>
     <p>Open the EcoLogic app to view the full job details and respond to this offer.</p>
     <div class="buttons">
-      <a href="${deepLinkUrl}" class="btn btn-open">Open in EcoLogic App</a>
+      <a href="${schemeUrl}" class="btn btn-open">Open in EcoLogic App</a>
+      <p class="hint">If nothing happens, install EcoLogic and try again.</p>
       <div class="divider">Don't have the app?</div>
       <a href="https://apps.apple.com/app/ecologic/id6743440891" class="btn btn-apple">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
@@ -14086,8 +14087,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   </div>
   <script>
     setTimeout(function() {
-      window.location.href = '${deepLinkUrl}';
-    }, 500);
+      window.location.href = '${schemeUrl}';
+    }, 300);
   </script>
 </body>
 </html>`);
@@ -16559,8 +16560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Server-side landing page for /job-offer/:jobId/:token (fallback if app not installed)
   app.get('/job-offer/:jobId/:token', async (req, res) => {
     const { jobId, token: inviteToken } = req.params;
-    const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
-    const deepLinkUrl = `${baseUrl.replace(/\/$/, '')}/job-offer/${jobId}/${inviteToken}`;
+    const schemeUrl = `ecologic://job-offer/${jobId}/${inviteToken}`;
     res.setHeader('Content-Type', 'text/html');
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -16577,6 +16577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     .icon { font-size: 48px; margin-bottom: 16px; }
     h2 { color: #1e293b; font-size: 20px; margin-bottom: 8px; }
     p { color: #64748b; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+    .hint { color: #94a3b8; font-size: 12px; margin-top: 8px; }
     .buttons { display: flex; flex-direction: column; gap: 12px; }
     .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; transition: transform 0.1s; }
     .btn:active { transform: scale(0.97); }
@@ -16594,7 +16595,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <h2>Job Offer</h2>
     <p>You've received a job offer. Open or download EcoLogic to view details and respond.</p>
     <div class="buttons">
-      <a class="btn btn-open" href="${deepLinkUrl}">Open in EcoLogic</a>
+      <a class="btn btn-open" href="${schemeUrl}">Open in EcoLogic</a>
+      <p class="hint">If nothing happens, install EcoLogic and try again.</p>
       <div class="divider">or download the app</div>
       <a class="btn btn-apple" href="https://apps.apple.com/app/ecologic/id6745136938">🍎 App Store</a>
       <a class="btn btn-google" href="https://play.google.com/store/apps/details?id=com.ecologic.app">▶ Google Play</a>

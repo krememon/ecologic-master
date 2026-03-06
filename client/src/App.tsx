@@ -447,26 +447,35 @@ function useCapacitorDeepLinks() {
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] Received:", url);
 
+          let pathToMatch = "";
           try {
-            const parsed = new URL(url);
-
-            const jobOfferMatch = parsed.pathname.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
-            if (jobOfferMatch) {
-              console.log("[deep-link] Job offer deep link detected, navigating to", parsed.pathname);
-              sessionStorage.setItem("pendingDeepLink", parsed.pathname);
-              window.location.href = parsed.pathname;
-              return;
+            if (url.startsWith("ecologic://")) {
+              pathToMatch = "/" + url.replace("ecologic://", "").replace(/^\/+/, "");
+            } else {
+              pathToMatch = new URL(url).pathname;
             }
+          } catch {
+            pathToMatch = "";
+          }
 
-            const inviteMatch = parsed.pathname.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
-            if (inviteMatch) {
-              const target = `/referrals/invite/${inviteMatch[1]}`;
-              console.log("[deep-link] Referral invite deep link detected, navigating to", target);
-              sessionStorage.setItem("pendingDeepLink", target);
-              window.location.href = target;
-              return;
-            }
-          } catch {}
+          console.log("[deep-link] Resolved path:", pathToMatch);
+
+          const jobOfferMatch = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
+          if (jobOfferMatch) {
+            console.log("[deep-link] Job offer deep link detected, navigating to", pathToMatch);
+            sessionStorage.setItem("pendingDeepLink", pathToMatch);
+            window.location.href = pathToMatch;
+            return;
+          }
+
+          const inviteMatch = pathToMatch.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+          if (inviteMatch) {
+            const target = `/referrals/invite/${inviteMatch[1]}`;
+            console.log("[deep-link] Referral invite deep link detected, navigating to", target);
+            sessionStorage.setItem("pendingDeepLink", target);
+            window.location.href = target;
+            return;
+          }
 
           if (!url.startsWith("ecologic://auth/callback")) return;
 
