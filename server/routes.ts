@@ -14010,7 +14010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: "M9WJ473PV5.com.ecologic.app",
-            paths: ["/invite/referral/*", "/auth/*"]
+            paths: ["/invite/referral/*", "/job-offer/*", "/auth/*"]
           }
         ]
       }
@@ -16078,7 +16078,7 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
       const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
-      const inviteUrl = `${baseUrl.replace(/\/$/, '')}/job-offer/${jobId}/${inviteToken}`;
+      const inviteUrl = `${baseUrl.replace(/\/$/, '')}/invite/referral/${inviteToken}`;
 
       const referral = await storage.createJobReferral({
         jobId,
