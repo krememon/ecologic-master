@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X,
   Send, Inbox, ArrowUpRight, Briefcase, DollarSign, Loader2,
-  CheckCircle, XCircle, Clock, ArrowRight, Percent,
+  CheckCircle, XCircle, Clock, ArrowRight, Percent, MessageSquare,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type InsertSubcontractor, type Subcontractor } from "@shared/schema";
@@ -151,6 +151,7 @@ export default function Contractors() {
   const [allowPriceChange, setAllowPriceChange] = useState(false);
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [feeError, setFeeError] = useState<string>("");
+  const [sendVia, setSendVia] = useState<string>("email");
 
   const { data: membership } = useQuery<{ role: string }>({
     queryKey: ["/api/user/membership"],
@@ -300,6 +301,7 @@ export default function Contractors() {
     setAllowPriceChange(false);
     setJobSearchQuery("");
     setFeeError("");
+    setSendVia("email");
   }
 
   function validateFee(type: string, val: string): string {
@@ -336,6 +338,7 @@ export default function Contractors() {
       referralValue: feeNum,
       message: referralMessage || null,
       allowPriceChange,
+      sendVia,
     });
   }
 
@@ -797,6 +800,30 @@ export default function Contractors() {
                   <p className="text-xs text-slate-500 dark:text-slate-400">Let the contractor modify the job price</p>
                 </div>
                 <Switch checked={allowPriceChange} onCheckedChange={setAllowPriceChange} />
+              </div>
+
+              {/* Send Invite Via */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Send Invite Via</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSendVia("email")}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${sendVia === 'email' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <Mail className="w-4 h-4" />Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendVia("sms")}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${sendVia === 'sms' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <MessageSquare className="w-4 h-4" />SMS
+                  </button>
+                </div>
+                {sendVia === 'sms' && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">SMS requires Telnyx to be configured. Falls back to email if unavailable.</p>
+                )}
               </div>
 
               <Button onClick={handleSendSubmit} className="w-full h-11" disabled={!canSubmitSend}>

@@ -14003,7 +14003,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/invite/referral/:token', async (req, res) => {
     const { token } = req.params;
-    const deepLinkUrl = `https://app.ecologicc.com/invite/referral/${token}`;
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
+    const deepLinkUrl = `${baseUrl.replace(/\/$/, '')}/invite/referral/${token}`;
     res.setHeader('Content-Type', 'text/html');
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -16000,7 +16001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Only Owner or Admin can send referrals' });
       }
 
-      const { jobId, receiverCompanyId, referralType, referralValue, message, allowPriceChange } = req.body;
+      const { jobId, receiverCompanyId, referralType, referralValue, message, allowPriceChange, sendVia } = req.body;
 
       if (!jobId || !receiverCompanyId || !referralType) {
         return res.status(400).json({ error: 'jobId, receiverCompanyId, and referralType are required' });
@@ -16027,6 +16028,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const inviteToken = crypto.randomBytes(32).toString('hex');
       const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+      const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
+      const inviteUrl = `${baseUrl.replace(/\/$/, '')}/invite/referral/${inviteToken}`;
+
+      const smsAvailable = !!(process.env.TELNYX_API_KEY && process.env.TELNYX_MESSAGING_PROFILE_ID && receiverCompany.phone);
+      const preferredChannel: string = sendVia === 'sms' && smsAvailable ? 'sms' : 'email';
+      const contactTarget = preferredChannel === 'sms' ? (receiverCompany.phone || '') : (receiverCompany.email || '');
+
       const referral = await storage.createJobReferral({
         jobId,
         senderCompanyId: company.id,
@@ -16038,6 +16046,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allowPriceChange: !!allowPriceChange,
         inviteToken,
         inviteSentToPhone: receiverCompany.phone || null,
+        inviteSentVia: preferredChannel,
+        inviteSentTo: contactTarget || null,
       });
 
       await storage.updateJobReferral(referral.id, {
@@ -16045,9 +16055,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inviteExpiresAt,
       } as any);
 
-      const inviteUrl = `https://app.ecologicc.com/invite/referral/${inviteToken}`;
+      let inviteSent = false;
 
-      if (receiverCompany.phone && process.env.TELNYX_API_KEY && process.env.TELNYX_MESSAGING_PROFILE_ID) {
+      if (preferredChannel === 'sms') {
         try {
           const smsBody = `EcoLogic: New job offer from ${company.name}. Tap to view & respond: ${inviteUrl}`;
           const telnyxRes = await fetch('https://api.telnyx.com/v2/messages', {
@@ -16057,26 +16067,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
               'Authorization': `Bearer ${process.env.TELNYX_API_KEY}`,
             },
             body: JSON.stringify({
-              from: process.env.TELNYX_FROM_NUMBER || receiverCompany.phone,
+              from: company.telnyxPhone || process.env.TELNYX_FROM_NUMBER || receiverCompany.phone,
               to: receiverCompany.phone,
               text: smsBody,
               messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
             }),
           });
           if (telnyxRes.ok) {
-            console.log(`[referrals] SMS sent to ${receiverCompany.phone.slice(-4)} for referral id=${referral.id}`);
+            inviteSent = true;
+            console.log(`[referrals] SMS invite sent to ***${(receiverCompany.phone || '').slice(-4)} referralId=${referral.id}`);
           } else {
-            console.log(`[referrals] SMS send failed status=${telnyxRes.status} for referral id=${referral.id}`);
+            console.log(`[referrals] SMS send failed status=${telnyxRes.status} referralId=${referral.id}, falling back to email`);
           }
         } catch (smsErr: any) {
-          console.log(`[referrals] SMS send error for referral id=${referral.id}: ${smsErr.message}`);
+          console.log(`[referrals] SMS error referralId=${referral.id}: ${smsErr.message}, falling back to email`);
         }
-      } else {
-        console.log(`[referrals] SMS queued (Telnyx not configured or no phone) for referral id=${referral.id} inviteUrl=${inviteUrl}`);
       }
 
-      console.log(`[referrals] job referral created id=${referral.id} jobId=${jobId} sender=${company.id} receiver=${receiverCompanyId} token=${inviteToken.slice(0,8)}...`);
-      res.json({ success: true, referral, inviteUrl });
+      if (!inviteSent && receiverCompany.email) {
+        try {
+          const { Resend } = await import('resend');
+          const resendClient = new Resend(process.env.RESEND_API_KEY);
+          const fromEmail = process.env.RESEND_FROM || 'EcoLogic <no-reply@ecologicc.com>';
+
+          await resendClient.emails.send({
+            from: fromEmail,
+            to: [receiverCompany.email],
+            subject: `New job offer from ${company.name}`,
+            html: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 20px;">
+                <h1 style="font-size: 24px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; color: #1e293b; text-align: center;">ECOLOGIC</h1>
+                <p style="color: #64748b; text-align: center; margin-bottom: 24px;">Construction Management</p>
+                <div style="background: #f8fafc; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                  <h2 style="font-size: 18px; color: #1e293b; margin: 0 0 8px;">You've received a job offer!</h2>
+                  <p style="color: #64748b; font-size: 14px; margin: 0 0 4px;"><strong>${company.name}</strong> wants to send you a job.</p>
+                  ${job.title ? `<p style="color: #64748b; font-size: 14px; margin: 0;">Job: <strong>${job.title}</strong></p>` : ''}
+                  ${message ? `<p style="color: #64748b; font-size: 14px; margin: 8px 0 0;">Message: "${message}"</p>` : ''}
+                </div>
+                <div style="text-align: center;">
+                  <a href="${inviteUrl}" style="display: inline-block; background: #059669; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">View Job Offer</a>
+                </div>
+                <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 24px;">Open the link in the EcoLogic app to accept or decline this offer.</p>
+              </div>
+            `,
+          });
+          inviteSent = true;
+          await storage.updateJobReferral(referral.id, {
+            inviteSentVia: 'email',
+            inviteSentTo: receiverCompany.email,
+          } as any);
+          console.log(`[referrals] email invite sent to ${receiverCompany.email} referralId=${referral.id}`);
+        } catch (emailErr: any) {
+          console.log(`[referrals] email send error referralId=${referral.id}: ${emailErr.message}`);
+        }
+      }
+
+      if (!inviteSent) {
+        console.log(`[referrals] invite queued (no delivery channel) referralId=${referral.id} inviteUrl=${inviteUrl}`);
+      }
+
+      console.log(`[referrals] referral created id=${referral.id} jobId=${jobId} sender=${company.id} receiver=${receiverCompanyId} via=${preferredChannel} token=${inviteToken.slice(0,8)}...`);
+      res.json({ success: true, referral, inviteUrl, sentVia: inviteSent ? preferredChannel : 'queued' });
     } catch (error: any) {
       console.error('[referrals] Error sending referral:', error);
       res.status(500).json({ error: 'Failed to send referral' });

@@ -1980,6 +1980,8 @@ export const jobReferrals = pgTable("job_referrals", {
   allowPriceChange: boolean("allow_price_change").notNull().default(false),
   inviteToken: text("invite_token").unique(),
   inviteSentToPhone: text("invite_sent_to_phone"),
+  inviteSentVia: text("invite_sent_via"),
+  inviteSentTo: text("invite_sent_to"),
   inviteSentAt: timestamp("invite_sent_at"),
   inviteExpiresAt: timestamp("invite_expires_at"),
   acceptedAt: timestamp("accepted_at"),
