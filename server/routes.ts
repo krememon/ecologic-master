@@ -14010,7 +14010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: "M9WJ473PV5.com.ecologic.app",
-            paths: ["/invite/referral/*"]
+            paths: ["/invite/referral/*", "/auth/*"]
           }
         ]
       }
