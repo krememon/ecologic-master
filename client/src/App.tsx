@@ -76,6 +76,7 @@ import Paywall from "@/pages/Paywall";
 import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
 import JobOfferInvite from "@/pages/JobOfferInvite";
+import JobOffer from "@/pages/JobOffer";
 
 function isSubscriptionActive(company: any): boolean {
   if (!company) return false;
@@ -353,6 +354,10 @@ function Router() {
     return <PayoutSetup token={setupToken} />;
   }
 
+  if (path.match(/^\/job-offer\/\d+\/[a-zA-Z0-9]+/)) {
+    return <JobOffer />;
+  }
+
   if (localStorage.getItem('ecologic_demo_mode')) {
     localStorage.removeItem('ecologic_demo_mode');
   }
@@ -417,6 +422,22 @@ function useCapacitorDeepLinks() {
 
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] Received:", url);
+
+          try {
+            const parsed = new URL(url);
+            const jobOfferMatch = parsed.pathname.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
+            if (jobOfferMatch) {
+              console.log("[deep-link] Job offer deep link detected, navigating");
+              window.location.href = parsed.pathname;
+              return;
+            }
+            const inviteMatch = parsed.pathname.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+            if (inviteMatch) {
+              console.log("[deep-link] Referral invite deep link detected, navigating");
+              window.location.href = `/referrals/invite/${inviteMatch[1]}`;
+              return;
+            }
+          } catch {}
 
           if (!url.startsWith("ecologic://auth/callback")) return;
 

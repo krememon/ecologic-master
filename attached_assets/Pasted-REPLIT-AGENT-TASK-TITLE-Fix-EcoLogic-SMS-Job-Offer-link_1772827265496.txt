@@ -1,0 +1,259 @@
+REPLIT AGENT TASK
+
+TITLE
+Fix EcoLogic SMS Job Offer links so they open the NATIVE APP (not Safari) and deep-link directly to the Job Offer Accept / Decline screen.
+
+CONTEXT
+Currently SMS messages send a link like:
+https://eco-logic-pjpell077.replit.app
+
+When tapped on iPhone it opens Safari and loads the web version of EcoLogic.
+
+Desired behavior:
+
+SMS → tap link → EcoLogic NATIVE APP opens → Job Offer screen appears with Accept / Decline.
+
+If the app is NOT installed, then it should fall back to the web page.
+
+The mobile app is a Capacitor wrapper around the React app.
+
+We already have universal links partially configured but they are not routing correctly.
+
+--------------------------------
+
+GOAL
+
+Implement FULL universal deep linking for job offers.
+
+When a subcontractor receives a job offer SMS and taps the link, the app should:
+
+1. Open EcoLogic native app
+2. Navigate to the Job Offer screen
+3. Load the job information
+4. Allow Accept / Decline
+
+--------------------------------
+
+PART 1 — CREATE JOB OFFER DEEP LINK ROUTE
+
+Create a deep link route format:
+
+/job-offer/:jobId/:token
+
+Example:
+
+https://app.ecologicc.com/job-offer/4821/abc123
+
+This route must work for BOTH:
+
+• native app
+• browser fallback
+
+--------------------------------
+
+PART 2 — UPDATE SMS GENERATION
+
+Update the SMS job offer message generator.
+
+Replace the current link with:
+
+https://app.ecologicc.com/job-offer/{jobId}/{token}
+
+Example SMS:
+
+EcoLogic Job Offer
+
+Job: Plumbing Install
+Address: 77 N Ave
+
+Accept or Decline:
+https://app.ecologicc.com/job-offer/4821/abc123
+
+--------------------------------
+
+PART 3 — BACKEND ENDPOINT
+
+Create endpoint:
+
+GET /api/job-offer/:jobId/:token
+
+Responsibilities:
+
+• validate token
+• fetch job
+• fetch customer
+• return job offer data
+
+Response format:
+
+{
+  jobId,
+  jobName,
+  address,
+  description,
+  customerName,
+  tokenValid: true
+}
+
+If invalid token:
+
+return 403
+
+--------------------------------
+
+PART 4 — FRONTEND PAGE
+
+Create new React page:
+
+/job-offer/[jobId]/[token]
+
+When opened:
+
+1. call backend endpoint
+2. load job data
+3. render job offer card
+
+UI should show:
+
+EcoLogic Job Offer
+
+Job Name
+Address
+Customer
+Description
+
+Buttons:
+
+[Accept Job]
+[Decline Job]
+
+--------------------------------
+
+PART 5 — ACCEPT / DECLINE ACTIONS
+
+Create endpoints:
+
+POST /api/job-offer/:jobId/accept
+POST /api/job-offer/:jobId/decline
+
+Both require token validation.
+
+Accept:
+
+• assign job to contractor
+• update job status
+• send confirmation
+
+Decline:
+
+• mark declined
+• notify dispatcher/owner
+
+--------------------------------
+
+PART 6 — UNIVERSAL LINK CONFIG
+
+Domain used:
+
+app.ecologicc.com
+
+Create file:
+
+/.well-known/apple-app-site-association
+
+Content:
+
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.ecologic.app",
+        "paths": [
+          "/job-offer/*"
+        ]
+      }
+    ]
+  }
+}
+
+Serve with:
+
+Content-Type: application/json
+
+--------------------------------
+
+PART 7 — CAPACITOR DEEP LINK HANDLER
+
+Modify main.tsx or App.tsx.
+
+Listen for native deep links.
+
+Example logic:
+
+App.addListener("appUrlOpen", (event) => {
+
+  const url = new URL(event.url)
+
+  if (url.pathname.startsWith("/job-offer")) {
+
+    const parts = url.pathname.split("/")
+
+    const jobId = parts[2]
+    const token = parts[3]
+
+    router.push(`/job-offer/${jobId}/${token}`)
+  }
+
+})
+
+--------------------------------
+
+PART 8 — ENSURE ROUTER SUPPORT
+
+React Router must support direct navigation to:
+
+/job-offer/:jobId/:token
+
+WITHOUT requiring login.
+
+This is a public route.
+
+--------------------------------
+
+PART 9 — FALLBACK BEHAVIOR
+
+If user does NOT have the EcoLogic app installed:
+
+The same URL should open the web version of the job offer screen.
+
+--------------------------------
+
+PART 10 — TEST FLOW
+
+Test sequence:
+
+1. send job offer SMS
+2. tap link on iPhone
+3. EcoLogic app opens
+4. Job Offer screen loads
+5. Accept / Decline works
+6. backend updates job
+
+--------------------------------
+
+DELIVERABLES
+
+Implement:
+
+• job-offer deep link route
+• backend validation endpoint
+• React job-offer screen
+• accept / decline endpoints
+• universal link configuration
+• capacitor deep link listener
+• updated SMS link format
+
+Ensure native app opens instead of Safari when installed.
+
+--------------------------------

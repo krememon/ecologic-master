@@ -13996,7 +13996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: `${teamId}.${bundleId}`,
-            paths: ['/auth/*', '/invite/referral/*'],
+            paths: ['/auth/*', '/invite/referral/*', '/job-offer/*'],
           },
         ],
       },
@@ -16043,7 +16043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
       const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
-      const inviteUrl = `${baseUrl.replace(/\/$/, '')}/invite/referral/${inviteToken}`;
+      const inviteUrl = `${baseUrl.replace(/\/$/, '')}/job-offer/${jobId}/${inviteToken}`;
 
       const referral = await storage.createJobReferral({
         jobId,
@@ -16372,6 +16372,216 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('[referrals] Error declining invite:', error);
       res.status(500).json({ error: 'Failed to decline referral' });
     }
+  });
+
+  // =====================
+  // Job Offer Deep Link Endpoints (public GET, auth required for accept/decline)
+  // =====================
+
+  app.get('/api/job-offer/:jobId/:token', async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId, 10);
+      const { token } = req.params;
+      if (isNaN(jobId) || !token) {
+        return res.status(400).json({ error: 'Invalid job offer link' });
+      }
+
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral || referral.jobId !== jobId) {
+        return res.status(403).json({ error: 'Invalid or expired job offer link', tokenValid: false });
+      }
+
+      if (referral.inviteExpiresAt && new Date(referral.inviteExpiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This job offer has expired', tokenValid: false });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `This job offer has already been ${referral.status}`, tokenValid: false });
+      }
+
+      const job = await storage.getJob(referral.jobId);
+      const senderCompany = await storage.getCompany(referral.senderCompanyId);
+
+      let customerName: string | null = null;
+      let customerAddress: string | null = null;
+      if (job?.customerId) {
+        const customer = await storage.getCustomer(job.customerId);
+        if (customer) {
+          customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
+          customerAddress = [customer.addressLine1, customer.city, customer.state, customer.postalCode].filter(Boolean).join(', ') || null;
+        }
+      }
+
+      res.json({
+        referralId: referral.id,
+        jobId: referral.jobId,
+        status: referral.status,
+        referralType: referral.referralType,
+        referralValue: referral.referralValue,
+        message: referral.message,
+        allowPriceChange: referral.allowPriceChange,
+        senderCompanyName: senderCompany?.name || null,
+        senderCompanyCity: senderCompany?.city || null,
+        senderCompanyState: senderCompany?.state || null,
+        tokenValid: true,
+        job: job ? {
+          id: job.id,
+          title: job.title,
+          status: job.status,
+          description: job.description,
+          scheduledDate: job.scheduledDate,
+          scheduledTime: job.scheduledTime,
+          estimatedCost: referral.allowPriceChange ? job.estimatedCost : null,
+          notes: job.notes,
+        } : null,
+        customerName,
+        customerAddress,
+      });
+    } catch (error: any) {
+      console.error('[job-offer] Error fetching:', error);
+      res.status(500).json({ error: 'Failed to load job offer' });
+    }
+  });
+
+  app.post('/api/job-offer/:jobId/accept', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can accept job offers' });
+      }
+
+      const jobId = parseInt(req.params.jobId, 10);
+      const { token } = req.body;
+      if (isNaN(jobId) || !token) {
+        return res.status(400).json({ error: 'Invalid request' });
+      }
+
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral || referral.jobId !== jobId) {
+        return res.status(404).json({ error: 'Job offer not found' });
+      }
+
+      if (referral.inviteExpiresAt && new Date(referral.inviteExpiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This job offer has expired' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Job offer is already ${referral.status}` });
+      }
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This job offer is not for your company' });
+      }
+
+      await storage.updateJobReferral(referral.id, {
+        status: 'accepted',
+        acceptedAt: new Date(),
+      });
+
+      const updatedJob = await storage.updateJob(referral.jobId, {
+        companyId: company.id,
+      } as any);
+
+      console.log(`[job-offer] accepted referralId=${referral.id} jobId=${jobId} newCompanyId=${company.id}`);
+      res.json({ success: true, job: updatedJob });
+    } catch (error: any) {
+      console.error('[job-offer] Error accepting:', error);
+      res.status(500).json({ error: 'Failed to accept job offer' });
+    }
+  });
+
+  app.post('/api/job-offer/:jobId/decline', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can decline job offers' });
+      }
+
+      const jobId = parseInt(req.params.jobId, 10);
+      const { token } = req.body;
+      if (isNaN(jobId) || !token) {
+        return res.status(400).json({ error: 'Invalid request' });
+      }
+
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral || referral.jobId !== jobId) {
+        return res.status(404).json({ error: 'Job offer not found' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Job offer is already ${referral.status}` });
+      }
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This job offer is not for your company' });
+      }
+
+      await storage.updateJobReferral(referral.id, { status: 'declined' });
+
+      console.log(`[job-offer] declined referralId=${referral.id} jobId=${jobId}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[job-offer] Error declining:', error);
+      res.status(500).json({ error: 'Failed to decline job offer' });
+    }
+  });
+
+  // Server-side landing page for /job-offer/:jobId/:token (fallback if app not installed)
+  app.get('/job-offer/:jobId/:token', async (req, res) => {
+    const { jobId, token: inviteToken } = req.params;
+    const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
+    const deepLinkUrl = `${baseUrl.replace(/\/$/, '')}/job-offer/${jobId}/${inviteToken}`;
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoLogic - Job Offer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .card { background: white; border-radius: 16px; padding: 40px 32px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .logo { font-size: 28px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase; color: #1e293b; margin-bottom: 8px; }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 32px; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h2 { color: #1e293b; font-size: 20px; margin-bottom: 8px; }
+    p { color: #64748b; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+    .buttons { display: flex; flex-direction: column; gap: 12px; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; transition: transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-apple { background: #000; color: white; }
+    .btn-google { background: #1a73e8; color: white; }
+    .btn-open { background: #059669; color: white; margin-top: 8px; }
+    .divider { color: #94a3b8; font-size: 12px; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">ECOLOGIC</div>
+    <div class="subtitle">Construction Management</div>
+    <div class="icon">📋</div>
+    <h2>Job Offer</h2>
+    <p>You've received a job offer. Open or download EcoLogic to view details and respond.</p>
+    <div class="buttons">
+      <a class="btn btn-open" href="${deepLinkUrl}">Open in EcoLogic</a>
+      <div class="divider">or download the app</div>
+      <a class="btn btn-apple" href="https://apps.apple.com/app/ecologic/id6745136938">🍎 App Store</a>
+      <a class="btn btn-google" href="https://play.google.com/store/apps/details?id=com.ecologic.app">▶ Google Play</a>
+    </div>
+  </div>
+</body>
+</html>`);
   });
 
   app.get('/api/companies/network', isAuthenticated, async (req: any, res) => {
