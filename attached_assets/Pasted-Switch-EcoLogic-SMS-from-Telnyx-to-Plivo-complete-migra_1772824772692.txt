@@ -1,0 +1,102 @@
+Switch EcoLogic SMS from Telnyx to Plivo (complete migration).
+
+Goal:
+- Replace all Telnyx-specific code with Plivo.
+- Keep the EcoLogic SMS features the same: sms_threads, sms_messages, /api/sms/send, /api/sms/threads, /api/sms/threads/:id, inbound webhook handling, delivery status updates, and the SMS UI.
+- Do NOT break existing in-app DMs.
+- Keep RBAC rules the same.
+
+========================================================
+1) ENV / SECRETS (Plivo)
+========================================================
+Replace Telnyx env vars with Plivo:
+
+PLIVO_AUTH_ID=...
+PLIVO_AUTH_TOKEN=...
+PLIVO_FROM_NUMBER=...          # default company sender for DEV testing (E.164, ex +1347xxxxxxx)
+APP_PUBLIC_BASE_URL=...
+
+If we support per-company phone numbers already, keep companies.telnyx_phone BUT rename it to companies.sms_phone (provider-agnostic). If rename is risky, add companies.sms_phone and migrate the value.
+
+========================================================
+2) PROVIDER ABSTRACTION (recommended)
+========================================================
+Create server/services/smsProvider.ts with an interface:
+
+sendSms({from, to, text}): { providerMessageId }
+verifyWebhook(rawBody, headers): boolean (Plivo may not require signature; if not, return true)
+parseWebhook(body): normalized event object:
+  { eventType, providerMessageId, status, from, to, text, errorCode, errorMessage }
+
+Implement Plivo provider in server/services/plivo.ts using Plivo REST API.
+
+========================================================
+3) OUTBOUND SEND (replace Telnyx send)
+========================================================
+Update /api/sms/send and /api/sms/test-send to use Plivo:
+
+- Use Plivo “Send a message” endpoint
+- from = company.sms_phone if set, otherwise PLIVO_FROM_NUMBER
+- to = normalized E.164
+- text = body
+
+Store providerMessageId in sms_messages.provider_message_id (rename telnyx_message_id -> provider_message_id)
+If renaming column is risky:
+- add provider_message_id column and keep telnyx_message_id unused.
+
+Status mapping:
+- queued/sent initially
+- update to delivered/failed based on webhooks
+
+========================================================
+4) INBOUND WEBHOOK (Plivo)
+========================================================
+Replace /api/webhooks/telnyx/sms with:
+
+POST /api/webhooks/plivo/sms
+
+Handle Plivo inbound message callbacks:
+- Extract From, To, Text, MessageUUID (or equivalent)
+- Find company by To (the Plivo number assigned to the company)
+- Find or create sms_thread by (company_id + customer_phone)
+- Insert sms_message direction=inbound status=delivered body=text provider_message_id=uuid
+- Update thread.last_message_at
+
+Handle Plivo message status callbacks (if enabled):
+- Update sms_messages.status by provider_message_id
+- Store error details on failure
+
+IMPORTANT:
+- Plivo webhooks require you to configure them in Plivo console for the number/application.
+- If Plivo provides signature validation, implement it; otherwise ensure endpoint is hard-to-guess and rate-limited.
+
+========================================================
+5) FRONTEND UPDATES
+========================================================
+No major UI changes.
+- Ensure the app still calls /api/sms/send and displays sms_threads + sms_messages.
+- Update any labels/logs that mention Telnyx to say SMS Provider / Plivo.
+
+========================================================
+6) CLEANUP
+========================================================
+- Remove telnyx.ts helper and Telnyx-specific webhook verification middleware.
+- Remove TELNYX_* env usage.
+- Update logs from [telnyx] to [plivo].
+
+========================================================
+7) DELIVERABLES + TEST
+========================================================
+Deliverables:
+- Working outbound SMS via Plivo
+- Working inbound SMS via Plivo webhook
+- Delivery status updates wired (if Plivo supports status webhooks)
+- DB stores provider_message_id and error details
+
+Testing steps:
+1) Set PLIVO_AUTH_ID / PLIVO_AUTH_TOKEN / PLIVO_FROM_NUMBER in Replit secrets.
+2) Send test SMS from EcoLogic to my phone.
+3) Reply from my phone and confirm inbound message appears in EcoLogic.
+4) Confirm failures store error in sms_messages.error and show “Failed” in UI.
+
+Add a short DEV LOG listing modified files and Plivo console setup steps (number + webhook URLs).
