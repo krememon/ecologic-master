@@ -16028,14 +16028,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!company) return res.status(404).json({ error: 'Company not found' });
 
       const allCompanies = await storage.getNetworkCompanies(company.id);
-      res.json(allCompanies.map(c => ({
+      const payload = allCompanies.map(c => ({
         id: c.id,
         name: c.name,
         city: c.city || null,
         state: c.state || null,
         email: c.email || null,
         industry: c.industry || null,
-      })));
+      }));
+      console.log('[network companies] count=' + payload.length, payload.map(c => ({ id: c.id, name: c.name, city: c.city, state: c.state })));
+      res.json(payload);
     } catch (error: any) {
       console.error('[Network] Error fetching companies:', error);
       res.status(500).json({ error: 'Failed to fetch companies' });

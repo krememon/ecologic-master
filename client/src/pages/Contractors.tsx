@@ -176,12 +176,11 @@ export default function Contractors() {
   });
 
   const networkCompanies = useMemo(() => {
-    const seen = new Set<number>();
-    return rawNetworkCompanies.filter(c => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
+    console.log('[network companies] payload=', rawNetworkCompanies);
+    const deduped = Array.from(
+      new Map(rawNetworkCompanies.map(c => [String(c.id), c])).values()
+    );
+    return deduped;
   }, [rawNetworkCompanies]);
 
   const { data: incomingReferrals = [], isLoading: incomingLoading } = useQuery<any[]>({

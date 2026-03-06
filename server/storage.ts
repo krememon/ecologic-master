@@ -4441,7 +4441,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNetworkCompanies(excludeCompanyId: number): Promise<Company[]> {
-    return db.select().from(companies).where(ne(companies.id, excludeCompanyId)).orderBy(companies.name);
+    const rows = await db
+      .selectDistinctOn([companies.name], {
+        id: companies.id,
+        name: companies.name,
+        email: companies.email,
+        phone: companies.phone,
+        addressLine1: companies.addressLine1,
+        addressLine2: companies.addressLine2,
+        city: companies.city,
+        state: companies.state,
+        postalCode: companies.postalCode,
+        country: companies.country,
+        inviteCode: companies.inviteCode,
+        inviteCodeVersion: companies.inviteCodeVersion,
+        inviteCodeRotatedAt: companies.inviteCodeRotatedAt,
+        logo: companies.logo,
+        logoFitMode: companies.logoFitMode,
+        licenseNumber: companies.licenseNumber,
+        defaultFooterText: companies.defaultFooterText,
+        industry: companies.industry,
+        teamSizeRange: companies.teamSizeRange,
+        onboardingCompleted: companies.onboardingCompleted,
+      })
+      .from(companies)
+      .innerJoin(companyMembers, eq(companies.id, companyMembers.companyId))
+      .where(
+        and(
+          ne(companies.id, excludeCompanyId),
+          eq(companies.onboardingCompleted, true)
+        )
+      )
+      .orderBy(companies.name, desc(companies.id));
+    return rows as Company[];
   }
 
 }
