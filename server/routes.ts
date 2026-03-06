@@ -14004,30 +14004,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/.well-known/apple-app-site-association', (_req, res) => {
-    const teamId = process.env.APNS_TEAM_ID || 'M9WJ473PV5';
-    const bundleId = process.env.APNS_BUNDLE_ID || 'com.ecologic.app';
-    const appID = `${teamId}.${bundleId}`;
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.json({
+    const aasa = {
       applinks: {
         apps: [],
         details: [
           {
-            appID,
-            paths: ['/invite/referral/*', '/job-offer/*', '/auth/*'],
-          },
-          {
-            appIDs: [appID],
-            components: [
-              { "/": "/invite/referral/*" },
-              { "/": "/job-offer/*" },
-              { "/": "/auth/*" },
-            ],
-          },
-        ],
-      },
-    });
+            appID: "M9WJ473PV5.com.ecologic.app",
+            paths: ["/invite/referral/*"]
+          }
+        ]
+      }
+    };
+    const body = JSON.stringify(aasa, null, 2);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Length', Buffer.byteLength(body).toString());
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.end(body);
   });
 
   app.get('/.well-known/assetlinks.json', (_req, res) => {
