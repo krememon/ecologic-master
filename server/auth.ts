@@ -307,13 +307,21 @@ export function setupAuth(app: Express) {
             let user = await storage.getUserByGoogleId(googleId);
             
             if (user) {
-              // User already linked to this Google account
-              console.log("[google-auth] Found user by googleId:", user.id);
-              return done(null, user);
+              // If the googleId user is a deleted/anonymized account, unlink it and fall through
+              if (user.email && user.email.includes('@deleted.local')) {
+                console.log("[google-auth] Found deleted user with googleId, unlinking:", user.id);
+                await storage.updateUser(user.id, { googleId: null, googleLinked: false });
+                user = null;
+              } else {
+                console.log("[google-auth] Found user by googleId:", user.id);
+                return done(null, user);
+              }
             }
             
             // Step 2: Try to find user by email
-            user = await storage.getUserByEmail(email);
+            if (!user) {
+              user = await storage.getUserByEmail(email);
+            }
             
             if (user) {
               // Link Google account to existing user
