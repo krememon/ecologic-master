@@ -1,0 +1,110 @@
+Implement Universal Links / App Links so invite links open the NATIVE EcoLogic app (not Safari).
+
+Current:
+- DNS for app.ecologicc.com is set and resolving.
+- Invite links currently open Safari web EcoLogic.
+Goal:
+- Tapping https://app.ecologicc.com/invite/referral/:token opens the native app to the Job Offer Invite screen.
+- If app not installed, user sees a simple landing page with App Store / Play Store buttons.
+
+-----------------------------
+1) Force invite links to use app.ecologicc.com
+-----------------------------
+- Set env:
+  APP_PUBLIC_BASE_URL=https://app.ecologicc.com
+- Anywhere we generate/share invite links must use:
+  `${APP_PUBLIC_BASE_URL}/invite/referral/${token}`
+- Never use the replit.dev domain in shared links.
+
+-----------------------------
+2) Serve iOS AASA file (required)
+-----------------------------
+Add a route that serves this EXACT path (no redirect):
+GET /.well-known/apple-app-site-association
+
+Return JSON (Content-Type: application/json) including:
+- applinks.details[].appID with our TeamID + BundleID
+- paths includes:
+  "/invite/referral/*"
+
+If we don’t know TeamID/BundleID yet, implement the server route now with placeholders and add a TODO comment + log to fill them after we confirm.
+
+Also ensure:
+- No auth, no caching issues, no redirect.
+
+-----------------------------
+3) Serve Android assetlinks.json (required)
+-----------------------------
+Add route:
+GET /.well-known/assetlinks.json
+
+Return JSON with:
+- package_name (Android app id)
+- sha256_cert_fingerprints (debug + release if known)
+- relation: ["delegate_permission/common.handle_all_urls"]
+
+If we don’t know the fingerprint yet, add a placeholder and output a dev instruction to extract it.
+
+-----------------------------
+4) iOS: Associated Domains + rebuild
+-----------------------------
+In Xcode project:
+- Enable “Associated Domains”
+- Add:
+  applinks:app.ecologicc.com
+
+Then:
+- npx cap sync ios
+- rebuild + reinstall iOS app
+
+-----------------------------
+5) Android: Intent filter + rebuild
+-----------------------------
+Update AndroidManifest intent filter:
+- scheme https
+- host app.ecologicc.com
+- pathPrefix /invite/referral
+
+Then:
+- npx cap sync android
+- rebuild + reinstall Android app
+
+-----------------------------
+6) Capacitor deep link routing
+-----------------------------
+In the app, handle deep links (appUrlOpen):
+- If path matches /invite/referral/:token
+  -> navigate to in-app route /referrals/invite/:token
+
+If not logged in:
+- store pendingDeepLink
+- after login, navigate to it.
+
+-----------------------------
+7) Web fallback page (only if app not installed)
+-----------------------------
+Add server-side web page for:
+GET /invite/referral/:token
+
+This page should NOT show job details.
+It should show:
+- “Open in EcoLogic”
+- buttons for App Store / Google Play
+- (optional) a small “If you already have the app installed, tap Open” hint
+
+This is just the fallback when Universal Links don’t open the app.
+
+-----------------------------
+8) Deliverables + test steps
+-----------------------------
+Deliver:
+- app.ecologicc.com/.well-known/apple-app-site-association works
+- app.ecologicc.com/.well-known/assetlinks.json works
+- iOS opens app from Messages link
+- Android opens app from link
+- If app not installed, shows store landing page
+
+Add a short DEV LOG with:
+- Files changed
+- Where to put TeamID/BundleID + Android package/fingerprint
+- How to verify AASA/assetlinks in browser
