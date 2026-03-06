@@ -935,13 +935,13 @@ app.post('/api/webhooks/telnyx/sms', express.raw({ type: 'application/json' }), 
       const msgId = msgData?.id || '';
       const toEntry = msgData?.to?.[0] || {};
       const status = toEntry?.status || msgData?.status || '';
-      if (eventType === 'message.finalized' && status === 'delivery_failed') {
-        const errCode = msgData?.errors?.[0]?.code || toEntry?.errors?.[0]?.code || '';
-        const errTitle = msgData?.errors?.[0]?.title || toEntry?.errors?.[0]?.title || '';
-        const errDetail = msgData?.errors?.[0]?.detail || toEntry?.errors?.[0]?.detail || '';
+      if (status === 'delivery_failed' || status === 'sending_failed') {
+        const err0 = msgData?.errors?.[0] || msgData?.error || toEntry?.errors?.[0] || {};
+        const errCode = err0?.code || msgData?.response?.status || msgData?.detail?.code || '';
+        const errDetail = err0?.detail || err0?.message || msgData?.detail?.detail || msgData?.detail || msgData?.response?.body || '';
         const fromLast4 = (msgData?.from?.phone_number || '').slice(-4);
         const toLast4 = (toEntry?.phone_number || '').slice(-4);
-        console.log(`[telnyx] delivery_failed msgId=${msgId} from=***${fromLast4} to=***${toLast4} code=${errCode} title="${errTitle}" detail="${errDetail}"`);
+        console.log(`[telnyx] ${status} msgId=${msgId} from=***${fromLast4} to=***${toLast4} code=${errCode} detail="${typeof errDetail === 'string' ? errDetail : JSON.stringify(errDetail)}"`);
       } else {
         console.log(`[telnyx] status update event=${eventType} msgId=${msgId} status=${status}`);
       }

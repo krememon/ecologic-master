@@ -1123,13 +1123,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'toPhone and text are required' });
       }
 
-      let normalizedTo = toPhone.replace(/[\s\-\(\)\.]/g, '');
-      if (!normalizedTo.startsWith('+')) {
-        normalizedTo = '+1' + normalizedTo;
+      let normalizedTo = toPhone.replace(/[^\d+]/g, '');
+      if (normalizedTo.startsWith('+')) {
+        // already E.164
+      } else {
+        const digits = normalizedTo.replace(/\D/g, '');
+        if (digits.length === 10) {
+          normalizedTo = '+1' + digits;
+        } else if (digits.length === 11 && digits.startsWith('1')) {
+          normalizedTo = '+' + digits;
+        } else {
+          normalizedTo = '+' + digits;
+        }
       }
 
       if (!/^\+\d{10,15}$/.test(normalizedTo)) {
-        return res.status(400).json({ error: 'Invalid phone number format' });
+        return res.status(400).json({ error: `Invalid phone number format. Got: ${normalizedTo}` });
       }
 
       const apiKey = process.env.TELNYX_API_KEY;
@@ -1158,7 +1167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (telnyxRes.ok) {
         const msgId = (telnyxBody as any)?.data?.id || 'unknown';
         console.log(`[telnyx] test-send to=***${normalizedTo.slice(-4)} status=sent msgId=${msgId}`);
-        res.json({ success: true, messageId: msgId });
+        res.json({ success: true, messageId: msgId, normalizedTo });
       } else {
         const errMsg = (telnyxBody as any)?.errors?.[0]?.detail || `Telnyx API error (${telnyxRes.status})`;
         console.log(`[telnyx] test-send FAILED to=***${normalizedTo.slice(-4)} status=${telnyxRes.status} error=${errMsg}`);
