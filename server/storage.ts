@@ -473,6 +473,7 @@ export interface IStorage {
   updateJobReferral(id: number, data: Partial<JobReferral>): Promise<JobReferral | undefined>;
   getIncomingReferrals(companyId: number): Promise<JobReferral[]>;
   getOutgoingReferrals(companyId: number): Promise<JobReferral[]>;
+  getNetworkCompanies(excludeCompanyId: number): Promise<Company[]>;
 
 }
 
@@ -4437,6 +4438,10 @@ export class DatabaseStorage implements IStorage {
 
   async getOutgoingReferrals(companyId: number): Promise<JobReferral[]> {
     return db.select().from(jobReferrals).where(eq(jobReferrals.senderCompanyId, companyId)).orderBy(desc(jobReferrals.createdAt));
+  }
+
+  async getNetworkCompanies(excludeCompanyId: number): Promise<Company[]> {
+    return db.select().from(companies).where(ne(companies.id, excludeCompanyId)).orderBy(companies.name);
   }
 
 }

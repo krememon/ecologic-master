@@ -16021,6 +16021,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/companies/network', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const companies = await storage.getNetworkCompanies(company.id);
+      res.json(companies.map(c => ({ id: c.id, name: c.name })));
+    } catch (error: any) {
+      console.error('[Network] Error fetching companies:', error);
+      res.status(500).json({ error: 'Failed to fetch companies' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
