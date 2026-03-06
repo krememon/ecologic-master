@@ -14006,14 +14006,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/.well-known/apple-app-site-association', (_req, res) => {
     const teamId = process.env.APNS_TEAM_ID || 'M9WJ473PV5';
     const bundleId = process.env.APNS_BUNDLE_ID || 'com.ecologic.app';
+    const appID = `${teamId}.${bundleId}`;
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json({
       applinks: {
         apps: [],
         details: [
           {
-            appID: `${teamId}.${bundleId}`,
-            paths: ['/auth/*', '/invite/referral/*', '/job-offer/*'],
+            appID,
+            paths: ['/invite/referral/*', '/job-offer/*', '/auth/*'],
+          },
+          {
+            appIDs: [appID],
+            components: [
+              { "/": "/invite/referral/*" },
+              { "/": "/job-offer/*" },
+              { "/": "/auth/*" },
+            ],
           },
         ],
       },
@@ -14022,6 +14032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/.well-known/assetlinks.json', (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json([{
       relation: ['delegate_permission/common.handle_all_urls'],
       target: {

@@ -1,0 +1,84 @@
+Fix Contractor Network invite links so they open the NATIVE EcoLogic app (Universal Links / App Links) instead of Safari.
+
+Current bug:
+Shared invite link opens the Safari web version, not the native app.
+
+Root cause:
+We are using a non-associated domain (replit.dev) and/or missing Universal Link + App Link configuration.
+
+Target:
+Use production domain: https://app.ecologicc.com/invite/referral/:token
+Tapping this link should open the EcoLogic native app to the “Job Offer Invite” screen.
+
+---------------------------------------------------------
+A) Use a real domain for links (no replit.dev)
+---------------------------------------------------------
+1) Add env var:
+APP_PUBLIC_BASE_URL=https://app.ecologicc.com
+
+2) Ensure invite link generation ALWAYS uses APP_PUBLIC_BASE_URL:
+inviteUrl = `${APP_PUBLIC_BASE_URL}/invite/referral/${token}`
+
+Do NOT use the replit.dev URL for invite links.
+
+---------------------------------------------------------
+B) iOS Universal Links (Associated Domains + AASA)
+---------------------------------------------------------
+1) iOS (Xcode project):
+- Add Associated Domains capability
+- Add: applinks:app.ecologicc.com
+
+2) Host AASA file on the domain:
+Path: /.well-known/apple-app-site-association
+Content-type: application/json
+NO redirects
+
+Include path:
+"/invite/referral/*"
+
+If we already have an AASA for Stripe, extend it to include /invite/referral/*.
+
+---------------------------------------------------------
+C) Android App Links (assetlinks.json + intent filter)
+---------------------------------------------------------
+1) Update AndroidManifest intent filter for https://app.ecologicc.com:
+- host: app.ecologicc.com
+- pathPrefix: /invite/referral
+
+2) Host assetlinks.json:
+Path: /.well-known/assetlinks.json
+Include the correct package name + SHA256 cert fingerprints
+If we already have assetlinks for Stripe, extend it.
+
+---------------------------------------------------------
+D) App-side deep link routing (Capacitor)
+---------------------------------------------------------
+1) In the Capacitor app, handle appUrlOpen:
+- When URL matches /invite/referral/:token
+- Navigate to in-app route: /referrals/invite/:token
+
+2) If user not logged in:
+- send to login
+- after login, continue to /referrals/invite/:token
+
+---------------------------------------------------------
+E) Web fallback when app not installed
+---------------------------------------------------------
+The https://app.ecologicc.com/invite/referral/:token route on web should be a tiny “Get EcoLogic” landing page:
+- Buttons: App Store / Play Store
+- No job details shown on web
+- Include token in the link so after install it can resume
+
+---------------------------------------------------------
+F) Deliverables
+---------------------------------------------------------
+- Invite URLs use app.ecologicc.com (not replit.dev)
+- Universal Links + App Links configured for /invite/referral/*
+- Capacitor deep link routes into the invite screen
+- Web fallback page for non-installed users
+- Short dev log + test steps for iOS + Android
+
+Test steps:
+1) Install app on iPhone
+2) Tap https://app.ecologicc.com/invite/referral/<token> in Messages
+3) It must open native app to invite screen (not Safari)

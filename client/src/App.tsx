@@ -161,6 +161,15 @@ function useColdStartRedirect(ready: boolean) {
     if (!ready) return;
     if (sessionStorage.getItem("coldStartRedirectDone")) return;
     sessionStorage.setItem("coldStartRedirectDone", "1");
+
+    const pendingLink = sessionStorage.getItem("pendingDeepLink");
+    if (pendingLink) {
+      sessionStorage.removeItem("pendingDeepLink");
+      console.log("[deep-link] Resuming pending deep link after login:", pendingLink);
+      setLocation(pendingLink, { replace: true });
+      return;
+    }
+
     try {
       const cap = (window as any).Capacitor;
       const platform = cap?.getPlatform?.();
@@ -440,16 +449,21 @@ function useCapacitorDeepLinks() {
 
           try {
             const parsed = new URL(url);
+
             const jobOfferMatch = parsed.pathname.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
             if (jobOfferMatch) {
-              console.log("[deep-link] Job offer deep link detected, navigating");
+              console.log("[deep-link] Job offer deep link detected, navigating to", parsed.pathname);
+              sessionStorage.setItem("pendingDeepLink", parsed.pathname);
               window.location.href = parsed.pathname;
               return;
             }
+
             const inviteMatch = parsed.pathname.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
             if (inviteMatch) {
-              console.log("[deep-link] Referral invite deep link detected, navigating");
-              window.location.href = `/referrals/invite/${inviteMatch[1]}`;
+              const target = `/referrals/invite/${inviteMatch[1]}`;
+              console.log("[deep-link] Referral invite deep link detected, navigating to", target);
+              sessionStorage.setItem("pendingDeepLink", target);
+              window.location.href = target;
               return;
             }
           } catch {}
@@ -479,8 +493,15 @@ function useCapacitorDeepLinks() {
 
               if (res.ok) {
                 console.log("[deep-link] Auth code exchanged successfully");
-                queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-                window.location.href = "/";
+                queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+                const pendingLink = sessionStorage.getItem("pendingDeepLink");
+                if (pendingLink) {
+                  sessionStorage.removeItem("pendingDeepLink");
+                  console.log("[deep-link] Resuming pending deep link after auth:", pendingLink);
+                  window.location.href = pendingLink;
+                } else {
+                  window.location.href = "/";
+                }
               } else {
                 console.error("[deep-link] Exchange failed:", res.status);
                 window.location.href = "/login?error=exchange_failed";
