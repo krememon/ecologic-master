@@ -130,6 +130,9 @@ import {
   supportRequests,
   type SupportRequest,
   type InsertSupportRequest,
+  jobReferrals,
+  type JobReferral,
+  type InsertJobReferral,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -463,6 +466,13 @@ export interface IStorage {
 
   // Support request operations
   createSupportRequest(data: InsertSupportRequest): Promise<SupportRequest>;
+
+  // Job referral operations
+  createJobReferral(data: InsertJobReferral): Promise<JobReferral>;
+  getJobReferral(id: number): Promise<JobReferral | undefined>;
+  updateJobReferral(id: number, data: Partial<JobReferral>): Promise<JobReferral | undefined>;
+  getIncomingReferrals(companyId: number): Promise<JobReferral[]>;
+  getOutgoingReferrals(companyId: number): Promise<JobReferral[]>;
 
 }
 
@@ -4404,6 +4414,29 @@ export class DatabaseStorage implements IStorage {
   async createSupportRequest(data: InsertSupportRequest): Promise<SupportRequest> {
     const [request] = await db.insert(supportRequests).values(data).returning();
     return request;
+  }
+
+  async createJobReferral(data: InsertJobReferral): Promise<JobReferral> {
+    const [referral] = await db.insert(jobReferrals).values(data).returning();
+    return referral;
+  }
+
+  async getJobReferral(id: number): Promise<JobReferral | undefined> {
+    const [referral] = await db.select().from(jobReferrals).where(eq(jobReferrals.id, id));
+    return referral;
+  }
+
+  async updateJobReferral(id: number, data: Partial<JobReferral>): Promise<JobReferral | undefined> {
+    const [updated] = await db.update(jobReferrals).set(data).where(eq(jobReferrals.id, id)).returning();
+    return updated;
+  }
+
+  async getIncomingReferrals(companyId: number): Promise<JobReferral[]> {
+    return db.select().from(jobReferrals).where(eq(jobReferrals.receiverCompanyId, companyId)).orderBy(desc(jobReferrals.createdAt));
+  }
+
+  async getOutgoingReferrals(companyId: number): Promise<JobReferral[]> {
+    return db.select().from(jobReferrals).where(eq(jobReferrals.senderCompanyId, companyId)).orderBy(desc(jobReferrals.createdAt));
   }
 
 }

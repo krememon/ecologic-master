@@ -1,0 +1,154 @@
+Build the **foundation for the EcoLogic Contractor Network – Job Referral System**.
+
+This is **backend only for now**. Do NOT build UI yet.
+
+Goal: allow one contractor company to **send a job to another contractor** (job referral). The receiving contractor can **accept or decline**, and if accepted the **job ownership transfers to them** while tracking the referral.
+
+Follow EcoLogic architecture rules:
+
+* Maintain existing RBAC
+* Owner/Admin can send referrals
+* Supervisors can view
+* Technicians have no access
+* Do NOT break existing job logic
+* Do NOT modify existing job table structure unless necessary
+
+---
+
+### 1. Database Table: job_referrals
+
+Create a new table called `job_referrals`.
+
+Fields:
+
+id (uuid primary key)
+
+job_id (uuid)
+→ reference existing jobs table
+
+sender_company_id (uuid)
+
+receiver_company_id (uuid)
+
+referral_type (text)
+values: "percent" | "flat"
+
+referral_value (numeric)
+
+status (text)
+values:
+pending
+accepted
+declined
+completed
+
+message (text)
+
+allow_price_change (boolean default false)
+
+created_at (timestamp default now)
+
+accepted_at (timestamp nullable)
+
+---
+
+### 2. API Route: Send Job Referral
+
+Create route:
+
+POST `/api/referrals/send`
+
+RBAC:
+Owner/Admin only
+
+Request body:
+
+jobId
+receiverCompanyId
+referralType
+referralValue
+message
+allowPriceChange
+
+Logic:
+
+1. Verify sender owns the job
+2. Verify receiver company exists
+3. Create new job_referral record
+4. status = pending
+5. return success
+
+Add logs:
+
+[referrals] job referral created
+
+---
+
+### 3. API Route: Accept Referral
+
+POST `/api/referrals/accept/:referralId`
+
+Logic:
+
+1. Find referral
+2. Verify receiver company matches logged-in company
+3. Update referral status = accepted
+4. set accepted_at timestamp
+5. Transfer job ownership
+
+Job transfer:
+
+update jobs table:
+
+company_id = receiver_company_id
+
+Add logs:
+
+[referrals] job transferred to receiving contractor
+
+Return updated job.
+
+---
+
+### 4. API Route: Decline Referral
+
+POST `/api/referrals/decline/:referralId`
+
+Logic:
+
+Update referral status = declined.
+
+---
+
+### 5. API Route: Fetch Referrals
+
+Create two routes:
+
+GET `/api/referrals/incoming`
+→ referrals where receiver_company_id = current company
+
+GET `/api/referrals/outgoing`
+→ referrals where sender_company_id = current company
+
+Include job summary:
+
+job title
+client name
+job price
+status
+
+---
+
+### 6. Deliverables
+
+Agent should:
+
+✔ create job_referrals table
+✔ create referral API routes
+✔ add job transfer logic
+✔ enforce RBAC
+✔ add minimal logs
+
+Do NOT build UI yet.
+
+Ensure existing job functionality, payments, scheduling, and documents remain untouched.

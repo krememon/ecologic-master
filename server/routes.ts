@@ -15805,6 +15805,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= Job Referral Routes =============
+
+  const REFERRAL_SEND_ROLES = new Set(['OWNER', 'ADMIN']);
+  const REFERRAL_VIEW_ROLES = new Set(['OWNER', 'ADMIN', 'SUPERVISOR']);
+
+  app.post('/api/referrals/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can send referrals' });
+      }
+
+      const { jobId, receiverCompanyId, referralType, referralValue, message, allowPriceChange } = req.body;
+
+      if (!jobId || !receiverCompanyId || !referralType) {
+        return res.status(400).json({ error: 'jobId, receiverCompanyId, and referralType are required' });
+      }
+      if (!['percent', 'flat'].includes(referralType)) {
+        return res.status(400).json({ error: 'referralType must be "percent" or "flat"' });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ error: 'Job not found or not owned by your company' });
+      }
+
+      const receiverCompany = await storage.getCompany(receiverCompanyId);
+      if (!receiverCompany) {
+        return res.status(404).json({ error: 'Receiver company not found' });
+      }
+
+      if (receiverCompanyId === company.id) {
+        return res.status(400).json({ error: 'Cannot send a referral to your own company' });
+      }
+
+      const referral = await storage.createJobReferral({
+        jobId,
+        senderCompanyId: company.id,
+        receiverCompanyId,
+        referralType,
+        referralValue: String(referralValue || 0),
+        status: 'pending',
+        message: message || null,
+        allowPriceChange: !!allowPriceChange,
+      });
+
+      console.log(`[referrals] job referral created id=${referral.id} jobId=${jobId} sender=${company.id} receiver=${receiverCompanyId}`);
+      res.json({ success: true, referral });
+    } catch (error: any) {
+      console.error('[referrals] Error sending referral:', error);
+      res.status(500).json({ error: 'Failed to send referral' });
+    }
+  });
+
+  app.post('/api/referrals/accept/:referralId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can accept referrals' });
+      }
+
+      const referralId = parseInt(req.params.referralId, 10);
+      if (isNaN(referralId)) return res.status(400).json({ error: 'Invalid referral ID' });
+
+      const referral = await storage.getJobReferral(referralId);
+      if (!referral) return res.status(404).json({ error: 'Referral not found' });
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This referral is not addressed to your company' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Referral is already ${referral.status}` });
+      }
+
+      await storage.updateJobReferral(referralId, {
+        status: 'accepted',
+        acceptedAt: new Date(),
+      });
+
+      const updatedJob = await storage.updateJob(referral.jobId, {
+        companyId: company.id,
+      } as any);
+
+      console.log(`[referrals] job transferred to receiving contractor referralId=${referralId} jobId=${referral.jobId} newCompanyId=${company.id}`);
+      res.json({ success: true, job: updatedJob });
+    } catch (error: any) {
+      console.error('[referrals] Error accepting referral:', error);
+      res.status(500).json({ error: 'Failed to accept referral' });
+    }
+  });
+
+  app.post('/api/referrals/decline/:referralId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can decline referrals' });
+      }
+
+      const referralId = parseInt(req.params.referralId, 10);
+      if (isNaN(referralId)) return res.status(400).json({ error: 'Invalid referral ID' });
+
+      const referral = await storage.getJobReferral(referralId);
+      if (!referral) return res.status(404).json({ error: 'Referral not found' });
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This referral is not addressed to your company' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Referral is already ${referral.status}` });
+      }
+
+      await storage.updateJobReferral(referralId, { status: 'declined' });
+
+      console.log(`[referrals] referral declined id=${referralId} jobId=${referral.jobId}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[referrals] Error declining referral:', error);
+      res.status(500).json({ error: 'Failed to decline referral' });
+    }
+  });
+
+  app.get('/api/referrals/incoming', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_VIEW_ROLES.has(role)) {
+        return res.status(403).json({ error: 'You do not have permission to view referrals' });
+      }
+
+      const referrals = await storage.getIncomingReferrals(company.id);
+
+      const enriched = await Promise.all(referrals.map(async (r) => {
+        const job = await storage.getJob(r.jobId);
+        const senderCompany = await storage.getCompany(r.senderCompanyId);
+        let customerName: string | null = null;
+        if (job?.customerId) {
+          const customer = await storage.getCustomer(job.customerId);
+          if (customer) customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
+        }
+        return {
+          ...r,
+          jobTitle: job?.title || null,
+          jobStatus: job?.status || null,
+          customerName,
+          jobEstimatedCost: job?.estimatedCost || null,
+          senderCompanyName: senderCompany?.name || null,
+        };
+      }));
+
+      res.json(enriched);
+    } catch (error: any) {
+      console.error('[referrals] Error fetching incoming referrals:', error);
+      res.status(500).json({ error: 'Failed to fetch incoming referrals' });
+    }
+  });
+
+  app.get('/api/referrals/outgoing', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_VIEW_ROLES.has(role)) {
+        return res.status(403).json({ error: 'You do not have permission to view referrals' });
+      }
+
+      const referrals = await storage.getOutgoingReferrals(company.id);
+
+      const enriched = await Promise.all(referrals.map(async (r) => {
+        const job = await storage.getJob(r.jobId);
+        const receiverCompany = await storage.getCompany(r.receiverCompanyId);
+        let customerName: string | null = null;
+        if (job?.customerId) {
+          const customer = await storage.getCustomer(job.customerId);
+          if (customer) customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
+        }
+        return {
+          ...r,
+          jobTitle: job?.title || null,
+          jobStatus: job?.status || null,
+          customerName,
+          jobEstimatedCost: job?.estimatedCost || null,
+          receiverCompanyName: receiverCompany?.name || null,
+        };
+      }));
+
+      res.json(enriched);
+    } catch (error: any) {
+      console.error('[referrals] Error fetching outgoing referrals:', error);
+      res.status(500).json({ error: 'Failed to fetch outgoing referrals' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ noServer: true });

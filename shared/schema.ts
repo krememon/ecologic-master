@@ -1964,6 +1964,37 @@ export const insertSupportRequestSchema = createInsertSchema(supportRequests).om
 export type SupportRequest = typeof supportRequests.$inferSelect;
 export type InsertSupportRequest = z.infer<typeof insertSupportRequestSchema>;
 
+export const referralStatusEnum = pgEnum("referral_status", ["pending", "accepted", "declined", "completed"]);
+export const referralTypeEnum = pgEnum("referral_type", ["percent", "flat"]);
+
+export const jobReferrals = pgTable("job_referrals", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id),
+  senderCompanyId: integer("sender_company_id").notNull().references(() => companies.id),
+  receiverCompanyId: integer("receiver_company_id").notNull().references(() => companies.id),
+  referralType: referralTypeEnum("referral_type").notNull(),
+  referralValue: decimal("referral_value", { precision: 10, scale: 2 }).notNull().default("0"),
+  status: referralStatusEnum("status").notNull().default("pending"),
+  message: text("message"),
+  allowPriceChange: boolean("allow_price_change").notNull().default(false),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("job_referrals_job_idx").on(table.jobId),
+  index("job_referrals_sender_idx").on(table.senderCompanyId),
+  index("job_referrals_receiver_idx").on(table.receiverCompanyId),
+  index("job_referrals_status_idx").on(table.status),
+]);
+
+export const insertJobReferralSchema = createInsertSchema(jobReferrals).omit({
+  id: true,
+  createdAt: true,
+  acceptedAt: true,
+});
+
+export type JobReferral = typeof jobReferrals.$inferSelect;
+export type InsertJobReferral = z.infer<typeof insertJobReferralSchema>;
+
 export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   id: serial("id").primaryKey(),
   stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull().unique(),
