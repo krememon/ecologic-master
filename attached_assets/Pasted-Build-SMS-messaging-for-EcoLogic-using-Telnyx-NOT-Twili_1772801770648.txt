@@ -1,0 +1,222 @@
+Build SMS messaging for EcoLogic using **Telnyx** (NOT Twilio).
+
+Goal:
+- EcoLogic companies can text customers (and customers can reply).
+- Messages are stored in DB and shown inside our existing Messaging area (or a new SMS screen if needed).
+- Must support inbound webhooks from Telnyx + signature verification.
+- Must NOT break existing DM/in-app messaging.
+
+Use Telnyx Messaging API + webhooks (message.received, message.sent, message.finalized / delivery updates if available).
+We will start with SMS only (MMS later).
+
+========================================
+A) ENV + CONFIG (required)
+========================================
+Add env vars (with safe fallbacks / clear errors if missing):
+
+TELNYX_API_KEY=...
+TELNYX_MESSAGING_PROFILE_ID=...          # messaging profile in Telnyx Mission Control
+TELNYX_PUBLIC_KEY=...                    # for webhook signature verification (Standard Webhooks / ed25519)
+APP_PUBLIC_BASE_URL=https://<our-domain> # used to build webhook URL if needed
+
+Notes:
+- Telnyx webhooks use headers: telnyx-timestamp + telnyx-signature-ed25519
+- We MUST verify webhook signatures.
+- Express must capture RAW body for signature verification (don’t JSON-parse before verifying).
+
+========================================
+B) DATABASE TABLES
+========================================
+Add 2 tables for SMS:
+
+1) sms_threads
+- id (serial or uuid matching codebase style)
+- company_id (FK companies.id)         # the EcoLogic company who owns the thread
+- job_id (nullable FK jobs.id)         # optional: tie to a job
+- customer_id (nullable FK customers.id) OR client_id (use whichever exists in codebase)
+- customer_phone (text, E.164)         # +1...
+- telnyx_phone (text, E.164)           # the Telnyx number used (company’s number)
+- last_message_at (timestamp)
+- created_at
+
+Indexes:
+- company_id
+- job_id
+- customer_phone
+- last_message_at
+
+2) sms_messages
+- id
+- thread_id (FK sms_threads.id)
+- direction (enum: inbound | outbound)
+- status (enum: queued | sent | delivered | failed)   # keep simple for now
+- from_phone (text)
+- to_phone (text)
+- body (text)
+- telnyx_message_id (text nullable)
+- error (text nullable)
+- created_at
+
+Indexes:
+- thread_id
+- created_at
+- telnyx_message_id
+
+========================================
+C) TELNYX SERVICE (server/services/telnyx.ts)
+========================================
+Create a Telnyx helper with:
+
+sendSms({ from, to, text, messagingProfileId }): returns { telnyxMessageId, rawResponse }
+
+Implementation:
+- Use fetch/axios to POST to Telnyx “send message” endpoint
+- Include TELNYX_API_KEY as Bearer token
+- Use TELNYX_MESSAGING_PROFILE_ID
+- Handle errors and return readable error messages
+
+Also create:
+verifyTelnyxWebhook(rawBody, headers): boolean
+- Verify signature using TELNYX_PUBLIC_KEY
+- Use telnyx-timestamp + telnyx-signature-ed25519 headers
+- Reject if missing headers or invalid signature
+- IMPORTANT: verify against RAW body bytes/string exactly as received
+
+========================================
+D) API ROUTES (server/routes.ts)
+========================================
+1) POST /api/sms/send
+RBAC:
+- Owner/Admin + Supervisor can send
+- Technician cannot send (unless we decide later)
+
+Body:
+- threadId (optional)
+- jobId (optional)
+- customerId/clientId (optional)
+- toPhone (required if thread not provided)
+- text (required)
+- fromPhone (optional; if omitted use company default Telnyx number)
+
+Logic:
+- Validate text length and phone format (basic E.164 normalization)
+- Find or create sms_thread:
+  - if threadId provided -> load + verify company owns it
+  - else -> upsert by (company_id + customer_phone + job_id optional)
+- Create sms_message row as outbound status=queued
+- Call telnyx.sendSms()
+- Update sms_message with telnyx_message_id + status=sent (or failed with error)
+- Update sms_thread.last_message_at
+- Return thread + message
+
+2) GET /api/sms/threads
+RBAC:
+- Owner/Admin/Supervisor can view
+- Technician: no access for now
+
+Return:
+- list of threads for company ordered by last_message_at desc
+- include preview (last message body + timestamp)
+- include customer name if available + job title if tied to job
+
+3) GET /api/sms/threads/:threadId
+Return:
+- thread + messages ordered asc
+
+4) POST /api/webhooks/telnyx/sms
+PUBLIC endpoint (no auth). Must verify signature.
+Steps:
+- Read RAW body (must be stored by raw-body middleware)
+- verifyTelnyxWebhook(rawBody, req.headers)
+- Parse JSON AFTER verify
+- Handle event types:
+  a) inbound message received:
+     - extract from_phone (customer), to_phone (our telnyx number), text, telnyx_message_id
+     - find company by telnyx_phone (to_phone) OR by messaging profile mapping if we store it
+     - find or create sms_thread by (company_id + customer_phone)
+     - insert sms_message direction=inbound status=delivered (or received)
+     - update thread.last_message_at
+  b) outbound message status updates (if Telnyx sends them):
+     - match by telnyx_message_id and update sms_messages.status (delivered/failed) + error
+
+Return 200 quickly.
+
+IMPORTANT:
+- Add minimal logs: [telnyx] inbound message, [telnyx] status update, [telnyx] signature failed
+- NEVER log full message body in production logs (only ids + phone last4)
+
+========================================
+E) COMPANY TELNYX NUMBER
+========================================
+We need a place to store each company’s Telnyx “from” number.
+
+Add to companies table (if not present):
+- telnyx_phone (text E.164, nullable)
+
+If we can’t alter companies easily, create a new table:
+company_phone_numbers:
+- id
+- company_id
+- phone_e164
+- is_default boolean
+
+For now:
+- assume 1 default telnyx_phone per company.
+
+========================================
+F) FRONTEND UI (client)
+========================================
+Add a new section inside existing Messaging page:
+
+Tabs:
+- Direct Messages (existing)
+- SMS (new)
+
+SMS tab:
+1) Thread list (left) + Thread view (right) for desktop, stacked for mobile
+- Thread card shows:
+  - Customer name (or phone)
+  - Job title (if linked)
+  - last message preview
+  - time
+
+2) Thread view
+- Message bubbles inbound/outbound
+- Composer at bottom with send button
+- Call POST /api/sms/send
+
+3) Start new SMS
+- “New Text” button
+- Select customer (existing customers list)
+- Optionally pick job
+- Enter phone (prefill if customer has one)
+- Creates thread on first send
+
+RBAC:
+- Supervisor can view + send
+- Technician hidden (no SMS tab)
+
+========================================
+G) MIDDLEWARE: RAW BODY SUPPORT
+========================================
+Update Express app setup to preserve raw body for ONLY the Telnyx webhook route.
+Example approach:
+- Use express.raw({ type: "application/json" }) on /api/webhooks/telnyx/sms
+- Use express.json() normally elsewhere
+This is required for signature verification.
+
+========================================
+H) DELIVERABLES
+========================================
+- DB tables: sms_threads, sms_messages (+ company telnyx phone storage)
+- Telnyx service: sendSms + verifyTelnyxWebhook
+- API: /api/sms/send, /api/sms/threads, /api/sms/threads/:id, /api/webhooks/telnyx/sms
+- Frontend: SMS tab with thread list + thread view + send composer + new text flow
+- RBAC respected
+- No breaking existing DM system
+
+After implementing:
+- Add a short DEV LOG listing touched files and how to test:
+  1) Send outbound SMS to your phone
+  2) Reply from phone -> verify inbound webhook creates message
+  3) Confirm messages persist and render in UI
