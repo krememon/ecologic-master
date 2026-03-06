@@ -1,0 +1,55 @@
+Update Contractor Network “Send Job Offer” to use the native share sheet instead of “Send Invite Via (Email/SMS)”.
+
+Goal:
+- Replace the “Send Invite Via” Email/SMS selector with a single button: [ Share Invite ]
+- When tapped, open the device’s native share sheet (iOS/Android) like the screenshot (Messages, Mail, etc.)
+- Share content includes the invite link + short job summary.
+- After sharing, EcoLogic still creates the referral (same backend call as today).
+
+Requirements:
+1) UI changes (client/src/pages/Contractors.tsx or wherever modal lives)
+- Remove the Email/SMS segmented control entirely.
+- Add a primary button near the bottom:
+  [ Share Invite ]
+- Keep the existing “Send Job Offer” logic OR merge into Share flow (see below).
+
+2) Flow behavior
+- User selects Job + Contractor + fee fields as usual.
+- When user taps [ Share Invite ]:
+  a) Call POST /api/referrals/send (same payload as current send)
+  b) Response must include inviteToken OR inviteUrl (if not currently returned, update backend to return invite_token)
+  c) Build a share message string:
+     “EcoLogic Job Offer from {SenderCompany}
+      Job: {JobTitle}
+      Customer: {CustomerName}
+      Address: {ShortAddress}
+      Accept/Decline: {inviteUrl}”
+  d) Open native share sheet with that text.
+
+3) Implementation details
+- Use Capacitor Share plugin:
+  @capacitor/share
+  Share.share({ title, text, url? })
+- If running on web (desktop), fallback to:
+  - navigator.share if available
+  - else copy to clipboard + toast “Link copied”
+
+4) Make sure invite link exists
+- Ensure job_referrals has invite_token generated on send (if not already).
+- Expose invite url format:
+  `${APP_PUBLIC_BASE_URL}/invite/referral/${inviteToken}`
+- Return inviteToken (or inviteUrl) from POST /api/referrals/send response so frontend can share it.
+
+5) UX polish
+- Disable [ Share Invite ] until required fields are valid (same rules as Send Job Offer).
+- Show toast:
+  - “Invite ready — choose how to share” after share sheet opens
+  - If fallback copy: “Invite link copied”
+
+Deliverables:
+- Single “Share Invite” button
+- Opens native share sheet on iOS/Android
+- Works on web with share/copy fallback
+- No Email/SMS toggle in UI
+- Referral creation still works as before
+- Add short dev log listing changed files

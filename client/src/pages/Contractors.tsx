@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X,
   Send, Inbox, ArrowUpRight, Briefcase, DollarSign, Loader2,
-  CheckCircle, XCircle, Clock, ArrowRight, Percent, MessageSquare,
+  CheckCircle, XCircle, Clock, ArrowRight, Percent, Share2, Copy,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type InsertSubcontractor, type Subcontractor } from "@shared/schema";
@@ -151,7 +151,7 @@ export default function Contractors() {
   const [allowPriceChange, setAllowPriceChange] = useState(false);
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [feeError, setFeeError] = useState<string>("");
-  const [sendVia, setSendVia] = useState<string>("email");
+  const [isSharing, setIsSharing] = useState(false);
 
   const { data: membership } = useQuery<{ role: string }>({
     queryKey: ["/api/user/membership"],
@@ -250,12 +250,6 @@ export default function Contractors() {
       const res = await apiRequest("POST", "/api/referrals/send", payload);
       return await res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
-      setSendModalOpen(false);
-      resetSendForm();
-      toast({ title: "Job offer sent", description: "The contractor has been notified." });
-    },
     onError: (error: Error) => {
       toast({ title: "Failed to send", description: error.message, variant: "destructive" });
     },
@@ -301,7 +295,7 @@ export default function Contractors() {
     setAllowPriceChange(false);
     setJobSearchQuery("");
     setFeeError("");
-    setSendVia("email");
+    setIsSharing(false);
   }
 
   function validateFee(type: string, val: string): string {
@@ -326,20 +320,68 @@ export default function Contractors() {
   const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
   const feeNum = parseFloat(referralValue || '0');
   const estimatedEarnings = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
-  const canSubmitSend = !!selectedJobId && !!receiverCompanyId && !!referralValue && !feeError && !sendReferralMutation.isPending;
+  const canSubmitSend = !!selectedJobId && !!receiverCompanyId && !!referralValue && !feeError && !sendReferralMutation.isPending && !isSharing;
 
-  function handleSendSubmit() {
+  async function handleShareInvite() {
     const err = validateFee(referralType, referralValue);
     if (err) { setFeeError(err); return; }
-    sendReferralMutation.mutate({
-      jobId: selectedJobId,
-      receiverCompanyId: parseInt(receiverCompanyId),
-      referralType,
-      referralValue: feeNum,
-      message: referralMessage || null,
-      allowPriceChange,
-      sendVia,
-    });
+    setIsSharing(true);
+    try {
+      const result = await sendReferralMutation.mutateAsync({
+        jobId: selectedJobId,
+        receiverCompanyId: parseInt(receiverCompanyId),
+        referralType,
+        referralValue: feeNum,
+        message: referralMessage || null,
+        allowPriceChange,
+      });
+
+      const inviteUrl = result.inviteUrl;
+      if (!inviteUrl) {
+        toast({ title: "Error", description: "No invite link returned", variant: "destructive" });
+        setIsSharing(false);
+        return;
+      }
+
+      const companyName = networkCompanies.find(c => String(c.id) === receiverCompanyId)?.name || "contractor";
+      const jobTitle = selectedJob?.title || "Job";
+      const customerName = selectedJob?.customerName || "";
+      const address = selectedJob?.address || selectedJob?.location || "";
+
+      let shareText = `EcoLogic Job Offer\nJob: ${jobTitle}`;
+      if (customerName) shareText += `\nCustomer: ${customerName}`;
+      if (address) shareText += `\nAddress: ${address}`;
+      shareText += `\n\nAccept or Decline: ${inviteUrl}`;
+
+      let shared = false;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "EcoLogic Job Offer", text: shareText });
+          shared = true;
+          toast({ title: "Invite ready", description: "Choose how to share" });
+        } catch (shareErr: any) {
+          if (shareErr.name !== "AbortError") {
+            console.log("[share] navigator.share failed, falling back to clipboard");
+          }
+        }
+      }
+
+      if (!shared) {
+        try {
+          await navigator.clipboard.writeText(shareText);
+          toast({ title: "Invite link copied", description: "Paste it in any app to share" });
+        } catch {
+          toast({ title: "Invite created", description: inviteUrl });
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
+      setSendModalOpen(false);
+      resetSendForm();
+    } catch {
+    } finally {
+      setIsSharing(false);
+    }
   }
 
   if (isLoading || !isAuthenticated || subcontractorsLoading) {
@@ -802,35 +844,11 @@ export default function Contractors() {
                 <Switch checked={allowPriceChange} onCheckedChange={setAllowPriceChange} />
               </div>
 
-              {/* Send Invite Via */}
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Send Invite Via</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSendVia("email")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${sendVia === 'email' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                  >
-                    <Mail className="w-4 h-4" />Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSendVia("sms")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${sendVia === 'sms' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-600' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                  >
-                    <MessageSquare className="w-4 h-4" />SMS
-                  </button>
-                </div>
-                {sendVia === 'sms' && (
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500">SMS requires Telnyx to be configured. Falls back to email if unavailable.</p>
-                )}
-              </div>
-
-              <Button onClick={handleSendSubmit} className="w-full h-11" disabled={!canSubmitSend}>
-                {sendReferralMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending...</>
+              <Button onClick={handleShareInvite} className="w-full h-11" disabled={!canSubmitSend}>
+                {isSharing || sendReferralMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" />Creating invite...</>
                 ) : (
-                  <><Send className="w-4 h-4 mr-2" />Send Job Offer</>
+                  <><Share2 className="w-4 h-4 mr-2" />Share Invite</>
                 )}
               </Button>
             </div>
