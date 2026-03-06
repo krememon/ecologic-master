@@ -1977,6 +1977,10 @@ export const jobReferrals = pgTable("job_referrals", {
   status: referralStatusEnum("status").notNull().default("pending"),
   message: text("message"),
   allowPriceChange: boolean("allow_price_change").notNull().default(false),
+  inviteToken: text("invite_token").unique(),
+  inviteSentToPhone: text("invite_sent_to_phone"),
+  inviteSentAt: timestamp("invite_sent_at"),
+  inviteExpiresAt: timestamp("invite_expires_at"),
   acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -1984,12 +1988,15 @@ export const jobReferrals = pgTable("job_referrals", {
   index("job_referrals_sender_idx").on(table.senderCompanyId),
   index("job_referrals_receiver_idx").on(table.receiverCompanyId),
   index("job_referrals_status_idx").on(table.status),
+  index("job_referrals_invite_token_idx").on(table.inviteToken),
 ]);
 
 export const insertJobReferralSchema = createInsertSchema(jobReferrals).omit({
   id: true,
   createdAt: true,
   acceptedAt: true,
+  inviteSentAt: true,
+  inviteExpiresAt: true,
 });
 
 export type JobReferral = typeof jobReferrals.$inferSelect;

@@ -75,6 +75,7 @@ import OnboardingSubscription from "@/pages/OnboardingSubscription";
 import Paywall from "@/pages/Paywall";
 import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
+import JobOfferInvite from "@/pages/JobOfferInvite";
 
 function isSubscriptionActive(company: any): boolean {
   if (!company) return false;
@@ -251,6 +252,9 @@ function AuthenticatedRouter() {
         <Route path="/leads" component={Leads} />
         <Route path="/leads/:id">
           {(params) => <LeadDetails leadId={params.id} />}
+        </Route>
+        <Route path="/referrals/invite/:token">
+          {() => <JobOfferInvite />}
         </Route>
         <Route path="/subcontractors" component={Contractors} />
         <Route path="/clients" component={Clients} />

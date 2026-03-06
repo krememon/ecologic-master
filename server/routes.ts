@@ -13873,11 +13873,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: `${teamId}.${bundleId}`,
-            paths: ['/auth/*'],
+            paths: ['/auth/*', '/invite/referral/*'],
           },
         ],
       },
     });
+  });
+
+  app.get('/.well-known/assetlinks.json', (_req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json([{
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: {
+        namespace: 'android_app',
+        package_name: process.env.ANDROID_PACKAGE_NAME || 'com.ecologic.app',
+        sha256_cert_fingerprints: [process.env.ANDROID_CERT_FINGERPRINT || ''].filter(Boolean),
+      },
+    }]);
+  });
+
+  app.get('/invite/referral/:token', async (req, res) => {
+    const { token } = req.params;
+    const deepLinkUrl = `https://app.ecologicc.com/invite/referral/${token}`;
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoLogic - Job Offer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .card { background: white; border-radius: 16px; padding: 40px 32px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .logo { font-size: 28px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase; color: #1e293b; margin-bottom: 8px; }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 32px; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h2 { color: #1e293b; font-size: 20px; margin-bottom: 8px; }
+    p { color: #64748b; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+    .buttons { display: flex; flex-direction: column; gap: 12px; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; transition: transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-apple { background: #000; color: white; }
+    .btn-google { background: #1a73e8; color: white; }
+    .btn-open { background: #059669; color: white; margin-top: 8px; }
+    .divider { color: #94a3b8; font-size: 12px; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">ECOLOGIC</div>
+    <div class="subtitle">Construction Management</div>
+    <div class="icon">📋</div>
+    <h2>You've received a job offer!</h2>
+    <p>Open the EcoLogic app to view the full job details and respond to this offer.</p>
+    <div class="buttons">
+      <a href="${deepLinkUrl}" class="btn btn-open">Open in EcoLogic App</a>
+      <div class="divider">Don't have the app?</div>
+      <a href="https://apps.apple.com/app/ecologic/id6743440891" class="btn btn-apple">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Download on the App Store
+      </a>
+      <a href="https://play.google.com/store/apps/details?id=com.ecologic.app" class="btn btn-google">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35zm13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27zm.91-.91L19.59 12l-1.87-2.21-2.27 2.27 2.27 2.15zM6.05 2.66l10.76 6.22-2.27 2.27-8.49-8.49z"/></svg>
+        Get it on Google Play
+      </a>
+    </div>
+  </div>
+  <script>
+    setTimeout(function() {
+      window.location.href = '${deepLinkUrl}';
+    }, 500);
+  </script>
+</body>
+</html>`);
   });
 
   // POST /api/payments/stripe/create-intent - Create a Stripe PaymentIntent for in-app payment
@@ -15845,6 +15914,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Cannot send a referral to your own company' });
       }
 
+      const crypto = await import('crypto');
+      const inviteToken = crypto.randomBytes(32).toString('hex');
+      const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
       const referral = await storage.createJobReferral({
         jobId,
         senderCompanyId: company.id,
@@ -15854,10 +15927,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending',
         message: message || null,
         allowPriceChange: !!allowPriceChange,
+        inviteToken,
+        inviteSentToPhone: receiverCompany.phone || null,
       });
 
-      console.log(`[referrals] job referral created id=${referral.id} jobId=${jobId} sender=${company.id} receiver=${receiverCompanyId}`);
-      res.json({ success: true, referral });
+      await storage.updateJobReferral(referral.id, {
+        inviteSentAt: new Date(),
+        inviteExpiresAt,
+      } as any);
+
+      const inviteUrl = `https://app.ecologicc.com/invite/referral/${inviteToken}`;
+
+      if (receiverCompany.phone && process.env.TELNYX_API_KEY && process.env.TELNYX_MESSAGING_PROFILE_ID) {
+        try {
+          const smsBody = `EcoLogic: New job offer from ${company.name}. Tap to view & respond: ${inviteUrl}`;
+          const telnyxRes = await fetch('https://api.telnyx.com/v2/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.TELNYX_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: process.env.TELNYX_FROM_NUMBER || receiverCompany.phone,
+              to: receiverCompany.phone,
+              text: smsBody,
+              messaging_profile_id: process.env.TELNYX_MESSAGING_PROFILE_ID,
+            }),
+          });
+          if (telnyxRes.ok) {
+            console.log(`[referrals] SMS sent to ${receiverCompany.phone.slice(-4)} for referral id=${referral.id}`);
+          } else {
+            console.log(`[referrals] SMS send failed status=${telnyxRes.status} for referral id=${referral.id}`);
+          }
+        } catch (smsErr: any) {
+          console.log(`[referrals] SMS send error for referral id=${referral.id}: ${smsErr.message}`);
+        }
+      } else {
+        console.log(`[referrals] SMS queued (Telnyx not configured or no phone) for referral id=${referral.id} inviteUrl=${inviteUrl}`);
+      }
+
+      console.log(`[referrals] job referral created id=${referral.id} jobId=${jobId} sender=${company.id} receiver=${receiverCompanyId} token=${inviteToken.slice(0,8)}...`);
+      res.json({ success: true, referral, inviteUrl });
     } catch (error: any) {
       console.error('[referrals] Error sending referral:', error);
       res.status(500).json({ error: 'Failed to send referral' });
@@ -16018,6 +16128,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('[referrals] Error fetching outgoing referrals:', error);
       res.status(500).json({ error: 'Failed to fetch outgoing referrals' });
+    }
+  });
+
+  // ============= Job Referral Invite Routes (token-based) =============
+
+  app.get('/api/referrals/invite/:token', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const { token } = req.params;
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral) return res.status(404).json({ error: 'Invite not found' });
+
+      if (referral.inviteExpiresAt && new Date(referral.inviteExpiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This invite has expired', status: 'expired' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `This referral has already been ${referral.status}`, status: referral.status });
+      }
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This invite is not for your company' });
+      }
+
+      const job = await storage.getJob(referral.jobId);
+      const senderCompany = await storage.getCompany(referral.senderCompanyId);
+      let customerName: string | null = null;
+      let customerAddress: string | null = null;
+      if (job?.customerId) {
+        const customer = await storage.getCustomer(job.customerId);
+        if (customer) {
+          customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
+          customerAddress = [customer.addressLine1, customer.city, customer.state, customer.postalCode].filter(Boolean).join(', ') || null;
+        }
+      }
+
+      res.json({
+        referralId: referral.id,
+        status: referral.status,
+        referralType: referral.referralType,
+        referralValue: referral.referralValue,
+        message: referral.message,
+        allowPriceChange: referral.allowPriceChange,
+        senderCompanyName: senderCompany?.name || null,
+        senderCompanyCity: senderCompany?.city || null,
+        senderCompanyState: senderCompany?.state || null,
+        job: job ? {
+          id: job.id,
+          title: job.title,
+          status: job.status,
+          description: job.description,
+          scheduledDate: job.scheduledDate,
+          scheduledTime: job.scheduledTime,
+          estimatedCost: referral.allowPriceChange ? job.estimatedCost : null,
+          notes: job.notes,
+        } : null,
+        customerName,
+        customerAddress,
+      });
+    } catch (error: any) {
+      console.error('[referrals] Error fetching invite:', error);
+      res.status(500).json({ error: 'Failed to fetch invite details' });
+    }
+  });
+
+  app.post('/api/referrals/invite/:token/accept', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can accept referrals' });
+      }
+
+      const { token } = req.params;
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral) return res.status(404).json({ error: 'Invite not found' });
+
+      if (referral.inviteExpiresAt && new Date(referral.inviteExpiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This invite has expired' });
+      }
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Referral is already ${referral.status}` });
+      }
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This invite is not for your company' });
+      }
+
+      await storage.updateJobReferral(referral.id, {
+        status: 'accepted',
+        acceptedAt: new Date(),
+      });
+
+      const updatedJob = await storage.updateJob(referral.jobId, {
+        companyId: company.id,
+      } as any);
+
+      console.log(`[referrals] invite accepted via token referralId=${referral.id} jobId=${referral.jobId} newCompanyId=${company.id}`);
+      res.json({ success: true, job: updatedJob });
+    } catch (error: any) {
+      console.error('[referrals] Error accepting invite:', error);
+      res.status(500).json({ error: 'Failed to accept referral' });
+    }
+  });
+
+  app.post('/api/referrals/invite/:token/decline', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (!REFERRAL_SEND_ROLES.has(role)) {
+        return res.status(403).json({ error: 'Only Owner or Admin can decline referrals' });
+      }
+
+      const { token } = req.params;
+      const referral = await storage.getJobReferralByToken(token);
+      if (!referral) return res.status(404).json({ error: 'Invite not found' });
+
+      if (referral.status !== 'pending') {
+        return res.status(400).json({ error: `Referral is already ${referral.status}` });
+      }
+
+      if (referral.receiverCompanyId !== company.id) {
+        return res.status(403).json({ error: 'This invite is not for your company' });
+      }
+
+      await storage.updateJobReferral(referral.id, { status: 'declined' });
+
+      console.log(`[referrals] invite declined via token referralId=${referral.id} jobId=${referral.jobId}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[referrals] Error declining invite:', error);
+      res.status(500).json({ error: 'Failed to decline referral' });
     }
   });
 

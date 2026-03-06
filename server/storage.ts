@@ -470,6 +470,7 @@ export interface IStorage {
   // Job referral operations
   createJobReferral(data: InsertJobReferral): Promise<JobReferral>;
   getJobReferral(id: number): Promise<JobReferral | undefined>;
+  getJobReferralByToken(token: string): Promise<JobReferral | undefined>;
   updateJobReferral(id: number, data: Partial<JobReferral>): Promise<JobReferral | undefined>;
   getIncomingReferrals(companyId: number): Promise<JobReferral[]>;
   getOutgoingReferrals(companyId: number): Promise<JobReferral[]>;
@@ -4424,6 +4425,11 @@ export class DatabaseStorage implements IStorage {
 
   async getJobReferral(id: number): Promise<JobReferral | undefined> {
     const [referral] = await db.select().from(jobReferrals).where(eq(jobReferrals.id, id));
+    return referral;
+  }
+
+  async getJobReferralByToken(token: string): Promise<JobReferral | undefined> {
+    const [referral] = await db.select().from(jobReferrals).where(eq(jobReferrals.inviteToken, token));
     return referral;
   }
 

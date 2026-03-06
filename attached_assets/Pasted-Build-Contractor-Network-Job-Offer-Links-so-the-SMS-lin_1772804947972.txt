@@ -1,0 +1,178 @@
+Build “Contractor Network Job Offer Links” so the SMS link opens INSIDE the EcoLogic app (not a public job page).
+
+Desired behavior:
+- Sender taps “Send Job Offer” in EcoLogic → referral is created as usual.
+- EcoLogic sends SMS to contractor phone with a link.
+- If recipient HAS EcoLogic installed → link opens the EcoLogic app directly to a “Job Offer” screen with full job details + Accept / Decline.
+- If recipient does NOT have EcoLogic installed → link sends them to the App Store / Google Play to download EcoLogic.
+- After install + first open + login, EcoLogic should continue the flow and land them back on the Job Offer screen using the same token.
+
+We are using Capacitor (iOS + Android). Implement Universal Links / App Links + in-app deep link handling.
+
+========================================================
+A) URL + TOKEN FORMAT (single link works everywhere)
+========================================================
+Use a single HTTPS link in the SMS:
+
+https://app.ecologicc.com/invite/referral/<token>
+
+- token is a secure random string stored on job_referrals
+- This URL must be a Universal Link (iOS) + App Link (Android)
+
+========================================================
+B) DATABASE: job_referrals invite fields
+========================================================
+Add fields to job_referrals if missing:
+- invite_token (text unique not null)
+- invite_sent_to_phone (text nullable)
+- invite_sent_at (timestamp nullable)
+- invite_expires_at (timestamp nullable, default now + 7 days)
+
+When POST /api/referrals/send creates a referral:
+- generate invite_token
+- set invite_expires_at
+- set invite_sent_to_phone based on selected contractor’s phone
+- set invite_sent_at = now
+
+========================================================
+C) SMS CONTENT (Telnyx later, queue now if blocked)
+========================================================
+Message example:
+“EcoLogic: New job offer from {SenderCompany}. Tap to view & respond: https://app.ecologicc.com/invite/referral/{token}”
+
+If Telnyx not configured, do NOT fail; log queued.
+
+========================================================
+D) APP LINKING (CRITICAL)
+========================================================
+We must configure:
+1) iOS Universal Links
+2) Android App Links
+
+Domain to use: app.ecologicc.com (preferred) OR current prod domain if different.
+(Do NOT rely on replit.dev for long-term universal links; use your real domain.)
+
+1) iOS:
+- Add Associated Domains in Xcode: applinks:app.ecologicc.com
+- Serve AASA file at:
+  https://app.ecologicc.com/.well-known/apple-app-site-association
+- Include paths:
+  /invite/referral/*
+- Ensure correct content-type and no redirects.
+
+2) Android:
+- Add intent filter for https://app.ecologicc.com/invite/referral/*
+- Serve assetlinks.json at:
+  https://app.ecologicc.com/.well-known/assetlinks.json
+
+If universal/app links are already set up for Stripe return URLs, reuse the same infrastructure and extend paths.
+
+========================================================
+E) FALLBACK IF APP NOT INSTALLED
+========================================================
+Universal/App Links will open browser if app not installed.
+We need that web URL to redirect users to the appropriate app store.
+
+Implement a very small landing handler for GET /invite/referral/:token on the web server:
+- It should NOT show job details.
+- It should show “Get EcoLogic” with buttons:
+  - “Download on the App Store”
+  - “Get it on Google Play”
+- Attempt to open the app via deep link scheme as a secondary fallback if desired (optional).
+- Include the token as a parameter so after install/open it can resume.
+
+This page is only for “app not installed” fallback, NOT the offer details.
+
+========================================================
+F) IN-APP DEEP LINK HANDLING
+========================================================
+Implement deep link routing in the Capacitor app:
+
+- When the app opens via URL https://app.ecologicc.com/invite/referral/:token
+  route to:
+  /referrals/invite/:token  (a new in-app screen)
+
+If user is NOT logged in:
+- show login/signup
+- after login, continue automatically to /referrals/invite/:token
+
+If user IS logged in:
+- fetch invite details via API (below)
+- show Job Offer screen with job details + Accept / Decline
+
+========================================================
+G) BACKEND API FOR INVITE DETAILS + ACTIONS
+========================================================
+Add authenticated endpoints:
+
+1) GET /api/referrals/invite/:token
+- Requires auth
+- Finds referral by invite_token
+- Validates:
+  - not expired
+  - referral status is pending
+  - logged-in user’s company matches receiver_company_id
+- Returns:
+  - referral summary (fee type/value)
+  - sender company name
+  - job details needed for display (title, customer, address, scheduled time, scope/notes, price if allowed)
+
+2) POST /api/referrals/invite/:token/accept
+- Requires auth
+- Same validation as above
+- Accepts referral + transfers job ownership (reuse existing accept logic)
+- Return updated job + referral
+
+3) POST /api/referrals/invite/:token/decline
+- Requires auth
+- Mark declined
+- Return referral
+
+Important:
+- Do NOT allow any company other than receiver_company_id to accept via token.
+- Token is only a “locator”; authorization still enforced via logged-in company.
+
+========================================================
+H) FRONTEND: “Job Offer” SCREEN
+========================================================
+Create screen: JobOfferInvite.tsx (or similar)
+
+UI:
+- Header: “Job Offer”
+- Shows:
+  - From: {SenderCompany}
+  - Job title
+  - Customer name
+  - Address
+  - Schedule info (if exists)
+  - Notes/message from sender (if exists)
+  - Referral fee summary (10% or $250)
+- Buttons:
+  [Accept Job] (primary)
+  [Decline] (secondary)
+- After accept/decline:
+  - show confirmation state
+  - optional “Go to Job” button if accepted
+
+Edge cases:
+- Expired token → show “Invite expired”
+- Already accepted/declined → show final status
+- Logged in but wrong company → show “This invite is not for your company”
+
+========================================================
+I) DELIVERABLES
+========================================================
+- Invite token added to job_referrals + generated on send
+- SMS includes https://app.ecologicc.com/invite/referral/:token
+- Universal Links + App Links config updated for /invite/referral/*
+- Fallback landing page redirects to App Store / Play Store (no job details)
+- In-app deep link routing to Job Offer invite screen
+- Authenticated invite APIs (details/accept/decline) with strict company validation
+- JobOfferInvite screen implemented
+
+Add a short DEV LOG with touched files and how to test:
+1) Send job offer → copy link
+2) On device with app installed → tap link → opens app → shows invite
+3) Log out → tap link → login → returns to invite
+4) Accept → job transfers and appears in jobs list
+5) If app not installed → link shows “Get EcoLogic” with store buttons
