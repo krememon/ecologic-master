@@ -95,10 +95,19 @@ function getNextOnboardingRoute(params: {
 }): string | null {
   const { user, onboardingChoice, onboardingIndustry, subActive } = params;
   
+  console.log("[auth] getNextOnboardingRoute", {
+    hasCompany: !!user?.company,
+    companyId: user?.company?.id,
+    onboardingCompleted: user?.company?.onboardingCompleted,
+    onboardingChoice,
+    subActive,
+  });
+
   if (user?.company) {
     const { onboardingCompleted } = user.company;
 
     if (onboardingCompleted && subActive) {
+      console.log("[auth] redirecting to dashboard — onboarding complete + subscription active");
       return null;
     }
 
@@ -187,6 +196,12 @@ function AuthenticatedRouter() {
 
   const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
+
+  if (hasCompany) {
+    localStorage.removeItem("onboardingChoice");
+    localStorage.removeItem("onboardingIndustry");
+  }
+
   const nextRoute = !isLoading && isAuthenticated && user 
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry, subActive })
     : null;

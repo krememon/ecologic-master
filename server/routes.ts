@@ -719,6 +719,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const isMobile = !!req.headers['authorization']?.startsWith('Bearer ');
+      console.log(`[auth] ${isMobile ? 'mobile' : 'web'} app user fetched`, {
+        userId,
+        email: user.email,
+        companyId: company?.id ?? null,
+        role,
+        onboardingChoice: user.onboardingChoice,
+      });
+
+      if (company) {
+        console.log("[auth] companyId detected:", company.id);
+      }
+
       const responseData = {
         ...user,
         role,
@@ -738,6 +751,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null
       };
       
+      if (company) {
+        console.log("[auth] redirecting to dashboard");
+      }
+
       res.json(responseData);
     } catch (error) {
       console.error("Error fetching user:", error);
