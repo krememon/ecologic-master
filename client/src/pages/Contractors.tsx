@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,13 +105,12 @@ const STATUS_CONFIG: Record<string, { color: string; icon: typeof Clock; label: 
 };
 
 function companySubtitle(c: NetworkCompany): string {
-  const parts: string[] = [];
-  if (c.city && c.state) parts.push(`${c.city}, ${c.state}`);
-  else if (c.city) parts.push(c.city);
-  else if (c.state) parts.push(c.state);
-  if (!parts.length && c.industry) parts.push(c.industry);
-  if (!parts.length && c.email) parts.push(c.email);
-  return parts.join(' · ');
+  if (c.city && c.state) return `${c.city}, ${c.state}`;
+  if (c.city) return c.city;
+  if (c.state) return c.state;
+  if (c.industry) return c.industry;
+  if (c.email) return c.email;
+  return '';
 }
 
 function feeBadge(type: string, value: string) {
@@ -120,9 +119,24 @@ function feeBadge(type: string, value: string) {
   return `$${v.toFixed(2)}`;
 }
 
+function jobSecondaryInfo(job: any): string {
+  const parts: string[] = [];
+  const titleLower = (job.title || '').toLowerCase();
+  const clientName = job.clientName || job.customerName || '';
+  if (clientName && !titleLower.includes(clientName.toLowerCase())) {
+    parts.push(clientName);
+  }
+  const loc = job.location || job.address || '';
+  if (loc) {
+    const short = loc.length > 40 ? loc.substring(0, 40) + '...' : loc;
+    parts.push(short);
+  }
+  return parts.join(' · ');
+}
+
 export default function Contractors() {
   const { toast } = useToast();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("contractors");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSubcontractor, setEditingSubcontractor] = useState<Subcontractor | null>(null);
@@ -156,10 +170,19 @@ export default function Contractors() {
     enabled: isAuthenticated && canSend,
   });
 
-  const { data: networkCompanies = [] } = useQuery<NetworkCompany[]>({
+  const { data: rawNetworkCompanies = [] } = useQuery<NetworkCompany[]>({
     queryKey: ["/api/companies/network"],
     enabled: isAuthenticated && canSend,
   });
+
+  const networkCompanies = useMemo(() => {
+    const seen = new Set<number>();
+    return rawNetworkCompanies.filter(c => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+  }, [rawNetworkCompanies]);
 
   const { data: incomingReferrals = [], isLoading: incomingLoading } = useQuery<any[]>({
     queryKey: ["/api/referrals/incoming"],
@@ -180,7 +203,7 @@ export default function Contractors() {
   const filteredJobs = jobs.filter((j: any) => {
     if (!jobSearchQuery.trim()) return true;
     const q = jobSearchQuery.toLowerCase();
-    return j.title?.toLowerCase().includes(q) || j.clientName?.toLowerCase().includes(q);
+    return j.title?.toLowerCase().includes(q) || j.clientName?.toLowerCase().includes(q) || j.customerName?.toLowerCase().includes(q);
   });
 
   const createSubcontractorMutation = useMutation({
@@ -191,6 +214,7 @@ export default function Contractors() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       setIsDialogOpen(false);
+      toast({ title: "Contractor added" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -205,6 +229,7 @@ export default function Contractors() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       setEditingSubcontractor(null);
+      toast({ title: "Contractor updated" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -213,7 +238,10 @@ export default function Contractors() {
 
   const deleteSubcontractorMutation = useMutation({
     mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/subcontractors/${id}`); },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
+      toast({ title: "Contractor deleted" });
+    },
     onError: (error: Error) => { toast({ title: "Error", description: error.message, variant: "destructive" }); },
   });
 
@@ -277,7 +305,7 @@ export default function Contractors() {
 
   function validateFee(type: string, val: string): string {
     const num = parseFloat(val);
-    if (!val || isNaN(num) || num <= 0) return type === 'percent' ? 'Must be between 1-100' : 'Must be greater than 0';
+    if (!val || isNaN(num) || num <= 0) return type === 'percent' ? 'Must be between 1 and 100' : 'Must be greater than 0';
     if (type === 'percent' && num > 100) return 'Cannot exceed 100%';
     return '';
   }
@@ -294,7 +322,7 @@ export default function Contractors() {
   }
 
   const selectedJob = jobs.find((j: any) => j.id === selectedJobId);
-  const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || '0') : 0;
+  const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
   const feeNum = parseFloat(referralValue || '0');
   const estimatedEarnings = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
   const canSubmitSend = !!selectedJobId && !!receiverCompanyId && !!referralValue && !feeError && !sendReferralMutation.isPending;
@@ -517,7 +545,7 @@ export default function Contractors() {
                           </p>
                           {ref.customerName && <p className="text-xs text-slate-500 dark:text-slate-400 ml-[22px]">{ref.customerName}</p>}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 text-[11px] font-bold px-2 py-0.5 rounded-full">
                             {feeBadge(ref.referralType, ref.referralValue)}
                           </span>
@@ -596,7 +624,7 @@ export default function Contractors() {
                           </p>
                           {ref.customerName && <p className="text-xs text-slate-500 dark:text-slate-400 ml-[22px]">{ref.customerName}</p>}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 text-[11px] font-bold px-2 py-0.5 rounded-full">
                             {feeBadge(ref.referralType, ref.referralValue)}
                           </span>
@@ -633,148 +661,156 @@ export default function Contractors() {
       </Tabs>
 
       {/* ====== SEND JOB MODAL ====== */}
-      <Dialog open={sendModalOpen} onOpenChange={(open) => { if (!open) { setSendModalOpen(false); resetSendForm(); } }}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-lg p-0 gap-0 rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-center h-13 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative shrink-0">
-            <button onClick={() => { setSendModalOpen(false); resetSendForm(); }} className="absolute right-4 top-1/2 -translate-y-1/2">
-              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-            </button>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Send Job Offer</h3>
-          </div>
+      {canSend && (
+        <Dialog open={sendModalOpen} onOpenChange={(open) => { if (!open) { setSendModalOpen(false); resetSendForm(); } }}>
+          <DialogContent hideCloseButton className="w-[95vw] max-w-lg p-0 gap-0 rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-center py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative shrink-0">
+              <button onClick={() => { setSendModalOpen(false); resetSendForm(); }} className="absolute right-4 top-1/2 -translate-y-1/2">
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </button>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Send Job Offer</h3>
+            </div>
 
-          <div className="p-4 space-y-3.5 overflow-y-auto flex-1">
-            {/* Select Job */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Job <span className="text-red-400 text-xs">*</span></label>
-              {selectedJob ? (
-                <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{selectedJob.title}</p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {[selectedJob.clientName, selectedJob.location].filter(Boolean).join(' · ') || 'No details'}
-                    </p>
+            <div className="px-4 pt-3 pb-4 space-y-3 overflow-y-auto flex-1">
+              {/* Select Job */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Job <span className="text-red-400 text-xs">*</span></label>
+                {selectedJob ? (
+                  <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{selectedJob.title}</p>
+                      {jobSecondaryInfo(selectedJob) && (
+                        <p className="text-xs text-slate-500 truncate">{jobSecondaryInfo(selectedJob)}</p>
+                      )}
+                    </div>
+                    <button onClick={() => setSelectedJobId(null)} className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"><X className="w-4 h-4" /></button>
                   </div>
-                  <button onClick={() => setSelectedJobId(null)} className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"><X className="w-4 h-4" /></button>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input placeholder="Search jobs..." value={jobSearchQuery} onChange={(e) => setJobSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input placeholder="Search jobs..." value={jobSearchQuery} onChange={(e) => setJobSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
+                    </div>
+                    <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                      {jobs.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-4">No jobs to send yet. Create a job first.</p>
+                      ) : filteredJobs.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-4">No matching jobs</p>
+                      ) : (
+                        filteredJobs.slice(0, 20).map((job: any) => {
+                          const secondary = jobSecondaryInfo(job);
+                          return (
+                            <button key={job.id} type="button" onClick={() => { setSelectedJobId(job.id); setJobSearchQuery(""); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                              <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{job.title}</p>
+                              {secondary && <p className="text-xs text-slate-500 truncate">{secondary}</p>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                  <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                    {jobs.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4">No jobs to send yet. Create a job first.</p>
-                    ) : filteredJobs.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4">No matching jobs</p>
+                )}
+              </div>
+
+              {/* Select Contractor */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Contractor <span className="text-red-400 text-xs">*</span></label>
+                <Select value={receiverCompanyId} onValueChange={setReceiverCompanyId}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Choose a contractor company" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" sideOffset={4} className="max-h-48 overflow-y-auto">
+                    {networkCompanies.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-slate-400">No contractors available yet</div>
                     ) : (
-                      filteredJobs.slice(0, 20).map((job: any) => (
-                        <button key={job.id} type="button" onClick={() => { setSelectedJobId(job.id); setJobSearchQuery(""); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{job.title}</p>
-                          <p className="text-xs text-slate-500 truncate">{[job.clientName, job.location].filter(Boolean).join(' · ') || ''}</p>
-                        </button>
-                      ))
+                      networkCompanies.map((c) => {
+                        const sub = companySubtitle(c);
+                        return (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            <div className="flex flex-col py-0.5">
+                              <span className="font-medium">{c.name}</span>
+                              {sub && <span className="text-[11px] text-slate-400 leading-tight">{sub}</span>}
+                            </div>
+                          </SelectItem>
+                        );
+                      })
                     )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Select Contractor */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Contractor <span className="text-red-400 text-xs">*</span></label>
-              <Select value={receiverCompanyId} onValueChange={setReceiverCompanyId}>
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Choose a contractor company" />
-                </SelectTrigger>
-                <SelectContent className="max-h-52">
-                  {networkCompanies.length === 0 ? (
-                    <div className="px-3 py-4 text-center text-xs text-slate-400">No contractors available yet</div>
-                  ) : (
-                    networkCompanies.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        <div className="flex flex-col">
-                          <span>{c.name}</span>
-                          {companySubtitle(c) && <span className="text-[11px] text-slate-400">{companySubtitle(c)}</span>}
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Fee */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Fee Type <span className="text-red-400 text-xs">*</span></label>
-                <Select value={referralType} onValueChange={handleFeeTypeChange}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percent">Percentage</SelectItem>
-                    <SelectItem value="flat">Flat Amount</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
-                  {referralType === 'percent' ? 'Percentage (%)' : 'Flat Amount ($)'} <span className="text-red-400 text-xs">*</span>
-                </label>
-                <Input
-                  type="number"
-                  step={referralType === 'percent' ? '1' : '0.01'}
-                  min="0"
-                  max={referralType === 'percent' ? '100' : undefined}
-                  placeholder={referralType === 'percent' ? 'e.g., 15' : 'e.g., 250'}
-                  value={referralValue}
-                  onChange={(e) => handleFeeChange(e.target.value)}
-                  className={`h-10 ${feeError ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-                />
-                {feeError && <p className="text-xs text-red-500 mt-0.5">{feeError}</p>}
-              </div>
-            </div>
 
-            {/* Fee Summary */}
-            {referralValue && !feeError && (
-              <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                <span className="text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
-                  {referralType === 'percent' ? <Percent className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
-                  Referral: {referralType === 'percent' ? `${feeNum}%` : `$${feeNum.toFixed(2)}`}
-                </span>
-                {jobPrice > 0 && estimatedEarnings > 0 && (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3" />
-                    Estimated earnings: ${estimatedEarnings.toFixed(2)}
+              {/* Fee */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Fee Type <span className="text-red-400 text-xs">*</span></label>
+                  <Select value={referralType} onValueChange={handleFeeTypeChange}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" sideOffset={4}>
+                      <SelectItem value="percent">Percentage</SelectItem>
+                      <SelectItem value="flat">Flat Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
+                    {referralType === 'percent' ? 'Percentage (%)' : 'Flat Amount ($)'} <span className="text-red-400 text-xs">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    step={referralType === 'percent' ? '1' : '0.01'}
+                    min="0"
+                    max={referralType === 'percent' ? '100' : undefined}
+                    placeholder={referralType === 'percent' ? 'e.g., 15' : 'e.g., 250'}
+                    value={referralValue}
+                    onChange={(e) => handleFeeChange(e.target.value)}
+                    className={`h-10 ${feeError ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
+                  />
+                  {feeError && <p className="text-xs text-red-500 mt-0.5">{feeError}</p>}
+                </div>
+              </div>
+
+              {/* Fee Summary */}
+              {referralValue && !feeError && feeNum > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <span className="text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
+                    {referralType === 'percent' ? <Percent className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
+                    Referral: {referralType === 'percent' ? `${feeNum}%` : `$${feeNum.toFixed(2)}`}
                   </span>
-                )}
-              </div>
-            )}
-
-            {/* Message */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Message</label>
-              <Textarea placeholder="Add a note for the contractor (optional)" value={referralMessage} onChange={(e) => setReferralMessage(e.target.value)} rows={2} className="resize-none text-sm" />
-            </div>
-
-            {/* Price change toggle */}
-            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow price changes</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Let the contractor modify the job price</p>
-              </div>
-              <Switch checked={allowPriceChange} onCheckedChange={setAllowPriceChange} />
-            </div>
-
-            <Button onClick={handleSendSubmit} className="w-full h-11" disabled={!canSubmitSend}>
-              {sendReferralMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending...</>
-              ) : (
-                <><Send className="w-4 h-4 mr-2" />Send Job Offer</>
+                  {jobPrice > 0 && estimatedEarnings > 0 && (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <ArrowRight className="w-3 h-3" />
+                      Estimated earnings: ${estimatedEarnings.toFixed(2)}
+                    </span>
+                  )}
+                </div>
               )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+
+              {/* Message */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Message</label>
+                <Textarea placeholder="Add a note for the contractor (optional)" value={referralMessage} onChange={(e) => setReferralMessage(e.target.value)} rows={2} className="resize-none text-sm" />
+              </div>
+
+              {/* Price change toggle */}
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow price changes</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Let the contractor modify the job price</p>
+                </div>
+                <Switch checked={allowPriceChange} onCheckedChange={setAllowPriceChange} />
+              </div>
+
+              <Button onClick={handleSendSubmit} className="w-full h-11" disabled={!canSubmitSend}>
+                {sendReferralMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sending...</>
+                ) : (
+                  <><Send className="w-4 h-4 mr-2" />Send Job Offer</>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -1,0 +1,54 @@
+Stop. Do NOT work on geo-tracking/location tasks in this session.
+
+We are working on: Contractor Network page + Send Job Offer modal UI polish/fixes.
+
+Current issues from screenshots:
+- Select Contractor dropdown shows repeated names (e.g., “Elijah Kelly” many times) and unclear identity.
+- Dropdown menus overflow off-screen in the modal.
+- Need better validation/disable submit until valid.
+- Improve job picker labeling (avoid duplicate customer name lines) and search behavior.
+- Supervisor should not see “Send Job” / cannot open send modal.
+
+Your task:
+1) Fix “Select Contractor” dropdown (CRITICAL)
+- Populate from companies table (company records), not users.
+- Show company.name as primary label; optional subtle secondary (city/state or owner email).
+- Deduplicate unique by company id.
+- Exclude current user’s company.
+- Placeholder stays “Choose a contractor company”.
+- If none available, show “No contractors available yet”.
+
+2) Job picker improvements
+- List items: primary = job.title (or “Job – {customerName}”), secondary = customer name + optional short location.
+- Search filters by job title + customer name.
+- Only show jobs from current company.
+- If no jobs, show empty state “No jobs to send yet. Create a job first.”
+
+3) Validation + submit UX
+- Disable “Send Job Offer” until job + contractor + fee type + valid fee value.
+- Percent: >0 and <=100; Flat: >0.
+- Inline errors under fields, not alerts.
+- Loading state on submit; prevent double submit.
+
+4) Fee UI polish
+- Percentage label “Percentage (%)” placeholder “e.g., 15”
+- Flat label “Flat Amount ($)” placeholder “e.g., 250”
+- Add “Referral: 10%” or “Referral: $250”
+- If job has price, show “Estimated earnings: $X” based on referral; hide if no price.
+
+5) Modal layout polish (mobile)
+- Dropdown menus must be scrollable with max-height and not overflow off-screen.
+- Reduce vertical spacing so submit button stays visible on small screens.
+
+6) Incoming & Sent list cards
+- When referrals exist, each card shows: job title, customer, sender/receiver company, fee badge, status badge (Sent).
+- After Accept/Decline: update UI immediately + toast + refetch.
+
+7) RBAC polish
+- Owner/Admin: full access
+- Supervisor: view Incoming/Sent ONLY; hide Send Job button and prevent opening modal
+- Technician: no access (keep gating)
+
+Deliverable:
+- Implement these UI fixes only. No geo tracking work.
+- Add a short dev log of what changed and where (files/components).
