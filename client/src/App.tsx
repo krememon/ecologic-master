@@ -78,6 +78,9 @@ import PayoutSetup from "@/pages/PayoutSetup";
 import JobOfferInvite from "@/pages/JobOfferInvite";
 import JobOffer from "@/pages/JobOffer";
 
+let _nativeLaunchUrlChecked = false;
+let _nativeLaunchUrlPromise: Promise<void> | null = null;
+
 function checkLaunchDeepLink(): void {
   try {
     const cap = (window as any).Capacitor;
@@ -85,14 +88,15 @@ function checkLaunchDeepLink(): void {
     const platform = cap.getPlatform?.();
     if (!platform || platform === "web") return;
 
-    console.log("[deep-link] early check: native platform detected");
+    console.log("[deep-link] early check: native platform detected, path=", window.location.pathname);
 
     const currentPath = window.location.pathname;
     const invitePathMatch = currentPath.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
     if (invitePathMatch) {
       const target = `/referrals/invite/${invitePathMatch[1]}`;
-      console.log("[deep-link] early check: current path is invite URL, saving pending=", target);
+      console.log("[deep-link] early check: invite URL path, saving pending=", target);
       sessionStorage.setItem("pendingDeepLink", target);
+      _nativeLaunchUrlChecked = true;
       return;
     }
 
@@ -100,6 +104,7 @@ function checkLaunchDeepLink(): void {
     if (referralsMatch) {
       console.log("[deep-link] early check: already on invite screen path");
       sessionStorage.setItem("pendingDeepLink", currentPath);
+      _nativeLaunchUrlChecked = true;
       return;
     }
 
@@ -108,10 +113,47 @@ function checkLaunchDeepLink(): void {
       const target = `/referrals/invite/${jobOfferMatch[1]}`;
       console.log("[deep-link] early check: job-offer path, saving pending=", target);
       sessionStorage.setItem("pendingDeepLink", target);
+      _nativeLaunchUrlChecked = true;
       return;
     }
+
+    _nativeLaunchUrlPromise = (async () => {
+      try {
+        const { App: CapApp } = await import("@capacitor/app");
+        const launchUrl = await CapApp.getLaunchUrl();
+        console.log("[deep-link] early getLaunchUrl result=", launchUrl?.url || "(none)");
+        if (launchUrl?.url) {
+          let pathToMatch = "";
+          try {
+            if (launchUrl.url.startsWith("ecologic://")) {
+              pathToMatch = "/" + launchUrl.url.replace("ecologic://", "").replace(/^\/+/, "");
+            } else {
+              pathToMatch = new URL(launchUrl.url).pathname;
+            }
+          } catch { /* ignore */ }
+
+          const jobOffer = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
+          if (jobOffer) {
+            const target = `/referrals/invite/${jobOffer[2]}`;
+            console.log("[deep-link] early getLaunchUrl: job-offer, saving pending=", target);
+            sessionStorage.setItem("pendingDeepLink", target);
+          }
+          const invite = pathToMatch.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+          if (invite) {
+            const target = `/referrals/invite/${invite[1]}`;
+            console.log("[deep-link] early getLaunchUrl: invite, saving pending=", target);
+            sessionStorage.setItem("pendingDeepLink", target);
+          }
+        }
+      } catch (e) {
+        console.log("[deep-link] early getLaunchUrl failed:", e);
+      } finally {
+        _nativeLaunchUrlChecked = true;
+      }
+    })();
   } catch (e) {
     console.log("[deep-link] early check failed:", e);
+    _nativeLaunchUrlChecked = true;
   }
 }
 checkLaunchDeepLink();
@@ -199,25 +241,38 @@ function useColdStartRedirect(ready: boolean) {
 
   React.useEffect(() => {
     if (!ready || attemptedRef.current) return;
-    attemptedRef.current = true;
 
-    const pendingLink = sessionStorage.getItem("pendingDeepLink");
-    if (pendingLink) {
-      sessionStorage.removeItem("pendingDeepLink");
-      console.log("[deep-link] suppressing dashboard redirect, navigating to:", pendingLink);
-      setLocation(pendingLink, { replace: true });
-      return;
-    }
+    const doRedirect = () => {
+      if (attemptedRef.current) return;
+      attemptedRef.current = true;
 
-    try {
-      const cap = (window as any).Capacitor;
-      const platform = cap?.getPlatform?.();
-      if (!platform || platform === "web") return;
-    } catch { return; }
-    const p = window.location.pathname;
-    if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) return;
-    if (p !== "/") {
-      setLocation("/", { replace: true });
+      const pendingLink = sessionStorage.getItem("pendingDeepLink");
+      if (pendingLink) {
+        sessionStorage.removeItem("pendingDeepLink");
+        console.log("[deep-link] suppressing dashboard redirect, navigating to:", pendingLink);
+        setLocation(pendingLink, { replace: true });
+        return;
+      }
+
+      try {
+        const cap = (window as any).Capacitor;
+        const platform = cap?.getPlatform?.();
+        if (!platform || platform === "web") return;
+      } catch { return; }
+      const p = window.location.pathname;
+      if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) return;
+      if (p !== "/") {
+        setLocation("/", { replace: true });
+      }
+    };
+
+    if (_nativeLaunchUrlChecked) {
+      doRedirect();
+    } else if (_nativeLaunchUrlPromise) {
+      console.log("[deep-link] waiting for getLaunchUrl before redirect...");
+      _nativeLaunchUrlPromise.then(doRedirect);
+    } else {
+      doRedirect();
     }
   }, [ready, setLocation]);
 }
