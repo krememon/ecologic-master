@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X,
   Send, Inbox, ArrowUpRight, Briefcase, DollarSign, Loader2,
-  CheckCircle, XCircle, Clock, ArrowRight, Percent, Share2, Copy, MapPin,
+  CheckCircle, XCircle, Clock, Share2, Copy, MapPin,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -399,10 +399,18 @@ export default function Contractors() {
     setIsSharing(false);
   }
 
+  const selectedJob = jobs.find((j: any) => j.id === selectedJobId);
+  const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
+  const feeNum = parseFloat(referralValue || '0');
+  const contractorGets = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
+  const yourShare = jobPrice - contractorGets;
+  const isPayoutValid = feeNum > 0 && !isNaN(feeNum) && contractorGets >= 0 && yourShare >= 0 && (referralType !== 'percent' || feeNum <= 100) && (referralType !== 'flat' || feeNum <= jobPrice || jobPrice === 0);
+
   function validateFee(type: string, val: string): string {
     const num = parseFloat(val);
     if (!val || isNaN(num) || num <= 0) return type === 'percent' ? 'Must be between 1 and 100' : 'Must be greater than 0';
-    if (type === 'percent' && num > 100) return 'Cannot exceed 100%';
+    if (type === 'percent' && num > 100) return 'Percentage cannot exceed 100%';
+    if (type === 'flat' && jobPrice > 0 && num > jobPrice) return 'Flat fee cannot exceed the job price';
     return '';
   }
 
@@ -417,11 +425,11 @@ export default function Contractors() {
     if (referralValue) setFeeError(validateFee(type, referralValue));
   }
 
-  const selectedJob = jobs.find((j: any) => j.id === selectedJobId);
-  const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
-  const feeNum = parseFloat(referralValue || '0');
-  const estimatedEarnings = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
-  const canSubmitSend = !!selectedJobId && !!selectedSubcontractorId && !!referralValue && !feeError && !sendReferralMutation.isPending && !isSharing;
+  function formatUSD(amount: number): string {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  }
+
+  const canSubmitSend = !!selectedJobId && !!selectedSubcontractorId && !!referralValue && !feeError && isPayoutValid && !sendReferralMutation.isPending && !isSharing;
 
   async function handleShareInvite() {
     const err = validateFee(referralType, referralValue);
@@ -943,21 +951,33 @@ export default function Contractors() {
                 </div>
               </div>
 
-              {/* Fee Summary */}
-              {referralValue && !feeError && feeNum > 0 && (
-                <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                  <span className="text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
-                    {referralType === 'percent' ? <Percent className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />}
-                    Referral: {referralType === 'percent' ? `${feeNum}%` : `$${feeNum.toFixed(2)}`}
-                  </span>
-                  {jobPrice > 0 && estimatedEarnings > 0 && (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                      <ArrowRight className="w-3 h-3" />
-                      Estimated earnings: ${estimatedEarnings.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Offer Breakdown */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/40 p-3.5 space-y-2.5">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Offer Breakdown</p>
+                {!selectedJob ? (
+                  <p className="text-sm text-slate-400 italic">Select a job to preview payout</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Job Price</span>
+                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{jobPrice > 0 ? formatUSD(jobPrice) : '—'}</span>
+                    </div>
+                    <div className="h-px bg-slate-200 dark:bg-slate-700" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Contractor Gets</span>
+                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        {feeNum > 0 && !feeError && isPayoutValid ? formatUSD(contractorGets) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Your Share</span>
+                      <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        {feeNum > 0 && !feeError && isPayoutValid && jobPrice > 0 ? formatUSD(yourShare) : '—'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {/* Message */}
               <div className="space-y-1">

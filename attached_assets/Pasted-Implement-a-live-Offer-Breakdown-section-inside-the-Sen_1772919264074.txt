@@ -1,0 +1,249 @@
+Implement a live “Offer Breakdown” section inside the Send Job Offer modal so the user can clearly see the total job price, contractor payout, and company share before sending the invite.
+
+Goal
+
+On the Send Job Offer modal, add a clean summary card that updates in real time based on:
+
+selected job
+
+selected fee type
+
+entered percentage / fee amount
+
+any relevant job total data already stored in the job
+
+The purpose is to make it obvious how much the job is worth and how much each side gets.
+
+UI Requirements
+1) Add a new section below the Fee Type / Percentage row
+
+Place a new card section directly under the fee inputs and above Message.
+
+Section title:
+
+Offer Breakdown
+
+Card style:
+
+same modern Apple-like styling as the rest of EcoLogic
+
+soft background
+
+rounded corners
+
+subtle border
+
+compact but premium
+
+should feel like part of the modal, not a separate ugly widget
+
+2) Show these values inside the Offer Breakdown card
+Always display:
+
+Job Price → total value of the selected job
+
+Contractor Gets → what the subcontractor will receive
+
+Your Share → what the company keeps
+
+If no job is selected yet:
+
+show placeholders like —
+
+or muted helper text: Select a job to preview payout
+
+3) Live calculation behavior
+
+The numbers must update instantly when:
+
+the user selects a different job
+
+the user changes fee type
+
+the user enters/changes the percentage or flat fee
+
+Calculation Rules
+
+Use the job’s actual price/total from the selected job.
+
+If Fee Type = Percentage
+
+Interpret the entered value as the contractor’s percentage of the job total.
+
+Example:
+
+Job Price = $10,000
+
+Percentage = 40%
+
+Contractor Gets = $4,000
+
+Your Share = $6,000
+
+Formula:
+
+contractorGets = jobPrice * (percentage / 100)
+
+yourShare = jobPrice - contractorGets
+
+If Fee Type = Flat Amount
+
+Interpret the entered value as the flat amount the contractor gets.
+
+Example:
+
+Job Price = $10,000
+
+Flat Amount = $3,500
+
+Contractor Gets = $3,500
+
+Your Share = $6,500
+
+Formula:
+
+contractorGets = flatAmount
+
+yourShare = jobPrice - contractorGets
+
+Validation / Edge Cases
+1) Never allow invalid payouts
+
+Guard against:
+
+negative values
+
+NaN
+
+empty values
+
+contractor payout greater than job price
+
+percentage over 100
+
+flat amount over job total
+
+2) If invalid
+
+Show inline validation under the input:
+
+Percentage cannot exceed 100%
+
+Flat fee cannot exceed the job price
+
+Enter a valid amount
+
+And in the breakdown card:
+
+do not show misleading payout numbers
+
+either clamp safely or show — until valid
+
+3) Currency formatting
+
+Format all money as proper USD:
+
+$0.00
+
+$3,500.00
+
+$12,250.75
+
+4) Percent formatting
+
+If percentage type is selected, keep the % suffix visually clean and aligned.
+
+Data Source
+
+Use the selected job’s real pricing source from the existing jobs data model.
+Find the correct total from the current job object / estimate / invoice-backed total / job total field already used elsewhere in the app.
+
+Do not hardcode.
+Do not invent a fake total.
+Use the same source of truth the app already uses for job price / total.
+
+If there are multiple possible job total fields, use the most reliable final total and add a small fallback chain in code.
+
+Example fallback idea:
+
+job.total
+
+job.totalPrice
+
+job.projectTotal
+
+job.estimateTotal
+
+etc. only if these truly exist in the codebase
+
+Use whichever is actually correct in this project.
+
+Suggested Breakdown Layout
+
+Inside the new card, display something like:
+
+Job Price ........ $12,000.00
+
+Contractor Gets ... $4,800.00
+
+Your Share ........ $7,200.00
+
+Optional:
+
+Add a thin divider before the payout rows
+
+Make Contractor Gets slightly green-tinted
+
+Make Your Share use EcoLogic blue styling
+
+Keep it tasteful, not loud
+
+UX polish
+
+smooth real-time updates
+
+no layout jumping
+
+responsive on laptop + mobile
+
+spacing should match the rest of the modal
+
+typography should match the customer/job picker vibe
+
+keep it clean and premium
+
+Button behavior
+
+If payout input is invalid, the Share Invite button should remain disabled.
+
+Deliverables
+
+Add the new Offer Breakdown section to the modal
+
+Wire it to the selected job’s actual total
+
+Live-update calculations based on fee type + entered value
+
+Add proper validation and button-disable logic
+
+Keep all existing modal functionality intact
+
+Do not break:
+
+job selection
+
+contractor selection
+
+share invite flow
+
+allow price changes toggle
+
+existing form submission behavior
+
+After implementing, give me:
+
+the exact fields used for the job total source
+
+the calculation logic used
+
+any validation rules added
