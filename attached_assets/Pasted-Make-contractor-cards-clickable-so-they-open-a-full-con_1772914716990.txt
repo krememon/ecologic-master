@@ -1,0 +1,95 @@
+Make contractor cards clickable so they open a full contractor detail screen, similar to how client cards open.
+
+Goal:
+When the user taps a contractor card in Contractor Network, it should open a dedicated contractor detail view that feels like the client detail page.
+
+========================================
+1) Card click behavior
+========================================
+In the Contractors tab:
+- Make the entire contractor card tappable
+- Tapping the card opens a contractor detail screen/page
+- The edit and delete icons should still work independently and must NOT trigger the card open
+- Use stopPropagation where needed on the edit/delete actions
+
+========================================
+2) New contractor detail screen
+========================================
+Create a contractor detail view modeled after the client detail page style.
+
+Header:
+- Back arrow
+- Company Name as title
+
+Top info card:
+- Personal Name (if present)
+- Email
+- Phone
+- Website
+- Optional company location if available
+- “Added {date}”
+
+Match the visual vibe of the client detail page:
+- clean white cards
+- bold section titles
+- same spacing / padding / border radius
+- mobile-first
+
+========================================
+3) Detail page sections
+========================================
+Add sections like:
+
+A) Contractor Information
+- Company Name
+- Personal Name
+- Email
+- Phone
+- Website
+
+B) Referral Activity
+Show related job referral activity with this contractor if available:
+- Sent referrals
+- Incoming referrals
+- Status (pending / accepted / declined)
+- Fee summary if available
+
+If referral activity is not yet easy to wire, still build the page with:
+- Contractor Information
+- placeholder section for Referral Activity
+but keep structure clean and ready
+
+========================================
+4) Navigation / routing
+========================================
+Add a contractor detail route, something like:
+- /contractors/:id
+
+Tapping a card should navigate there.
+
+========================================
+5) Reuse / consistency
+========================================
+Use the client detail page as the design reference:
+- same back-header feel
+- same card layout style
+- same typography hierarchy
+- same overall polish level
+
+Do NOT literally copy client-specific sections like communication preferences unless they make sense for contractors.
+
+========================================
+6) Safety / UX
+========================================
+- If contractor not found, show clean “Contractor not found”
+- Keep edit/delete functional from list
+- No regressions to existing Contractor Network flow
+
+========================================
+Deliverables
+========================================
+- contractor cards open on tap
+- dedicated contractor detail screen exists
+- looks similar in polish/style to client detail page
+- edit/delete buttons still work separately
+- short dev log listing files changed

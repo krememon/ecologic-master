@@ -41,6 +41,7 @@ import InvoiceDetails from "@/pages/InvoiceDetails";
 import JobDetails from "@/pages/JobDetails";
 import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
+import ContractorDetail from "@/pages/ContractorDetail";
 import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
 import Leads from "@/pages/Leads";
@@ -375,6 +376,9 @@ function AuthenticatedRouter() {
           {() => <JobOfferInvite />}
         </Route>
         <Route path="/subcontractors" component={Contractors} />
+        <Route path="/subcontractors/:id">
+          {(params) => <ContractorDetail contractorId={params.id} />}
+        </Route>
         <Route path="/clients" component={Clients} />
         <Route path="/clients/:id">
           {(params) => <ClientDetail customerId={params.id} />}

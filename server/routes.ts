@@ -4512,6 +4512,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/subcontractors/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid subcontractor ID" });
+      }
+      const sub = await storage.getSubcontractor(id);
+      if (!sub || sub.companyId !== company.id) {
+        return res.status(404).json({ message: "Contractor not found" });
+      }
+      res.json(sub);
+    } catch (error) {
+      console.error("Error fetching subcontractor:", error);
+      res.status(500).json({ message: "Failed to fetch contractor" });
+    }
+  });
+
+  app.get('/api/subcontractors/:id/referrals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      const subId = parseInt(req.params.id);
+      if (isNaN(subId)) {
+        return res.status(400).json({ message: "Invalid subcontractor ID" });
+      }
+      const sub = await storage.getSubcontractor(subId);
+      if (!sub || sub.companyId !== company.id) {
+        return res.status(404).json({ message: "Contractor not found" });
+      }
+      res.json({ incoming: [], outgoing: [] });
+    } catch (error) {
+      console.error("Error fetching subcontractor referrals:", error);
+      res.status(500).json({ message: "Failed to fetch referrals" });
+    }
+  });
+
   app.delete('/api/subcontractors/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
