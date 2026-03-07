@@ -1,0 +1,237 @@
+We found the next real bug in the subcontractor invite flow.
+
+Current bug
+
+Flow tested:
+
+From owner account, I sent the job offer to Jennifer Pellegrino
+
+That contractor/contact has email jpellegrino06@gmail.com
+
+Then I logged into the alt account using jpellegrino06@gmail.com
+
+Clicked the invite link
+
+Instead of showing the offer details + accept/decline, it shows:
+
+Not For Your Company
+“This job offer was sent to a different company. Make sure you're logged in with the correct account.”
+
+That is wrong.
+
+If the logged-in user’s email matches the email the invite was sent to, they should be allowed into the offer and see the full job details + Accept / Decline flow.
+
+What needs to be fixed
+Root issue to investigate
+
+The public / invite / acceptance flow is likely validating against the wrong thing.
+
+Right now it seems to be checking:
+
+current user’s company membership / companyId
+
+or contractor company relationship only
+
+instead of first checking the invite recipient email
+
+For this flow, the system must support this rule:
+
+Correct access rule
+
+A logged-in user should be allowed to open the offer if either:
+
+their logged-in email matches the invite recipient email exactly (case-insensitive), or
+
+they are already properly linked to the intended contractor/company record for that invite
+
+But at minimum, email match must work.
+
+Required behavior
+If logged-in email matches recipient email
+
+Example:
+
+invite sent to jpellegrino06@gmail.com
+
+logged-in user email = jpellegrino06@gmail.com
+
+Then:
+
+allow access
+
+show job offer details
+
+show payout / fee info
+
+show accept / decline actions
+
+If logged-in email does NOT match
+
+Then show the blocked state.
+
+Fix scope
+1) Inspect the offer token resolution flow
+
+Review the route / page / API used when opening:
+
+/sign/:token
+
+or subcontractor invite route
+
+or public offer accept route
+
+whatever the actual EcoLogic route is
+
+Find where the app decides:
+
+whether this logged-in user can view the invite
+
+and why it is currently falling into Not For Your Company
+
+2) Change validation logic
+
+When resolving the invite, validate in this order:
+
+Step A — token validity
+
+token exists
+
+invite exists
+
+not expired if expiry exists
+
+not canceled / revoked
+
+not already fully processed if that matters
+
+Step B — logged-in user identity
+
+Resolve current authenticated user email safely.
+
+Step C — access decision
+
+Allow access if:
+
+normalized(currentUser.email) === normalized(invite.recipientEmail)
+
+Use:
+
+trim
+
+lowercase
+
+null-safe comparison
+
+Example:
+
+const normalizeEmail = (value?: string | null) => (value || '').trim().toLowerCase();
+const emailMatches = normalizeEmail(currentUser?.email) === normalizeEmail(invite?.recipientEmail);
+Step D — only if email does not match
+
+Then fall back to any contractor-company / membership checks that are actually intended.
+
+Do not make company mismatch override a valid recipient email match.
+
+3) PublicSign / Job Offer details page behavior
+
+If email match passes:
+
+do not show Not For Your Company
+
+instead render the actual offer screen
+
+show:
+
+job name
+
+customer/job location
+
+payout structure
+
+contractor gets / share info if applicable
+
+message/note if present
+
+Accept
+
+Decline
+
+4) Backend must be source of truth
+
+Do not rely only on frontend gating.
+
+Ensure the backend endpoint that returns the invite / performs accept / decline also allows the recipient when the logged-in email matches the invite email.
+
+The frontend and backend must agree.
+
+Important edge cases
+Case-insensitive email match
+
+These should count as equal:
+
+Jpellegrino06@gmail.com
+
+jpellegrino06@gmail.com
+
+Whitespace safety
+
+Trim accidental spaces.
+
+No current company yet
+
+If the recipient user is logged in but not yet attached to the “expected company” in the same way, they should still be able to open the invite if email matches.
+
+Correct company linking can happen after acceptance
+
+If needed, the company relationship / contractor linkage can be finalized during accept flow.
+Do not block the view screen too early.
+
+Debug logs to add temporarily
+
+Add targeted logs only:
+
+[JobOfferAccess] currentUserEmail:
+
+[JobOfferAccess] inviteRecipientEmail:
+
+[JobOfferAccess] emailMatches:
+
+[JobOfferAccess] currentUserCompanyId:
+
+[JobOfferAccess] inviteCompanyId / contractorCompanyId:
+
+[JobOfferAccess] finalAccessDecision:
+
+This will let us see exactly why it is failing.
+
+Do not break
+
+Do not break:
+
+existing token validation
+
+accept / decline mutations
+
+owner-side invite sending
+
+contractor selection
+
+invite creation
+
+native mobile deep link flow
+
+web fallback flow
+
+Deliverables
+
+After fixing, report back with:
+
+what check was incorrectly blocking access
+
+the exact new access logic
+
+whether backend and frontend were both updated
+
+the temporary logs added
+
+confirmation that a logged-in user with matching recipient email now sees the offer instead of “Not For Your Company”

@@ -16211,7 +16211,7 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(403).json({ error: 'Only Owner or Admin can send referrals' });
       }
 
-      const { jobId, receiverCompanyId, referralType, referralValue, message, allowPriceChange } = req.body;
+      const { jobId, receiverCompanyId, recipientEmail, recipientPhone, referralType, referralValue, message, allowPriceChange } = req.body;
 
       if (!jobId || !referralType) {
         return res.status(400).json({ error: 'jobId and referralType are required' });
@@ -16256,9 +16256,9 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         message: message || null,
         allowPriceChange: !!allowPriceChange,
         inviteToken,
-        inviteSentToPhone: receiverPhone,
+        inviteSentToPhone: recipientPhone || receiverPhone,
         inviteSentVia: 'share',
-        inviteSentTo: null,
+        inviteSentTo: recipientEmail || null,
       });
 
       await storage.updateJobReferral(referral.id, {
@@ -16462,8 +16462,14 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(400).json({ error: `This referral has already been ${referral.status}`, status: referral.status });
       }
 
-      if (referral.receiverCompanyId !== company.id) {
-        console.log(`[referral-invite] 403: expected company ${referral.receiverCompanyId}, got ${company.id}`);
+      const normalizeEmail = (v?: string | null) => (v || '').trim().toLowerCase();
+      const currentUser = await storage.getUser(userId);
+      const emailMatches = !!referral.inviteSentTo && normalizeEmail(currentUser?.email) === normalizeEmail(referral.inviteSentTo);
+      const companyMatches = !!referral.receiverCompanyId && referral.receiverCompanyId === company.id;
+      console.log(`[JobOfferAccess] currentUserEmail=${currentUser?.email} inviteRecipientEmail=${referral.inviteSentTo} emailMatches=${emailMatches} companyMatches=${companyMatches}`);
+
+      if (!emailMatches && !companyMatches) {
+        console.log(`[referral-invite] 403: no email or company match`);
         return res.status(403).json({ error: 'This invite is not for your company' });
       }
 
@@ -16532,13 +16538,18 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(400).json({ error: `Referral is already ${referral.status}` });
       }
 
-      if (referral.receiverCompanyId !== company.id) {
+      const normalizeEmail = (v?: string | null) => (v || '').trim().toLowerCase();
+      const currentUser = await storage.getUser(userId);
+      const emailMatches = !!referral.inviteSentTo && normalizeEmail(currentUser?.email) === normalizeEmail(referral.inviteSentTo);
+      const companyMatches = !!referral.receiverCompanyId && referral.receiverCompanyId === company.id;
+      if (!emailMatches && !companyMatches) {
         return res.status(403).json({ error: 'This invite is not for your company' });
       }
 
       await storage.updateJobReferral(referral.id, {
         status: 'accepted',
         acceptedAt: new Date(),
+        receiverCompanyId: company.id,
       });
 
       const updatedJob = await storage.updateJob(referral.jobId, {
@@ -16573,7 +16584,11 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(400).json({ error: `Referral is already ${referral.status}` });
       }
 
-      if (referral.receiverCompanyId !== company.id) {
+      const normalizeEmail = (v?: string | null) => (v || '').trim().toLowerCase();
+      const currentUser = await storage.getUser(userId);
+      const emailMatches = !!referral.inviteSentTo && normalizeEmail(currentUser?.email) === normalizeEmail(referral.inviteSentTo);
+      const companyMatches = !!referral.receiverCompanyId && referral.receiverCompanyId === company.id;
+      if (!emailMatches && !companyMatches) {
         return res.status(403).json({ error: 'This invite is not for your company' });
       }
 

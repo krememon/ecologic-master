@@ -448,6 +448,8 @@ export default function Contractors() {
       const result = await sendReferralMutation.mutateAsync({
         jobId: selectedJobId,
         receiverCompanyId: null,
+        recipientEmail: selectedSub?.email || null,
+        recipientPhone: selectedSub?.phone || null,
         referralType,
         referralValue: feeNum,
         message: referralMessage || null,
