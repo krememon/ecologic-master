@@ -4512,6 +4512,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete('/api/subcontractors/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid subcontractor ID" });
+      }
+      console.log(`[contractors] deleting subcontractor id=${id} companyId=${company.id}`);
+      const deleted = await storage.deleteSubcontractorSecure(id, company.id);
+      console.log(`[contractors] delete affectedRows=${deleted ? 1 : 0}`);
+      if (!deleted) {
+        return res.status(404).json({ message: "Contractor not found" });
+      }
+      res.json({ message: "Contractor deleted" });
+    } catch (error) {
+      console.error("Error deleting subcontractor:", error);
+      res.status(500).json({ message: "Failed to delete contractor" });
+    }
+  });
+
   // Jobs routes
   app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {

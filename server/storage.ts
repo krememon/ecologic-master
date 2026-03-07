@@ -228,6 +228,7 @@ export interface IStorage {
   createSubcontractor(subcontractor: InsertSubcontractor): Promise<Subcontractor>;
   updateSubcontractor(id: number, subcontractor: Partial<InsertSubcontractor>): Promise<Subcontractor>;
   deleteSubcontractor(id: number): Promise<void>;
+  deleteSubcontractorSecure(id: number, companyId: number): Promise<boolean>;
   
   // Job operations
   getJobs(companyId: number): Promise<any[]>;
@@ -1416,6 +1417,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubcontractor(id: number): Promise<void> {
     await db.delete(subcontractors).where(eq(subcontractors.id, id));
+  }
+
+  async deleteSubcontractorSecure(id: number, companyId: number): Promise<boolean> {
+    const result = await db.delete(subcontractors).where(and(eq(subcontractors.id, id), eq(subcontractors.companyId, companyId))).returning({ id: subcontractors.id });
+    return result.length > 0;
   }
 
   async getJobs(companyId: number): Promise<any[]> {

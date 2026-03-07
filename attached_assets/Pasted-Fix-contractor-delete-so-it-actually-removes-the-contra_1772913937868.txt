@@ -1,0 +1,75 @@
+Fix contractor delete so it actually removes the contractor record from the list and database.
+
+Current bug:
+- DELETE /api/subcontractors/:id returns 200
+- But GET /api/subcontractors still returns the same contractor immediately after
+- UI keeps showing the contractor card
+- Example: contractor id 330 “Jon …” still comes back after delete
+
+This means the delete endpoint is responding success without actually deleting the row (or soft-delete filtering is broken).
+
+==================================================
+1) Backend: fix the actual delete logic
+==================================================
+Inspect DELETE /api/subcontractors/:id all the way through:
+- route handler
+- storage method
+- DB query
+
+Make sure it performs a REAL delete (or a real soft delete if that is the intended pattern).
+
+If hard delete:
+- delete from subcontractors where id = :id and company_id = currentCompanyId
+
+If soft delete:
+- set deleted_at (or is_deleted=true)
+- AND update GET /api/subcontractors to exclude deleted rows
+
+Right now one of these is broken:
+- delete query not running correctly
+- wrong WHERE clause
+- delete against wrong table
+- success returned even if 0 rows affected
+- GET endpoint not filtering soft-deleted rows
+
+==================================================
+2) Add strict verification in delete endpoint
+==================================================
+After delete query:
+- verify affected row count
+- if 0 rows affected, return 404 or meaningful error instead of 200 success
+
+Example:
+- if contractor doesn’t exist or doesn’t belong to company, do NOT return success
+
+==================================================
+3) Frontend: refresh correctly after successful delete
+==================================================
+After successful delete:
+- immediately remove contractor from local state OR
+- invalidate/refetch /api/subcontractors
+- ensure card disappears without needing manual refresh
+
+Do not show success if backend did not actually delete anything.
+
+==================================================
+4) Logging
+==================================================
+Add temporary targeted logs:
+- [contractors] deleting subcontractor id=330 companyId=393
+- [contractors] delete affectedRows=...
+- [contractors] refetch count=...
+
+This is to prove whether delete is real.
+
+==================================================
+5) Deliverable
+==================================================
+- deleting a contractor actually removes it from DB (or marks deleted and hides it)
+- GET /api/subcontractors no longer returns deleted contractor
+- contractor disappears from UI immediately
+- no false 200 success when nothing was deleted
+- short dev log with:
+  - root cause
+  - files changed
+  - whether hard delete or soft delete was used
