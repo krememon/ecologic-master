@@ -1,0 +1,246 @@
+Next we need to fully test whether Stripe actually splits/pays out the money correctly in the subcontractor flow.
+
+Goal
+
+Verify the real payment flow for a subcontracted job so we can confirm:
+
+how much the customer pays
+
+how much stays with the main company
+
+how much gets routed/transferred to the subcontractor
+
+whether Stripe fees are being handled correctly
+
+whether the payout math matches the Offer Breakdown
+
+What I need you to audit first
+
+Before changing anything, inspect the current Stripe payment architecture for subcontracted jobs and tell me exactly which model we are using:
+
+Determine whether we currently use:
+
+Destination charges
+
+Separate charges and transfers
+
+Direct charges
+
+Some other custom/manual split logic
+
+Also identify:
+
+whether connected accounts are already set up for subcontractors
+
+where the subcontractor Stripe account ID is stored
+
+whether the app currently creates:
+
+application_fee_amount
+
+transfer_data[destination]
+
+separate transfers
+
+or nothing at all
+
+What I want tested
+
+We need an end-to-end test case like this:
+
+Example scenario
+
+Job total = $1,000
+
+Fee type = Percentage
+
+Contractor gets = 20%
+
+Contractor payout = $200
+
+Main company share = $800
+
+Or if the current logic is reversed in the payment architecture, clearly explain it. But the final money movement must match what the UI promised.
+
+Required outputs during testing
+
+When a subcontracted job payment is processed, log all of this clearly:
+
+job id
+
+invoice/payment id
+
+total charge amount
+
+Stripe fee
+
+application fee amount
+
+transfer amount
+
+destination connected account
+
+platform/company retained amount
+
+subcontractor amount
+
+payment intent id / checkout session id / charge id
+
+whether transfer succeeded
+
+Use targeted logs only, for example:
+
+[SubPay] jobId:
+
+[SubPay] totalAmount:
+
+[SubPay] contractorPayout:
+
+[SubPay] companyShare:
+
+[SubPay] stripeFee:
+
+[SubPay] applicationFeeAmount:
+
+[SubPay] transferDestination:
+
+[SubPay] transferAmount:
+
+[SubPay] paymentIntentId:
+
+[SubPay] finalResult:
+
+What I need implemented if missing
+1) Ensure subcontractor payout data is stored on accepted offers
+
+When the subcontractor accepts the job, make sure the accepted offer stores the exact financial terms needed for payment splitting later, including:
+
+fee type
+
+fee value
+
+contractor payout amount
+
+company share amount
+
+linked contractor/company/account
+
+any Stripe connected account ID needed later
+
+Do not rely on recalculating from random stale UI state if it can be avoided.
+
+2) Ensure payment logic uses accepted subcontract terms
+
+When customer payment is collected for a subcontracted job:
+
+pull the accepted subcontract agreement for that job
+
+compute the exact payout amounts from the stored accepted terms
+
+use those values in Stripe
+
+The source of truth must be the accepted job offer / subcontract agreement tied to the job.
+
+3) Add a safe test mode path
+
+Create a clean way to test this in Stripe test mode without affecting production behavior.
+
+I want to be able to run a test payment and see:
+
+what the customer was charged
+
+whether the subcontractor got their cut
+
+whether the company kept its share
+
+If connected account transfers cannot fully occur yet because onboarding is incomplete, tell me exactly what is blocking it and what is currently simulated vs real.
+
+Validation rules
+
+Make sure the payment split logic never allows:
+
+contractor payout > collected amount
+
+negative company share
+
+invalid connected account destination
+
+missing accepted offer terms for a subcontracted job
+
+duplicated transfer on retry / refresh / webhook replay
+
+Need idempotency protection so the subcontractor does not get paid twice.
+
+Webhook / post-payment audit
+
+Inspect whether webhook handling is involved.
+
+If yes, verify:
+
+where payment success is finalized
+
+where transfer/split is created
+
+whether retries could duplicate money movement
+
+whether payout records are written to DB
+
+If missing, add a proper DB audit record for each subcontractor payment split:
+
+job id
+
+payment id
+
+subcontractor id / company id
+
+gross amount
+
+contractor payout
+
+company share
+
+stripe fee
+
+net retained
+
+stripe transfer/payment ids
+
+status
+
+What I want after the audit
+
+Give me a clear report with:
+
+Current Stripe split architecture
+
+Whether subcontractor connected accounts are actually wired
+
+Whether money is truly being split today or only displayed in UI
+
+What exact code path handles the split
+
+Any missing pieces blocking real split payouts
+
+What test case you ran
+
+The exact Stripe objects created during the test
+
+Whether the money division matched the Offer Breakdown
+
+Important
+
+Do not break:
+
+current customer payment flow
+
+invoices/payments UI
+
+existing Stripe checkout
+
+owner/company payout flow
+
+native app payment return flow
+
+webhook reliability
+
+If the split is not truly implemented yet, do not fake success. Tell me exactly what is real and what still needs to be built.
