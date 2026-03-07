@@ -80,7 +80,7 @@ export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: Ana
 
   // Team performance data
   const teamPerformance = subcontractors.slice(0, 5).map((sub, index) => ({
-    name: sub.name,
+    name: sub.companyName || sub.name,
     jobs: Math.floor(Math.random() * 10) + 5,
     rating: parseFloat(sub.rating || (4.0 + Math.random()).toFixed(1)),
     efficiency: Math.floor(Math.random() * 30) + 70

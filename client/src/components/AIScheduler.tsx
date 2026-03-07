@@ -242,7 +242,7 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                               <div key={index} className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
-                                    <h4 className="font-medium">{sub.name}</h4>
+                                    <h4 className="font-medium">{sub.companyName || sub.name}</h4>
                                     <Badge variant="outline" className="flex items-center gap-1">
                                       <Star className="h-3 w-3" />
                                       {sub.matchScore}% match

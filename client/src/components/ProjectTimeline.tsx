@@ -192,7 +192,7 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
                             <div className="flex gap-2">
                               {subcontractors.slice(0, 3).map((sub, i) => (
                                 <Badge key={i} variant="outline" className="text-xs">
-                                  {sub.name}
+                                  {sub.companyName || sub.name}
                                 </Badge>
                               ))}
                             </div>
@@ -245,10 +245,10 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
                 <div key={subcontractor.id} className="p-4 border rounded-lg">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                      {subcontractor.name.split(' ').map((n: string) => n[0]).join('')}
+                      {(subcontractor.companyName || subcontractor.name).split(' ').map((n: string) => n[0]).join('')}
                     </div>
                     <div>
-                      <h4 className="font-medium text-slate-900 dark:text-slate-100">{subcontractor.name}</h4>
+                      <h4 className="font-medium text-slate-900 dark:text-slate-100">{subcontractor.companyName || subcontractor.name}</h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400">{subcontractor.specialization}</p>
                     </div>
                   </div>

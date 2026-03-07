@@ -38,6 +38,15 @@ interface NetworkCompany {
   industry: string | null;
 }
 
+function contractorDisplayName(sub: any): string {
+  return sub.companyName || sub.name || 'Unknown';
+}
+
+function contractorPersonalName(sub: any): string | null {
+  if (sub.companyName && sub.name && sub.name !== sub.companyName) return sub.name;
+  return null;
+}
+
 function ContractorForm({
   onSubmit,
   isLoading,
@@ -50,20 +59,22 @@ function ContractorForm({
   isEdit?: boolean;
 }) {
   const [formData, setFormData] = useState({
-    name: initialData?.name || "",
+    companyName: initialData?.companyName || initialData?.name || "",
     email: initialData?.email || "",
     phone: initialData?.phone || "",
-    companyName: initialData?.companyName || "",
     companyWebsite: initialData?.companyWebsite || "",
+    personalName: (initialData?.companyName && initialData?.name && initialData.name !== initialData.companyName) ? initialData.name : "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const companyName = formData.companyName.trim();
+    const personalName = formData.personalName.trim();
     onSubmit({
-      name: formData.name,
+      name: personalName || companyName,
       email: formData.email || null,
       phone: formData.phone || null,
-      companyName: formData.companyName || null,
+      companyName: companyName,
       companyWebsite: normalizeWebsite(formData.companyWebsite) || null,
     });
   };
@@ -71,8 +82,8 @@ function ContractorForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3 w-full">
       <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Name <span className="text-red-400 text-xs">*</span></label>
-        <Input placeholder="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required className="h-10" />
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Name <span className="text-red-400 text-xs">*</span></label>
+        <Input placeholder="Company Name" value={formData.companyName} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} required className="h-10" />
       </div>
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Email</label>
@@ -83,12 +94,12 @@ function ContractorForm({
         <Input placeholder="Phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: formatPhoneInput(e.target.value) })} inputMode="numeric" autoComplete="tel" className="h-10" />
       </div>
       <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Name</label>
-        <Input placeholder="Company Name" value={formData.companyName} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} className="h-10" />
-      </div>
-      <div className="space-y-1">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Website</label>
         <Input placeholder="Company Website" value={formData.companyWebsite} onChange={(e) => setFormData({ ...formData, companyWebsite: e.target.value })} className="h-10" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Personal Name</label>
+        <Input placeholder="Personal Name" value={formData.personalName} onChange={(e) => setFormData({ ...formData, personalName: e.target.value })} className="h-10" />
       </div>
       <Button type="submit" className="w-full h-11 mt-2" disabled={isLoading}>
         {isLoading ? "Saving..." : isEdit ? "Update Contractor" : "Add Contractor"}
@@ -512,11 +523,11 @@ export default function Contractors() {
                 <Card key={sub.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <UserCheck className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0" />
-                      {sub.name}
+                      <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0" />
+                      {contractorDisplayName(sub)}
                     </CardTitle>
-                    {sub.companyName && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{sub.companyName}</p>
+                    {contractorPersonalName(sub) && (
+                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><UserCheck className="h-3.5 w-3.5" />{contractorPersonalName(sub)}</p>
                     )}
                   </CardHeader>
                   <CardContent className="space-y-2">
@@ -542,7 +553,7 @@ export default function Contractors() {
                           <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Contractor</AlertDialogTitle>
-                              <AlertDialogDescription>Are you sure you want to delete "{sub.name}"? This action cannot be undone.</AlertDialogDescription>
+                              <AlertDialogDescription>Are you sure you want to delete "{contractorDisplayName(sub)}"? This action cannot be undone.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>

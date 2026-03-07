@@ -624,7 +624,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                             <SelectItem value="none">No subcontractor</SelectItem>
                             {subcontractors.map((sub: any) => (
                               <SelectItem key={sub.id} value={sub.id.toString()}>
-                                {sub.name}
+                                {sub.companyName || sub.name}
                               </SelectItem>
                             ))}
                           </SelectContent>

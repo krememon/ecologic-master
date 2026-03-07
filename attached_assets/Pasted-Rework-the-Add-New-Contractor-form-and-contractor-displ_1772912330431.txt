@@ -1,0 +1,66 @@
+Rework the “Add New Contractor” form and contractor display model to be company-first, not person-first.
+
+Goal:
+The contractor system should treat this as a COMPANY contact record first, with an optional personal contact name.
+Right now the form/order is causing confusion because “Name” is being used like the company label in dropdowns/invites.
+
+Make these changes:
+
+1) Update Add New Contractor form field order and labels
+Change the form to this exact order:
+
+- Company Name *
+- Email
+- Phone
+- Company Website
+- Personal Name
+
+Details:
+- “Company Name” should be the primary required field
+- “Personal Name” should be optional
+- Update placeholders to match field names exactly in greyed-out style
+- Keep the same modern modal styling, spacing, and button style as current EcoLogic forms
+
+2) Update saved contractor display behavior
+Wherever contractors are shown (dropdowns, cards, invite selection, etc.):
+- Primary label = Company Name
+- Secondary/subtext = Personal Name if present
+- If no Personal Name, do not show an ugly blank/fallback
+- Do NOT use personal name as the main display title anymore
+
+3) Update data mapping
+Make sure form submission maps correctly:
+- companyName -> primary company/company label
+- name/personalName -> optional contact person
+- email -> company/contact email
+- phone -> company/contact phone
+- website -> company website
+
+If current schema uses `name` as the top-level display field, refactor frontend usage so companyName is preferred everywhere for display.
+Do this safely without breaking existing contractor records.
+
+4) Backward compatibility for existing records
+For old contractor entries already in the DB:
+- If companyName is missing but name exists, continue to display name as fallback
+- But all NEW entries should save and render company-first
+- Do not break old records or make lists empty
+
+5) Update affected UI surfaces
+Apply the company-first display to:
+- Add Contractor modal
+- Contractor cards/list
+- Select Contractor dropdown in Send Job Offer
+- Any contractor profile/info card
+- Any invite/job referral display where contractor identity appears
+
+6) UI polish
+- Keep modal clean and mobile-friendly
+- Maintain proper spacing like the improved Jobs/Invoices forms
+- No functional regressions
+
+Deliverables:
+- Updated Add Contractor form with:
+  Company Name, Email, Phone, Company Website, Personal Name
+- Contractors render company-first throughout app
+- Existing records still display safely with fallback logic
+- Short dev log listing changed files
