@@ -631,34 +631,25 @@ export default function Contractors() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredSubcontractors.map((sub: any) => (
                 <Card key={sub.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/subcontractors/${sub.id}`)}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0" />
-                      {contractorDisplayName(sub)}
-                    </CardTitle>
-                    {contractorPersonalName(sub) && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><UserCheck className="h-3.5 w-3.5" />{contractorPersonalName(sub)}</p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {sub.email && (
-                      <a href={`mailto:${sub.email.trim()}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Mail className="h-4 w-4" />{sub.email}</a>
-                    )}
-                    {sub.phone && (
-                      <a href={`tel:${sub.phone.replace(/[\s()-]/g, '')}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Phone className="h-4 w-4" />{sub.phone}</a>
-                    )}
-                    {sub.companyWebsite && (
-                      <a href={sub.companyWebsite.match(/^https?:\/\//) ? sub.companyWebsite : `https://${sub.companyWebsite}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Globe className="h-4 w-4" />Website</a>
-                    )}
-                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                      <p className="text-xs text-slate-500">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
-                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => setEditingSubcontractor(sub)}>
-                          <Edit className="h-4 w-4" />
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 truncate">{contractorDisplayName(sub)}</h3>
+                        {contractorPersonalName(sub) && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">{contractorPersonalName(sub)}</p>
+                        )}
+                      </div>
+                      <Building2 className="h-5 w-5 text-slate-400 shrink-0 mt-0.5" />
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <p className="text-xs text-slate-400">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
+                      <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => setEditingSubcontractor(sub)}>
+                          <Edit className="h-3.5 w-3.5" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="h-3.5 w-3.5" /></Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
                             <AlertDialogHeader>
