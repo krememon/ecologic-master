@@ -378,8 +378,9 @@ function Router() {
     return <PayoutSetup token={setupToken} />;
   }
 
-  if (path.match(/^\/job-offer\/\d+\/[a-zA-Z0-9]+/)) {
-    return <JobOffer />;
+  const jobOfferRouteMatch = path.match(/^\/job-offer\/\d+\/([a-zA-Z0-9]+)/);
+  if (jobOfferRouteMatch) {
+    return <Redirect to={`/referrals/invite/${jobOfferRouteMatch[1]}`} />;
   }
 
   if (localStorage.getItem('ecologic_demo_mode')) {
@@ -462,9 +463,10 @@ function useCapacitorDeepLinks() {
 
           const jobOfferMatch = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
           if (jobOfferMatch) {
-            console.log("[deep-link] Job offer deep link detected, navigating to", pathToMatch);
-            sessionStorage.setItem("pendingDeepLink", pathToMatch);
-            window.location.href = pathToMatch;
+            const target = `/referrals/invite/${jobOfferMatch[2]}`;
+            console.log("[deep-link] Job offer deep link detected, routing to", target);
+            sessionStorage.setItem("pendingDeepLink", target);
+            window.location.href = target;
             return;
           }
 

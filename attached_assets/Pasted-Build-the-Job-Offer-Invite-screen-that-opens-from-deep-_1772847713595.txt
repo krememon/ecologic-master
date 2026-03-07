@@ -1,0 +1,115 @@
+Build the “Job Offer Invite” screen that opens from deep links and lets the receiving contractor Accept or Deny the job.
+
+Context:
+- Universal Links now work.
+- Links open the native app for:
+  /invite/referral/:token
+  /job-offer/:jobId/:token (backward compatible)
+- We already have job_referrals backend + invite_token support.
+- Contractor Network UI exists (Incoming/Sent/Contractors tabs).
+- DO NOT create a public web accept/deny page. This must be inside the app only.
+
+========================================================
+1) Routing (already partially exists, ensure correct)
+========================================================
+When app receives:
+- https://app.ecologicc.com/invite/referral/:token
+Route to in-app screen:
+- /referrals/invite/:token
+
+If URL is:
+- https://app.ecologicc.com/job-offer/:jobId/:token
+Also route to:
+- /referrals/invite/:token  (ignore jobId, token is the source of truth)
+
+If user is logged out:
+- store pendingDeepLink
+- after login, navigate to /referrals/invite/:token
+
+========================================================
+2) Backend endpoints (create if missing)
+========================================================
+Add authenticated endpoints (RBAC: receiver company members only):
+GET  /api/referrals/invite/:token
+POST /api/referrals/invite/:token/accept
+POST /api/referrals/invite/:token/decline
+
+Rules:
+- Find referral by invite_token
+- Validate not expired
+- Validate referral status is pending (or return state “already accepted/declined”)
+- Validate logged-in companyId == receiver_company_id
+- Accept: set referral status accepted + accepted_at, then transfer job ownership to receiver_company_id (reuse existing accept logic)
+- Decline: set status declined
+Return: job summary + referral summary + sender company name
+
+========================================================
+3) New screen: JobOfferInvite.tsx
+========================================================
+Create a dedicated native-style screen that matches EcoLogic theme.
+
+UI layout:
+Header:
+- Title: “Job Offer”
+- Subtitle: “From {SenderCompany}”
+
+Body (card sections):
+A) Job Info
+- Job Title
+- Customer Name
+- Address (with optional “Open Maps” button)
+- Scheduled date/time (if exists)
+- Notes / description (if exists)
+
+B) Referral / Payment
+- Fee pill: “10%” or “$250”
+- If job has price: show “Estimated earnings: $X” (based on fee)
+
+C) Status states
+- If pending: show actions
+- If accepted: show “Accepted ✅” + button “Open Job”
+- If declined: show “Declined” + button “Back to Contractor Network”
+- If expired: show “Invite expired”
+- If wrong company: show “This invite is not for your company”
+
+Actions (pending only):
+Primary: [ Accept Job ]
+Secondary: [ Decline ]
+
+Interaction:
+- On load: fetch GET /api/referrals/invite/:token
+- Accept: POST accept, show loading, then success state, then navigate to the job details screen (or Jobs list) after tap “Open Job”
+- Decline: POST decline, show success state
+
+========================================================
+4) Data refresh + Notifications
+========================================================
+After accept/decline:
+- Invalidate/refetch:
+  - /api/referrals/incoming
+  - /api/referrals/outgoing
+  - Jobs list
+- Show toast:
+  - “Job accepted”
+  - “Job declined”
+
+========================================================
+5) Edge cases + polish
+========================================================
+- Prevent double-submit (disable buttons during request)
+- Show skeleton loader while fetching
+- If token invalid/404: “Invite not found”
+- Minimal logs, no sensitive info
+
+========================================================
+Deliverables
+========================================================
+- Invite screen works end-to-end from deep link
+- Accept transfers job ownership correctly
+- Decline marks referral declined
+- UI matches EcoLogic styling and looks clean on mobile
+- Add short dev log with files changed and how to test:
+  1) Send job offer
+  2) Tap link on receiving phone
+  3) Accept -> job appears in Jobs
+  4) Decline -> status updates

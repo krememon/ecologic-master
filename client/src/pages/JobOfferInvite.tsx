@@ -64,8 +64,9 @@ export default function JobOfferInvite() {
       setAcceptedJobId(result.job?.id || null);
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/invite", token] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/incoming"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      toast({ title: "Job offer accepted", description: "The job has been transferred to your company." });
+      toast({ title: "Job accepted", description: "The job has been transferred to your company." });
     },
     onError: () => {
       toast({ title: "Failed to accept", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -81,7 +82,8 @@ export default function JobOfferInvite() {
       setActionTaken("declined");
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/invite", token] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/incoming"] });
-      toast({ title: "Job offer declined" });
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
+      toast({ title: "Job declined" });
     },
     onError: () => {
       toast({ title: "Failed to decline", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -256,9 +258,17 @@ export default function JobOfferInvite() {
             {data.customerAddress && (
               <div className="flex items-start gap-3">
                 <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-medium">Address</p>
                   <p className="text-sm text-muted-foreground">{data.customerAddress}</p>
+                  <a
+                    href={`https://maps.apple.com/?q=${encodeURIComponent(data.customerAddress)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1 inline-block"
+                  >
+                    Open in Maps
+                  </a>
                 </div>
               </div>
             )}
@@ -308,11 +318,22 @@ export default function JobOfferInvite() {
       )}
 
       <Card className="mb-6">
-        <CardContent className="pt-5">
+        <CardContent className="pt-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Referral Fee</span>
             <Badge variant="outline" className="text-sm">{feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}</Badge>
           </div>
+          {data.job?.estimatedCost && parseFloat(data.job.estimatedCost) > 0 && (
+            <div className="flex items-center justify-between pt-1 border-t">
+              <span className="text-sm font-medium">Estimated Earnings</span>
+              <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                ${data.referralType === "percent"
+                  ? (parseFloat(data.job.estimatedCost) * (1 - parseFloat(data.referralValue) / 100)).toFixed(2)
+                  : (parseFloat(data.job.estimatedCost) - parseFloat(data.referralValue)).toFixed(2)
+                }
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
