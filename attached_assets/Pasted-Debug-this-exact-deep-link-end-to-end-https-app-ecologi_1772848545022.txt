@@ -1,0 +1,127 @@
+Debug this exact deep link end-to-end:
+
+https://app.ecologicc.com/invite/referral/d5d705c2d245333a7589eb733c0d02099c9ec4166a32f4db60fe823236fde047
+
+Current behavior:
+- The link opens the EcoLogic app
+- But the Job Offer Invite screen does not appear
+
+Since the URL path is correct (/invite/referral/:token), the bug is inside native app routing or token handling.
+
+==================================================
+1) Add logs at every step
+==================================================
+Add targeted logs for this exact flow:
+
+A) Capacitor deep link listener
+Log:
+- raw URL
+- pathname
+- extracted token
+- final in-app route
+
+Example:
+[deepLink] raw=https://app.ecologicc.com/invite/referral/...
+[deepLink] pathname=/invite/referral/d5d705...
+[deepLink] token=d5d705...
+[deepLink] navigate=/referrals/invite/d5d705...
+
+B) Cold start handling
+If app opens from a terminated state, log whether initial URL is detected.
+Example:
+[deepLink] coldStartUrl=...
+[deepLink] coldStart navigate=/referrals/invite/...
+
+C) Pending deep link restore
+Log whether pending link is saved/restored.
+Example:
+[deepLink] saved pending token=...
+[deepLink] restored pending token=...
+
+D) JobOfferInvite screen
+On mount, log:
+[inviteScreen] mounted token=...
+[inviteScreen] fetching /api/referrals/invite/:token
+
+E) API result
+Log:
+- success
+- 404
+- wrong company
+- expired
+- unauthorized
+
+==================================================
+2) Handle BOTH app states correctly
+==================================================
+Ensure deep links work in BOTH cases:
+
+A) App already open/backgrounded
+- appUrlOpen should navigate immediately to /referrals/invite/:token
+
+B) App cold started from link
+- detect initial launch URL on startup
+- if it matches /invite/referral/:token, navigate to /referrals/invite/:token
+- do not rely only on appUrlOpen, because cold starts can miss it
+
+==================================================
+3) Force route navigation correctly
+==================================================
+Make sure the navigation call actually uses:
+navigate(`/referrals/invite/${token}`)
+
+and that App.tsx/router has a real route for:
+<Route path="/referrals/invite/:token" ... />
+
+If a redirect exists for /invite/referral/:token, confirm it is not being skipped on native launch.
+
+==================================================
+4) Prevent race condition on app startup
+==================================================
+Likely issue:
+The deep link fires before the router/auth state is ready.
+
+Fix:
+- if auth/router not ready yet, store the token in a startupDeepLink state
+- once app initialization completes, consume it and navigate
+- if logged out, save pendingDeepLink and continue after login
+
+==================================================
+5) Add visible fallback for debugging
+==================================================
+If the app receives a valid token but cannot navigate, show a temporary debug banner/home modal:
+“Invite link detected: <token>”
+with a button:
+[Open Invite Screen]
+
+This helps prove whether the token is reaching the app.
+
+==================================================
+6) Verify backend for this exact token
+==================================================
+Check this token directly on backend:
+d5d705c2d245333a7589eb733c0d02099c9ec4166a32f4db60fe823236fde047
+
+Confirm:
+- referral exists
+- invite_token matches exactly
+- status is pending
+- not expired
+- receiving company matches the logged in contractor account being tested
+
+If backend rejects it, log the exact reason.
+
+==================================================
+7) Deliverable
+==================================================
+Fix the bug so tapping this exact link:
+https://app.ecologicc.com/invite/referral/d5d705c2d245333a7589eb733c0d02099c9ec4166a32f4db60fe823236fde047
+
+reliably opens:
+- the EcoLogic app
+- then immediately the Job Offer Invite screen
+
+Add a short dev log showing:
+- where the failure was
+- what was fixed
+- the exact logs proving the token reaches the screen

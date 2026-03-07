@@ -14037,6 +14037,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/invite/referral/:token', async (req, res) => {
     const { token } = req.params;
+
+    if (req.isAuthenticated?.()) {
+      return res.redirect(`/referrals/invite/${token}`);
+    }
+
     const schemeUrl = `ecologic://invite/referral/${token}`;
     const fallbackUrl = `/invite/fallback/${token}`;
     res.setHeader('Content-Type', 'text/html');
@@ -16270,22 +16275,34 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
   app.get('/api/referrals/invite/:token', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(userId);
-      if (!company) return res.status(404).json({ error: 'Company not found' });
-
       const { token } = req.params;
+      console.log(`[referral-invite] GET token=${token.slice(0, 12)}... userId=${userId}`);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        console.log(`[referral-invite] 404: user ${userId} has no company`);
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
       const referral = await storage.getJobReferralByToken(token);
-      if (!referral) return res.status(404).json({ error: 'Invite not found' });
+      if (!referral) {
+        console.log(`[referral-invite] 404: token not found`);
+        return res.status(404).json({ error: 'Invite not found' });
+      }
+
+      console.log(`[referral-invite] found referral #${referral.id}, status=${referral.status}, receiverCompanyId=${referral.receiverCompanyId}, userCompanyId=${company.id}`);
 
       if (referral.inviteExpiresAt && new Date(referral.inviteExpiresAt) < new Date()) {
+        console.log(`[referral-invite] 410: expired at ${referral.inviteExpiresAt}`);
         return res.status(410).json({ error: 'This invite has expired', status: 'expired' });
       }
 
       if (referral.status !== 'pending') {
+        console.log(`[referral-invite] 400: already ${referral.status}`);
         return res.status(400).json({ error: `This referral has already been ${referral.status}`, status: referral.status });
       }
 
       if (referral.receiverCompanyId !== company.id) {
+        console.log(`[referral-invite] 403: expected company ${referral.receiverCompanyId}, got ${company.id}`);
         return res.status(403).json({ error: 'This invite is not for your company' });
       }
 

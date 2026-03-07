@@ -40,15 +40,21 @@ export default function JobOfferInvite() {
   const [actionTaken, setActionTaken] = useState<"accepted" | "declined" | null>(null);
   const [acceptedJobId, setAcceptedJobId] = useState<number | null>(null);
 
+  console.log("[inviteScreen] mounted token=", token ? token.slice(0, 12) + "..." : "(empty)");
+
   const { data, isLoading, error } = useQuery<InviteData>({
     queryKey: ["/api/referrals/invite", token],
     queryFn: async () => {
+      console.log("[inviteScreen] fetching /api/referrals/invite/" + token.slice(0, 12) + "...");
       const res = await fetch(`/api/referrals/invite/${token}`, { credentials: "include" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        console.log("[inviteScreen] API error:", res.status, body.error || body.status);
         throw { status: res.status, ...body };
       }
-      return res.json();
+      const result = await res.json();
+      console.log("[inviteScreen] API success, referralId=", result.referralId, "status=", result.status);
+      return result;
     },
     enabled: !!token,
     retry: false,

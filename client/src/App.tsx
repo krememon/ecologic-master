@@ -153,7 +153,7 @@ function UnsubscribeRouter() {
   return <PublicUnsubscribe />;
 }
 
-const COLD_START_SKIP = ["/auth", "/login", "/signup", "/register", "/forgot-password", "/reset-password", "/onboarding", "/join-company", "/paywall", "/sign", "/wrapper", "/welcome"];
+const COLD_START_SKIP = ["/auth", "/login", "/signup", "/register", "/forgot-password", "/reset-password", "/onboarding", "/join-company", "/paywall", "/sign", "/wrapper", "/welcome", "/referrals/invite", "/invite/referral", "/job-offer"];
 
 function useColdStartRedirect(ready: boolean) {
   const [, setLocation] = useLocation();
@@ -383,6 +383,12 @@ function Router() {
     return <Redirect to={`/referrals/invite/${jobOfferRouteMatch[1]}`} />;
   }
 
+  const inviteRedirectMatch = path.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+  if (inviteRedirectMatch) {
+    console.log("[deep-link] SPA caught /invite/referral/ path, redirecting to invite screen");
+    return <Redirect to={`/referrals/invite/${inviteRedirectMatch[1]}`} />;
+  }
+
   if (localStorage.getItem('ecologic_demo_mode')) {
     localStorage.removeItem('ecologic_demo_mode');
   }
@@ -430,6 +436,35 @@ function usePreventScrollbarShift() {
   }, []);
 }
 
+function resolveDeepLinkPath(url: string): string {
+  try {
+    if (url.startsWith("ecologic://")) {
+      return "/" + url.replace("ecologic://", "").replace(/^\/+/, "");
+    }
+    return new URL(url).pathname;
+  } catch {
+    return "";
+  }
+}
+
+function extractDeepLinkTarget(pathToMatch: string): string | null {
+  const jobOfferMatch = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
+  if (jobOfferMatch) {
+    return `/referrals/invite/${jobOfferMatch[2]}`;
+  }
+  const inviteMatch = pathToMatch.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+  if (inviteMatch) {
+    return `/referrals/invite/${inviteMatch[1]}`;
+  }
+  return null;
+}
+
+function navigateToDeepLink(target: string) {
+  console.log("[deep-link] navigate=", target);
+  sessionStorage.setItem("pendingDeepLink", target);
+  window.location.href = target;
+}
+
 function useCapacitorDeepLinks() {
   React.useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -445,37 +480,29 @@ function useCapacitorDeepLinks() {
         console.log("[deep-link] Native platform detected, setting up deep link listener");
         const { App: CapApp } = await import("@capacitor/app");
 
+        const launchUrl = await CapApp.getLaunchUrl();
+        if (launchUrl?.url) {
+          console.log("[deep-link] coldStartUrl=", launchUrl.url);
+          const coldPath = resolveDeepLinkPath(launchUrl.url);
+          console.log("[deep-link] coldStart pathname=", coldPath);
+          const coldTarget = extractDeepLinkTarget(coldPath);
+          if (coldTarget) {
+            console.log("[deep-link] coldStart navigate=", coldTarget);
+            navigateToDeepLink(coldTarget);
+          }
+        }
+
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
-          console.log("[deep-link] Received:", url);
+          console.log("[deep-link] appUrlOpen raw=", url);
 
-          let pathToMatch = "";
-          try {
-            if (url.startsWith("ecologic://")) {
-              pathToMatch = "/" + url.replace("ecologic://", "").replace(/^\/+/, "");
-            } else {
-              pathToMatch = new URL(url).pathname;
-            }
-          } catch {
-            pathToMatch = "";
-          }
+          const pathToMatch = resolveDeepLinkPath(url);
+          console.log("[deep-link] pathname=", pathToMatch);
 
-          console.log("[deep-link] Resolved path:", pathToMatch);
-
-          const jobOfferMatch = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
-          if (jobOfferMatch) {
-            const target = `/referrals/invite/${jobOfferMatch[2]}`;
-            console.log("[deep-link] Job offer deep link detected, routing to", target);
-            sessionStorage.setItem("pendingDeepLink", target);
-            window.location.href = target;
-            return;
-          }
-
-          const inviteMatch = pathToMatch.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
-          if (inviteMatch) {
-            const target = `/referrals/invite/${inviteMatch[1]}`;
-            console.log("[deep-link] Referral invite deep link detected, navigating to", target);
-            sessionStorage.setItem("pendingDeepLink", target);
-            window.location.href = target;
+          const target = extractDeepLinkTarget(pathToMatch);
+          if (target) {
+            const tokenMatch = pathToMatch.match(/([a-f0-9]{16,})/);
+            console.log("[deep-link] token=", tokenMatch?.[1]?.slice(0, 12) + "...");
+            navigateToDeepLink(target);
             return;
           }
 
@@ -508,7 +535,7 @@ function useCapacitorDeepLinks() {
                 const pendingLink = sessionStorage.getItem("pendingDeepLink");
                 if (pendingLink) {
                   sessionStorage.removeItem("pendingDeepLink");
-                  console.log("[deep-link] Resuming pending deep link after auth:", pendingLink);
+                  console.log("[deep-link] restored pending=", pendingLink);
                   window.location.href = pendingLink;
                 } else {
                   window.location.href = "/";
