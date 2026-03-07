@@ -644,12 +644,12 @@ export default function Contractors() {
                     <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                       <p className="text-xs text-slate-400">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
                       <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => setEditingSubcontractor(sub)}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => setEditingSubcontractor(sub)}>
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="h-3.5 w-3.5" /></Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"><Trash2 className="h-3.5 w-3.5" /></Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
                             <AlertDialogHeader>
