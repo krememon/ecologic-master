@@ -1,0 +1,349 @@
+Based on the audit, we now know the truth:
+
+No real Stripe split payouts exist yet
+
+All customer payments currently go 100% to the main Stripe account
+
+Offer Breakdown is UI only
+
+No Stripe Connect onboarding / connected account storage / transfer logic exists
+
+So now I want you to start building the real subcontractor payout infrastructure in a safe phased way.
+
+Important overall goal
+
+We need EcoLogic to eventually support this real flow:
+
+customer pays invoice
+
+EcoLogic knows the job was subcontracted
+
+EcoLogic knows the accepted subcontract terms
+
+EcoLogic knows the subcontractor company’s Stripe connected account
+
+Stripe routes the subcontractor’s portion correctly
+
+EcoLogic stores a full audit trail
+
+no duplicate payouts happen
+
+But do this in a careful order so we don’t break the existing payment flow.
+
+PHASE 1 — Data model + backend groundwork only
+
+Do not fully switch live payment splitting on yet.
+
+First build the infrastructure needed so we can safely wire it up after.
+
+1) Add Stripe Connect account storage
+
+Add the proper DB fields for subcontractor/company payout support.
+
+Companies table
+
+Add fields like:
+
+stripeConnectAccountId
+
+stripeConnectStatus
+examples: not_started, pending_onboarding, active, restricted, disabled
+
+stripeConnectChargesEnabled
+
+stripeConnectPayoutsEnabled
+
+stripeConnectDetailsSubmitted
+
+stripeConnectOnboardedAt
+
+stripeConnectLastCheckedAt
+
+Use naming that matches the codebase style, but keep it clean and explicit.
+
+2) Add subcontract payment agreement snapshot storage
+
+We cannot rely on random UI recalculation later.
+
+When a subcontractor accepts a job offer, store a locked snapshot of the financial terms that will later drive payout splitting.
+
+Add either a new table or expand the correct existing referral/accepted-offer structure so we persist:
+
+jobId
+
+referral / offer id
+
+owner company id
+
+subcontractor company id
+
+contractor/contact id if relevant
+
+fee type
+
+fee value
+
+job total at time of agreement if appropriate
+
+contractor payout amount snapshot
+
+company share amount snapshot
+
+offer accepted timestamp
+
+status
+
+recipient email used
+
+any future connected account id reference if useful
+
+I want a true source of truth for the accepted subcontract agreement.
+
+Important
+
+Do not break the current referral accept flow that is already working.
+
+3) Add payout audit table
+
+Create a dedicated DB table for payout / transfer tracking.
+
+Example fields:
+
+id
+
+jobId
+
+invoiceId
+
+paymentId
+
+paymentIntentId
+
+chargeId
+
+ownerCompanyId
+
+subcontractorCompanyId
+
+subcontractAgreementId
+
+grossAmount
+
+contractorPayoutAmount
+
+companyShareAmount
+
+stripeFeeAmount
+
+netRetainedAmount
+
+transferAmount
+
+transferId
+
+destinationAccountId
+
+status
+
+idempotencyKey
+
+createdAt
+
+updatedAt
+
+failureReason
+
+raw metadata json if helpful
+
+This table will protect us from double-pays and let us audit every split later.
+
+4) Add backend Stripe Connect service layer
+
+Create a clean backend service module for subcontractor payouts.
+
+I want reusable helpers for things like:
+
+create connected account
+
+create onboarding link
+
+retrieve account status
+
+resolve whether a company is payout-ready
+
+compute subcontract split from accepted agreement
+
+prepare payout audit payload
+
+generate idempotency keys
+
+Do not jam everything into route files.
+
+Keep it modular and future-safe.
+
+5) Add onboarding API endpoints
+
+Build backend endpoints for Stripe Connect onboarding for subcontractor companies.
+
+Needed endpoints:
+
+create/get connected account for a company
+
+create onboarding link
+
+refresh/retry onboarding link
+
+fetch current Stripe Connect status for a company
+
+sync Stripe account status back into DB
+
+Use Stripe-hosted onboarding.
+
+6) Add basic owner/subcontractor UI entry point
+
+Add a simple, clean UI so the subcontractor company can connect Stripe.
+
+This does not need to be fully polished yet, but it must be functional.
+
+Need:
+
+connect Stripe button
+
+onboarding status badge
+
+retry onboarding if incomplete
+
+success/connected state
+
+restricted/incomplete messaging
+
+visible only where appropriate by role/RBAC
+
+Keep it aligned with EcoLogic styling.
+
+7) Add subcontract job payment detection
+
+In the payment backend, add detection logic for:
+
+is this invoice/job tied to an accepted subcontract agreement?
+
+if yes, load the agreement snapshot
+
+check whether subcontractor company has an active Stripe connected account
+
+prepare the future payout calculation object
+
+But for Phase 1:
+
+Do not execute real transfers yet.
+Just:
+
+compute it
+
+log it
+
+write a payout audit row in a safe “preview/pending” style status if appropriate
+
+This lets us verify the logic before moving real money.
+
+8) Add targeted logs
+
+Add only focused logs such as:
+
+[SubPaySetup] subcontract agreement found:
+
+[SubPaySetup] ownerCompanyId:
+
+[SubPaySetup] subcontractorCompanyId:
+
+[SubPaySetup] connectedAccountId:
+
+[SubPaySetup] chargesEnabled:
+
+[SubPaySetup] payoutsEnabled:
+
+[SubPaySetup] grossAmount:
+
+[SubPaySetup] contractorPayoutAmount:
+
+[SubPaySetup] companyShareAmount:
+
+[SubPaySetup] phase1 preview only, no transfer executed
+
+Do not spam unrelated logs.
+
+PHASE 2 PREP ONLY — choose recommended Stripe architecture
+
+I also want you to decide and report which real Stripe architecture EcoLogic should use for this subcontractor use case.
+
+Compare and recommend one of:
+
+destination charges
+
+separate charges and transfers
+
+direct charges
+
+For the recommendation, consider:
+
+EcoLogic controls checkout
+
+EcoLogic already has the customer-facing payment flow
+
+we need platform visibility and auditability
+
+we need subcontractor connected accounts
+
+we need reliable split payouts after accepted referrals
+
+we may need to hold funds until payment clears / job state is valid
+
+we want safest future scaling path
+
+Deliverable
+
+Tell me which architecture you recommend and why for EcoLogic specifically.
+
+Absolutely do not break
+
+Do not break:
+
+current invoice payment flow
+
+current Stripe checkout
+
+current webhook processing
+
+current accepted referral flow
+
+current job transfer flow
+
+native payment return flow
+
+existing owner/company payment records
+
+What I want back after this phase
+
+When done, report back with:
+
+exact DB schema changes made
+
+where the accepted subcontract agreement snapshot is stored
+
+payout audit table structure
+
+new Stripe Connect service/helpers added
+
+new onboarding endpoints added
+
+new UI entry point added
+
+how subcontracted-job payment detection works
+
+what gets logged today vs what is still preview-only
+
+which Stripe architecture you recommend for EcoLogic and why
+
+confirmation that no live money splitting has been turned on yet
+
+Do this as Phase 1 groundwork only so we can test safely before enabling real transfers.

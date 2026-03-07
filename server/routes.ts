@@ -31,6 +31,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
+import * as stripeConnectService from "./services/stripeConnect";
 import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, insertScheduleEventSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
@@ -10485,6 +10486,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [inv] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
         if (inv?.jobId) {
           await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
+
+          stripeConnectService.processSubcontractPaymentDetection({
+            jobId: inv.jobId,
+            invoiceId,
+            paymentId: matchedPayment.id,
+            paymentIntentId: pi,
+            paymentAmountCents: matchedPayment.amountCents || Math.round(parseFloat(matchedPayment.amount) * 100),
+            ownerCompanyId: inv.companyId,
+          }).catch(err => console.error('[SubPaySetup] detection error:', err?.message));
         }
 
         sendReceiptForPayment(matchedPayment.id).catch(err =>
@@ -16546,11 +16556,22 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(403).json({ error: 'This invite is not for your company' });
       }
 
+      const jobLineItemsForTotal = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, referral.jobId));
+      const jobTotalCents = jobLineItemsForTotal.reduce((sum: number, li: any) => sum + (li.totalCents || 0), 0);
+      const job = await storage.getJob(referral.jobId);
+      const fallbackTotalCents = jobTotalCents || Math.round((parseFloat(job?.estimatedCost || '0') || parseFloat(job?.actualCost || '0') || 0) * 100);
+      const split = stripeConnectService.computeSubcontractSplit(referral, fallbackTotalCents);
+
       await storage.updateJobReferral(referral.id, {
         status: 'accepted',
         acceptedAt: new Date(),
         receiverCompanyId: company.id,
-      });
+        jobTotalAtAcceptanceCents: fallbackTotalCents,
+        contractorPayoutAmountCents: split.contractorPayoutCents,
+        companyShareAmountCents: split.companyShareCents,
+      } as any);
+
+      console.log(`[referrals] snapshot stored: jobTotal=${fallbackTotalCents} contractorPayout=${split.contractorPayoutCents} companyShare=${split.companyShareCents}`);
 
       const updatedJob = await storage.updateJob(referral.jobId, {
         companyId: company.id,
@@ -17190,6 +17211,116 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
+  });
+
+  // ===================== Stripe Connect Onboarding =====================
+
+  app.post('/api/stripe-connect/create-account', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER') {
+        return res.status(403).json({ error: 'Only the company owner can connect Stripe' });
+      }
+
+      if (company.stripeConnectAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect account already exists', accountId: company.stripeConnectAccountId });
+      }
+
+      const account = await stripeConnectService.createConnectedAccount(company.id, company.name, company.email);
+      res.json({ success: true, accountId: account.id, status: 'pending_onboarding' });
+    } catch (error: any) {
+      console.error('[StripeConnect] Error creating account:', error);
+      res.status(500).json({ error: 'Failed to create Stripe Connect account' });
+    }
+  });
+
+  app.post('/api/stripe-connect/onboarding-link', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER') {
+        return res.status(403).json({ error: 'Only the company owner can manage Stripe Connect' });
+      }
+
+      if (!company.stripeConnectAccountId) {
+        return res.status(400).json({ error: 'No Stripe Connect account exists. Create one first.' });
+      }
+
+      const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
+      const returnUrl = `${baseUrl}/settings/stripe-connect?status=complete`;
+      const refreshUrl = `${baseUrl}/settings/stripe-connect?status=refresh`;
+
+      const link = await stripeConnectService.createOnboardingLink(company.stripeConnectAccountId, returnUrl, refreshUrl);
+      res.json({ success: true, url: link.url, expiresAt: link.expires_at });
+    } catch (error: any) {
+      console.error('[StripeConnect] Error creating onboarding link:', error);
+      res.status(500).json({ error: 'Failed to create onboarding link' });
+    }
+  });
+
+  app.get('/api/stripe-connect/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      if (!company.stripeConnectAccountId) {
+        return res.json({
+          hasAccount: false,
+          status: 'not_started',
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+        });
+      }
+
+      res.json({
+        hasAccount: true,
+        accountId: company.stripeConnectAccountId,
+        status: company.stripeConnectStatus || 'not_started',
+        chargesEnabled: company.stripeConnectChargesEnabled || false,
+        payoutsEnabled: company.stripeConnectPayoutsEnabled || false,
+        detailsSubmitted: company.stripeConnectDetailsSubmitted || false,
+        onboardedAt: company.stripeConnectOnboardedAt,
+        lastCheckedAt: company.stripeConnectLastCheckedAt,
+      });
+    } catch (error: any) {
+      console.error('[StripeConnect] Error fetching status:', error);
+      res.status(500).json({ error: 'Failed to fetch Stripe Connect status' });
+    }
+  });
+
+  app.post('/api/stripe-connect/sync', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER') {
+        return res.status(403).json({ error: 'Only the company owner can sync Stripe Connect status' });
+      }
+
+      if (!company.stripeConnectAccountId) {
+        return res.status(400).json({ error: 'No Stripe Connect account to sync' });
+      }
+
+      const result = await stripeConnectService.syncAccountStatus(company.id, company.stripeConnectAccountId);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error('[StripeConnect] Error syncing status:', error);
+      res.status(500).json({ error: 'Failed to sync Stripe Connect status' });
+    }
   });
 
   return httpServer;

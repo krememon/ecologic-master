@@ -25,6 +25,7 @@ import MessageThread from "@/pages/MessageThread";
 import PaymentsPage from "@/pages/payments-page";
 import AIScheduling from "@/pages/AIScheduling";
 import Settings from "@/pages/Settings";
+import StripeConnectSettings from "@/pages/StripeConnectSettings";
 import Approvals from "@/pages/Approvals";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -413,6 +414,7 @@ function AuthenticatedRouter() {
         <Route path="/employees" component={Employees} />
         <Route path="/timesheets" component={Timesheets} />
         <Route path="/settings" component={Settings} />
+        <Route path="/settings/stripe-connect" component={StripeConnectSettings} />
         <Route path="/settings/about" component={About} />
         <Route path="/settings/support" component={Support} />
         <Route path="/settings/support/contact" component={ContactSupport} />

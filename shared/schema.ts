@@ -156,6 +156,13 @@ export const companies = pgTable("companies", {
   qboTokenExpiresAt: timestamp("qbo_token_expires_at"),
   qboConnectedAt: timestamp("qbo_connected_at"),
   telnyxPhone: varchar("telnyx_phone"),
+  stripeConnectAccountId: varchar("stripe_connect_account_id"),
+  stripeConnectStatus: varchar("stripe_connect_status").default("not_started"),
+  stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").default(false),
+  stripeConnectPayoutsEnabled: boolean("stripe_connect_payouts_enabled").default(false),
+  stripeConnectDetailsSubmitted: boolean("stripe_connect_details_submitted").default(false),
+  stripeConnectOnboardedAt: timestamp("stripe_connect_onboarded_at"),
+  stripeConnectLastCheckedAt: timestamp("stripe_connect_last_checked_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1986,6 +1993,9 @@ export const jobReferrals = pgTable("job_referrals", {
   inviteSentAt: timestamp("invite_sent_at"),
   inviteExpiresAt: timestamp("invite_expires_at"),
   acceptedAt: timestamp("accepted_at"),
+  jobTotalAtAcceptanceCents: integer("job_total_at_acceptance_cents"),
+  contractorPayoutAmountCents: integer("contractor_payout_amount_cents"),
+  companyShareAmountCents: integer("company_share_amount_cents"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("job_referrals_job_idx").on(table.jobId),
@@ -2015,4 +2025,38 @@ export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const subcontractPayoutAudit = pgTable("subcontract_payout_audit", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id),
+  invoiceId: integer("invoice_id").references(() => invoices.id),
+  paymentId: integer("payment_id").references(() => payments.id),
+  paymentIntentId: varchar("payment_intent_id"),
+  chargeId: varchar("charge_id"),
+  ownerCompanyId: integer("owner_company_id").notNull().references(() => companies.id),
+  subcontractorCompanyId: integer("subcontractor_company_id").references(() => companies.id),
+  referralId: integer("referral_id").notNull().references(() => jobReferrals.id),
+  grossAmountCents: integer("gross_amount_cents").notNull(),
+  contractorPayoutAmountCents: integer("contractor_payout_amount_cents").notNull(),
+  companyShareAmountCents: integer("company_share_amount_cents").notNull(),
+  stripeFeeAmountCents: integer("stripe_fee_amount_cents"),
+  netRetainedAmountCents: integer("net_retained_amount_cents"),
+  transferAmountCents: integer("transfer_amount_cents"),
+  stripeTransferId: varchar("stripe_transfer_id"),
+  destinationAccountId: varchar("destination_account_id"),
+  status: varchar("status").notNull().default("preview"),
+  idempotencyKey: varchar("idempotency_key").unique(),
+  failureReason: text("failure_reason"),
+  rawMeta: jsonb("raw_meta"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("payout_audit_job_idx").on(table.jobId),
+  index("payout_audit_payment_idx").on(table.paymentId),
+  index("payout_audit_referral_idx").on(table.referralId),
+  index("payout_audit_status_idx").on(table.status),
+  index("payout_audit_idempotency_idx").on(table.idempotencyKey),
+]);
+
+export type SubcontractPayoutAudit = typeof subcontractPayoutAudit.$inferSelect;
 
