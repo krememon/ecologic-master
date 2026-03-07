@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,14 +30,6 @@ function normalizeWebsite(url: string): string {
   return normalized;
 }
 
-interface NetworkCompany {
-  id: number;
-  name: string;
-  city: string | null;
-  state: string | null;
-  email: string | null;
-  industry: string | null;
-}
 
 function contractorDisplayName(sub: any): string {
   return sub.companyName || sub.name || 'Unknown';
@@ -226,14 +218,6 @@ const STATUS_CONFIG: Record<string, { color: string; icon: typeof Clock; label: 
   completed: { color: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400", icon: CheckCircle, label: "Completed" },
 };
 
-function companySubtitle(c: NetworkCompany): string {
-  if (c.city && c.state) return `${c.city}, ${c.state}`;
-  if (c.city) return c.city;
-  if (c.state) return c.state;
-  if (c.industry) return c.industry;
-  if (c.email) return c.email;
-  return '';
-}
 
 function feeBadge(type: string, value: string) {
   const v = parseFloat(value || '0');
@@ -268,6 +252,7 @@ export default function Contractors() {
 
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [receiverCompanyId, setReceiverCompanyId] = useState<string>("");
+  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>("");
   const [referralType, setReferralType] = useState<string>("percent");
   const [referralValue, setReferralValue] = useState<string>("");
   const [referralMessage, setReferralMessage] = useState<string>("");
@@ -294,18 +279,6 @@ export default function Contractors() {
     enabled: isAuthenticated && canSend,
   });
 
-  const { data: rawNetworkCompanies = [] } = useQuery<NetworkCompany[]>({
-    queryKey: ["/api/companies/network"],
-    enabled: isAuthenticated && canSend,
-  });
-
-  const networkCompanies = useMemo(() => {
-    console.log('[network companies] payload=', rawNetworkCompanies);
-    const deduped = Array.from(
-      new Map(rawNetworkCompanies.map(c => [String(c.id), c])).values()
-    );
-    return deduped;
-  }, [rawNetworkCompanies]);
 
   const { data: incomingReferrals = [], isLoading: incomingLoading } = useQuery<any[]>({
     queryKey: ["/api/referrals/incoming"],
@@ -410,6 +383,7 @@ export default function Contractors() {
   function resetSendForm() {
     setSelectedJobId(null);
     setReceiverCompanyId("");
+    setSelectedSubcontractorId("");
     setReferralType("percent");
     setReferralValue("");
     setReferralMessage("");
@@ -441,16 +415,17 @@ export default function Contractors() {
   const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
   const feeNum = parseFloat(referralValue || '0');
   const estimatedEarnings = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
-  const canSubmitSend = !!selectedJobId && !!receiverCompanyId && !!referralValue && !feeError && !sendReferralMutation.isPending && !isSharing;
+  const canSubmitSend = !!selectedJobId && !!selectedSubcontractorId && !!referralValue && !feeError && !sendReferralMutation.isPending && !isSharing;
 
   async function handleShareInvite() {
     const err = validateFee(referralType, referralValue);
     if (err) { setFeeError(err); return; }
     setIsSharing(true);
     try {
+      const selectedSub = subcontractors.find((s: any) => String(s.id) === selectedSubcontractorId);
       const result = await sendReferralMutation.mutateAsync({
         jobId: selectedJobId,
-        receiverCompanyId: parseInt(receiverCompanyId),
+        receiverCompanyId: null,
         referralType,
         referralValue: feeNum,
         message: referralMessage || null,
@@ -464,7 +439,7 @@ export default function Contractors() {
         return;
       }
 
-      const companyName = networkCompanies.find(c => String(c.id) === receiverCompanyId)?.name || "contractor";
+      const companyName = selectedSub ? contractorDisplayName(selectedSub) : "contractor";
       const jobTitle = selectedJob?.title || "Job";
       const customerName = selectedJob?.customerName || "";
       const address = selectedJob?.address || selectedJob?.location || "";
@@ -871,21 +846,21 @@ export default function Contractors() {
               {/* Select Contractor */}
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Contractor <span className="text-red-400 text-xs">*</span></label>
-                <Select value={receiverCompanyId} onValueChange={setReceiverCompanyId}>
+                <Select value={selectedSubcontractorId} onValueChange={setSelectedSubcontractorId}>
                   <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Choose a contractor company" />
+                    <SelectValue placeholder="Choose a contractor" />
                   </SelectTrigger>
                   <SelectContent position="popper" sideOffset={4} className="max-h-48 overflow-y-auto">
-                    {networkCompanies.length === 0 ? (
-                      <div className="px-3 py-4 text-center text-xs text-slate-400">No contractors available yet</div>
+                    {subcontractors.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-slate-400">No saved contractors yet</div>
                     ) : (
-                      networkCompanies.map((c) => {
-                        const sub = companySubtitle(c);
+                      subcontractors.map((sub: any) => {
+                        const personal = contractorPersonalName(sub);
                         return (
-                          <SelectItem key={c.id} value={String(c.id)}>
+                          <SelectItem key={sub.id} value={String(sub.id)}>
                             <div className="flex flex-col py-0.5">
-                              <span className="font-medium">{c.name}</span>
-                              {sub && <span className="text-[11px] text-slate-400 leading-tight">{sub}</span>}
+                              <span className="font-medium">{contractorDisplayName(sub)}</span>
+                              {personal && <span className="text-[11px] text-slate-400 leading-tight">{personal}</span>}
                             </div>
                           </SelectItem>
                         );

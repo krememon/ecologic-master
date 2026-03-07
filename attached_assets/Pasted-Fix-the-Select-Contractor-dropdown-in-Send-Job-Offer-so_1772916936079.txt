@@ -1,0 +1,77 @@
+Fix the “Select Contractor” dropdown in Send Job Offer so it only shows the contractors saved in the current company’s Contractor Network, not random companies/people.
+
+Current bug:
+- The dropdown is showing unrelated companies / random records like Elijah Kelly, Peter Pellegrino, Your Company, etc.
+- But the Contractor Network list only has the saved contractor(s), for example ZSL Plumbing
+- The dropdown should correlate directly with the saved contractor records, not the global companies table/network
+
+Goal:
+The Send Job Offer contractor picker should only list contractors that the current company has explicitly saved in its Contractor Network.
+
+========================================
+1) Change data source for Select Contractor
+========================================
+Right now the picker appears to be pulling from a global companies/network endpoint.
+
+Change it so the Send Job Offer “Select Contractor” dropdown uses the saved subcontractors / contractors for the current company only:
+- same source as the Contractors tab list/cards
+- likely /api/subcontractors (or whatever endpoint powers the Contractor Network list)
+
+Do NOT use:
+- global companies table
+- /api/companies/network
+- unrelated onboarding/test company records
+
+========================================
+2) Display mapping
+========================================
+For each option in the Select Contractor dropdown, show:
+- primary = Company Name
+- secondary = Personal Name if present
+
+Use company-first display logic:
+- companyName ?? name ?? "Unknown Contractor"
+
+Example:
+- ZSL Plumbing
+  Jon Scaduto
+
+Do not show random unrelated companies.
+
+========================================
+3) Selection behavior
+========================================
+When a contractor is chosen from the dropdown:
+- use the saved contractor record id as the selected value
+- when sending the job offer, use that contractor’s saved contact/company info
+- make sure the selected contractor is the same entity as the saved contractor card
+
+If the referral backend expects a receiver company id rather than local subcontractor id:
+- map the saved contractor record to the correct company/contact target safely
+- but still drive the UI picker from saved contractors only
+
+========================================
+4) Empty state
+========================================
+If there are no saved contractors:
+- show a clean empty state like:
+  “No saved contractors yet”
+- optionally disable Send Job flow until a contractor is saved
+
+========================================
+5) Keep current UI style
+========================================
+Do not change the visual styling of the modal unnecessarily.
+Only fix the data source and rendering so the picker matches saved contractors.
+
+========================================
+6) Deliverable
+========================================
+- Select Contractor dropdown only shows saved contractors from Contractor Network
+- no more random companies/people
+- company-first display with optional personal name subtext
+- selection maps correctly for sending job offer
+- short dev log with:
+  - previous wrong data source
+  - new correct data source
+  - files changed

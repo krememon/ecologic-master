@@ -1973,7 +1973,7 @@ export const jobReferrals = pgTable("job_referrals", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull().references(() => jobs.id),
   senderCompanyId: integer("sender_company_id").notNull().references(() => companies.id),
-  receiverCompanyId: integer("receiver_company_id").notNull().references(() => companies.id),
+  receiverCompanyId: integer("receiver_company_id").references(() => companies.id),
   referralType: referralTypeEnum("referral_type").notNull(),
   referralValue: decimal("referral_value", { precision: 10, scale: 2 }).notNull().default("0"),
   status: referralStatusEnum("status").notNull().default("pending"),

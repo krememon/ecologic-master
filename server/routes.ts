@@ -16213,8 +16213,8 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
 
       const { jobId, receiverCompanyId, referralType, referralValue, message, allowPriceChange } = req.body;
 
-      if (!jobId || !receiverCompanyId || !referralType) {
-        return res.status(400).json({ error: 'jobId, receiverCompanyId, and referralType are required' });
+      if (!jobId || !referralType) {
+        return res.status(400).json({ error: 'jobId and referralType are required' });
       }
       if (!['percent', 'flat'].includes(referralType)) {
         return res.status(400).json({ error: 'referralType must be "percent" or "flat"' });
@@ -16225,13 +16225,18 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(404).json({ error: 'Job not found or not owned by your company' });
       }
 
-      const receiverCompany = await storage.getCompany(receiverCompanyId);
-      if (!receiverCompany) {
-        return res.status(404).json({ error: 'Receiver company not found' });
-      }
+      let resolvedReceiverCompanyId = receiverCompanyId || null;
+      let receiverPhone: string | null = null;
 
-      if (receiverCompanyId === company.id) {
-        return res.status(400).json({ error: 'Cannot send a referral to your own company' });
+      if (resolvedReceiverCompanyId) {
+        const receiverCompany = await storage.getCompany(resolvedReceiverCompanyId);
+        if (!receiverCompany) {
+          return res.status(404).json({ error: 'Receiver company not found' });
+        }
+        if (resolvedReceiverCompanyId === company.id) {
+          return res.status(400).json({ error: 'Cannot send a referral to your own company' });
+        }
+        receiverPhone = receiverCompany.phone || null;
       }
 
       const crypto = await import('crypto');
@@ -16244,14 +16249,14 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       const referral = await storage.createJobReferral({
         jobId,
         senderCompanyId: company.id,
-        receiverCompanyId,
+        receiverCompanyId: resolvedReceiverCompanyId,
         referralType,
         referralValue: String(referralValue || 0),
         status: 'pending',
         message: message || null,
         allowPriceChange: !!allowPriceChange,
         inviteToken,
-        inviteSentToPhone: receiverCompany.phone || null,
+        inviteSentToPhone: receiverPhone,
         inviteSentVia: 'share',
         inviteSentTo: null,
       });
