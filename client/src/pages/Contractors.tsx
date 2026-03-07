@@ -360,7 +360,6 @@ export default function Contractors() {
     mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/subcontractors/${id}`); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
-      toast({ title: "Contractor deleted" });
     },
     onError: (error: Error) => { toast({ title: "Error", description: error.message, variant: "destructive" }); },
   });
