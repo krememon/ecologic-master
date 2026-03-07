@@ -1,0 +1,174 @@
+The new Offer Breakdown UI is there, but the selected job is not pulling/displaying the real job total correctly. Right now it shows — / $0.00 even when a job is selected.
+
+Fix the job total source-of-truth wiring for the Send Job Offer modal.
+
+Issue
+
+In the modal:
+
+a job is selected correctly
+
+the breakdown card renders
+
+percentage input is working
+
+but Job Price is not showing the actual selected job total
+
+because of that, Contractor Gets and Your Share are also wrong / blank
+
+What I need fixed
+1) Find the real pricing field for the selected job
+
+Inspect the selected job object and determine which field actually holds the real total price used elsewhere in EcoLogic.
+
+Possible examples only if they truly exist in this codebase:
+
+job.total
+
+job.totalPrice
+
+job.jobTotal
+
+job.projectTotal
+
+job.estimateTotal
+
+job.finalTotal
+
+derived total from estimate line items
+
+derived total from invoice / proposal / approved estimate
+
+Do not guess.
+Do not hardcode.
+Use the same source the app already trusts anywhere job pricing is shown.
+
+2) Add a proper fallback resolver
+
+Create a clean helper for resolving the selected job’s total amount.
+
+Example intent:
+
+check the true primary total field first
+
+then check valid fallback fields only if they actually exist in this project
+
+if the job total is not stored directly, derive it from the correct related pricing data already attached to the job
+
+convert strings to numbers safely
+
+reject invalid values
+
+I want a reliable resolvedJobTotal that the modal can use consistently.
+
+3) Wire Offer Breakdown to that resolved total
+
+Once the real job total is found:
+
+Job Price should display the correct total
+
+Contractor Gets should calculate from that total
+
+Your Share should calculate from that total
+
+If Fee Type = Percentage
+
+contractorGets = resolvedJobTotal * (percentage / 100)
+
+yourShare = resolvedJobTotal - contractorGets
+
+If Fee Type = Flat Amount
+
+contractorGets = flatAmount
+
+yourShare = resolvedJobTotal - contractorGets
+
+Debug requirement
+
+Add targeted console logs temporarily so we can see:
+
+selected job object
+
+all pricing-related fields found on that job
+
+which field was chosen as the final total
+
+the final numeric resolvedJobTotal
+
+Example logs:
+
+[SendJobOffer] selectedJob:
+
+[SendJobOffer] pricing candidates:
+
+[SendJobOffer] resolvedJobTotal from <field>:
+
+Do not spam unrelated logs.
+
+UI behavior
+If total is successfully found
+
+Show:
+
+Job Price = actual dollar amount
+
+Contractor Gets = calculated amount
+
+Your Share = calculated amount
+
+If total truly cannot be found
+
+Instead of silently showing $0.00, show a clearer muted fallback such as:
+
+Job total unavailable
+and prevent misleading payout calculations.
+
+Do not default to zero unless zero is actually the real total.
+
+Validation
+
+Keep all the existing validation from before:
+
+no negative values
+
+no NaN
+
+percentage cannot exceed 100
+
+flat fee cannot exceed job total
+
+invalid input disables Share Invite
+
+Also ensure validation uses the resolved job total, not a fake zero.
+
+Important
+
+Do not break:
+
+selected job card UI
+
+selected contractor card UI
+
+fee type dropdown
+
+percent suffix
+
+message field
+
+allow price changes toggle
+
+share invite flow
+
+Deliverables
+
+After fixing, report back with:
+
+the exact field/path used as the primary job total source
+
+any fallback fields used
+
+whether the total is stored directly or derived
+
+the temporary debug logs added
+
+confirmation that the breakdown now updates off the real selected job amount

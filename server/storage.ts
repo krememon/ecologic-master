@@ -1502,12 +1502,14 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(jobLineItems.jobId, jobIds))
       .orderBy(jobLineItems.sortOrder);
     
-    // Group by job and get first item
+    // Group by job and get first item + compute totals
     const firstLineItemByJob: Record<number, string> = {};
+    const lineItemTotalByJob: Record<number, number> = {};
     for (const item of allLineItems) {
       if (!firstLineItemByJob[item.jobId]) {
         firstLineItemByJob[item.jobId] = item.name;
       }
+      lineItemTotalByJob[item.jobId] = (lineItemTotalByJob[item.jobId] || 0) + (item.totalCents || 0);
     }
     
     // Fetch crew assignments for all jobs
@@ -1577,6 +1579,7 @@ export class DatabaseStorage implements IStorage {
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
+      lineItemTotalCents: lineItemTotalByJob[job.id] || 0,
       isPaid: paidStatusByJob[job.id] || false,
       invoicePaymentStatus: invoicePaymentStatusByJob[job.id] || null,
       crewAssignments: crewByJob[job.id] || [],

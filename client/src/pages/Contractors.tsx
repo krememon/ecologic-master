@@ -400,7 +400,15 @@ export default function Contractors() {
   }
 
   const selectedJob = jobs.find((j: any) => j.id === selectedJobId);
-  const jobPrice = selectedJob ? parseFloat(selectedJob.estimatedCost || selectedJob.actualCost || selectedJob.totalCents || '0') : 0;
+  const jobPrice = (() => {
+    if (!selectedJob) return 0;
+    if (selectedJob.lineItemTotalCents && selectedJob.lineItemTotalCents > 0) return selectedJob.lineItemTotalCents / 100;
+    const est = parseFloat(selectedJob.estimatedCost || '0');
+    if (est > 0) return est;
+    const act = parseFloat(selectedJob.actualCost || '0');
+    if (act > 0) return act;
+    return 0;
+  })();
   const feeNum = parseFloat(referralValue || '0');
   const contractorGets = referralType === 'percent' ? jobPrice * (feeNum / 100) : feeNum;
   const yourShare = jobPrice - contractorGets;
@@ -956,11 +964,13 @@ export default function Contractors() {
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Offer Breakdown</p>
                 {!selectedJob ? (
                   <p className="text-sm text-slate-400 italic">Select a job to preview payout</p>
+                ) : jobPrice === 0 ? (
+                  <p className="text-sm text-slate-400 italic">Job total unavailable</p>
                 ) : (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-600 dark:text-slate-400">Job Price</span>
-                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{jobPrice > 0 ? formatUSD(jobPrice) : '—'}</span>
+                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatUSD(jobPrice)}</span>
                     </div>
                     <div className="h-px bg-slate-200 dark:bg-slate-700" />
                     <div className="flex items-center justify-between">
