@@ -1,0 +1,73 @@
+Update the contractor cards so they display and function like the client cards.
+
+Goal:
+I want contractor cards to show the same useful contact rows the client cards show on the outside of the card:
+- Email
+- Phone
+- Address if we have one
+- Website if we have one
+
+And I want those rows to function the same way:
+- tap email -> opens mail app
+- tap phone -> opens dialer / call prompt
+- tap website -> opens browser
+- if address exists, tap -> opens maps
+
+Right now contractor cards are too stripped down. I want them to feel more like the client cards.
+
+Requirements:
+
+1) Add contact rows back onto contractor cards
+Show on the contractor card:
+- Company Name (primary)
+- Personal Name (secondary, if present)
+- Email
+- Phone
+- Address if available
+- Website if available
+- Added date at bottom
+
+2) Match client card style
+Use the client card as the design reference:
+- same row spacing
+- same icon + text layout
+- same blue clickable text style
+- same divider / bottom metadata feel
+- same polished mobile-first card appearance
+
+3) Make links functional on the contractor card itself
+- Email row -> mailto:
+- Phone row -> tel:
+- Website row -> https URL
+- Address row -> open in maps
+
+4) Prevent parent card click conflicts
+IMPORTANT:
+The contractor card itself is clickable and opens contractor detail.
+But if the user taps email / phone / website / address, it should only do that contact action and NOT trigger the full card open.
+
+So:
+- add stopPropagation / proper nested click handling
+- edit/delete icons should also still work independently
+
+5) Keep detail page working
+Do not break:
+- contractor detail screen
+- edit contractor
+- delete contractor
+- contractor card tap opens detail when user taps elsewhere on the card
+
+6) Data mapping
+Use safe display logic:
+- companyName as primary
+- personalName as secondary
+- email / phone / website / address if available
+- fallback safely for older records
+
+7) Deliverable
+- contractor cards now visually resemble client cards
+- contact rows appear on outside of contractor cards
+- those rows are clickable and functional
+- card tap still opens detail when tapping elsewhere
+- no regressions to edit/delete/detail navigation
+- short dev log listing files changed

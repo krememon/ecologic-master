@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X,
   Send, Inbox, ArrowUpRight, Briefcase, DollarSign, Loader2,
-  CheckCircle, XCircle, Clock, ArrowRight, Percent, Share2, Copy,
+  CheckCircle, XCircle, Clock, ArrowRight, Percent, Share2, Copy, MapPin,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -612,19 +612,13 @@ export default function Contractors() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredSubcontractors.map((sub: any) => (
                 <Card key={sub.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/subcontractors/${sub.id}`)}>
-                  <CardContent className="p-4">
+                  <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 truncate">{contractorDisplayName(sub)}</h3>
-                        {contractorPersonalName(sub) && (
-                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">{contractorPersonalName(sub)}</p>
-                        )}
-                      </div>
-                      <Building2 className="h-5 w-5 text-slate-400 shrink-0 mt-0.5" />
-                    </div>
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      <p className="text-xs text-slate-400">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
-                      <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+                      <CardTitle className="flex items-center gap-2 text-[15px]">
+                        <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        {contractorDisplayName(sub)}
+                      </CardTitle>
+                      <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950" onClick={() => setEditingSubcontractor(sub)}>
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
@@ -646,6 +640,46 @@ export default function Contractors() {
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
+                    </div>
+                    {contractorPersonalName(sub) && (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{contractorPersonalName(sub)}</p>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    {sub.email && (
+                      <a
+                        href={`mailto:${sub.email}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                      >
+                        <Mail className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{sub.email}</span>
+                      </a>
+                    )}
+                    {sub.phone && (
+                      <a
+                        href={`tel:${sub.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                      >
+                        <Phone className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{sub.phone}</span>
+                      </a>
+                    )}
+                    {sub.companyWebsite && (
+                      <a
+                        href={sub.companyWebsite.startsWith('http') ? sub.companyWebsite : `https://${sub.companyWebsite}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                      >
+                        <Globe className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{sub.companyWebsite.replace(/^https?:\/\//, '')}</span>
+                      </a>
+                    )}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <p className="text-xs text-slate-400">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
                     </div>
                   </CardContent>
                 </Card>
