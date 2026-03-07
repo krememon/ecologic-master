@@ -157,30 +157,51 @@ const COLD_START_SKIP = ["/auth", "/login", "/signup", "/register", "/forgot-pas
 
 function useColdStartRedirect(ready: boolean) {
   const [, setLocation] = useLocation();
+  const attemptedRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (!ready) return;
-    if (sessionStorage.getItem("coldStartRedirectDone")) return;
-    sessionStorage.setItem("coldStartRedirectDone", "1");
+    if (!ready || attemptedRef.current) return;
 
-    const pendingLink = sessionStorage.getItem("pendingDeepLink");
-    if (pendingLink) {
-      sessionStorage.removeItem("pendingDeepLink");
-      console.log("[deep-link] Resuming pending deep link after login:", pendingLink);
-      setLocation(pendingLink, { replace: true });
-      return;
-    }
+    const consumeDeepLink = () => {
+      const pendingLink = sessionStorage.getItem("pendingDeepLink");
+      if (pendingLink) {
+        sessionStorage.removeItem("pendingDeepLink");
+        attemptedRef.current = true;
+        sessionStorage.setItem("coldStartRedirectDone", "1");
+        console.log("[deep-link] suppressing dashboard redirect for invite, navigating to:", pendingLink);
+        setLocation(pendingLink, { replace: true });
+        return true;
+      }
+      return false;
+    };
 
-    try {
-      const cap = (window as any).Capacitor;
-      const platform = cap?.getPlatform?.();
-      if (!platform || platform === "web") return;
-    } catch { return; }
-    const p = window.location.pathname;
-    if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) return;
-    if (p !== "/") {
-      console.log("[cold-start] Native cold start, redirecting to /");
-      setLocation("/", { replace: true });
-    }
+    if (consumeDeepLink()) return;
+
+    const timer = setTimeout(() => {
+      if (attemptedRef.current) return;
+
+      if (consumeDeepLink()) return;
+
+      attemptedRef.current = true;
+      sessionStorage.setItem("coldStartRedirectDone", "1");
+
+      try {
+        const cap = (window as any).Capacitor;
+        const platform = cap?.getPlatform?.();
+        if (!platform || platform === "web") return;
+      } catch { return; }
+      const p = window.location.pathname;
+      if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) {
+        console.log("[cold-start] Path in skip list, not redirecting:", p);
+        return;
+      }
+      if (p !== "/") {
+        console.log("[cold-start] Native cold start, redirecting to /");
+        setLocation("/", { replace: true });
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [ready, setLocation]);
 }
 
@@ -459,10 +480,10 @@ function extractDeepLinkTarget(pathToMatch: string): string | null {
   return null;
 }
 
-function navigateToDeepLink(target: string) {
-  console.log("[deep-link] navigate=", target);
+function saveDeepLink(target: string) {
+  console.log("[deep-link] saved pending=", target);
   sessionStorage.setItem("pendingDeepLink", target);
-  window.location.href = target;
+  sessionStorage.removeItem("coldStartRedirectDone");
 }
 
 function useCapacitorDeepLinks() {
@@ -487,8 +508,9 @@ function useCapacitorDeepLinks() {
           console.log("[deep-link] coldStart pathname=", coldPath);
           const coldTarget = extractDeepLinkTarget(coldPath);
           if (coldTarget) {
-            console.log("[deep-link] coldStart navigate=", coldTarget);
-            navigateToDeepLink(coldTarget);
+            const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
+            console.log("[deep-link] coldStart token=", tokenSnippet + "..., target=", coldTarget);
+            saveDeepLink(coldTarget);
           }
         }
 
@@ -502,7 +524,8 @@ function useCapacitorDeepLinks() {
           if (target) {
             const tokenMatch = pathToMatch.match(/([a-f0-9]{16,})/);
             console.log("[deep-link] token=", tokenMatch?.[1]?.slice(0, 12) + "...");
-            navigateToDeepLink(target);
+            saveDeepLink(target);
+            window.location.href = target;
             return;
           }
 
