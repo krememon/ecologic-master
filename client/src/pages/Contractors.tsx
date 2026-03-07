@@ -614,7 +614,7 @@ export default function Contractors() {
                 <Card key={sub.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/subcontractors/${sub.id}`)}>
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="flex items-center gap-2 text-[15px]">
+                      <CardTitle className="flex items-center gap-2">
                         <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                         {contractorDisplayName(sub)}
                       </CardTitle>
