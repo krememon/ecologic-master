@@ -253,6 +253,7 @@ export default function Contractors() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [receiverCompanyId, setReceiverCompanyId] = useState<string>("");
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>("");
+  const [contractorSearchQuery, setContractorSearchQuery] = useState<string>("");
   const [referralType, setReferralType] = useState<string>("percent");
   const [referralValue, setReferralValue] = useState<string>("");
   const [referralMessage, setReferralMessage] = useState<string>("");
@@ -384,6 +385,7 @@ export default function Contractors() {
     setSelectedJobId(null);
     setReceiverCompanyId("");
     setSelectedSubcontractorId("");
+    setContractorSearchQuery("");
     setReferralType("percent");
     setReferralValue("");
     setReferralMessage("");
@@ -846,28 +848,54 @@ export default function Contractors() {
               {/* Select Contractor */}
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Contractor <span className="text-red-400 text-xs">*</span></label>
-                <Select value={selectedSubcontractorId} onValueChange={setSelectedSubcontractorId}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Choose a contractor" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4} className="max-h-48 overflow-y-auto">
-                    {subcontractors.length === 0 ? (
-                      <div className="px-3 py-4 text-center text-xs text-slate-400">No saved contractors yet</div>
-                    ) : (
-                      subcontractors.map((sub: any) => {
-                        const personal = contractorPersonalName(sub);
-                        return (
-                          <SelectItem key={sub.id} value={String(sub.id)}>
-                            <div className="flex flex-col py-0.5">
-                              <span className="font-medium">{contractorDisplayName(sub)}</span>
-                              {personal && <span className="text-[11px] text-slate-400 leading-tight">{personal}</span>}
-                            </div>
-                          </SelectItem>
-                        );
-                      })
-                    )}
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const selectedSub = subcontractors.find((s: any) => String(s.id) === selectedSubcontractorId);
+                  if (selectedSub) {
+                    const personal = contractorPersonalName(selectedSub);
+                    return (
+                      <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{contractorDisplayName(selectedSub)}</p>
+                          {personal && <p className="text-xs text-slate-500 truncate">{personal}</p>}
+                        </div>
+                        <button onClick={() => setSelectedSubcontractorId("")} className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"><X className="w-4 h-4" /></button>
+                      </div>
+                    );
+                  }
+                  const cq = contractorSearchQuery.toLowerCase().trim();
+                  const filteredContractors = subcontractors.filter((sub: any) => {
+                    if (!cq) return true;
+                    return (sub.companyName || '').toLowerCase().includes(cq)
+                      || (sub.name || '').toLowerCase().includes(cq)
+                      || (sub.email || '').toLowerCase().includes(cq)
+                      || (sub.phone || '').toLowerCase().includes(cq);
+                  });
+                  return (
+                    <div className="space-y-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input placeholder="Search contractors..." value={contractorSearchQuery} onChange={(e) => setContractorSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
+                      </div>
+                      <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                        {subcontractors.length === 0 ? (
+                          <p className="text-xs text-slate-400 text-center py-4">No saved contractors yet</p>
+                        ) : filteredContractors.length === 0 ? (
+                          <p className="text-xs text-slate-400 text-center py-4">No contractors found</p>
+                        ) : (
+                          filteredContractors.slice(0, 20).map((sub: any) => {
+                            const personal = contractorPersonalName(sub);
+                            return (
+                              <button key={sub.id} type="button" onClick={() => { setSelectedSubcontractorId(String(sub.id)); setContractorSearchQuery(""); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{contractorDisplayName(sub)}</p>
+                                {personal && <p className="text-xs text-slate-500 truncate">{personal}</p>}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Fee */}
