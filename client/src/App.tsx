@@ -78,6 +78,44 @@ import PayoutSetup from "@/pages/PayoutSetup";
 import JobOfferInvite from "@/pages/JobOfferInvite";
 import JobOffer from "@/pages/JobOffer";
 
+function checkLaunchDeepLink(): void {
+  try {
+    const cap = (window as any).Capacitor;
+    if (!cap?.isNativePlatform?.()) return;
+    const platform = cap.getPlatform?.();
+    if (!platform || platform === "web") return;
+
+    console.log("[deep-link] early check: native platform detected");
+
+    const currentPath = window.location.pathname;
+    const invitePathMatch = currentPath.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
+    if (invitePathMatch) {
+      const target = `/referrals/invite/${invitePathMatch[1]}`;
+      console.log("[deep-link] early check: current path is invite URL, saving pending=", target);
+      sessionStorage.setItem("pendingDeepLink", target);
+      return;
+    }
+
+    const referralsMatch = currentPath.match(/^\/referrals\/invite\/([a-zA-Z0-9]+)/);
+    if (referralsMatch) {
+      console.log("[deep-link] early check: already on invite screen path");
+      sessionStorage.setItem("pendingDeepLink", currentPath);
+      return;
+    }
+
+    const jobOfferMatch = currentPath.match(/^\/job-offer\/\d+\/([a-zA-Z0-9]+)/);
+    if (jobOfferMatch) {
+      const target = `/referrals/invite/${jobOfferMatch[1]}`;
+      console.log("[deep-link] early check: job-offer path, saving pending=", target);
+      sessionStorage.setItem("pendingDeepLink", target);
+      return;
+    }
+  } catch (e) {
+    console.log("[deep-link] early check failed:", e);
+  }
+}
+checkLaunchDeepLink();
+
 function isSubscriptionActive(company: any): boolean {
   if (!company) return false;
   const status = company.subscriptionStatus;
@@ -161,47 +199,26 @@ function useColdStartRedirect(ready: boolean) {
 
   React.useEffect(() => {
     if (!ready || attemptedRef.current) return;
+    attemptedRef.current = true;
 
-    const consumeDeepLink = () => {
-      const pendingLink = sessionStorage.getItem("pendingDeepLink");
-      if (pendingLink) {
-        sessionStorage.removeItem("pendingDeepLink");
-        attemptedRef.current = true;
-        sessionStorage.setItem("coldStartRedirectDone", "1");
-        console.log("[deep-link] suppressing dashboard redirect for invite, navigating to:", pendingLink);
-        setLocation(pendingLink, { replace: true });
-        return true;
-      }
-      return false;
-    };
+    const pendingLink = sessionStorage.getItem("pendingDeepLink");
+    if (pendingLink) {
+      sessionStorage.removeItem("pendingDeepLink");
+      console.log("[deep-link] suppressing dashboard redirect, navigating to:", pendingLink);
+      setLocation(pendingLink, { replace: true });
+      return;
+    }
 
-    if (consumeDeepLink()) return;
-
-    const timer = setTimeout(() => {
-      if (attemptedRef.current) return;
-
-      if (consumeDeepLink()) return;
-
-      attemptedRef.current = true;
-      sessionStorage.setItem("coldStartRedirectDone", "1");
-
-      try {
-        const cap = (window as any).Capacitor;
-        const platform = cap?.getPlatform?.();
-        if (!platform || platform === "web") return;
-      } catch { return; }
-      const p = window.location.pathname;
-      if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) {
-        console.log("[cold-start] Path in skip list, not redirecting:", p);
-        return;
-      }
-      if (p !== "/") {
-        console.log("[cold-start] Native cold start, redirecting to /");
-        setLocation("/", { replace: true });
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
+    try {
+      const cap = (window as any).Capacitor;
+      const platform = cap?.getPlatform?.();
+      if (!platform || platform === "web") return;
+    } catch { return; }
+    const p = window.location.pathname;
+    if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) return;
+    if (p !== "/") {
+      setLocation("/", { replace: true });
+    }
   }, [ready, setLocation]);
 }
 
@@ -480,10 +497,13 @@ function extractDeepLinkTarget(pathToMatch: string): string | null {
   return null;
 }
 
-function saveDeepLink(target: string) {
-  console.log("[deep-link] saved pending=", target);
+function saveDeepLink(target: string, navigate = false) {
+  console.log("[deep-link] saved pending=", target, navigate ? "(will navigate)" : "");
   sessionStorage.setItem("pendingDeepLink", target);
-  sessionStorage.removeItem("coldStartRedirectDone");
+  if (navigate) {
+    sessionStorage.removeItem("pendingDeepLink");
+    window.location.href = target;
+  }
 }
 
 function useCapacitorDeepLinks() {
@@ -503,14 +523,18 @@ function useCapacitorDeepLinks() {
 
         const launchUrl = await CapApp.getLaunchUrl();
         if (launchUrl?.url) {
-          console.log("[deep-link] coldStartUrl=", launchUrl.url);
+          console.log("[deep-link] getLaunchUrl=", launchUrl.url);
           const coldPath = resolveDeepLinkPath(launchUrl.url);
-          console.log("[deep-link] coldStart pathname=", coldPath);
           const coldTarget = extractDeepLinkTarget(coldPath);
           if (coldTarget) {
-            const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
-            console.log("[deep-link] coldStart token=", tokenSnippet + "..., target=", coldTarget);
-            saveDeepLink(coldTarget);
+            const alreadyPending = sessionStorage.getItem("pendingDeepLink");
+            if (!alreadyPending) {
+              const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
+              console.log("[deep-link] getLaunchUrl token=", tokenSnippet + "..., target=", coldTarget);
+              saveDeepLink(coldTarget, true);
+            } else {
+              console.log("[deep-link] getLaunchUrl: pendingDeepLink already set, skipping");
+            }
           }
         }
 
@@ -523,9 +547,8 @@ function useCapacitorDeepLinks() {
           const target = extractDeepLinkTarget(pathToMatch);
           if (target) {
             const tokenMatch = pathToMatch.match(/([a-f0-9]{16,})/);
-            console.log("[deep-link] token=", tokenMatch?.[1]?.slice(0, 12) + "...");
-            saveDeepLink(target);
-            window.location.href = target;
+            console.log("[deep-link] appUrlOpen token=", tokenMatch?.[1]?.slice(0, 12) + "...");
+            saveDeepLink(target, true);
             return;
           }
 
