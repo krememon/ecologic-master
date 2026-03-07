@@ -255,6 +255,7 @@ export default function Contractors() {
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>("");
   const [contractorSearchQuery, setContractorSearchQuery] = useState<string>("");
   const [contractorPickerOpen, setContractorPickerOpen] = useState(false);
+  const [jobPickerOpen, setJobPickerOpen] = useState(false);
   const [referralType, setReferralType] = useState<string>("percent");
   const [referralValue, setReferralValue] = useState<string>("");
   const [referralMessage, setReferralMessage] = useState<string>("");
@@ -388,6 +389,7 @@ export default function Contractors() {
     setSelectedSubcontractorId("");
     setContractorSearchQuery("");
     setContractorPickerOpen(false);
+    setJobPickerOpen(false);
     setReferralType("percent");
     setReferralValue("");
     setReferralMessage("");
@@ -811,39 +813,29 @@ export default function Contractors() {
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Select Job <span className="text-red-400 text-xs">*</span></label>
                 {selectedJob ? (
-                  <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{selectedJob.title}</p>
-                      {jobSecondaryInfo(selectedJob) && (
-                        <p className="text-xs text-slate-500 truncate">{jobSecondaryInfo(selectedJob)}</p>
-                      )}
+                  <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center shrink-0">
+                        <Briefcase className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{selectedJob.title}</p>
+                        {jobSecondaryInfo(selectedJob) && (
+                          <p className="text-xs text-slate-500 truncate">{jobSecondaryInfo(selectedJob)}</p>
+                        )}
+                      </div>
                     </div>
                     <button onClick={() => setSelectedJobId(null)} className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"><X className="w-4 h-4" /></button>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input placeholder="Search jobs..." value={jobSearchQuery} onChange={(e) => setJobSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
-                    </div>
-                    <div className="max-h-32 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                      {jobs.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center py-4">No jobs to send yet. Create a job first.</p>
-                      ) : filteredJobs.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center py-4">No matching jobs</p>
-                      ) : (
-                        filteredJobs.slice(0, 20).map((job: any) => {
-                          const secondary = jobSecondaryInfo(job);
-                          return (
-                            <button key={job.id} type="button" onClick={() => { setSelectedJobId(job.id); setJobSearchQuery(""); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                              <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{job.title}</p>
-                              {secondary && <p className="text-xs text-slate-500 truncate">{secondary}</p>}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setJobPickerOpen(true)}
+                    className="w-full flex items-center justify-between h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                  >
+                    <span>Choose a job</span>
+                    <Search className="h-4 w-4 text-slate-400" />
+                  </button>
                 )}
               </div>
 
@@ -1043,6 +1035,95 @@ export default function Contractors() {
                           </div>
                         </button>
                         {index < filtered.length - 1 && (
+                          <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Job Picker Modal */}
+      <Dialog open={jobPickerOpen} onOpenChange={(open) => { if (!open) { setJobPickerOpen(false); setJobSearchQuery(""); } }}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Select Job</h3>
+            <button
+              onClick={() => { setJobPickerOpen(false); setJobSearchQuery(""); }}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="px-4 py-3 bg-white dark:bg-slate-900">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={jobSearchQuery}
+                onChange={(e) => setJobSearchQuery(e.target.value)}
+                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-slate-800" />
+
+          <div className="max-h-80 overflow-y-auto bg-white dark:bg-slate-900">
+            {(() => {
+              if (jobs.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Briefcase className="h-7 w-7 text-slate-400" />
+                    </div>
+                    <p className="font-medium text-slate-600 dark:text-slate-400 text-center">No jobs to send yet. Create a job first.</p>
+                  </div>
+                );
+              }
+
+              if (filteredJobs.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Search className="h-7 w-7 text-slate-400" />
+                    </div>
+                    <p className="font-medium text-slate-600 dark:text-slate-400 text-center">No jobs found</p>
+                    <p className="text-sm text-slate-400 mt-1">Try a different search term</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="py-1">
+                  {filteredJobs.slice(0, 30).map((job: any, index: number) => {
+                    const secondary = jobSecondaryInfo(job);
+                    return (
+                      <div key={job.id}>
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-3 px-4 min-h-[60px] text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
+                          onClick={() => {
+                            setSelectedJobId(job.id);
+                            setJobSearchQuery("");
+                            setJobPickerOpen(false);
+                          }}
+                        >
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center shrink-0">
+                            <Briefcase className="h-4.5 w-4.5 text-slate-600 dark:text-slate-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{job.title}</p>
+                            {secondary && <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{secondary}</p>}
+                          </div>
+                        </button>
+                        {index < filteredJobs.length - 1 && (
                           <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
                         )}
                       </div>

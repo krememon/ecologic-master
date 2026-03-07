@@ -1,0 +1,72 @@
+Make the “Select Job” experience match the new full-modal “Select Contractor” / “Select Customer” style.
+
+Goal:
+When the user taps Select Job in Send Job Offer, it should open a full modal picker instead of the small inline job dropdown.
+
+Requirements:
+
+1) Change Select Job into full modal picker
+- Tapping the Select Job field should open a centered/mobile-friendly full modal
+- Modal header should match the same style as Select Customer / Select Contractor:
+  - Title: Select Job
+  - Close X in top-right
+- Same rounded corners, spacing, padding, and polished EcoLogic feel
+
+2) Search bar at top
+- Add a search input at the top of the modal
+- Placeholder:
+  Search jobs...
+- Same style as the other selectors
+- Filter jobs in real time as user types
+
+3) Job row layout
+Each job row should be clean and easy to scan, similar to the current job option card but formatted as a modal list item.
+
+Show:
+- primary = Job Title
+- secondary = address / client name / short location info
+- if useful, optional small third line or subtle meta info for scheduled date
+
+Use the same best display logic already used in the current job picker:
+- avoid duplicating customer name if it is already in the title
+- keep secondary line concise and clean
+
+4) Data source
+- Keep using the current correct jobs source already used in Send Job Offer
+- Do NOT change the actual job selection logic or backend behavior
+- Just rework the UI/UX into the full modal selector pattern
+
+5) Selection behavior
+- Tapping a job row selects it and closes the modal
+- Selected job then displays in the main Send Job Offer form
+- Preserve current selected job id/value used for submit
+
+6) Empty states
+- If there are no eligible jobs:
+  show:
+  No jobs to send yet. Create a job first.
+- If search has no matches:
+  show:
+  No jobs found
+
+7) Keep Send Job flow intact
+Do NOT break:
+- selected job state
+- contractor selection
+- fee logic
+- send job offer submission
+
+8) Match selector system
+The Select Job modal should visually match the Select Customer and Select Contractor modal pattern:
+- same search bar style
+- same header style
+- same list row rhythm
+- same mobile-first UX
+
+Deliverables:
+- Select Job opens a full modal picker
+- search bar filters jobs in real time
+- job rows are clean and easy to scan
+- selecting a row closes modal and fills the field
+- no regressions to Send Job Offer flow
+- short dev log listing files changed
