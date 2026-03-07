@@ -1,0 +1,232 @@
+The accept flow is functionally working now, but there is still one UX/state bug:
+
+Current bug
+
+After the subcontractor taps Accept or Decline:
+
+the success toast appears
+
+the job actually transfers correctly
+
+the data updates correctly
+
+but then the screen falls into the error state and shows:
+
+Error
+This referral has already been accepted
+
+That is the wrong post-action UX.
+
+Once the user successfully accepts or declines, they should see a proper final success/declined confirmation state, not an error card.
+
+What needs to be fixed
+Root issue
+
+Right now, after mutation success, the page is likely:
+
+re-fetching the invite/referral
+
+seeing status = accepted (or declined)
+
+and incorrectly treating that as an error state
+
+That should not happen.
+
+A referral that was just successfully accepted is not an error.
+It is a valid completed state.
+
+Required behavior
+If the user successfully accepts
+
+After success, show a completed confirmation state like:
+
+success icon
+
+Job Accepted
+
+This job has been transferred to your company.
+
+optional button: Go to Jobs
+
+optional button: Done
+
+Do not show the red error card afterward.
+
+If the user successfully declines
+
+Show a completed declined state like:
+
+neutral / red icon
+
+Job Declined
+
+You declined this job offer.
+
+optional button: Done
+
+Do not show a generic error card afterward either.
+
+Logic change needed
+1) Separate “completed state” from “error state”
+
+Update the invite/referral details page so these statuses are handled distinctly:
+
+Valid states
+
+pending → show offer details + Accept / Decline
+
+accepted → show completed accepted state
+
+declined → show completed declined state
+
+Error states
+
+Only use error UI for actual failures such as:
+
+invalid token
+
+missing referral/invite
+
+expired token
+
+revoked/canceled invite
+
+unauthorized user
+
+network/server failure
+
+malformed response
+
+2) Do not treat accepted as an error
+
+If backend returns something like:
+
+status: accepted
+
+or already accepted
+
+that should render the accepted-complete screen, not the red error screen.
+
+This is especially important after mutation success, but also if the user reopens the same link later.
+
+Preferred UX behavior
+Scenario A — user just accepted in this session
+
+Immediately after accept mutation succeeds:
+
+set local UI state to completed accepted
+
+stop showing loading/error state
+
+optionally stop the follow-up refetch from overriding the success screen
+
+if you do refetch, map returned accepted status to the same accepted-complete UI
+
+Scenario B — user opens the same invite again later
+
+If the invite is already accepted:
+
+show a friendly completed state:
+
+Already Accepted
+
+This job offer has already been accepted and transferred.
+
+Not an error card.
+
+Scenario C — user previously declined
+
+If already declined:
+
+show:
+
+Already Declined
+
+This job offer has already been declined.
+
+Also not an error card.
+
+Implementation guidance
+1) Audit current state machine / conditional rendering
+
+Find the page/component used for the subcontractor invite details / public sign / accept-deny flow.
+
+Look for logic like:
+
+if not pending → show error
+
+if backend says already accepted → throw error
+
+if accept mutation succeeds and then detail query re-runs, causing the UI to fall into the generic error branch
+
+Fix that so status-driven rendering is explicit.
+
+2) Add explicit status mapping
+
+Use something like:
+
+pending → interactive offer screen
+
+accepted → accepted confirmation screen
+
+declined → declined confirmation screen
+
+invalid/expired/unauthorized → error screen
+
+3) Preserve native flow
+
+Do not break:
+
+native deep link flow
+
+browser/web fallback
+
+toast notifications
+
+actual job transfer logic
+
+decline logic
+
+owner-side results
+
+Add targeted logs temporarily
+
+Add only focused logs:
+
+[JobOfferPage] fetched invite status:
+
+[JobOfferPage] accept mutation success
+
+[JobOfferPage] decline mutation success
+
+[JobOfferPage] rendering state: pending|accepted|declined|error
+
+[JobOfferPage] error reason:
+
+This is only for debugging the post-action state mapping.
+
+UI requirement
+
+Keep the completed state visually polished and consistent with EcoLogic:
+
+centered card
+
+green success styling for accepted
+
+tasteful declined styling for declined
+
+no scary red error unless it is a real error
+
+Deliverables
+
+After fixing, report back with:
+
+what conditional/render logic was incorrectly causing the error screen
+
+how accepted/declined are now handled separately from real errors
+
+whether both fresh accept flow and reopening an already-accepted link now show a proper completed state
+
+the temporary logs added
+
+confirmation that the job still transfers correctly and no backend behavior was broken

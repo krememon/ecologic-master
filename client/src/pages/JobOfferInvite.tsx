@@ -40,23 +40,18 @@ export default function JobOfferInvite() {
   const [actionTaken, setActionTaken] = useState<"accepted" | "declined" | null>(null);
   const [acceptedJobId, setAcceptedJobId] = useState<number | null>(null);
 
-  console.log("[inviteScreen] mounted token=", token ? token.slice(0, 12) + "..." : "(empty)");
-
   const { data, isLoading, error } = useQuery<InviteData>({
     queryKey: ["/api/referrals/invite", token],
     queryFn: async () => {
-      console.log("[inviteScreen] fetching /api/referrals/invite/" + token.slice(0, 12) + "...");
       const res = await fetch(`/api/referrals/invite/${token}`, { credentials: "include" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        console.log("[inviteScreen] API error:", res.status, body.error || body.status);
-        throw { status: res.status, ...body };
+        const httpStatus = res.status;
+        throw { httpStatus, ...body };
       }
-      const result = await res.json();
-      console.log("[inviteScreen] API success, referralId=", result.referralId, "status=", result.status);
-      return result;
+      return await res.json();
     },
-    enabled: !!token,
+    enabled: !!token && !actionTaken,
     retry: false,
   });
 
@@ -68,7 +63,6 @@ export default function JobOfferInvite() {
     onSuccess: (result) => {
       setActionTaken("accepted");
       setAcceptedJobId(result.job?.id || null);
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals/invite", token] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/incoming"] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -86,7 +80,6 @@ export default function JobOfferInvite() {
     },
     onSuccess: () => {
       setActionTaken("declined");
-      queryClient.invalidateQueries({ queryKey: ["/api/referrals/invite", token] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/incoming"] });
       queryClient.invalidateQueries({ queryKey: ["/api/referrals/outgoing"] });
       toast({ title: "Job declined" });
@@ -95,6 +88,53 @@ export default function JobOfferInvite() {
       toast({ title: "Failed to decline", description: "Something went wrong. Please try again.", variant: "destructive" });
     },
   });
+
+  if (actionTaken === "accepted") {
+    console.log("[JobOfferPage] rendering state: accepted");
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-8 text-center">
+            <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold mb-2">Job Accepted!</h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              The job has been transferred to your company. You can now manage it from your jobs list.
+            </p>
+            <div className="flex gap-3 justify-center">
+              {acceptedJobId && (
+                <Button onClick={() => setLocation(`/jobs/${acceptedJobId}`)} className="gap-2">
+                  Go to Job <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setLocation("/")}>
+                Done
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (actionTaken === "declined") {
+    console.log("[JobOfferPage] rendering state: declined");
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-8 text-center">
+            <XCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold mb-2">Offer Declined</h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              You've declined this job offer. The sender will be notified.
+            </p>
+            <Button variant="outline" onClick={() => setLocation("/")}>
+              Done
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -106,7 +146,39 @@ export default function JobOfferInvite() {
 
   const err = error as any;
   if (err) {
-    if (err.status === 410 || err.status === "expired") {
+    const httpStatus = err.httpStatus;
+    const referralStatus = err.status;
+
+    if (referralStatus === "accepted" || referralStatus === "declined") {
+      console.log("[JobOfferPage] rendering state: already-" + referralStatus);
+      return (
+        <div className="flex items-center justify-center min-h-[60vh] px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-8 text-center">
+              {referralStatus === "accepted" ? (
+                <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              ) : (
+                <XCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              )}
+              <h2 className="text-lg font-semibold mb-2">
+                {referralStatus === "accepted" ? "Already Accepted" : "Already Declined"}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {referralStatus === "accepted"
+                  ? "This job offer has already been accepted and transferred."
+                  : "This job offer has already been declined."}
+              </p>
+              <Button variant="outline" className="mt-4" onClick={() => setLocation("/")}>
+                Done
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (httpStatus === 410) {
+      console.log("[JobOfferPage] rendering state: expired");
       return (
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card className="w-full max-w-md">
@@ -119,7 +191,9 @@ export default function JobOfferInvite() {
         </div>
       );
     }
-    if (err.status === 403) {
+
+    if (httpStatus === 403) {
+      console.log("[JobOfferPage] rendering state: not-for-company");
       return (
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card className="w-full max-w-md">
@@ -132,31 +206,8 @@ export default function JobOfferInvite() {
         </div>
       );
     }
-    if (err.status === 400 && err.status) {
-      const finalStatus = err.status === "accepted" ? "accepted" : err.status === "declined" ? "declined" : err.status;
-      return (
-        <div className="flex items-center justify-center min-h-[60vh] px-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="pt-8 text-center">
-              {finalStatus === "accepted" ? (
-                <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              ) : (
-                <XCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              )}
-              <h2 className="text-lg font-semibold mb-2">
-                {finalStatus === "accepted" ? "Already Accepted" : "Already Declined"}
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                This job offer has already been {finalStatus}.
-              </p>
-              <Button variant="outline" className="mt-4" onClick={() => setLocation("/subcontractors")}>
-                Go to Contractors
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    }
+
+    console.log("[JobOfferPage] rendering state: error, reason:", err.error || "unknown");
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
         <Card className="w-full max-w-md">
@@ -170,47 +221,9 @@ export default function JobOfferInvite() {
     );
   }
 
-  if (actionTaken === "accepted") {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh] px-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-8 text-center">
-            <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2">Job Accepted!</h2>
-            <p className="text-muted-foreground text-sm mb-6">
-              The job has been transferred to your company. You can now manage it from your jobs list.
-            </p>
-            {acceptedJobId && (
-              <Button onClick={() => setLocation(`/jobs/${acceptedJobId}`)} className="gap-2">
-                Go to Job <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (actionTaken === "declined") {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh] px-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-8 text-center">
-            <XCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold mb-2">Offer Declined</h2>
-            <p className="text-muted-foreground text-sm mb-6">
-              You've declined this job offer. The sender will be notified.
-            </p>
-            <Button variant="outline" onClick={() => setLocation("/subcontractors")}>
-              Back to Contractors
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (!data) return null;
+
+  console.log("[JobOfferPage] rendering state: pending");
 
   const feeDisplay = data.referralType === "percent"
     ? `${data.referralValue}%`
