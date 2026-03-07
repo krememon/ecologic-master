@@ -15919,6 +15919,36 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  const TRADE_PLACE_TYPES = new Set([
+    'electrician', 'plumber', 'roofing_contractor', 'painter', 'general_contractor',
+    'carpenter', 'locksmith', 'moving_company', 'storage',
+    'home_goods_store', 'hardware_store',
+  ]);
+
+  const TRADE_KEYWORDS = [
+    'plumb', 'hvac', 'heat', 'cool', 'air condition', 'electric', 'wiring',
+    'general contract', 'roof', 'paint', 'carpet', 'floor', 'landscape',
+    'lawn', 'mason', 'concrete', 'restor', 'water damage', 'mold',
+    'excavat', 'septic', 'solar', 'window', 'door', 'pool', 'spa',
+    'irrigat', 'fenc', 'pest control', 'exterminat', 'appliance',
+    'handyman', 'remodel', 'renovat', 'drywall', 'insulation', 'siding',
+    'gutter', 'demolit', 'paving', 'asphalt', 'welding', 'welder',
+    'garage door', 'fire protect', 'sprinkler', 'plaster', 'tile',
+    'cabinet', 'counter', 'deck', 'patio', 'tree', 'stump',
+    'chimney', 'foundation', 'waterproof', 'drain', 'sewer',
+    'construct', 'build', 'contractor', 'mechanical', 'service',
+    'maintenance', 'repair', 'install',
+  ];
+
+  function isTradeByTypes(types: string[]): boolean {
+    return types.some((t) => TRADE_PLACE_TYPES.has(t));
+  }
+
+  function isTradeByName(name: string): boolean {
+    const lower = name.toLowerCase();
+    return TRADE_KEYWORDS.some((kw) => lower.includes(kw));
+  }
+
   app.get('/api/business-search', isAuthenticated, async (req: any, res) => {
     try {
       const q = (req.query.q as string || '').trim();
@@ -15938,18 +15968,23 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.json([]);
       }
 
-      const top = autoData.predictions.slice(0, 5);
-      const results = await Promise.all(
+      const top = autoData.predictions.slice(0, 8);
+      const detailed = await Promise.all(
         top.map(async (pred: any) => {
           try {
-            const detUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pred.place_id)}&fields=name,formatted_phone_number,website,address_components,formatted_address&key=${apiKey}`;
+            const detUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pred.place_id)}&fields=name,formatted_phone_number,website,address_components,types&key=${apiKey}`;
             const detRes = await fetch(detUrl);
             const detData = await detRes.json();
             const r = detData.result || {};
+            const types: string[] = r.types || pred.types || [];
+            const name = r.name || pred.structured_formatting?.main_text || '';
+            const isTrade = isTradeByTypes(types) || isTradeByName(name) || isTradeByName(pred.description || '');
+            if (!isTrade) return null;
+
             const city = r.address_components?.find((c: any) => c.types?.includes('locality'))?.long_name || '';
             const state = r.address_components?.find((c: any) => c.types?.includes('administrative_area_level_1'))?.short_name || '';
             return {
-              name: r.name || pred.structured_formatting?.main_text || '',
+              name,
               phone: r.formatted_phone_number || null,
               email: null,
               website: r.website || null,
@@ -15957,18 +15992,14 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
               state: state || null,
             };
           } catch {
-            return {
-              name: pred.structured_formatting?.main_text || pred.description || '',
-              phone: null,
-              email: null,
-              website: null,
-              city: null,
-              state: null,
-            };
+            const name = pred.structured_formatting?.main_text || pred.description || '';
+            if (!isTradeByName(name) && !isTradeByName(pred.description || '')) return null;
+            return { name, phone: null, email: null, website: null, city: null, state: null };
           }
         })
       );
 
+      const results = detailed.filter(Boolean).slice(0, 5);
       res.json(results);
     } catch (error: any) {
       console.error('[BusinessSearch] error:', error.message);

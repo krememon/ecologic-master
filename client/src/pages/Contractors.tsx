@@ -174,7 +174,7 @@ function ContractorForm({
             ) : searchError ? (
               <div className="px-3 py-3 text-xs text-slate-400 text-center">Search unavailable</div>
             ) : suggestions.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-400 text-center">No businesses found</div>
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">No trade businesses found</div>
             ) : (
               suggestions.map((s, i) => {
                 const sub = [s.city, s.state].filter(Boolean).join(', ') || s.website || s.phone || '';
