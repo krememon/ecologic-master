@@ -15919,6 +15919,63 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  app.get('/api/business-search', isAuthenticated, async (req: any, res) => {
+    try {
+      const q = (req.query.q as string || '').trim();
+      if (q.length < 2) {
+        return res.json([]);
+      }
+      const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        return res.json([]);
+      }
+
+      const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=establishment&key=${apiKey}`;
+      const autoRes = await fetch(autoUrl);
+      const autoData = await autoRes.json();
+
+      if (!autoData.predictions || autoData.predictions.length === 0) {
+        return res.json([]);
+      }
+
+      const top = autoData.predictions.slice(0, 5);
+      const results = await Promise.all(
+        top.map(async (pred: any) => {
+          try {
+            const detUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pred.place_id)}&fields=name,formatted_phone_number,website,address_components,formatted_address&key=${apiKey}`;
+            const detRes = await fetch(detUrl);
+            const detData = await detRes.json();
+            const r = detData.result || {};
+            const city = r.address_components?.find((c: any) => c.types?.includes('locality'))?.long_name || '';
+            const state = r.address_components?.find((c: any) => c.types?.includes('administrative_area_level_1'))?.short_name || '';
+            return {
+              name: r.name || pred.structured_formatting?.main_text || '',
+              phone: r.formatted_phone_number || null,
+              email: null,
+              website: r.website || null,
+              city: city || null,
+              state: state || null,
+            };
+          } catch {
+            return {
+              name: pred.structured_formatting?.main_text || pred.description || '',
+              phone: null,
+              email: null,
+              website: null,
+              city: null,
+              state: null,
+            };
+          }
+        })
+      );
+
+      res.json(results);
+    } catch (error: any) {
+      console.error('[BusinessSearch] error:', error.message);
+      res.json([]);
+    }
+  });
+
   // Google Places proxy routes for debugging and secure API key usage
   const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   const googlePlacesKeySource = process.env.GOOGLE_PLACES_API_KEY ? 'GOOGLE_PLACES_API_KEY' : (process.env.GOOGLE_MAPS_API_KEY ? 'GOOGLE_MAPS_API_KEY' : 'NONE');

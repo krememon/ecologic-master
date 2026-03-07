@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,15 @@ function contractorPersonalName(sub: any): string | null {
   return null;
 }
 
+interface BusinessSuggestion {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  city?: string | null;
+  state?: string | null;
+}
+
 function ContractorForm({
   onSubmit,
   isLoading,
@@ -66,6 +75,69 @@ function ContractorForm({
     personalName: (initialData?.companyName && initialData?.name && initialData.name !== initialData.companyName) ? initialData.name : "",
   });
 
+  const [suggestions, setSuggestions] = useState<BusinessSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(false);
+    try {
+      const res = await fetch(`/api/business-search?q=${encodeURIComponent(query)}`, { credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data: BusinessSuggestion[] = await res.json();
+      setSuggestions(data);
+      setShowSuggestions(data.length > 0 || query.length >= 2);
+    } catch {
+      setSuggestions([]);
+      setSearchError(true);
+      setShowSuggestions(true);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const handleCompanyNameChange = (value: string) => {
+    setFormData({ ...formData, companyName: value });
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => fetchSuggestions(value.trim()), 300);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectSuggestion = (s: BusinessSuggestion) => {
+    setFormData((prev) => ({
+      ...prev,
+      companyName: s.name,
+      phone: s.phone || prev.phone,
+      email: s.email || prev.email,
+      companyWebsite: s.website || prev.companyWebsite,
+    }));
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const companyName = formData.companyName.trim();
@@ -81,9 +153,47 @@ function ContractorForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 w-full">
-      <div className="space-y-1">
+      <div className="space-y-1 relative" ref={wrapperRef}>
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Name <span className="text-red-400 text-xs">*</span></label>
-        <Input placeholder="Company Name" value={formData.companyName} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} required className="h-10" />
+        <Input
+          placeholder="Company Name"
+          value={formData.companyName}
+          onChange={(e) => handleCompanyNameChange(e.target.value)}
+          onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+          required
+          autoComplete="off"
+          className="h-10"
+        />
+        {showSuggestions && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+            {searchLoading ? (
+              <div className="flex items-center justify-center py-4 gap-2 text-sm text-slate-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Searching...
+              </div>
+            ) : searchError ? (
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">Search unavailable</div>
+            ) : suggestions.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">No businesses found</div>
+            ) : (
+              suggestions.map((s, i) => {
+                const sub = [s.city, s.state].filter(Boolean).join(', ') || s.website || s.phone || '';
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectSuggestion(s)}
+                  >
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{s.name}</p>
+                    {sub && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{sub}</p>}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
       <div className="space-y-1">
         <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Email</label>

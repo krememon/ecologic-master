@@ -1,0 +1,111 @@
+Add business autofill to the Add Contractor form so when the user starts typing a company name, autocomplete suggestions appear, and selecting one auto-fills the rest of the form.
+
+Goal:
+As the user types in the Company Name field, show business suggestions underneath.
+When they tap a suggestion, auto-fill:
+- Company Name
+- Phone
+- Email (if available from source)
+- Company Website
+
+Personal Name stays manual.
+
+========================================
+1) UX behavior
+========================================
+In the Add New Contractor modal:
+
+- Keep Company Name as the first field
+- As user types 2+ characters into Company Name, show an autocomplete dropdown under the input
+- Dropdown should look clean, modern, and match EcoLogic styling
+- Each suggestion row should show:
+  - Company Name (primary)
+  - Secondary line: city/state or website/phone if available
+
+When user taps a suggestion:
+- fill Company Name
+- fill Phone
+- fill Email if available
+- fill Company Website
+- close the suggestions dropdown
+
+If user keeps typing manually and does not pick a suggestion:
+- form should still work normally
+
+========================================
+2) Data source
+========================================
+Implement business lookup using a real business/autocomplete source if already available in project.
+If not already available, structure it so the provider can be swapped easily.
+
+Backend endpoint:
+GET /api/business-search?q=...
+
+Return normalized suggestion objects like:
+{
+  name: string,
+  phone?: string,
+  email?: string,
+  website?: string,
+  city?: string,
+  state?: string
+}
+
+Important:
+- Email is often not available from business APIs, so support it optionally
+- If email is unavailable, leave Email field untouched/blank
+- Website and phone should autofill when available
+
+========================================
+3) Frontend behavior
+========================================
+In Add Contractor modal:
+- debounce company name input (around 250–350ms)
+- only search when 2+ chars entered
+- show loading state in dropdown while searching
+- show “No businesses found” empty state if nothing returns
+- clicking outside closes dropdown
+- selecting a suggestion should not break typing/focus
+
+========================================
+4) Fill logic
+========================================
+When suggestion selected:
+- companyName = suggestion.name
+- phone = suggestion.phone ?? existing value
+- email = suggestion.email ?? existing value
+- website = suggestion.website ?? existing value
+
+Do not overwrite Personal Name.
+
+If no email comes from provider, keep email empty so user can add it manually.
+
+========================================
+5) Styling
+========================================
+Make the suggestion dropdown:
+- anchored directly below Company Name input
+- rounded
+- subtle shadow
+- mobile friendly
+- scrollable if many results
+- same visual language as EcoLogic selects/modals
+
+========================================
+6) Safety / fallback
+========================================
+- Form must still submit normally even if autocomplete API fails
+- If business lookup errors, fail silently with maybe a small “Search unavailable” helper text
+- No regressions to existing Add Contractor flow
+
+========================================
+Deliverables
+========================================
+- Company Name field shows live business suggestions
+- Selecting a suggestion auto-fills Phone, Email (if available), and Company Website
+- Personal Name remains manual
+- Manual entry still works
+- Short dev log listing:
+  - files changed
+  - business provider used
+  - whether email is realistically available from the provider
