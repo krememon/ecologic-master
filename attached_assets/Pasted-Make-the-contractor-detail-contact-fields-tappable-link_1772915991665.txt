@@ -1,0 +1,72 @@
+Make the contractor detail contact fields tappable links, just like the client detail page.
+
+Goal:
+On the contractor detail screen, the Email, Phone, and Website rows should be interactive and behave like real links:
+- tap email -> opens mail app
+- tap phone -> opens dialer / call prompt
+- tap website -> opens website in browser
+
+Right now they display as plain text. I want them to behave like the client detail page in the second screenshot.
+
+========================================
+1) Add tappable actions
+========================================
+For the contractor detail screen:
+
+Email row:
+- if email exists, tapping it should open:
+  mailto:<email>
+
+Phone row:
+- if phone exists, tapping it should open:
+  tel:<sanitized phone>
+
+Website row:
+- if website exists, tapping it should open the URL in a new browser tab / native browser
+- if website is missing protocol, normalize it to:
+  https://<website>
+
+========================================
+2) Match client detail behavior/style
+========================================
+Use the same interaction pattern and visual treatment as the client detail page:
+- clickable text in blue
+- row remains clean and aligned
+- icon on left, value on right
+- hover/tap cursor where appropriate
+- mobile friendly
+
+========================================
+3) Safety / normalization
+========================================
+Phone:
+- sanitize before tel: (remove spaces, parentheses, dashes except leading +)
+
+Website:
+- normalize if value is like:
+  www.zslplumbing.com
+  zslplumbing.com
+- open as valid https URL
+
+Email:
+- trim whitespace
+
+========================================
+4) Conditional behavior
+========================================
+- If a field is missing, keep it as non-clickable muted text or hide it cleanly
+- Do not render broken links
+
+========================================
+5) Reuse logic if possible
+========================================
+If client detail page already has helper logic/components for clickable email/phone/website rows, reuse the same pattern/components so contractor detail matches exactly.
+
+========================================
+Deliverables
+========================================
+- contractor detail email opens mail app
+- contractor detail phone opens call prompt
+- contractor detail website opens browser
+- visually matches client detail interaction style
+- short dev log listing files changed

@@ -109,15 +109,15 @@ export default function ContractorDetail({ contractorId }: ContractorDetailProps
           {contractor.email && (
             <div className="flex items-center gap-3">
               <Mail className="h-4 w-4 text-slate-400" />
-              <a href={`mailto:${contractor.email}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400">
-                {contractor.email}
+              <a href={`mailto:${contractor.email.trim()}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                {contractor.email.trim()}
               </a>
             </div>
           )}
           {contractor.phone && (
             <div className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-slate-400" />
-              <a href={`tel:${contractor.phone}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400">
+              <a href={`tel:${contractor.phone.replace(/[\s()-]/g, '')}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
                 {contractor.phone}
               </a>
             </div>
@@ -125,7 +125,12 @@ export default function ContractorDetail({ contractorId }: ContractorDetailProps
           {contractor.companyWebsite && (
             <div className="flex items-center gap-3">
               <Globe className="h-4 w-4 text-slate-400" />
-              <a href={contractor.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 dark:text-blue-400">
+              <a
+                href={contractor.companyWebsite.match(/^https?:\/\//) ? contractor.companyWebsite : `https://${contractor.companyWebsite}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
                 {contractor.companyWebsite.replace(/^https?:\/\//, '')}
               </a>
             </div>
