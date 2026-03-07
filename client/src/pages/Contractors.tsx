@@ -924,16 +924,21 @@ export default function Contractors() {
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
                     {referralType === 'percent' ? 'Percentage (%)' : 'Flat Amount ($)'} <span className="text-red-400 text-xs">*</span>
                   </label>
-                  <Input
-                    type="number"
-                    step={referralType === 'percent' ? '1' : '0.01'}
-                    min="0"
-                    max={referralType === 'percent' ? '100' : undefined}
-                    placeholder={referralType === 'percent' ? 'e.g., 15' : 'e.g., 250'}
-                    value={referralValue}
-                    onChange={(e) => handleFeeChange(e.target.value)}
-                    className={`h-10 ${feeError ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-                  />
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step={referralType === 'percent' ? '1' : '0.01'}
+                      min="0"
+                      max={referralType === 'percent' ? '100' : undefined}
+                      value={referralValue}
+                      onChange={(e) => handleFeeChange(e.target.value)}
+                      className={`h-10 pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${feeError ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">
+                      {referralType === 'percent' ? '%' : '$'}
+                    </span>
+                  </div>
                   {feeError && <p className="text-xs text-red-500 mt-0.5">{feeError}</p>}
                 </div>
               </div>
