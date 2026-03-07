@@ -5,7 +5,7 @@ import { companies, jobReferrals, subcontractPayoutAudit, payments } from "../..
 import { eq, and, sql } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2025-02-24" as any,
+  apiVersion: "2025-04-30.basil" as any,
 });
 
 export function isTransferEnabled(): boolean {
@@ -226,6 +226,7 @@ async function updatePayoutAuditRecord(id: number, data: Partial<{
   transferAmountCents: number | null;
   destinationAccountId: string | null;
   failureReason: string | null;
+  idempotencyKey: string | null;
   rawMeta: any;
   updatedAt: Date;
 }>) {
@@ -264,9 +265,13 @@ export async function executeSubcontractPayout(params: {
       console.log(`[SubPayExec] finalResult=duplicate_skipped`);
       return { status: "duplicate_skipped", auditId: existing.id, transferId: existing.stripeTransferId || undefined };
     }
-    if (existing.status === "preview" || existing.status === "blocked" || existing.status === "failed") {
+    if (existing.status === "preview" || existing.status === "blocked" || existing.status === "failed" || existing.status === "pending") {
       console.log(`[SubPayExec] superseding existing audit id=${existing.id} status=${existing.status}`);
-      await updatePayoutAuditRecord(existing.id, { status: "duplicate_skipped", failureReason: `Superseded by re-execution from ${source}` });
+      await updatePayoutAuditRecord(existing.id, {
+        status: "duplicate_skipped",
+        failureReason: `Superseded by re-execution from ${source}`,
+        idempotencyKey: `superseded_${existing.id}_${Date.now()}`,
+      });
     }
   }
 

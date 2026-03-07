@@ -1,0 +1,349 @@
+We are NOT enabling live Stripe subcontract transfers yet.
+
+Next task: run a full Stripe test-mode verification pass for the new Phase 2 payout execution system before we ever turn on real live money movement.
+
+Goal
+
+Prove that the subcontract payout system is actually safe and correct in Stripe test mode.
+
+We need hard verification of:
+
+exact transfer amounts
+
+idempotency / duplicate protection
+
+blocked payout behavior
+
+owner UI visibility
+
+non-subcontracted payment safety
+
+webhook path correctness
+
+TEST PLAN
+TEST 1 — Preview mode / transfer disabled
+
+With:
+
+STRIPE_SUBCONTRACT_TRANSFERS_ENABLED=false
+
+Run a subcontracted payment in Stripe test mode.
+
+Expected:
+
+customer payment succeeds normally
+
+subcontract detection runs
+
+payout amount is computed from the accepted agreement snapshot
+
+audit entry is written
+
+no Stripe transfer is created
+
+owner payout UI shows pending/preview style state
+
+logs clearly show transfer disabled
+
+Capture:
+
+payment intent id
+
+invoice id
+
+job id
+
+subcontract agreement/referral id
+
+gross collected amount
+
+contractor payout amount
+
+company share amount
+
+audit row contents
+
+whether any transfer id exists (should not)
+
+TEST 2 — Real transfer mode in Stripe test mode
+
+With:
+
+STRIPE_SUBCONTRACT_TRANSFERS_ENABLED=true
+
+Use a subcontracted job tied to a company that has a payout-ready Stripe connected account in test mode.
+
+Run a real payment.
+
+Expected:
+
+customer payment succeeds
+
+webhook path triggers payout execution
+
+exactly one Stripe transfer is created
+
+transfer amount matches accepted snapshot logic
+
+audit row ends in completed state
+
+owner payout UI shows completed with transfer id
+
+transfer metadata is populated correctly
+
+Capture:
+
+payment intent id
+
+charge id
+
+transfer id
+
+destination account id
+
+transfer metadata
+
+audit row
+
+logs
+
+TEST 3 — Duplicate webhook / replay protection
+
+Simulate or force the payout execution path to run again for the exact same successful payment.
+
+This can be by:
+
+replaying the webhook event
+
+re-calling the handler path safely in test
+
+whatever method makes sense in this codebase
+
+Expected:
+
+no second transfer is created
+
+existing successful payout is reused/skipped
+
+audit/log clearly says duplicate detected / skipped
+
+Stripe transfer count remains exactly one
+
+Capture:
+
+first transfer id
+
+result of replay attempt
+
+audit state after replay
+
+logs showing duplicate protection
+
+TEST 4 — Not payout-ready subcontractor
+
+Run a subcontracted payment where the subcontractor company:
+
+has no connected account, or
+
+has incomplete onboarding, or
+
+is not payout-ready
+
+Expected:
+
+customer payment still succeeds
+
+no transfer is created
+
+audit row shows blocked
+
+blocked reason is explicit
+
+owner UI clearly shows why payout did not happen
+
+Capture:
+
+audit row
+
+blocked reason
+
+UI screenshot/state if possible
+
+logs
+
+TEST 5 — Partial payment proportional payout
+
+Create a subcontracted job with a locked accepted agreement snapshot where:
+
+accepted job total is known
+
+accepted contractor payout is known
+
+collected payment is only a partial amount
+
+Example:
+
+locked job total: $1,000
+
+locked contractor payout: $200
+
+collected amount: $500
+
+Expected:
+
+payout transfer amount = $100
+
+company share for this payment event = $400
+
+audit reflects proportional split exactly
+
+no rounding bugs
+
+no cumulative overpayment risk
+
+Then run another partial/follow-up payment if supported and confirm total payouts across both payments do not exceed the locked contractor payout snapshot.
+
+Capture:
+
+formula used
+
+first payment payout amount
+
+second payment payout amount if tested
+
+cumulative total paid to subcontractor
+
+remaining unpaid subcontract amount if derivable
+
+TEST 6 — Non-subcontracted payment regression check
+
+Run a normal payment on a job with no active accepted subcontract agreement.
+
+Expected:
+
+payment behaves exactly as before
+
+no payout audit row is created unless intentionally expected
+
+no transfer logic runs
+
+no UI weirdness appears on job details
+
+Capture:
+
+payment result
+
+whether payout detection ran
+
+whether any audit entry exists
+
+confirmation that existing payment flow is unchanged
+
+VALIDATION REQUIREMENTS
+Verify canonical execution path
+
+Audit the logs and confirm which exact webhook branch actually executed payout creation for each test:
+
+checkout.session.completed
+
+payment_intent.succeeded upgrade path
+
+payment_intent.succeeded new payment path
+
+I want clarity on whether payout execution is effectively canonical and whether multiple webhook branches can touch the same payment safely without duplication.
+
+Verify metadata
+
+Inspect the actual Stripe transfer object and confirm metadata includes:
+
+jobId
+
+invoiceId
+
+paymentId
+
+referralId / subcontractAgreementId
+
+subcontractorCompanyId
+
+ownerCompanyId
+
+paymentIntentId
+
+If any are missing, add them.
+
+Verify audit quality
+
+Confirm the audit rows include:
+
+gross collected amount
+
+contractor payout amount
+
+company share amount
+
+transfer id if any
+
+destination account id
+
+idempotency key
+
+final status
+
+failure/blocked reason when relevant
+
+If audit rows are missing useful fields during testing, patch them.
+
+Logs
+
+Keep targeted logs only:
+
+[SubPayExec] paymentIntentId:
+
+[SubPayExec] invoiceId:
+
+[SubPayExec] jobId:
+
+[SubPayExec] subcontractAgreementId:
+
+[SubPayExec] grossCollectedAmount:
+
+[SubPayExec] contractorPayoutAmount:
+
+[SubPayExec] companyShareAmount:
+
+[SubPayExec] connectedAccountId:
+
+[SubPayExec] transferEnabled:
+
+[SubPayExec] transferId:
+
+[SubPayExec] duplicateDetected:
+
+[SubPayExec] blockedReason:
+
+[SubPayExec] finalResult:
+
+Deliverables
+
+After running all tests, report back with:
+
+results of Test 1 through Test 6
+
+exact webhook branch used in each case
+
+every Stripe object created in real-transfer test mode
+
+whether duplicate protection held perfectly
+
+whether partial payments were split correctly
+
+whether blocked payout behavior was correct
+
+whether non-subcontracted payments were unaffected
+
+any bugs or edge cases found
+
+whether you believe it is actually safe to enable live transfers after these tests
+
+Do not enable live mode yet.

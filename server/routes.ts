@@ -10487,14 +10487,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (inv?.jobId) {
           await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
 
-          stripeConnectService.processSubcontractPaymentDetection({
+          stripeConnectService.executeSubcontractPayout({
             jobId: inv.jobId,
             invoiceId,
             paymentId: matchedPayment.id,
             paymentIntentId: pi,
             paymentAmountCents: matchedPayment.amountCents || Math.round(parseFloat(matchedPayment.amount) * 100),
             ownerCompanyId: inv.companyId,
-          }).catch(err => console.error('[SubPaySetup] detection error:', err?.message));
+            source: "stripe-confirm",
+          }).catch(err => console.error('[SubPayExec] stripe-confirm error:', err?.message));
         }
 
         sendReceiptForPayment(matchedPayment.id).catch(err =>
