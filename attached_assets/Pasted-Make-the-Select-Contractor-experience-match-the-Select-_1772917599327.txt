@@ -1,0 +1,72 @@
+Make the “Select Contractor” experience match the “Select Customer” modal style almost exactly.
+
+Goal:
+When the user taps Select Contractor in Send Job Offer, it should open a full modal selector that feels just like the Select Customer modal in the screenshot — not a small inline dropdown.
+
+Requirements:
+
+1) Change Select Contractor into full modal picker
+- Tapping the Select Contractor field should open a centered/full mobile-friendly modal
+- Modal header should match Select Customer style:
+  - Title: Select Contractor
+  - Close X in top-right
+- Keep same spacing, rounded corners, padding, and visual feel as the customer selector
+
+2) Search bar at top
+- Add a search input at the top of the modal
+- Placeholder:
+  Search contractors...
+- Same visual style as Select Customer search bar
+- Search should filter saved contractors in real time
+
+3) Contractor list layout
+Each contractor row should look like Select Customer rows:
+- optional avatar/initial circle on left
+- primary text = Company Name
+- secondary text = Personal Name if present
+- if no Personal Name, use email as secondary if helpful
+- rows should be clean, tappable, and evenly spaced
+
+Example:
+ZSL Plumbing
+Jon Scaduto
+
+4) Data source
+IMPORTANT:
+- Use only saved contractors from Contractor Network
+- Do NOT use global companies or network companies
+- Keep current correct contractor source
+
+5) Selection behavior
+- Tapping a contractor row selects it and closes the modal
+- Selected contractor then displays in the field on the main Send Job Offer form
+- Keep selection stable for submit flow
+
+6) Empty states
+- If no saved contractors exist:
+  show clean empty state inside modal:
+  No saved contractors yet
+- If search has no matches:
+  show:
+  No contractors found
+
+7) Keep Send Job flow intact
+Do NOT break:
+- contractor selection
+- referral send logic
+- selected contractor id mapping
+
+8) Polish
+- Match Select Customer modal vibe as closely as possible
+- Scrollable contractor list
+- Mobile-first sizing
+- Smooth UX
+- No regressions
+
+Deliverables:
+- Select Contractor opens a full modal picker
+- layout closely matches Select Customer modal
+- search bar at top
+- saved contractors listed in clean rows
+- tap row to select and close
+- short dev log listing files changed
