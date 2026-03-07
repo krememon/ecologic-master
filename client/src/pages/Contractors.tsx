@@ -225,7 +225,6 @@ export default function Contractors() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       setIsDialogOpen(false);
-      toast({ title: "Contractor added" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
