@@ -251,6 +251,43 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const isPaid = invoiceStatus?.toLowerCase() === 'paid';
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
+  interface PayoutAuditData {
+    hasSubcontract: boolean;
+    referral: {
+      id: number;
+      referralType: string;
+      referralValue: string;
+      jobTotalAtAcceptanceCents: number | null;
+      contractorPayoutAmountCents: number | null;
+      companyShareAmountCents: number | null;
+      receiverCompanyId: number | null;
+      subcontractorCompanyName: string | null;
+      status: string;
+    } | null;
+    payouts: {
+      id: number;
+      paymentId: number;
+      grossAmountCents: number;
+      contractorPayoutAmountCents: number;
+      companyShareAmountCents: number;
+      transferAmountCents: number;
+      stripeTransferId: string | null;
+      status: string;
+      failureReason: string | null;
+      createdAt: string;
+    }[];
+  }
+
+  const { data: payoutAuditData } = useQuery<PayoutAuditData>({
+    queryKey: ['/api/subcontract-payouts/job', jobId],
+    queryFn: async () => {
+      const res = await fetch(`/api/subcontract-payouts/job/${jobId}`, { credentials: 'include' });
+      if (!res.ok) return { hasSubcontract: false, referral: null, payouts: [] };
+      return res.json();
+    },
+    enabled: !!jobId && isAuthenticated && role === 'OWNER',
+  });
+
   // Fetch company employees for assignment
   const { data: employeesData, isLoading: employeesLoading } = useQuery<{ users: Employee[]; total: number }>({
     queryKey: ['/api/org/users'],
@@ -1283,6 +1320,73 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Subcontract Payout Status (Owner only) */}
+      {payoutAuditData?.hasSubcontract && payoutAuditData.referral && (
+        <Card className="mt-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Subcontractor Payout
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Subcontractor</span>
+                <p className="font-medium">{payoutAuditData.referral.subcontractorCompanyName || 'Pending'}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Fee</span>
+                <p className="font-medium">
+                  {payoutAuditData.referral.referralType === 'percent'
+                    ? `${payoutAuditData.referral.referralValue}%`
+                    : `$${(parseFloat(payoutAuditData.referral.referralValue) / 100).toFixed(2)}`}
+                </p>
+              </div>
+              {payoutAuditData.referral.contractorPayoutAmountCents != null && (
+                <div>
+                  <span className="text-muted-foreground">Payout Amount</span>
+                  <p className="font-medium">${(payoutAuditData.referral.contractorPayoutAmountCents / 100).toFixed(2)}</p>
+                </div>
+              )}
+              {payoutAuditData.referral.companyShareAmountCents != null && (
+                <div>
+                  <span className="text-muted-foreground">Your Share</span>
+                  <p className="font-medium">${(payoutAuditData.referral.companyShareAmountCents / 100).toFixed(2)}</p>
+                </div>
+              )}
+            </div>
+
+            {payoutAuditData.payouts.length > 0 && (
+              <div className="border-t pt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Transfer History</p>
+                {payoutAuditData.payouts.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2 bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          p.status === 'completed' ? 'default' :
+                          p.status === 'pending' ? 'secondary' :
+                          p.status === 'failed' || p.status === 'blocked' ? 'destructive' :
+                          'outline'
+                        }
+                        className="text-xs capitalize"
+                      >
+                        {p.status}
+                      </Badge>
+                      <span className="font-medium">${(p.transferAmountCents / 100).toFixed(2)}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(p.createdAt), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Hidden file input */}

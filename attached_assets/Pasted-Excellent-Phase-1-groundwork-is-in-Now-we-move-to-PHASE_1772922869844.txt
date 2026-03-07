@@ -1,0 +1,420 @@
+Excellent. Phase 1 groundwork is in.
+
+Now we move to PHASE 2 — real Stripe split payout execution using the architecture you recommended:
+
+Use Separate Charges and Transfers
+
+That means:
+
+customer pays EcoLogic normally
+
+charge/payment lands on the platform Stripe account
+
+after successful payment, EcoLogic calculates the subcontractor cut from the accepted subcontract agreement snapshot
+
+EcoLogic creates a Stripe transfer to the subcontractor connected account
+
+EcoLogic writes/updates payout audit records
+
+idempotency prevents duplicate payouts
+
+Critical rule
+
+Turn this on in a controlled, safe way.
+
+I do not want reckless live behavior.
+Build it so we can:
+
+test in Stripe test mode safely
+
+verify audit trail and idempotency
+
+confirm transfer amounts exactly match the stored agreement snapshot
+
+avoid duplicate transfers on refresh/webhook replay/retry
+
+PHASE 2 REQUIREMENTS
+1) Real transfer execution path
+
+Extend the existing Phase 1 preview pipeline so that when a payment succeeds for a subcontracted job, the system can create a real Stripe transfer only when all safety checks pass.
+
+Safety checks required before transfer:
+
+accepted subcontract agreement exists
+
+accepted agreement snapshot contains valid locked financial values
+
+subcontractor company exists
+
+subcontractor company has stripe_connect_account_id
+
+Stripe Connect status is payout-ready
+
+no existing successful transfer/audit record already exists for this exact payment+agreement combination
+
+payout amount is valid and greater than zero
+
+payout amount does not exceed collected amount
+
+no negative company share
+
+platform payment actually succeeded
+
+If any check fails:
+
+do not transfer
+
+write/update audit as failed/blocked with exact reason
+
+log exact reason cleanly
+
+2) Source of truth for amount calculation
+
+Use the accepted subcontract agreement snapshot as the source of truth.
+
+Do not recalculate from UI state.
+Do not trust current editable job values.
+Do not use random live fee fields if the referral was already accepted.
+
+The transfer amount must come from the locked accepted agreement snapshot, with proper handling for:
+
+Full payment
+
+use full stored contractor payout amount
+
+Partial payment
+
+If invoice/payment collected is less than full job amount, support proportional payout from the stored snapshot.
+
+Example:
+
+locked job total at acceptance = $1,000
+
+locked contractor payout = $200
+
+collected payment = $500
+
+contractor payout for this payment = $100
+
+This must be deterministic and based on stored snapshot values.
+
+Also protect against cumulative overpayment across multiple partial payments.
+
+3) Transfer execution timing
+
+Inspect the current payment success lifecycle and wire the transfer into the safest place.
+
+Possible places:
+
+payment confirmation endpoint
+
+Stripe webhook after payment success
+
+or a carefully coordinated combination
+
+Preferred behavior
+
+Use the Stripe webhook-driven success path as the source of truth for final transfer execution, because that is safer than trusting client return flow alone.
+
+If the confirmation endpoint currently runs first, that is okay, but the actual real transfer logic should be protected so it cannot double-run when webhook also arrives.
+
+I want one canonical payout execution path.
+
+4) Idempotency / duplicate protection
+
+This is mandatory.
+
+Use the payout audit table plus deterministic idempotency so the subcontractor can never get paid twice for the same payment event.
+
+Requirements:
+
+deterministic idempotency key based on payment + subcontract agreement + transfer type
+
+unique constraint enforced in DB
+
+if retry happens, return/reuse existing successful result instead of creating a second transfer
+
+webhook replay must not create duplicate payout
+
+manual refresh must not create duplicate payout
+
+Log clearly whether a transfer was:
+
+newly created
+
+skipped as duplicate
+
+blocked
+
+failed
+
+5) Stripe transfer creation
+
+Implement the actual Stripe transfer call for eligible subcontractor payments.
+
+Need to store and log:
+
+transfer id
+
+destination connected account
+
+amount transferred
+
+currency
+
+related payment intent / charge / invoice / payment id
+
+final audit status
+
+Use metadata on the transfer so we can trace it later.
+
+Suggested metadata:
+
+jobId
+
+invoiceId
+
+paymentId
+
+subcontractAgreementId / referralId
+
+subcontractorCompanyId
+
+ownerCompanyId
+
+paymentIntentId
+
+6) Audit trail updates
+
+The subcontract_payout_audit table must fully reflect real execution.
+
+Required statuses to support:
+
+preview
+
+pending
+
+processing
+
+completed
+
+blocked
+
+failed
+
+duplicate_skipped
+
+Use whatever naming best matches the codebase, but keep them explicit.
+
+Each audit row should capture:
+
+gross collected amount
+
+contractor payout amount for that payment event
+
+company share for that payment event
+
+Stripe fee if available
+
+transfer amount
+
+transfer id
+
+destination account id
+
+idempotency key
+
+status
+
+failure reason if any
+
+If there is already a preview row from Phase 1, update or supersede it cleanly.
+Do not create messy duplicate audit clutter unless truly needed.
+
+7) Test-mode-only safety switch
+
+Before allowing live execution, gate real transfer execution behind an explicit safe flag.
+
+Example intent:
+
+preview mode default
+
+real transfer mode only when env/config flag is enabled
+
+I want something like:
+
+preview only in development until intentionally enabled
+
+real execution only when STRIPE_SUBCONTRACT_TRANSFERS_ENABLED=true or similar
+
+This must be explicit and easy to control.
+
+If disabled:
+
+run detection
+
+compute payout
+
+write audit
+
+log preview mode
+
+do not execute Stripe transfer
+
+If enabled:
+
+execute real transfer
+
+8) Admin/owner visibility
+
+Add a simple read-only UI surface so the owner can see subcontract payout status for a payment/job.
+
+This does not need to be huge yet.
+A compact MVP is enough.
+
+Need somewhere reasonable, such as payment detail / invoice detail / job financial area, showing:
+
+whether job had a subcontract agreement
+
+subcontractor payout amount
+
+payout status
+
+transfer id if completed
+
+blocked/failed reason if not completed
+
+Keep it clean and aligned with EcoLogic styling.
+
+9) Logs
+
+Add targeted logs only:
+
+[SubPayExec] paymentIntentId:
+
+[SubPayExec] invoiceId:
+
+[SubPayExec] jobId:
+
+[SubPayExec] subcontractAgreementId:
+
+[SubPayExec] grossCollectedAmount:
+
+[SubPayExec] contractorPayoutAmount:
+
+[SubPayExec] companyShareAmount:
+
+[SubPayExec] connectedAccountId:
+
+[SubPayExec] transferEnabled:
+
+[SubPayExec] auditStatus:
+
+[SubPayExec] transferId:
+
+[SubPayExec] duplicateDetected:
+
+[SubPayExec] blockedReason:
+
+[SubPayExec] finalResult:
+
+Do not spam unrelated logs.
+
+Testing requirements
+Test Case 1 — Preview mode
+
+Run a test subcontracted payment in Stripe test mode with transfer execution disabled.
+
+Verify:
+
+payment succeeds
+
+subcontract detection runs
+
+split is computed from accepted snapshot
+
+preview/blocked/pending audit row is written correctly
+
+no transfer is created
+
+logs clearly say preview mode only
+
+Test Case 2 — Real transfer mode in Stripe test mode
+
+Enable the explicit flag and run a Stripe test payment for a subcontracted job with a payout-ready connected account.
+
+Verify:
+
+customer payment succeeds
+
+exactly one Stripe transfer is created
+
+transfer amount matches the snapshot logic
+
+audit row updates to completed
+
+duplicate replay does not create a second transfer
+
+Test Case 3 — Duplicate protection
+
+Replay or re-trigger the success path and confirm:
+
+second transfer is not created
+
+audit/log shows duplicate skipped / existing payout reused
+
+Test Case 4 — Not payout-ready
+
+Use a subcontractor company without completed Stripe onboarding and verify:
+
+customer payment still succeeds
+
+transfer is not created
+
+audit shows blocked
+
+owner can see why it was blocked
+
+Absolutely do not break
+
+Do not break:
+
+normal non-subcontracted invoice payments
+
+existing Stripe checkout flow
+
+existing webhook handling
+
+native return flow
+
+accepted referral flow
+
+job transfer flow
+
+owner payment records
+
+invoice/payment status updates
+
+Deliverables after implementation
+
+When finished, report back with:
+
+exact code path used for real transfer execution
+
+whether webhook is now canonical for payout execution
+
+exact env/config flag used to enable real transfers
+
+how partial payment proportional payout is calculated
+
+how cumulative overpayment prevention is handled
+
+how idempotency is enforced
+
+what metadata is attached to Stripe transfers
+
+where the owner can view payout status in the UI
+
+results of all 4 test cases
+
+confirmation that non-subcontracted payments still behave exactly the same

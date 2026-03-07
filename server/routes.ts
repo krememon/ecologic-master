@@ -17213,6 +17213,64 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     });
   });
 
+  // ===================== Subcontract Payout Audit =====================
+
+  app.get('/api/subcontract-payouts/job/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER' && role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Only Owner or Admin can view payout details' });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+      const referral = await stripeConnectService.getAcceptedReferralForJob(jobId);
+      const audits = await stripeConnectService.getPayoutAuditForJob(jobId);
+
+      let subcontractorCompanyName: string | null = null;
+      if (referral?.receiverCompanyId) {
+        const subCo = await storage.getCompany(referral.receiverCompanyId);
+        subcontractorCompanyName = subCo?.name || null;
+      }
+
+      res.json({
+        hasSubcontract: !!referral,
+        referral: referral ? {
+          id: referral.id,
+          referralType: referral.referralType,
+          referralValue: referral.referralValue,
+          jobTotalAtAcceptanceCents: referral.jobTotalAtAcceptanceCents,
+          contractorPayoutAmountCents: referral.contractorPayoutAmountCents,
+          companyShareAmountCents: referral.companyShareAmountCents,
+          receiverCompanyId: referral.receiverCompanyId,
+          subcontractorCompanyName,
+          status: referral.status,
+        } : null,
+        payouts: audits.map(a => ({
+          id: a.id,
+          paymentId: a.paymentId,
+          grossAmountCents: a.grossAmountCents,
+          contractorPayoutAmountCents: a.contractorPayoutAmountCents,
+          companyShareAmountCents: a.companyShareAmountCents,
+          transferAmountCents: a.transferAmountCents,
+          stripeTransferId: a.stripeTransferId,
+          status: a.status,
+          failureReason: a.failureReason,
+          createdAt: a.createdAt,
+        })),
+      });
+    } catch (error: any) {
+      console.error('[SubPayAudit] Error:', error);
+      res.status(500).json({ error: 'Failed to fetch payout details' });
+    }
+  });
+
   // ===================== Stripe Connect Onboarding =====================
 
   app.post('/api/stripe-connect/create-account', isAuthenticated, async (req: any, res) => {

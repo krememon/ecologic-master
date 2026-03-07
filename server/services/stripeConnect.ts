@@ -1,12 +1,16 @@
 import Stripe from "stripe";
 import crypto from "crypto";
 import { db } from "../db";
-import { companies, jobReferrals, subcontractPayoutAudit } from "../../shared/schema";
-import { eq, and } from "drizzle-orm";
+import { companies, jobReferrals, subcontractPayoutAudit, payments } from "../../shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-02-24" as any,
 });
+
+export function isTransferEnabled(): boolean {
+  return process.env.STRIPE_SUBCONTRACT_TRANSFERS_ENABLED === "true";
+}
 
 export async function createConnectedAccount(companyId: number, companyName: string, companyEmail?: string | null) {
   console.log(`[StripeConnect] Creating connected account for company ${companyId}: ${companyName}`);
@@ -87,7 +91,7 @@ export async function syncAccountStatus(companyId: number, stripeAccountId: stri
     stripeConnectLastCheckedAt: new Date(),
   };
 
-  if (account.charges_enabled && account.payouts_enabled && !updateData.stripeConnectOnboardedAt) {
+  if (account.charges_enabled && account.payouts_enabled) {
     updateData.stripeConnectOnboardedAt = new Date();
   }
 
@@ -147,10 +151,6 @@ export function computeSubcontractSplit(referral: {
   };
 }
 
-export function generateIdempotencyKey(paymentId: number, referralId: number): string {
-  return `subpay_${paymentId}_${referralId}_${crypto.randomBytes(4).toString("hex")}`;
-}
-
 export function generateDeterministicIdempotencyKey(paymentId: number, referralId: number): string {
   return `subpay_${paymentId}_${referralId}`;
 }
@@ -176,6 +176,19 @@ export async function checkExistingPayout(paymentId: number, referralId: number)
     )
     .limit(1);
   return existing || null;
+}
+
+async function getCumulativePayoutForReferral(referralId: number): Promise<number> {
+  const [result] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${subcontractPayoutAudit.contractorPayoutAmountCents}), 0)` })
+    .from(subcontractPayoutAudit)
+    .where(
+      and(
+        eq(subcontractPayoutAudit.referralId, referralId),
+        eq(subcontractPayoutAudit.status, "completed"),
+      )
+    );
+  return Number(result?.total || 0);
 }
 
 export async function createPayoutAuditRecord(data: {
@@ -207,75 +220,296 @@ export async function createPayoutAuditRecord(data: {
   return record;
 }
 
-export async function processSubcontractPaymentDetection(params: {
+async function updatePayoutAuditRecord(id: number, data: Partial<{
+  status: string;
+  stripeTransferId: string | null;
+  transferAmountCents: number | null;
+  destinationAccountId: string | null;
+  failureReason: string | null;
+  rawMeta: any;
+  updatedAt: Date;
+}>) {
+  const [updated] = await db.update(subcontractPayoutAudit)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(subcontractPayoutAudit.id, id))
+    .returning();
+  return updated;
+}
+
+export async function executeSubcontractPayout(params: {
   jobId: number;
   invoiceId: number | null;
   paymentId: number;
   paymentIntentId: string | null;
   paymentAmountCents: number;
   ownerCompanyId: number;
-}) {
-  const { jobId, invoiceId, paymentId, paymentIntentId, paymentAmountCents, ownerCompanyId } = params;
+  source: string;
+}): Promise<{ status: string; auditId?: number; transferId?: string; reason?: string } | null> {
+  const { jobId, invoiceId, paymentId, paymentIntentId, paymentAmountCents, ownerCompanyId, source } = params;
+  const transferEnabled = isTransferEnabled();
 
   const referral = await getAcceptedReferralForJob(jobId);
   if (!referral) {
     return null;
   }
 
-  console.log(`[SubPaySetup] subcontract agreement found: referralId=${referral.id} jobId=${jobId}`);
-  console.log(`[SubPaySetup] ownerCompanyId=${ownerCompanyId} subcontractorCompanyId=${referral.receiverCompanyId}`);
-  console.log(`[SubPaySetup] feeType=${referral.referralType} feeValue=${referral.referralValue}`);
+  console.log(`[SubPayExec] jobId=${jobId} invoiceId=${invoiceId} paymentId=${paymentId} paymentIntentId=${paymentIntentId}`);
+  console.log(`[SubPayExec] subcontractAgreementId=${referral.id} source=${source}`);
+  console.log(`[SubPayExec] transferEnabled=${transferEnabled}`);
 
   const existing = await checkExistingPayout(paymentId, referral.id);
   if (existing) {
-    console.log(`[SubPaySetup] payout audit already exists id=${existing.id} status=${existing.status}, skipping`);
-    return existing;
+    if (existing.status === "completed" || existing.status === "duplicate_skipped") {
+      console.log(`[SubPayExec] duplicateDetected=true existingAuditId=${existing.id} status=${existing.status}`);
+      console.log(`[SubPayExec] finalResult=duplicate_skipped`);
+      return { status: "duplicate_skipped", auditId: existing.id, transferId: existing.stripeTransferId || undefined };
+    }
+    if (existing.status === "preview" || existing.status === "blocked" || existing.status === "failed") {
+      console.log(`[SubPayExec] superseding existing audit id=${existing.id} status=${existing.status}`);
+      await updatePayoutAuditRecord(existing.id, { status: "duplicate_skipped", failureReason: `Superseded by re-execution from ${source}` });
+    }
   }
 
   const split = computeSubcontractSplit(referral, paymentAmountCents);
 
-  console.log(`[SubPaySetup] grossAmount=${paymentAmountCents} contractorPayoutAmount=${split.contractorPayoutCents} companyShareAmount=${split.companyShareCents}`);
+  if (split.contractorPayoutCents <= 0) {
+    console.log(`[SubPayExec] blockedReason=contractor_payout_zero_or_negative`);
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      status: "blocked",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: "Contractor payout is zero or negative",
+    });
+    console.log(`[SubPayExec] finalResult=blocked auditId=${audit.id}`);
+    return { status: "blocked", auditId: audit.id, reason: "Contractor payout is zero or negative" };
+  }
 
-  let connectedAccountId: string | null = null;
-  let chargesEnabled = false;
-  let payoutsEnabled = false;
+  if (split.companyShareCents < 0) {
+    console.log(`[SubPayExec] blockedReason=negative_company_share`);
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      status: "blocked",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: "Negative company share",
+    });
+    console.log(`[SubPayExec] finalResult=blocked auditId=${audit.id}`);
+    return { status: "blocked", auditId: audit.id, reason: "Negative company share" };
+  }
 
-  if (referral.receiverCompanyId) {
-    const [subCompany] = await db.select().from(companies).where(eq(companies.id, referral.receiverCompanyId)).limit(1);
-    if (subCompany) {
-      connectedAccountId = subCompany.stripeConnectAccountId || null;
-      chargesEnabled = subCompany.stripeConnectChargesEnabled || false;
-      payoutsEnabled = subCompany.stripeConnectPayoutsEnabled || false;
+  if (split.contractorPayoutCents > paymentAmountCents) {
+    console.log(`[SubPayExec] blockedReason=payout_exceeds_collected`);
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      status: "blocked",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: "Payout exceeds collected amount",
+    });
+    console.log(`[SubPayExec] finalResult=blocked auditId=${audit.id}`);
+    return { status: "blocked", auditId: audit.id, reason: "Payout exceeds collected amount" };
+  }
+
+  if (referral.contractorPayoutAmountCents) {
+    const cumulativePaid = await getCumulativePayoutForReferral(referral.id);
+    const maxPayout = referral.contractorPayoutAmountCents;
+    const remaining = maxPayout - cumulativePaid;
+    if (remaining <= 0) {
+      console.log(`[SubPayExec] blockedReason=cumulative_overpayment cumulativePaid=${cumulativePaid} maxPayout=${maxPayout}`);
+      const audit = await createPayoutAuditRecord({
+        jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+        subcontractorCompanyId: referral.receiverCompanyId,
+        referralId: referral.id,
+        grossAmountCents: paymentAmountCents,
+        contractorPayoutAmountCents: 0,
+        companyShareAmountCents: paymentAmountCents,
+        status: "blocked",
+        idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+        failureReason: `Cumulative payout cap reached: paid=${cumulativePaid} max=${maxPayout}`,
+      });
+      console.log(`[SubPayExec] finalResult=blocked auditId=${audit.id}`);
+      return { status: "blocked", auditId: audit.id, reason: "Cumulative payout cap reached" };
+    }
+    if (split.contractorPayoutCents > remaining) {
+      console.log(`[SubPayExec] capping payout from ${split.contractorPayoutCents} to ${remaining} (cumulative protection)`);
+      split.contractorPayoutCents = remaining;
+      split.companyShareCents = paymentAmountCents - remaining;
     }
   }
 
-  console.log(`[SubPaySetup] connectedAccountId=${connectedAccountId} chargesEnabled=${chargesEnabled} payoutsEnabled=${payoutsEnabled}`);
-  console.log(`[SubPaySetup] phase1 preview only, no transfer executed`);
+  console.log(`[SubPayExec] grossCollectedAmount=${paymentAmountCents} contractorPayoutAmount=${split.contractorPayoutCents} companyShareAmount=${split.companyShareCents}`);
+
+  let connectedAccountId: string | null = null;
+  let subCompany: any = null;
+
+  if (referral.receiverCompanyId) {
+    const [sc] = await db.select().from(companies).where(eq(companies.id, referral.receiverCompanyId)).limit(1);
+    subCompany = sc || null;
+    connectedAccountId = sc?.stripeConnectAccountId || null;
+  }
+
+  console.log(`[SubPayExec] connectedAccountId=${connectedAccountId}`);
+
+  if (!referral.receiverCompanyId || !subCompany) {
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      status: "blocked",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: "Subcontractor company not found or not linked",
+    });
+    console.log(`[SubPayExec] blockedReason=no_subcontractor_company finalResult=blocked auditId=${audit.id}`);
+    return { status: "blocked", auditId: audit.id, reason: "Subcontractor company not found" };
+  }
+
+  if (!connectedAccountId || !isPayoutReady(subCompany)) {
+    const reason = !connectedAccountId
+      ? "Subcontractor has no Stripe Connect account"
+      : `Stripe Connect not payout-ready (status=${subCompany.stripeConnectStatus}, charges=${subCompany.stripeConnectChargesEnabled}, payouts=${subCompany.stripeConnectPayoutsEnabled})`;
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      destinationAccountId: connectedAccountId,
+      status: "blocked",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: reason,
+    });
+    console.log(`[SubPayExec] blockedReason=${reason} finalResult=blocked auditId=${audit.id}`);
+    return { status: "blocked", auditId: audit.id, reason };
+  }
+
+  if (!transferEnabled) {
+    const audit = await createPayoutAuditRecord({
+      jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
+      subcontractorCompanyId: referral.receiverCompanyId,
+      referralId: referral.id,
+      grossAmountCents: paymentAmountCents,
+      contractorPayoutAmountCents: split.contractorPayoutCents,
+      companyShareAmountCents: split.companyShareCents,
+      destinationAccountId: connectedAccountId,
+      status: "pending",
+      idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
+      failureReason: "Transfer execution disabled (STRIPE_SUBCONTRACT_TRANSFERS_ENABLED != true)",
+      rawMeta: {
+        referralType: referral.referralType,
+        referralValue: referral.referralValue,
+        connectedAccountReady: true,
+        transferDisabled: true,
+      },
+    });
+    console.log(`[SubPayExec] auditStatus=pending (transfers disabled) auditId=${audit.id}`);
+    console.log(`[SubPayExec] finalResult=pending_disabled`);
+    return { status: "pending", auditId: audit.id, reason: "Transfers disabled by config" };
+  }
 
   const idempotencyKey = generateDeterministicIdempotencyKey(paymentId, referral.id);
-
-  const auditRecord = await createPayoutAuditRecord({
-    jobId,
-    invoiceId,
-    paymentId,
-    paymentIntentId,
-    ownerCompanyId,
+  const audit = await createPayoutAuditRecord({
+    jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
     subcontractorCompanyId: referral.receiverCompanyId,
     referralId: referral.id,
     grossAmountCents: paymentAmountCents,
     contractorPayoutAmountCents: split.contractorPayoutCents,
     companyShareAmountCents: split.companyShareCents,
     destinationAccountId: connectedAccountId,
-    status: "preview",
+    transferAmountCents: split.contractorPayoutCents,
+    status: "processing",
     idempotencyKey,
     rawMeta: {
-      phase: 1,
       referralType: referral.referralType,
       referralValue: referral.referralValue,
-      connectedAccountReady: chargesEnabled && payoutsEnabled,
+      source,
     },
   });
 
-  console.log(`[SubPaySetup] created payout audit record id=${auditRecord.id} status=preview`);
-  return auditRecord;
+  console.log(`[SubPayExec] auditStatus=processing auditId=${audit.id}, executing transfer...`);
+
+  try {
+    const transfer = await stripe.transfers.create({
+      amount: split.contractorPayoutCents,
+      currency: "usd",
+      destination: connectedAccountId,
+      metadata: {
+        jobId: String(jobId),
+        invoiceId: invoiceId ? String(invoiceId) : "",
+        paymentId: String(paymentId),
+        referralId: String(referral.id),
+        subcontractorCompanyId: String(referral.receiverCompanyId),
+        ownerCompanyId: String(ownerCompanyId),
+        paymentIntentId: paymentIntentId || "",
+        auditId: String(audit.id),
+      },
+      source_transaction: paymentIntentId ? undefined : undefined,
+    }, {
+      idempotencyKey: `transfer_${idempotencyKey}`,
+    });
+
+    await updatePayoutAuditRecord(audit.id, {
+      status: "completed",
+      stripeTransferId: transfer.id,
+      transferAmountCents: transfer.amount,
+      destinationAccountId: transfer.destination as string,
+      rawMeta: {
+        referralType: referral.referralType,
+        referralValue: referral.referralValue,
+        source,
+        transferObject: { id: transfer.id, amount: transfer.amount, destination: transfer.destination },
+      },
+    });
+
+    console.log(`[SubPayExec] transferId=${transfer.id} transferAmount=${transfer.amount}`);
+    console.log(`[SubPayExec] auditStatus=completed auditId=${audit.id}`);
+    console.log(`[SubPayExec] finalResult=completed`);
+    return { status: "completed", auditId: audit.id, transferId: transfer.id };
+  } catch (err: any) {
+    const errorMsg = err?.message || "Unknown transfer error";
+    console.error(`[SubPayExec] transfer FAILED: ${errorMsg}`);
+
+    await updatePayoutAuditRecord(audit.id, {
+      status: "failed",
+      failureReason: errorMsg,
+    });
+
+    console.log(`[SubPayExec] auditStatus=failed auditId=${audit.id}`);
+    console.log(`[SubPayExec] finalResult=failed`);
+    return { status: "failed", auditId: audit.id, reason: errorMsg };
+  }
+}
+
+export async function getPayoutAuditForJob(jobId: number) {
+  const records = await db
+    .select()
+    .from(subcontractPayoutAudit)
+    .where(eq(subcontractPayoutAudit.jobId, jobId))
+    .orderBy(subcontractPayoutAudit.createdAt);
+  return records;
+}
+
+export async function getPayoutAuditForPayment(paymentId: number) {
+  const records = await db
+    .select()
+    .from(subcontractPayoutAudit)
+    .where(eq(subcontractPayoutAudit.paymentId, paymentId))
+    .orderBy(subcontractPayoutAudit.createdAt);
+  return records;
 }

@@ -12,6 +12,7 @@ import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
 import { notifyManagers, notifyOwners } from "./notificationService";
 import { startJobScheduler } from "./jobScheduler";
 import { sendReceiptForPayment } from "./receiptService";
+import * as stripeConnectService from "./services/stripeConnect";
 
 const app = express();
 
@@ -531,6 +532,18 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         sendReceiptForPayment(paymentId).catch(err =>
           console.error('[receipt] webhook checkout error:', err?.message));
       }
+
+      if (paymentId && effectiveJobId) {
+        stripeConnectService.executeSubcontractPayout({
+          jobId: effectiveJobId,
+          invoiceId: parseInt(invoiceId),
+          paymentId,
+          paymentIntentId: session.payment_intent as string || null,
+          paymentAmountCents: amountCents,
+          ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+          source: "webhook-checkout",
+        }).catch(err => console.error('[SubPayExec] webhook-checkout error:', err?.message));
+      }
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment:', error);
       return res.status(500).send('Error processing payment');
@@ -626,6 +639,18 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         if (wasProcessing) {
           sendReceiptForPayment(existingPaymentCheck.id).catch(err =>
             console.error('[receipt] webhook PI upgrade error:', err?.message));
+
+          if (effectiveJobId) {
+            stripeConnectService.executeSubcontractPayout({
+              jobId: effectiveJobId,
+              invoiceId: parseInt(invoiceId),
+              paymentId: existingPaymentCheck.id,
+              paymentIntentId: paymentIntent.id,
+              paymentAmountCents: existingPaymentCheck.amountCents || Math.round(parseFloat(existingPaymentCheck.amount) * 100),
+              ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+              source: "webhook-pi-upgrade",
+            }).catch(err => console.error('[SubPayExec] webhook-pi-upgrade error:', err?.message));
+          }
         }
 
         return res.json({ received: true, message: wasProcessing ? 'Upgraded to succeeded' : 'Already processed' });
@@ -700,6 +725,18 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
       sendReceiptForPayment(paymentId).catch(err =>
         console.error('[receipt] webhook PI new payment error:', err?.message));
+
+      if (effectiveJobId) {
+        stripeConnectService.executeSubcontractPayout({
+          jobId: effectiveJobId,
+          invoiceId: parseInt(invoiceId),
+          paymentId,
+          paymentIntentId: paymentIntent.id,
+          paymentAmountCents: amountCents,
+          ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+          source: "webhook-pi-new",
+        }).catch(err => console.error('[SubPayExec] webhook-pi-new error:', err?.message));
+      }
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment_intent.succeeded:', error);
       return res.status(500).send('Error processing payment');
