@@ -642,13 +642,13 @@ export default function Contractors() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {sub.email && (
-                      <p className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400"><Mail className="h-4 w-4" />{sub.email}</p>
+                      <a href={`mailto:${sub.email.trim()}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Mail className="h-4 w-4" />{sub.email}</a>
                     )}
                     {sub.phone && (
-                      <p className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400"><Phone className="h-4 w-4" />{sub.phone}</p>
+                      <a href={`tel:${sub.phone.replace(/[\s()-]/g, '')}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Phone className="h-4 w-4" />{sub.phone}</a>
                     )}
                     {sub.companyWebsite && (
-                      <p className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400"><Globe className="h-4 w-4" />Website</p>
+                      <a href={sub.companyWebsite.match(/^https?:\/\//) ? sub.companyWebsite : `https://${sub.companyWebsite}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"><Globe className="h-4 w-4" />Website</a>
                     )}
                     <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                       <p className="text-xs text-slate-500">Added {new Date(sub.createdAt).toLocaleDateString()}</p>
