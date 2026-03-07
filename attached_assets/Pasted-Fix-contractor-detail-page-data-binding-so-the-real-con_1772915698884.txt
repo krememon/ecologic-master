@@ -1,0 +1,98 @@
+Fix contractor detail page data binding so the real contractor information displays correctly instead of “Unknown” / “No contact information available”.
+
+Current bug:
+- Tapping a contractor card opens the contractor detail page
+- But the page shows:
+  - title = “Unknown”
+  - empty contractor info card
+- Even though the contractor card/list clearly has real data (example: ZSL Plumbing, Jon Scaduto, phone, website)
+
+Goal:
+Use the same contractor record data from the list/card and correctly load/render it on the detail page.
+
+========================================
+1) Find the data mismatch
+========================================
+Inspect:
+- contractor card/list data shape
+- contractor detail route param
+- detail fetch/query
+- detail page field mapping
+
+Likely issue is one of:
+- wrong route param id
+- detail page fetching wrong endpoint
+- returned object shape differs from list shape
+- using `contractor.companyName` while actual field is `name` or vice versa
+- fallback logic is too aggressive and overwriting real values
+
+========================================
+2) Make detail page use correct fields
+========================================
+Contractor detail page should display company-first with fallback logic:
+
+Title:
+- primary = contractor.companyName
+- fallback = contractor.name
+- fallback = "Unknown Contractor"
+
+Contractor Information section:
+- Company Name
+- Personal Name
+- Email
+- Phone
+- Website
+- Added date
+
+Suggested display mapping:
+- companyName = contractor.companyName ?? contractor.name ?? ""
+- personalName = contractor.personalName ?? contractor.contactName ?? ""
+- email = contractor.email ?? ""
+- phone = contractor.phone ?? ""
+- website = contractor.website ?? contractor.companyWebsite ?? ""
+- createdAt = contractor.createdAt
+
+If old records only have `name`, still show that instead of Unknown.
+
+========================================
+3) Reuse existing list/card data shape
+========================================
+The contractor card already displays the correct info.
+Use that same normalized display model in the detail page.
+
+Best approach:
+- create a shared normalizeContractor(contractor) helper
+OR
+- use consistent field mapping both in list and detail
+
+========================================
+4) Verify route + query
+========================================
+Ensure tapping a card passes the correct contractor id.
+Ensure detail page fetches the correct contractor by id.
+If no dedicated endpoint exists, add one:
+GET /api/subcontractors/:id
+scoped to current company.
+
+Do NOT silently swallow valid data because of undefined field names.
+
+========================================
+5) UI result
+========================================
+For the example contractor shown in the list:
+- title should show “ZSL Plumbing”
+- personal name should show “Jon Scaduto”
+- phone should show the saved phone
+- website should show the saved website
+- no fake “Unknown” / empty info when data exists
+
+========================================
+6) Deliverable
+========================================
+- contractor detail page shows real contractor data
+- old records still work with fallback logic
+- no more “Unknown” when valid data exists
+- short dev log with:
+  - root cause
+  - files changed
+  - final field mapping used

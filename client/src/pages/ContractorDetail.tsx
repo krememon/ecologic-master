@@ -33,12 +33,12 @@ export default function ContractorDetail({ contractorId }: ContractorDetailProps
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: contractor, isLoading, error } = useQuery<Subcontractor>({
-    queryKey: ['/api/subcontractors', contractorId],
+    queryKey: [`/api/subcontractors/${contractorId}`],
     enabled: !!contractorId && isAuthenticated,
   });
 
   const { data: referralData } = useQuery<{ incoming: any[]; outgoing: any[] }>({
-    queryKey: ['/api/subcontractors', contractorId, 'referrals'],
+    queryKey: [`/api/subcontractors/${contractorId}/referrals`],
     enabled: !!contractorId && isAuthenticated,
   });
 
