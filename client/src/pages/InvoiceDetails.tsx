@@ -5,6 +5,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
+import { useStripeConnectGate } from "@/hooks/useStripeConnectGate";
+import { StripeConnectGateModal } from "@/components/StripeConnectGateModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +107,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { role } = useCan();
+  const stripeGate = useStripeConnectGate();
   
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
@@ -159,6 +162,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const handlePayWithCard = async () => {
     if (isCheckoutLoading) return;
     if (partialEnabled && !isPartialValid) return;
+    const ready = await stripeGate.ensureReady();
+    if (!ready) return;
     setIsCheckoutLoading(true);
     try {
       const res = await apiRequest('POST', '/api/payments/stripe/create-intent', {
@@ -889,6 +894,12 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StripeConnectGateModal
+        open={stripeGate.showGateModal}
+        onClose={stripeGate.dismissGateModal}
+        returnPath={`/payments/invoice/${invoiceId}`}
+      />
     </div>
   );
 }

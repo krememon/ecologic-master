@@ -13,6 +13,8 @@ import {
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff, Percent, DollarSign } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
+import { useStripeConnectGate } from "@/hooks/useStripeConnectGate";
+import { StripeConnectGateModal } from "@/components/StripeConnectGateModal";
 import StripePaymentForm from "@/components/StripePaymentForm";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
@@ -62,6 +64,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { can } = useCan();
+  const stripeGate = useStripeConnectGate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
@@ -189,9 +192,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     }
   };
 
-  const handleMethodSelect = (method: PaymentMethod) => {
+  const handleMethodSelect = async (method: PaymentMethod) => {
     if (partialEnabled && !isPartialValid) return;
     if (method === 'card') {
+      const ready = await stripeGate.ensureReady();
+      if (!ready) return;
       handleCardPayment();
     } else {
       setSelectedMethod(method);
@@ -968,6 +973,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           </div>
         </DialogContent>
       </Dialog>
+
+      <StripeConnectGateModal
+        open={stripeGate.showGateModal}
+        onClose={stripeGate.dismissGateModal}
+        returnPath={`/jobs/${jobId}/pay/${invoiceId}`}
+      />
     </div>
   );
 }

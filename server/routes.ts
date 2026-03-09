@@ -17394,5 +17394,67 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  app.post('/api/stripe-connect/ensure-ready', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ error: 'Company not found' });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const role = (member?.role || '').toUpperCase();
+      if (role !== 'OWNER' && role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Only the company owner can set up Stripe Connect', ownerOnly: true });
+      }
+
+      const isReady = company.stripeConnectAccountId &&
+        company.stripeConnectChargesEnabled &&
+        company.stripeConnectPayoutsEnabled &&
+        company.stripeConnectDetailsSubmitted;
+
+      if (isReady) {
+        console.log(`[StripeConnect] ensure-ready: company ${company.id} is already ready`);
+        return res.json({ ready: true, status: 'active' });
+      }
+
+      if (!company.stripeConnectAccountId) {
+        console.log(`[StripeConnect] ensure-ready: creating account for company ${company.id}`);
+        const account = await stripeConnectService.createConnectedAccount(company.id, company.name, company.email);
+
+        const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
+        const returnPath = req.body.returnPath || '/settings/stripe-connect';
+        const returnUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=complete`;
+        const refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
+
+        console.log(`[StripeConnect] ensure-ready: generating onboarding link for new account ${account.id}`);
+        const link = await stripeConnectService.createOnboardingLink(account.id, returnUrl, refreshUrl);
+        return res.json({ ready: false, status: 'not_connected', onboardingUrl: link.url, accountId: account.id });
+      }
+
+      let syncedStatus = company.stripeConnectStatus;
+      try {
+        const synced = await stripeConnectService.syncAccountStatus(company.id, company.stripeConnectAccountId);
+        syncedStatus = synced.status;
+        if (synced.chargesEnabled && synced.payoutsEnabled && synced.detailsSubmitted) {
+          console.log(`[StripeConnect] ensure-ready: company ${company.id} became ready after sync`);
+          return res.json({ ready: true, status: 'active' });
+        }
+      } catch (e: any) {
+        console.warn(`[StripeConnect] ensure-ready: sync failed for company ${company.id}: ${e.message}`);
+      }
+
+      const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
+      const returnPath = req.body.returnPath || '/settings/stripe-connect';
+      const returnUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=complete`;
+      const refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
+
+      console.log(`[StripeConnect] ensure-ready: generating onboarding link for incomplete account ${company.stripeConnectAccountId}`);
+      const link = await stripeConnectService.createOnboardingLink(company.stripeConnectAccountId, returnUrl, refreshUrl);
+      return res.json({ ready: false, status: syncedStatus || 'setup_incomplete', onboardingUrl: link.url, accountId: company.stripeConnectAccountId });
+    } catch (error: any) {
+      console.error('[StripeConnect] Error in ensure-ready:', error);
+      res.status(500).json({ error: 'Failed to check Stripe Connect readiness' });
+    }
+  });
+
   return httpServer;
 }

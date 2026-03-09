@@ -1,0 +1,162 @@
+Implement a Stripe Connect onboarding gate directly inside the Card Payments flow, while preserving the existing Stripe Connect settings page and current backend endpoints.
+
+Context:
+EcoLogic already has a working Stripe Connect onboarding system.
+
+Existing backend endpoints:
+- POST /api/stripe-connect/create-account
+- POST /api/stripe-connect/onboarding-link
+- GET /api/stripe-connect/status
+- POST /api/stripe-connect/sync
+
+Existing frontend:
+- /settings/stripe-connect
+- StripeConnectSettings.tsx
+- Owners can already create an Express connected account, get redirected to Stripe hosted onboarding, and sync status after returning
+
+Current business goal:
+We do NOT want users to have to manually discover the Settings page first.
+If an Owner tries to use Card Payments and their company is not fully Stripe-connected yet, EcoLogic should automatically intercept that flow and send them through Stripe onboarding/remediation.
+
+Important product logic:
+- Each company only connects Stripe once to EcoLogic
+- They do NOT connect to each other
+- The same connected account is used for:
+  - receiving normal payouts
+  - subcontract payouts
+  - referral payouts
+- Card Payments should be blocked until the company is Stripe Connect ready
+- Owner-only actions for creating/managing onboarding links
+- Non-owners should see a clean message that only the company owner can complete Stripe setup
+
+What I need built:
+
+1) Add a Stripe readiness gate to Card Payments entry points
+Wherever the Owner enters the Card Payments flow, check Stripe Connect status first.
+
+Desired logic:
+- If company has no stripe connected account:
+  -> create connected account if needed
+  -> generate onboarding link
+  -> redirect user into Stripe hosted onboarding
+- If company has a connected account but onboarding is incomplete / requirements outstanding:
+  -> generate onboarding/remediation link
+  -> redirect user into Stripe hosted onboarding
+- If company is fully ready:
+  -> continue into Card Payments normally
+
+2) Reuse existing backend endpoints if possible
+Prefer using the current endpoints instead of inventing duplicate logic.
+Only add a new helper endpoint if absolutely necessary for cleaner orchestration.
+
+3) Define a clear readiness rule
+Use current Stripe Connect status to determine if the company is ready.
+I want a single frontend/backend-ready boolean concept for:
+- not_connected
+- incomplete
+- active
+- restricted / needs update
+
+At minimum, base this on the fields already being synced:
+- stripeConnectAccountId presence
+- charges_enabled
+- payouts_enabled
+- details_submitted
+- any requirements flags already available from Stripe if present
+
+4) UX behavior
+If Owner taps Card Payments and Stripe is not ready:
+- show a clean branded modal/screen, not a confusing error
+- explain:
+  “To accept card payments, you need to complete Stripe setup for your business.”
+- CTA button examples:
+  - Connect Stripe
+  - Finish Stripe Setup
+  - Update Stripe Details
+- then redirect them into onboarding link flow
+
+If non-owner taps Card Payments and Stripe is not ready:
+- do NOT allow them to create onboarding
+- show message like:
+  “Only the business owner can complete Stripe setup.”
+- no broken state, no raw API errors
+
+5) Return flow
+After Stripe redirects back into EcoLogic:
+- detect return status
+- call /api/stripe-connect/sync
+- refresh the displayed Stripe state
+- if ready, automatically continue or clearly let the user continue into Card Payments
+- handle cancelled return_url / refresh_url cases cleanly
+
+6) Keep Settings page intact
+Do NOT break or remove the existing /settings/stripe-connect flow.
+This task is to ADD Stripe onboarding access from Card Payments, not replace settings.
+Settings should still work as a manual management page.
+
+7) Where to place this
+Apply this gate at the actual Card Payments entry path(s), not just visually in one random button.
+Anywhere a user can initiate card payment setup/usage should respect the Stripe readiness check.
+
+8) Suggested architecture
+Please implement a reusable helper/hook/service, something like:
+- useStripeConnectGate()
+or
+- ensureStripeConnectReady()
+
+This should:
+- fetch current status
+- determine readiness state
+- if owner and not ready, create account/onboarding link as needed
+- redirect to Stripe hosted onboarding
+- return normalized state for UI
+
+9) Clean UI states
+I want polished status labels and no confusing language.
+Preferred states:
+- Not connected
+- Setup incomplete
+- Ready to accept payments
+- Needs attention
+
+Buttons should map accordingly:
+- Connect Stripe
+- Finish setup
+- Update Stripe
+- Continue
+
+10) Logging
+Add only targeted logs for:
+- status fetch result
+- account creation trigger
+- onboarding link generation
+- sync on return
+- readiness decision
+No noisy spam logs.
+
+11) Important constraints
+- Preserve RBAC
+- Preserve existing subcontract/referral payout architecture
+- Do not alter transfer logic in this task
+- Do not break current settings page onboarding
+- Do not create duplicate connected accounts for the same company
+- Avoid duplicate buttons or multiple competing Stripe setup flows on the same screen
+
+Deliverables:
+- backend changes if needed
+- frontend Card Payments gate implementation
+- reusable readiness helper/hook/service
+- polished owner/non-owner UI states
+- return/sync flow working after Stripe redirect
+- short summary of exactly which files changed
+
+Before finishing, verify these scenarios:
+1. Owner with no connected account taps Card Payments
+   -> gets Stripe onboarding flow
+2. Owner with incomplete account taps Card Payments
+   -> gets remediation/onboarding flow
+3. Owner with fully active account taps Card Payments
+   -> continues normally
+4. Non-owner taps Card Payments when Stripe is not ready
+   -> sees owner-only message
+5. Returning from Stripe updates status and removes stale UI
