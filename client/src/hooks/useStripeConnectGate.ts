@@ -121,7 +121,6 @@ export function useStripeConnectGate() {
       });
       const freshReadiness = deriveReadiness(freshData);
       if (freshReadiness === "ready") {
-        toastRef.current({ title: "Stripe setup complete! You can now accept card payments." });
       } else {
         toastRef.current({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
       }
@@ -167,7 +166,6 @@ export function useStripeConnectGate() {
 
       if (data.ready) {
         await queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-        toastRef.current({ title: "Stripe is ready! You can now accept card payments." });
         return;
       }
 
