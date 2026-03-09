@@ -245,8 +245,9 @@ export async function executeSubcontractPayout(params: {
   paymentAmountCents: number;
   ownerCompanyId: number;
   source: string;
+  chargeId?: string | null;
 }): Promise<{ status: string; auditId?: number; transferId?: string; reason?: string } | null> {
-  const { jobId, invoiceId, paymentId, paymentIntentId, paymentAmountCents, ownerCompanyId, source } = params;
+  const { jobId, invoiceId, paymentId, paymentIntentId, paymentAmountCents, ownerCompanyId, source, chargeId: providedChargeId } = params;
   const transferEnabled = isTransferEnabled();
 
   const referral = await getAcceptedReferralForJob(jobId);
@@ -449,8 +450,21 @@ export async function executeSubcontractPayout(params: {
 
   console.log(`[SubPayExec] auditStatus=processing auditId=${audit.id}, executing transfer...`);
 
+  let resolvedChargeId: string | null = providedChargeId || null;
+  if (!resolvedChargeId && paymentIntentId) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (pi.latest_charge) {
+        resolvedChargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id;
+      }
+    } catch (e: any) {
+      console.warn(`[SubPayExec] Could not resolve chargeId from PI ${paymentIntentId}: ${e.message}`);
+    }
+  }
+  console.log(`[SubPayExec] resolvedChargeId=${resolvedChargeId} (source_transaction for transfer)`);
+
   try {
-    const transfer = await stripe.transfers.create({
+    const transferParams: any = {
       amount: split.contractorPayoutCents,
       currency: "usd",
       destination: connectedAccountId,
@@ -464,8 +478,14 @@ export async function executeSubcontractPayout(params: {
         paymentIntentId: paymentIntentId || "",
         auditId: String(audit.id),
       },
-      source_transaction: paymentIntentId ? undefined : undefined,
-    }, {
+    };
+    if (resolvedChargeId) {
+      transferParams.source_transaction = resolvedChargeId;
+    }
+
+    console.log(`[SubPayExec] transfer_create: amount=${transferParams.amount} destination=${transferParams.destination} source_transaction=${resolvedChargeId || "NONE"}`);
+
+    const transfer = await stripe.transfers.create(transferParams, {
       idempotencyKey: `transfer_${idempotencyKey}`,
     });
 

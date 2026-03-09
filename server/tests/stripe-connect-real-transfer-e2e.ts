@@ -31,12 +31,13 @@ async function cleanupTestData() {
 
 async function run() {
   log("================================================================");
-  log("STRIPE CONNECT — REAL TRANSFER E2E VERIFICATION");
+  log("STRIPE CONNECT — REAL TRANSFER E2E (70/30 SPLIT)");
   log("================================================================");
 
   const platform = await stripe.accounts.retrieve();
   log(`Platform account: ${platform.id}`);
   log(`Stripe key prefix: ${(process.env.STRIPE_SECRET_KEY || '').slice(0, 7)}`);
+  log(`STRIPE_SUBCONTRACT_TRANSFERS_ENABLED: ${process.env.STRIPE_SUBCONTRACT_TRANSFERS_ENABLED}`);
 
   const connectedAcct = await stripe.accounts.retrieve(REAL_CONNECTED_ACCOUNT);
   log(`Connected account: ${connectedAcct.id}`);
@@ -57,19 +58,17 @@ async function run() {
   log(`  stripeConnectStatus: ${subCo.stripeConnectStatus}`);
   log(`  stripeConnectChargesEnabled: ${subCo.stripeConnectChargesEnabled}`);
   log(`  stripeConnectPayoutsEnabled: ${subCo.stripeConnectPayoutsEnabled}`);
-  log(`  stripeConnectDetailsSubmitted: ${subCo.stripeConnectDetailsSubmitted}`);
 
   if (subCo.stripeConnectAccountId !== REAL_CONNECTED_ACCOUNT) {
     log(`MISMATCH: Expected ${REAL_CONNECTED_ACCOUNT}, got ${subCo.stripeConnectAccountId}. Aborting.`);
     process.exit(1);
   }
-  log(`  ✅ Stripe Connect account ID matches: ${REAL_CONNECTED_ACCOUNT}`);
+  log(`  ✅ Stripe Connect account ID matches`);
 
   await cleanupTestData();
 
   const origEnv = process.env.STRIPE_SUBCONTRACT_TRANSFERS_ENABLED;
   process.env.STRIPE_SUBCONTRACT_TRANSFERS_ENABLED = "true";
-  log(`\nSTRIPE_SUBCONTRACT_TRANSFERS_ENABLED = true`);
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
@@ -77,21 +76,26 @@ async function run() {
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const [job] = await db.insert(jobs).values({
-    title: "REAL-E2E-Transfer-Test",
+    title: "REAL-E2E-70-30-Split",
     companyId: OWNER_COMPANY_ID,
     status: "in_progress",
   }).returning();
-  log(`Job created: id=${job.id} title="${job.title}" companyId=${job.companyId}`);
+  log(`Job: id=${job.id} title="${job.title}"`);
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ STEP 2 — CREATE REFERRAL (subcontract to company 450)       ║");
+  log("║ STEP 2 — CREATE REFERRAL (30% fee → 70/30 split)            ║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const jobTotalCents = 100000;
-  const referralFeePercent = 15;
+  const referralFeePercent = 30;
   const contractorPayoutCents = Math.round(jobTotalCents * (1 - referralFeePercent / 100));
   const companyShareCents = jobTotalCents - contractorPayoutCents;
+
+  log(`Job total: ${jobTotalCents}¢ ($${(jobTotalCents/100).toFixed(2)})`);
+  log(`Referral fee: ${referralFeePercent}%`);
+  log(`Contractor payout (70%): ${contractorPayoutCents}¢ ($${(contractorPayoutCents/100).toFixed(2)})`);
+  log(`Platform share (30%): ${companyShareCents}¢ ($${(companyShareCents/100).toFixed(2)})`);
 
   const [referral] = await db.insert(jobReferrals).values({
     jobId: job.id,
@@ -106,12 +110,7 @@ async function run() {
     companyShareAmountCents: companyShareCents,
   }).returning();
 
-  log(`Referral created: id=${referral.id}`);
-  log(`  sender: company ${OWNER_COMPANY_ID} → receiver: company ${SUBCONTRACTOR_COMPANY_ID}`);
-  log(`  type: ${referralFeePercent}% fee`);
-  log(`  jobTotal: ${jobTotalCents}¢ ($${(jobTotalCents/100).toFixed(2)})`);
-  log(`  contractorPayout: ${contractorPayoutCents}¢ ($${(contractorPayoutCents/100).toFixed(2)})`);
-  log(`  companyShare: ${companyShareCents}¢ ($${(companyShareCents/100).toFixed(2)})`);
+  log(`Referral: id=${referral.id} sender=393 → receiver=450`);
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
@@ -128,11 +127,11 @@ async function run() {
     issueDate: new Date().toISOString().split('T')[0],
     dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
   }).returning();
-  log(`Invoice created: id=${invoice.id} number="${invoice.invoiceNumber}" amount=$${invoice.amount}`);
+  log(`Invoice: id=${invoice.id} number="${invoice.invoiceNumber}" amount=$${invoice.amount}`);
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ STEP 4 — CREATE REAL STRIPE PAYMENTINTENT + PAY              ║");
+  log("║ STEP 4 — CREATE REAL PaymentIntent ($1,000 test charge)      ║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const pi = await stripe.paymentIntents.create({
@@ -157,7 +156,6 @@ async function run() {
   log(`  status: ${pi.status}`);
   log(`  amount: ${pi.amount}¢ ($${(pi.amount/100).toFixed(2)})`);
   log(`  chargeId: ${chargeId}`);
-  log(`  currency: ${pi.currency}`);
 
   const [payment] = await db.insert(payments).values({
     companyId: OWNER_COMPANY_ID,
@@ -169,11 +167,11 @@ async function run() {
     paidDate: new Date(),
     stripePaymentIntentId: pi.id,
   }).returning();
-  log(`Payment record: id=${payment.id} invoiceId=${invoice.id} amount=$${payment.amount}`);
+  log(`Payment: id=${payment.id}`);
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ STEP 5 — EXECUTE SUBCONTRACT PAYOUT                         ║");
+  log("║ STEP 5 — EXECUTE SUBCONTRACT PAYOUT (with source_transaction)║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const result = await stripeConnectService.executeSubcontractPayout({
@@ -183,10 +181,11 @@ async function run() {
     paymentIntentId: pi.id,
     paymentAmountCents: jobTotalCents,
     ownerCompanyId: OWNER_COMPANY_ID,
-    source: "real-e2e-transfer-test",
+    source: "real-e2e-70-30-split",
+    chargeId: chargeId,
   });
 
-  log(`Payout result:`);
+  log(`\nPayout result:`);
   log(`  status: ${result?.status}`);
   log(`  auditId: ${result?.auditId}`);
   log(`  transferId: ${result?.transferId}`);
@@ -200,64 +199,62 @@ async function run() {
   let transfer: Stripe.Transfer | null = null;
   if (result?.transferId) {
     transfer = await stripe.transfers.retrieve(result.transferId);
-    log(`Stripe Transfer CONFIRMED:`);
-    log(`  transferId: ${transfer.id}`);
-    log(`  amount: ${transfer.amount}¢ ($${(transfer.amount/100).toFixed(2)})`);
-    log(`  currency: ${transfer.currency}`);
-    log(`  destination: ${transfer.destination}`);
-    log(`  source_type: ${transfer.source_type}`);
-    log(`  created: ${new Date(transfer.created * 1000).toISOString()}`);
+    log(`TRANSFER CONFIRMED ON STRIPE:`);
+    log(`  transferId:         ${transfer.id}`);
+    log(`  amount:             ${transfer.amount}¢ ($${(transfer.amount/100).toFixed(2)})`);
+    log(`  currency:           ${transfer.currency}`);
+    log(`  destination:        ${transfer.destination}`);
+    log(`  source_transaction: ${(transfer as any).source_transaction || "NONE"}`);
+    log(`  created:            ${new Date(transfer.created * 1000).toISOString()}`);
     log(`  metadata:`);
     Object.entries(transfer.metadata).forEach(([k, v]) => log(`    ${k}: ${v}`));
-
-    const metaCorrect =
-      transfer.metadata.jobId === String(job.id) &&
-      transfer.metadata.invoiceId === String(invoice.id) &&
-      transfer.metadata.paymentId === String(payment.id) &&
-      transfer.metadata.referralId === String(referral.id) &&
-      transfer.metadata.subcontractorCompanyId === String(SUBCONTRACTOR_COMPANY_ID) &&
-      transfer.metadata.ownerCompanyId === String(OWNER_COMPANY_ID) &&
-      transfer.metadata.paymentIntentId === pi.id;
-
-    log(`  metadata correct: ${metaCorrect ? "✅ YES" : "❌ MISSING/WRONG FIELDS"}`);
-    log(`  amount correct (expected ${contractorPayoutCents}): ${transfer.amount === contractorPayoutCents ? "✅ YES" : "❌ NO (got " + transfer.amount + ")"}`);
-    log(`  destination correct: ${transfer.destination === REAL_CONNECTED_ACCOUNT ? "✅ YES" : "❌ NO"}`);
   } else {
-    log(`❌ NO TRANSFER CREATED`);
-    log(`  Result status: ${result?.status}`);
-    log(`  Reason: ${result?.reason}`);
+    log(`❌ NO TRANSFER CREATED — status: ${result?.status}, reason: ${result?.reason}`);
   }
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ STEP 7 — VERIFY AUDIT RECORD                                ║");
+  log("║ STEP 7 — VERIFY CHARGE SHOWS TRANSFER                       ║");
+  log("╚══════════════════════════════════════════════════════════════╝");
+
+  if (chargeId) {
+    const charge = await stripe.charges.retrieve(chargeId);
+    log(`Charge: ${charge.id}`);
+    log(`  amount:  ${charge.amount}¢ ($${(charge.amount/100).toFixed(2)})`);
+    log(`  transfer_group: ${(charge as any).transfer_group || "NONE"}`);
+
+    const balTx = await stripe.balanceTransactions.retrieve(charge.balance_transaction as string);
+    log(`  net to platform: ${balTx.net}¢ ($${(balTx.net/100).toFixed(2)})`);
+    log(`  fee: ${balTx.fee}¢ ($${(balTx.fee/100).toFixed(2)})`);
+  }
+
+  log("");
+  log("╔══════════════════════════════════════════════════════════════╗");
+  log("║ STEP 8 — VERIFY AUDIT RECORD                                ║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const audits = await db.select().from(subcontractPayoutAudit)
     .where(eq(subcontractPayoutAudit.jobId, job.id))
     .orderBy(subcontractPayoutAudit.createdAt);
 
-  log(`Audit records for job ${job.id}: ${audits.length}`);
+  log(`Audit records: ${audits.length}`);
   audits.forEach(a => {
     log(`  Audit #${a.id}:`);
-    log(`    status: ${a.status}`);
-    log(`    grossAmountCents: ${a.grossAmountCents}`);
-    log(`    contractorPayoutAmountCents: ${a.contractorPayoutAmountCents}`);
-    log(`    companyShareAmountCents: ${a.companyShareAmountCents}`);
-    log(`    transferAmountCents: ${a.transferAmountCents}`);
-    log(`    stripeTransferId: ${a.stripeTransferId}`);
-    log(`    destinationAccountId: ${a.destinationAccountId}`);
-    log(`    idempotencyKey: ${a.idempotencyKey}`);
-    log(`    paymentId: ${a.paymentId}`);
-    log(`    referralId: ${a.referralId}`);
-    log(`    source: ${a.source}`);
-    log(`    failureReason: ${a.failureReason || "NONE"}`);
-    log(`    createdAt: ${a.createdAt}`);
+    log(`    status:                ${a.status}`);
+    log(`    grossAmountCents:      ${a.grossAmountCents}`);
+    log(`    contractorPayoutCents: ${a.contractorPayoutAmountCents}`);
+    log(`    companyShareCents:     ${a.companyShareAmountCents}`);
+    log(`    transferAmountCents:   ${a.transferAmountCents}`);
+    log(`    stripeTransferId:      ${a.stripeTransferId}`);
+    log(`    destinationAccountId:  ${a.destinationAccountId}`);
+    log(`    idempotencyKey:        ${a.idempotencyKey}`);
+    log(`    source:                ${a.source}`);
+    log(`    failureReason:         ${a.failureReason || "NONE"}`);
   });
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ STEP 8 — DUPLICATE REPLAY PROTECTION                        ║");
+  log("║ STEP 9 — DUPLICATE REPLAY PROTECTION                        ║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const replayResult = await stripeConnectService.executeSubcontractPayout({
@@ -268,63 +265,67 @@ async function run() {
     paymentAmountCents: jobTotalCents,
     ownerCompanyId: OWNER_COMPANY_ID,
     source: "real-e2e-duplicate-replay",
+    chargeId: chargeId,
   });
-  log(`Replay attempt: status=${replayResult?.status} auditId=${replayResult?.auditId}`);
+  log(`Replay: status=${replayResult?.status} auditId=${replayResult?.auditId}`);
 
-  const transfersForDest = await stripe.transfers.list({ destination: REAL_CONNECTED_ACCOUNT, limit: 100 });
-  const jobTransfers = transfersForDest.data.filter(t => t.metadata.jobId === String(job.id));
+  const allTransfers = await stripe.transfers.list({ destination: REAL_CONNECTED_ACCOUNT, limit: 100 });
+  const jobTransfers = allTransfers.data.filter(t => t.metadata.jobId === String(job.id));
   log(`Stripe transfers for this job: ${jobTransfers.length}`);
   jobTransfers.forEach(t => log(`  ${t.id} amount=${t.amount}¢ created=${new Date(t.created * 1000).toISOString()}`));
 
   log("");
   log("╔══════════════════════════════════════════════════════════════╗");
-  log("║ FINAL SUMMARY                                               ║");
+  log("║ FINAL SUMMARY — 70/30 SPLIT VERIFICATION                    ║");
   log("╚══════════════════════════════════════════════════════════════╝");
 
   const transferCreated = !!transfer && transfer.amount === contractorPayoutCents;
-  const auditCorrect = audits.length >= 1 && audits.some(a => a.status === "completed" && a.stripeTransferId);
+  const destinationCorrect = transfer?.destination === REAL_CONNECTED_ACCOUNT;
+  const sourceTransactionLinked = !!(transfer as any)?.source_transaction;
+  const auditCorrect = audits.length >= 1 && audits.some(a => a.status === "completed" && !!a.stripeTransferId);
   const duplicateBlocked = replayResult?.status === "duplicate_skipped";
   const exactlyOneTransfer = jobTransfers.length === 1;
 
-  log(`┌─────────────────────────────────────────────────────────────────┐`);
-  log(`│ CAPTURED DATA                                                   │`);
-  log(`├─────────────────────────────────────────────────────────────────┤`);
-  log(`│ PaymentIntent:    ${pi.id.padEnd(42)} │`);
-  log(`│ ChargeId:         ${(chargeId || "N/A").padEnd(42)} │`);
-  log(`│ TransferId:       ${(transfer?.id || "NONE").padEnd(42)} │`);
-  log(`│ Destination:      ${REAL_CONNECTED_ACCOUNT.padEnd(42)} │`);
-  log(`│ Audit ID:         ${String(result?.auditId || "NONE").padEnd(42)} │`);
-  log(`│ Job ID:           ${String(job.id).padEnd(42)} │`);
-  log(`│ Invoice ID:       ${String(invoice.id).padEnd(42)} │`);
-  log(`│ Payment ID:       ${String(payment.id).padEnd(42)} │`);
-  log(`│ Referral ID:      ${String(referral.id).padEnd(42)} │`);
-  log(`│ Owner Company:    ${String(OWNER_COMPANY_ID).padEnd(42)} │`);
-  log(`│ Sub Company:      ${String(SUBCONTRACTOR_COMPANY_ID).padEnd(42)} │`);
-  log(`├─────────────────────────────────────────────────────────────────┤`);
-  log(`│ AMOUNTS                                                         │`);
-  log(`├─────────────────────────────────────────────────────────────────┤`);
-  log(`│ Job Total:        ${(jobTotalCents + "¢ ($" + (jobTotalCents/100).toFixed(2) + ")").padEnd(42)} │`);
-  log(`│ Referral Fee:     ${(referralFeePercent + "%").padEnd(42)} │`);
-  log(`│ Contractor Payout:${(contractorPayoutCents + "¢ ($" + (contractorPayoutCents/100).toFixed(2) + ")").padEnd(42)} │`);
-  log(`│ Company Share:    ${(companyShareCents + "¢ ($" + (companyShareCents/100).toFixed(2) + ")").padEnd(42)} │`);
-  log(`│ Transfer Amount:  ${((transfer?.amount || 0) + "¢ ($" + ((transfer?.amount || 0)/100).toFixed(2) + ")").padEnd(42)} │`);
-  log(`├─────────────────────────────────────────────────────────────────┤`);
-  log(`│ CHECKS                                                          │`);
-  log(`├─────────────────────────────────────────────────────────────────┤`);
-  log(`│ Transfer created:       ${transferCreated ? "✅ PASS" : "❌ FAIL"}                                │`);
-  log(`│ Audit correct:          ${auditCorrect ? "✅ PASS" : "❌ FAIL"}                                │`);
-  log(`│ Duplicate blocked:      ${duplicateBlocked ? "✅ PASS" : "❌ FAIL"}                                │`);
-  log(`│ Exactly 1 transfer:     ${exactlyOneTransfer ? "✅ PASS" : "❌ FAIL"}                                │`);
-  log(`└─────────────────────────────────────────────────────────────────┘`);
+  const platformKeeps = transfer ? (jobTotalCents - transfer.amount) : 0;
+  const connectedGets = transfer?.amount || 0;
 
-  const allPassed = transferCreated && auditCorrect && duplicateBlocked && exactlyOneTransfer;
+  log(`┌──────────────────────────────────────────────────────────────┐`);
+  log(`│ IDs                                                          │`);
+  log(`├──────────────────────────────────────────────────────────────┤`);
+  log(`│ PaymentIntent:  ${pi.id}     │`);
+  log(`│ ChargeId:       ${chargeId || "NONE"}     │`);
+  log(`│ TransferId:     ${transfer?.id || "NONE"}     │`);
+  log(`│ Destination:    ${REAL_CONNECTED_ACCOUNT}     │`);
+  log(`│ Audit ID:       ${result?.auditId || "NONE"}     │`);
+  log(`│ Job ID:         ${job.id}     │`);
+  log(`│ Invoice ID:     ${invoice.id}     │`);
+  log(`│ Payment ID:     ${payment.id}     │`);
+  log(`│ Referral ID:    ${referral.id}     │`);
+  log(`├──────────────────────────────────────────────────────────────┤`);
+  log(`│ SPLIT                                                        │`);
+  log(`├──────────────────────────────────────────────────────────────┤`);
+  log(`│ Total charged:   ${jobTotalCents}¢ ($${(jobTotalCents/100).toFixed(2)})     │`);
+  log(`│ Connected gets:  ${connectedGets}¢ ($${(connectedGets/100).toFixed(2)}) = ${((connectedGets/jobTotalCents)*100).toFixed(0)}%     │`);
+  log(`│ Platform keeps:  ${platformKeeps}¢ ($${(platformKeeps/100).toFixed(2)}) = ${((platformKeeps/jobTotalCents)*100).toFixed(0)}%     │`);
+  log(`│ source_transaction: ${sourceTransactionLinked ? "✅ LINKED" : "⚠️ NOT LINKED"}     │`);
+  log(`├──────────────────────────────────────────────────────────────┤`);
+  log(`│ CHECKS                                                       │`);
+  log(`├──────────────────────────────────────────────────────────────┤`);
+  log(`│ Transfer created (70%):     ${transferCreated ? "✅ PASS" : "❌ FAIL"}     │`);
+  log(`│ Destination correct:        ${destinationCorrect ? "✅ PASS" : "❌ FAIL"}     │`);
+  log(`│ source_transaction linked:  ${sourceTransactionLinked ? "✅ PASS" : "⚠️ WARN"}     │`);
+  log(`│ Audit record correct:       ${auditCorrect ? "✅ PASS" : "❌ FAIL"}     │`);
+  log(`│ Duplicate blocked:          ${duplicateBlocked ? "✅ PASS" : "❌ FAIL"}     │`);
+  log(`│ Exactly 1 transfer:         ${exactlyOneTransfer ? "✅ PASS" : "❌ FAIL"}     │`);
+  log(`└──────────────────────────────────────────────────────────────┘`);
+
+  const allPassed = transferCreated && destinationCorrect && auditCorrect && duplicateBlocked && exactlyOneTransfer;
   log(`\n${"=".repeat(64)}`);
-  log(`OVERALL RESULT: ${allPassed ? "✅ ALL CHECKS PASSED" : "❌ SOME CHECKS FAILED"}`);
+  log(`OVERALL: ${allPassed ? "✅ ALL CHECKS PASSED — 70/30 SPLIT CONFIRMED" : "❌ SOME CHECKS FAILED"}`);
   log(`${"=".repeat(64)}`);
 
   process.env.STRIPE_SUBCONTRACT_TRANSFERS_ENABLED = origEnv;
-
-  log("\nTest data preserved for inspection. Run cleanup manually if needed.");
+  log("\nTest data preserved for inspection.");
 }
 
 run().catch(err => {

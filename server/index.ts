@@ -534,6 +534,19 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       }
 
       if (paymentId && effectiveJobId) {
+        let checkoutChargeId: string | null = null;
+        try {
+          if (session.payment_intent) {
+            const piObj = await stripe.paymentIntents.retrieve(session.payment_intent as string);
+            checkoutChargeId = piObj.latest_charge
+              ? (typeof piObj.latest_charge === "string" ? piObj.latest_charge : piObj.latest_charge.id)
+              : null;
+          }
+        } catch (e: any) {
+          console.warn(`[SubPayExec] checkout: Could not resolve charge: ${e.message}`);
+        }
+        console.log(`[SubPayExec] checkout: invoiceId=${invoiceId} jobId=${effectiveJobId} paymentId=${paymentId} pi=${session.payment_intent} chargeId=${checkoutChargeId}`);
+
         stripeConnectService.executeSubcontractPayout({
           jobId: effectiveJobId,
           invoiceId: parseInt(invoiceId),
@@ -542,6 +555,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           paymentAmountCents: amountCents,
           ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
           source: "webhook-checkout",
+          chargeId: checkoutChargeId,
         }).catch(err => console.error('[SubPayExec] webhook-checkout error:', err?.message));
       }
     } catch (error: any) {
@@ -641,6 +655,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
             console.error('[receipt] webhook PI upgrade error:', err?.message));
 
           if (effectiveJobId) {
+            const upgradeChargeId = paymentIntent.latest_charge
+              ? (typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : paymentIntent.latest_charge.id)
+              : null;
+            console.log(`[SubPayExec] pi-upgrade: invoiceId=${invoiceId} jobId=${effectiveJobId} paymentId=${existingPaymentCheck.id} pi=${paymentIntent.id} chargeId=${upgradeChargeId}`);
+
             stripeConnectService.executeSubcontractPayout({
               jobId: effectiveJobId,
               invoiceId: parseInt(invoiceId),
@@ -649,6 +668,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
               paymentAmountCents: existingPaymentCheck.amountCents || Math.round(parseFloat(existingPaymentCheck.amount) * 100),
               ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
               source: "webhook-pi-upgrade",
+              chargeId: upgradeChargeId,
             }).catch(err => console.error('[SubPayExec] webhook-pi-upgrade error:', err?.message));
           }
         }
@@ -727,6 +747,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         console.error('[receipt] webhook PI new payment error:', err?.message));
 
       if (effectiveJobId) {
+        const newPiChargeId = paymentIntent.latest_charge
+          ? (typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : paymentIntent.latest_charge.id)
+          : null;
+        console.log(`[SubPayExec] pi-new: invoiceId=${invoiceId} jobId=${effectiveJobId} paymentId=${paymentId} pi=${paymentIntent.id} chargeId=${newPiChargeId}`);
+
         stripeConnectService.executeSubcontractPayout({
           jobId: effectiveJobId,
           invoiceId: parseInt(invoiceId),
@@ -735,6 +760,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           paymentAmountCents: amountCents,
           ownerCompanyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
           source: "webhook-pi-new",
+          chargeId: newPiChargeId,
         }).catch(err => console.error('[SubPayExec] webhook-pi-new error:', err?.message));
       }
     } catch (error: any) {

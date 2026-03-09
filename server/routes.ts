@@ -10487,6 +10487,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (inv?.jobId) {
           await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
 
+          let confirmChargeId: string | null = null;
+          try {
+            const piObj = await stripe.paymentIntents.retrieve(pi);
+            confirmChargeId = piObj.latest_charge
+              ? (typeof piObj.latest_charge === "string" ? piObj.latest_charge : piObj.latest_charge.id)
+              : null;
+          } catch (e: any) {
+            console.warn(`[SubPayExec] stripe-confirm: Could not resolve charge: ${e.message}`);
+          }
+          console.log(`[SubPayExec] stripe-confirm: invoiceId=${invoiceId} jobId=${inv.jobId} paymentId=${matchedPayment.id} pi=${pi} chargeId=${confirmChargeId}`);
+
           stripeConnectService.executeSubcontractPayout({
             jobId: inv.jobId,
             invoiceId,
@@ -10495,6 +10506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paymentAmountCents: matchedPayment.amountCents || Math.round(parseFloat(matchedPayment.amount) * 100),
             ownerCompanyId: inv.companyId,
             source: "stripe-confirm",
+            chargeId: confirmChargeId,
           }).catch(err => console.error('[SubPayExec] stripe-confirm error:', err?.message));
         }
 
