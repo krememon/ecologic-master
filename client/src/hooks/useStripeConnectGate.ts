@@ -60,13 +60,16 @@ export function useStripeConnectGate() {
   const queryClient = useQueryClient();
   const [location] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
   const [showGateModal, setShowGateModal] = useState(false);
   const [showOwnerOnlyMessage, setShowOwnerOnlyMessage] = useState(false);
   const onReadyCallbackRef = useRef<(() => void) | null>(null);
   const toastRef = useRef(toast);
   const queryClientRef = useRef(queryClient);
+  const locationRef = useRef(location);
   toastRef.current = toast;
   queryClientRef.current = queryClient;
+  locationRef.current = location;
 
   const role = (user as any)?.role?.toUpperCase?.() || "";
   const isOwner = role === "OWNER";
@@ -145,13 +148,19 @@ export function useStripeConnectGate() {
   }, [isReady, isOwner]);
 
   const startOnboarding = useCallback(async (returnPath?: string) => {
-    if (isProcessing) return;
+    if (isProcessingRef.current) {
+      console.log("[stripe-connect] startOnboarding blocked: already processing");
+      return;
+    }
+    isProcessingRef.current = true;
     setIsProcessing(true);
+    console.log("[stripe-connect] startOnboarding: first tap received, isProcessing set to true");
 
     try {
-      console.log("[stripe-connect] Calling ensure-ready...");
+      const currentPath = returnPath || locationRef.current;
+      console.log("[stripe-connect] Calling ensure-ready, returnPath:", currentPath);
       const res = await apiRequest("POST", "/api/stripe-connect/ensure-ready", {
-        returnPath: returnPath || location,
+        returnPath: currentPath,
       });
       const data = await res.json();
       console.log("[stripe-connect] ensure-ready response:", { ready: data.ready, hasUrl: !!data.onboardingUrl, status: data.status });
@@ -259,9 +268,11 @@ export function useStripeConnectGate() {
         toastRef.current({ title: "Failed to start Stripe setup", variant: "destructive" });
       }
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
+      console.log("[stripe-connect] startOnboarding complete, isProcessing reset to false");
     }
-  }, [isProcessing, location, syncStripeStatus]);
+  }, [syncStripeStatus]);
 
   const dismissGateModal = useCallback(() => {
     setShowGateModal(false);

@@ -1,0 +1,67 @@
+Fix the Stripe gate CTA so the user only has to tap “Connect Stripe” once.
+
+Current bug:
+- On the Stripe gate modal, when I tap “Connect Stripe,” it does not launch the Stripe onboarding link on the first tap
+- I have to tap it a second time for the onboarding link to open
+
+This is bad UX and should be fixed.
+The first tap should immediately start the Stripe onboarding flow.
+
+What to investigate:
+
+1) Inspect the Connect Stripe button handler
+Find out why the first tap is not completing the launch.
+Possible causes:
+- first tap only updates local modal state
+- first tap only fetches status but does not continue
+- async race condition between state update and open-link logic
+- stale closure / disabled/loading state issue
+- first tap triggers ensureReady but open action only happens after rerender
+- native browser launch is happening only on second render/click
+
+2) Ensure single-tap behavior
+Wanted behavior:
+- user taps “Connect Stripe” once
+- app immediately runs the correct ensure-ready logic
+- if no account exists, create it
+- generate onboarding link
+- open onboarding link immediately
+- no second tap required
+
+3) Preserve all existing logic
+Do not break:
+- owner/non-owner behavior
+- not_connected / needs_attention / ready states
+- native flow
+- return flow
+- current Stripe onboarding creation logic
+
+4) Add targeted logs
+Please log:
+- first button tap received
+- status before action
+- ensure-ready response
+- onboarding link returned
+- native/browser launch attempted
+- any early return or guard that prevents the first tap from continuing
+
+5) Check for UI state bugs
+Make sure the first tap is not being swallowed by:
+- loading state not set soon enough
+- modal rerender
+- button disabled style without true disabled logic
+- duplicate event prevention issue
+- state transition that requires a second manual confirmation
+
+6) UX requirement
+The CTA should behave like a normal primary action:
+- one tap
+- spinner/loading if needed
+- Stripe opens
+No double-tap needed.
+
+7) Deliverables
+- fix the double-tap issue
+- ensure single tap launches Stripe onboarding
+- explain root cause
+- list files changed
