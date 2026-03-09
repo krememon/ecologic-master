@@ -62,6 +62,10 @@ export function useStripeConnectGate() {
   const [showGateModal, setShowGateModal] = useState(false);
   const [showOwnerOnlyMessage, setShowOwnerOnlyMessage] = useState(false);
   const onReadyCallbackRef = useRef<(() => void) | null>(null);
+  const toastRef = useRef(toast);
+  const queryClientRef = useRef(queryClient);
+  toastRef.current = toast;
+  queryClientRef.current = queryClient;
 
   const role = (user as any)?.role?.toUpperCase?.() || "";
   const isOwner = role === "OWNER";
@@ -99,28 +103,28 @@ export function useStripeConnectGate() {
       window.history.replaceState({}, "", newUrl);
 
       if (isOwner) {
-        syncAfterReturn();
+        syncStripeStatus();
       }
     }
   }, []);
 
-  const syncAfterReturn = useCallback(async () => {
+  const syncStripeStatus = useCallback(async () => {
     try {
       await apiRequest("POST", "/api/stripe-connect/sync");
-      await queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-      const freshData = await queryClient.fetchQuery<ConnectStatus>({
+      await queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
+      const freshData = await queryClientRef.current.fetchQuery<ConnectStatus>({
         queryKey: ["/api/stripe-connect/status"],
       });
       const freshReadiness = deriveReadiness(freshData);
       if (freshReadiness === "ready") {
-        toast({ title: "Stripe setup complete! You can now accept card payments." });
+        toastRef.current({ title: "Stripe setup complete! You can now accept card payments." });
       } else {
-        toast({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
+        toastRef.current({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
       }
     } catch {
-      toast({ title: "Could not verify Stripe status", variant: "destructive" });
+      toastRef.current({ title: "Could not verify Stripe status", variant: "destructive" });
     }
-  }, [queryClient, toast, isOwner]);
+  }, []);
 
   const ensureReady = useCallback(async (onReady?: () => void): Promise<boolean> => {
     if (isReady) return true;
@@ -144,112 +148,119 @@ export function useStripeConnectGate() {
     setIsProcessing(true);
 
     try {
+      console.log("[stripe-connect] Calling ensure-ready...");
       const res = await apiRequest("POST", "/api/stripe-connect/ensure-ready", {
         returnPath: returnPath || location,
       });
       const data = await res.json();
+      console.log("[stripe-connect] ensure-ready response:", { ready: data.ready, hasUrl: !!data.onboardingUrl, status: data.status });
 
       if (data.ready) {
-        await queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-        toast({ title: "Stripe is ready! You can now accept card payments." });
+        await queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
+        toastRef.current({ title: "Stripe is ready! You can now accept card payments." });
         return;
       }
 
-      if (data.onboardingUrl) {
-        const { isNativePlatform } = await import("@/lib/capacitor");
+      if (!data.onboardingUrl) {
+        console.error("[stripe-connect] No onboarding URL returned");
+        toastRef.current({ title: "Failed to get Stripe setup link", variant: "destructive" });
+        return;
+      }
 
-        if (isNativePlatform()) {
-          await openStripeOnboardingNative(data.onboardingUrl);
-        } else {
-          window.location.href = data.onboardingUrl;
+      let useNative = false;
+      try {
+        const { isNativePlatform } = await import("@/lib/capacitor");
+        useNative = isNativePlatform();
+        console.log("[stripe-connect] Platform check: native =", useNative);
+      } catch (e) {
+        console.log("[stripe-connect] Platform check failed, using web:", e);
+      }
+
+      if (useNative) {
+        try {
+          const { Browser } = await import("@capacitor/browser");
+          console.log("[stripe-connect] Opening in native browser...");
+
+          stopStripePolling();
+          let resolved = false;
+          let pollInFlight = false;
+
+          const onBrowserDone = async () => {
+            if (resolved) return;
+            resolved = true;
+            console.log("[stripe-connect] Browser done, syncing status...");
+            stopStripePolling();
+            await syncStripeStatus();
+          };
+
+          let closedListener: any = null;
+          try {
+            closedListener = await Browser.addListener("browserFinished", () => {
+              console.log("[stripe-connect] browserFinished event");
+              onBrowserDone();
+            });
+          } catch (e) {
+            console.warn("[stripe-connect] Could not add browserFinished listener:", e);
+          }
+
+          await Browser.open({ url: data.onboardingUrl, presentationStyle: "fullscreen" });
+          console.log("[stripe-connect] Browser.open succeeded");
+
+          stripePollInterval = setInterval(async () => {
+            if (pollInFlight || resolved) return;
+            pollInFlight = true;
+            try {
+              await apiRequest("POST", "/api/stripe-connect/sync");
+              const statusRes = await fetch("/api/stripe-connect/status", { credentials: "include" });
+              const pollData: ConnectStatus = await statusRes.json();
+              console.log("[stripe-connect] Poll:", pollData.status, "charges:", pollData.chargesEnabled);
+
+              if (pollData.chargesEnabled && pollData.payoutsEnabled && pollData.detailsSubmitted) {
+                console.log("[stripe-connect] Ready detected via poll!");
+                resolved = true;
+                stopStripePolling();
+                try { await Browser.close(); } catch {}
+                try { closedListener?.remove(); } catch {}
+                await syncStripeStatus();
+              }
+            } catch (e) {
+              console.error("[stripe-connect] Poll error:", e);
+            } finally {
+              pollInFlight = false;
+            }
+          }, 3000);
+
+          stripePollTimeout = setTimeout(() => {
+            stopStripePolling();
+            if (!resolved) {
+              resolved = true;
+              console.log("[stripe-connect] Poll timeout, syncing final state");
+              try { closedListener?.remove(); } catch {}
+              syncStripeStatus();
+            }
+          }, 5 * 60 * 1000);
+
+          return;
+        } catch (nativeErr) {
+          console.error("[stripe-connect] Native browser failed, falling back to web redirect:", nativeErr);
         }
       }
+
+      console.log("[stripe-connect] Using web redirect");
+      window.location.href = data.onboardingUrl;
+
     } catch (err: any) {
+      console.error("[stripe-connect] startOnboarding error:", err);
       const errData = err?.message ? (() => { try { return JSON.parse(err.message); } catch { return null; } })() : null;
       if (errData?.ownerOnly) {
         setShowOwnerOnlyMessage(true);
       } else {
-        toast({ title: "Failed to start Stripe setup", variant: "destructive" });
+        toastRef.current({ title: "Failed to start Stripe setup", variant: "destructive" });
       }
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, location, queryClient, toast]);
-
-  const openStripeOnboardingNative = useCallback(async (onboardingUrl: string) => {
-    const { Browser } = await import("@capacitor/browser");
-
-    stopStripePolling();
-    let pollInFlight = false;
-    let resolved = false;
-
-    const handleBrowserClosed = async () => {
-      console.log("[stripe-connect] Browser closed by user");
-      stopStripePolling();
-      if (!resolved) {
-        resolved = true;
-        await syncAndUpdateAfterNativeReturn();
-      }
-      try { closedListener.remove(); } catch {}
-    };
-
-    const closedListener = await Browser.addListener("browserFinished", handleBrowserClosed);
-
-    console.log("[stripe-connect] Opening Stripe onboarding in native browser");
-    await Browser.open({ url: onboardingUrl, presentationStyle: "fullscreen" });
-
-    stripePollInterval = setInterval(async () => {
-      if (pollInFlight || resolved) return;
-      pollInFlight = true;
-      try {
-        await apiRequest("POST", "/api/stripe-connect/sync");
-        const statusRes = await fetch("/api/stripe-connect/status", { credentials: "include" });
-        const statusData: ConnectStatus = await statusRes.json();
-        console.log("[stripe-connect] Poll status:", statusData.status, "charges:", statusData.chargesEnabled);
-
-        if (statusData.chargesEnabled && statusData.payoutsEnabled && statusData.detailsSubmitted) {
-          console.log("[stripe-connect] Stripe ready detected via poll");
-          resolved = true;
-          stopStripePolling();
-          try { await Browser.close(); } catch {}
-          try { closedListener.remove(); } catch {}
-          await syncAndUpdateAfterNativeReturn();
-        }
-      } catch (err) {
-        console.error("[stripe-connect] Poll error:", err);
-      } finally {
-        pollInFlight = false;
-      }
-    }, 3000);
-
-    stripePollTimeout = setTimeout(async () => {
-      stopStripePolling();
-      if (!resolved) {
-        resolved = true;
-        console.log("[stripe-connect] Poll timeout (5 min), syncing final state");
-        try { closedListener.remove(); } catch {}
-        await syncAndUpdateAfterNativeReturn();
-      }
-    }, 5 * 60 * 1000);
-  }, []);
-
-  const syncAndUpdateAfterNativeReturn = useCallback(async () => {
-    try {
-      await apiRequest("POST", "/api/stripe-connect/sync");
-      await queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-      const freshData = await queryClient.fetchQuery<ConnectStatus>({
-        queryKey: ["/api/stripe-connect/status"],
-      });
-      const freshReadiness = deriveReadiness(freshData);
-      if (freshReadiness === "ready") {
-        toast({ title: "Stripe setup complete! You can now accept card payments." });
-      } else {
-        toast({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Could not verify Stripe status", variant: "destructive" });
-    }
-  }, [queryClient, toast]);
+  }, [isProcessing, location, syncStripeStatus]);
 
   const dismissGateModal = useCallback(() => {
     setShowGateModal(false);

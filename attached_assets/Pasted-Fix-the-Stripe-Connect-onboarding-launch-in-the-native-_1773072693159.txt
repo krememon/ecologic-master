@@ -1,0 +1,72 @@
+Fix the Stripe Connect onboarding launch in the native app.
+
+Current problem:
+- On the native build, tapping “Connect Stripe” now shows:
+  - “Failed to start Stripe setup”
+- I also want the Stripe setup to happen inside the native app flow, not dump the user into a separate browser/web experience.
+
+Goal:
+When the user taps “Connect Stripe” from the native app:
+1. Stripe onboarding should successfully launch
+2. It should open in a native in-app browser/webview flow appropriate for mobile
+3. When onboarding finishes, it should return back into the native EcoLogic app
+4. The app should sync Stripe status and continue the payment flow cleanly
+
+What to investigate and fix:
+
+1) Find the exact cause of “Failed to start Stripe setup”
+- Inspect the current Connect Stripe button handler in the native flow
+- Check whether onboarding-link generation is succeeding
+- Check whether the returned onboarding URL exists and is valid
+- Check whether native opening logic is failing after the URL is returned
+- Add targeted logs for:
+  - ensure-ready response
+  - onboarding link URL returned
+  - native open attempt
+  - any thrown error
+
+2) Ensure native-safe Stripe launch
+I do NOT want the user dumped into the normal external browser if avoidable.
+Use the correct native approach for mobile:
+- in-app browser / system browser sheet / Capacitor Browser / equivalent native-safe method
+- not a broken window.open flow
+- not a plain web redirect that leaves the app experience
+
+Use the best supported native method already available in this app stack.
+
+3) Return back into the native app after onboarding
+- Stripe completion should return into EcoLogic native app, not browser web app
+- inspect the return_url / refresh_url being generated
+- make them compatible with the native deep-link/app-link flow already used by EcoLogic
+- ensure the native app handles the incoming return and routes correctly
+
+4) End-to-end desired behavior
+Wanted flow:
+- tap Card Payments
+- if not connected, gate modal appears
+- tap Connect Stripe
+- Stripe onboarding opens successfully inside native-safe flow
+- user completes onboarding
+- returns directly into EcoLogic native app
+- app syncs account
+- if ready, continue into payment flow
+
+5) Important constraints
+- do not break web behavior
+- preserve current Stripe status logic
+- preserve owner/non-owner gating
+- preserve working payment flow after Stripe is ready
+- do not create duplicate connected accounts
+- no hacky redirects that strand the user
+
+6) Deliverables
+- fix the launch failure
+- make Stripe onboarding open correctly in native flow
+- make Stripe completion return to the native app
+- preserve browser fallback only if truly needed
+- provide a short summary of:
+  - root cause
+  - files changed
+  - how to test on native
+
+Please prioritize making the native experience work end-to-end.
