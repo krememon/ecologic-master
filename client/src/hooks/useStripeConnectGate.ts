@@ -112,6 +112,45 @@ export function useStripeConnectGate() {
     }
   }, []);
 
+  useEffect(() => {
+    let appStateCleanup: (() => void) | undefined;
+
+    const handleResume = () => {
+      console.log("[stripe-connect] App resumed, refreshing status");
+      queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
+      queryClientRef.current.invalidateQueries({ queryKey: ["/api/company"] });
+      syncStripeStatus();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        handleResume();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    (async () => {
+      try {
+        const { isNativePlatform } = await import("@/lib/capacitor");
+        if (isNativePlatform()) {
+          const { App: CapApp } = await import("@capacitor/app");
+          const listener = await CapApp.addListener("appStateChange", ({ isActive }) => {
+            if (isActive) {
+              handleResume();
+            }
+          });
+          appStateCleanup = () => listener.remove();
+        }
+      } catch {}
+    })();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      appStateCleanup?.();
+    };
+  }, [syncStripeStatus]);
+
   const syncStripeStatus = useCallback(async () => {
     try {
       await apiRequest("POST", "/api/stripe-connect/sync");
