@@ -1,0 +1,62 @@
+Change the Stripe Connect completion behavior so that after the setup/onboarding process finishes, the user is NOT redirected anywhere.
+
+Current problem:
+- After Stripe setup completes, the flow tries to redirect the user somewhere
+- I do not want any redirect after completion
+- I do not want the user dumped into the browser
+- I do not want the user pushed to some other web page
+- I want the experience to stay in the native app flow as cleanly as possible
+
+Desired behavior:
+After the user completes Stripe setup:
+1. do not redirect them to a web page
+2. do not navigate them away to a browser destination
+3. simply close/dismiss the Stripe onboarding flow
+4. return control back to EcoLogic
+5. EcoLogic should then sync Stripe status and update the UI in place
+
+Native UX goal:
+- user taps Connect Stripe
+- Stripe setup opens
+- user completes setup
+- Stripe flow closes
+- user is back in EcoLogic exactly where they were
+- app refreshes Stripe status automatically
+- UI updates to ready state or continues flow
+- no visible redirect page
+
+What to implement:
+
+1) Remove post-completion redirect behavior
+Inspect how the Stripe onboarding link is being launched and completed in native.
+I want completion to behave like a close/return, not like a visible redirect to the web app.
+
+2) Keep status sync
+Once the Stripe flow closes/completes:
+- immediately sync Stripe status
+- refresh any relevant queries/state
+- update the payment/setup UI instantly
+
+3) Preserve refresh/retry handling
+Do not break the ability to recover if the onboarding link expires or needs to be regenerated.
+But on successful completion, no visible redirect target should be shown to the user.
+
+4) Native-first behavior
+This is specifically for the native app build.
+The desired user experience is:
+- finish Stripe
+- back to app
+- no browser landing page
+- no extra redirect screen
+
+5) If a return URL is technically required by Stripe
+Handle it in the cleanest invisible/native-safe way possible.
+The user should not feel redirected.
+The app should just regain control and continue.
+
+6) Deliverables
+- remove the visible post-Stripe redirect behavior
+- keep Stripe completion detection working
+- sync/update EcoLogic immediately after completion
+- explain exactly how completion is now handled
+- list files changed

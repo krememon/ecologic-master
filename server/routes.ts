@@ -17310,6 +17310,11 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  app.get('/api/stripe-connect/native-return', (_req: any, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EcoLogic</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;color:#475569}.c{text-align:center}.s{width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px}@keyframes r{to{transform:rotate(360deg)}}p{font-size:15px}</style></head><body><div class="c"><div class="s"></div><p>Returning to EcoLogic...</p></div></body></html>`);
+  });
+
   app.post('/api/stripe-connect/onboarding-link', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
@@ -17416,14 +17421,24 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.json({ ready: true, status: 'active' });
       }
 
+      const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
+      const isNative = req.body.native === true;
+      const returnPath = req.body.returnPath || '/settings/stripe-connect';
+
+      let returnUrl: string;
+      let refreshUrl: string;
+
+      if (isNative) {
+        returnUrl = `${baseUrl}/api/stripe-connect/native-return`;
+        refreshUrl = `${baseUrl}/api/stripe-connect/native-return`;
+      } else {
+        returnUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=complete`;
+        refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
+      }
+
       if (!company.stripeConnectAccountId) {
         console.log(`[StripeConnect] ensure-ready: creating account for company ${company.id}`);
         const account = await stripeConnectService.createConnectedAccount(company.id, company.name, company.email);
-
-        const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
-        const returnPath = req.body.returnPath || '/settings/stripe-connect';
-        const returnUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=complete`;
-        const refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
 
         console.log(`[StripeConnect] ensure-ready: generating onboarding link for new account ${account.id}`);
         const link = await stripeConnectService.createOnboardingLink(account.id, returnUrl, refreshUrl);
@@ -17441,11 +17456,6 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       } catch (e: any) {
         console.warn(`[StripeConnect] ensure-ready: sync failed for company ${company.id}: ${e.message}`);
       }
-
-      const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
-      const returnPath = req.body.returnPath || '/settings/stripe-connect';
-      const returnUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=complete`;
-      const refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
 
       console.log(`[StripeConnect] ensure-ready: generating onboarding link for incomplete account ${company.stripeConnectAccountId}`);
       const link = await stripeConnectService.createOnboardingLink(company.stripeConnectAccountId, returnUrl, refreshUrl);

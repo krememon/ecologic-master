@@ -196,9 +196,15 @@ export function useStripeConnectGate() {
 
     try {
       const currentPath = returnPath || locationRef.current;
-      console.log("[stripe-connect] Calling ensure-ready, returnPath:", currentPath);
+      let useNative = false;
+      try {
+        const { isNativePlatform } = await import("@/lib/capacitor");
+        useNative = isNativePlatform();
+      } catch {}
+      console.log("[stripe-connect] Calling ensure-ready, returnPath:", currentPath, "native:", useNative);
       const res = await apiRequest("POST", "/api/stripe-connect/ensure-ready", {
         returnPath: currentPath,
+        native: useNative,
       });
       const data = await res.json();
       console.log("[stripe-connect] ensure-ready response:", { ready: data.ready, hasUrl: !!data.onboardingUrl, status: data.status });
@@ -214,15 +220,7 @@ export function useStripeConnectGate() {
         return;
       }
 
-      let useNative = false;
-      try {
-        const { isNativePlatform } = await import("@/lib/capacitor");
-        useNative = isNativePlatform();
-        console.log("[stripe-connect] Platform check: native =", useNative);
-      } catch (e) {
-        console.log("[stripe-connect] Platform check failed, using web:", e);
-      }
-
+      console.log("[stripe-connect] Platform check: native =", useNative);
       if (useNative) {
         try {
           const { Browser } = await import("@capacitor/browser");
