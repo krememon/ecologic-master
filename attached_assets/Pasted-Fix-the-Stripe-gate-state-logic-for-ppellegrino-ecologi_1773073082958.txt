@@ -1,0 +1,64 @@
+Fix the Stripe gate state logic for ppellegrino@ecologicc.com.
+
+Current problem:
+After I reset Stripe Connect and expect a fresh setup flow, the card payments modal is showing:
+- “Your Stripe account needs attention”
+- status: “Needs attention”
+- primary button: “Update Stripe”
+
+This is wrong for this test path.
+For this account/company, I want the modal to behave like a truly fresh setup:
+- show the normal “Set Up Card Payments” state
+- status should be “Not connected”
+- primary CTA should be “Connect Stripe”
+- tapping it should start a brand new Stripe onboarding flow
+
+What likely happened:
+The company/user is still being treated as if there is an old Stripe account or stale Stripe status/requirements attached somewhere, even though I wanted a reset.
+
+What I need you to do:
+
+1) Fully inspect the Stripe state for the company tied to ppellegrino@ecologicc.com
+Check:
+- stripe_connect_account_id on the company
+- any synced Stripe status fields in DB
+- any cached frontend state/query cache
+- any stored “needs_attention / incomplete / restricted” flags
+- whether the app is still referencing an old connected account from Stripe
+
+2) Make this account/company a true clean slate
+For this specific test path:
+- remove any saved stripe_connect_account_id
+- clear any synced Stripe status fields that imply connected/incomplete/restricted/needs_attention
+- clear stale onboarding/requirements state tied to the company if you store any locally
+- ensure the next gate check resolves to NOT_CONNECTED
+
+3) Fix the gate logic
+The modal should only show “Needs attention / Update Stripe” if there is actually an existing connected account that still belongs to this company and truly needs remediation.
+
+If there is no connected account attached, the gate must show:
+- title: Set Up Card Payments
+- description about connecting Stripe
+- status: Not connected
+- button: Connect Stripe
+
+4) Prevent stale status from winning
+If the account/company has been reset, old Stripe remediation states must not continue to display from:
+- stale React Query cache
+- persisted client state
+- old synced DB flags
+- orphaned Stripe account references
+
+5) Confirm the launch path
+After this cleanup, tapping Connect Stripe should:
+- create a brand new test connected account
+- open the setup/onboarding flow
+- not route into Update Stripe / remediation mode
+
+6) Deliverables
+Please:
+- fix the data/state issue causing this false “Needs attention” screen
+- verify the modal shows the correct fresh setup state
+- verify the next tap launches brand new onboarding
+- tell me exactly what stale field/reference caused the bug
+- list the files changed

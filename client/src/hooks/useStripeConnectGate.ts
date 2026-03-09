@@ -41,6 +41,7 @@ function deriveReadiness(data: ConnectStatus | undefined): StripeConnectReadines
   if (!data) return "loading";
   if (!data.hasAccount) return "not_connected";
   if (data.chargesEnabled && data.payoutsEnabled && data.detailsSubmitted) return "ready";
+  if (!data.detailsSubmitted) return "setup_incomplete";
   if (data.status === "restricted" || data.status === "disabled") return "needs_attention";
   return "setup_incomplete";
 }
