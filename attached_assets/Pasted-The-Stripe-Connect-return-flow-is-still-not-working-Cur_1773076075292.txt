@@ -1,0 +1,73 @@
+The Stripe Connect return flow is still not working.
+
+Current result:
+After finishing Stripe onboarding, it still brings me to EcoLogic web instead of reopening the native app.
+
+Important context:
+- The share-link feature already successfully reopens the native app
+- So EcoLogic deep linking already works in general
+- The Stripe return flow is still failing specifically
+
+I need you to debug this precisely, not just patch blindly.
+
+Tasks:
+
+1. Inspect the actual response body of /api/stripe-connect/native-return
+I need to know exactly what HTML/JS is being returned right now.
+Check whether it is:
+- rendering a normal web page
+- redirecting to web first
+- trying to call ecologic://stripe-connect-return
+- doing both
+- falling back too early
+
+2. Compare it directly against the working share-link handoff page
+Find the exact server route/page used by the share-link flow that successfully reopens the native app.
+Compare:
+- returned HTML
+- JS timing
+- window.location usage
+- fallback behavior
+- any user gesture requirement
+- any differences in how the route is opened
+
+3. Verify the Stripe onboarding is opening in the same type of browser context as the share-link flow
+I want to know:
+- is Stripe opening in Capacitor Browser / system browser / Safari view / external browser?
+- is that different from the share-link flow?
+- does that browser context block or ignore custom scheme handoff?
+
+4. Verify whether ecologic://stripe-connect-return is actually being attempted
+Add targeted logs / instrumentation so we can confirm:
+- native-return route was reached
+- handoff JS executed
+- ecologic://stripe-connect-return was attempted
+- appUrlOpen fired or did not fire in native
+- browser close was attempted or not
+
+5. If custom scheme handoff from this page is not reliable, make Stripe use the exact same return pattern as the working share-link flow
+Do not invent a different approach.
+Reuse the already proven native reopening mechanism.
+
+6. If a direct custom-scheme redirect from Stripe return is blocked, build a proper native-safe handoff page
+Requirements:
+- page should do nothing except reopen the app
+- no full EcoLogic web rendering
+- no visible web app landing page
+- fallback text can exist, but only as backup
+- if needed, include a manual “Open in App” button as backup
+
+7. Ensure the native app handles this exact return path
+Confirm App.tsx/native listeners are actually listening for:
+- ecologic://stripe-connect-return
+and not some mismatched path or missing host/path pattern.
+
+8. Tell me the exact root cause
+I want the final answer to include:
+- why share links work
+- why Stripe return still did not
+- what exact file(s) were wrong
+- what exact change fixed it
+
+Do not stop at “it should work now.”
+I need you to verify the full end-to-end handoff path.

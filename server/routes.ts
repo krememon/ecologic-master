@@ -17311,7 +17311,6 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
   });
 
   app.get('/api/stripe-connect/native-return', (_req: any, res) => {
-    const schemeUrl = 'ecologic://stripe-connect-return';
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     res.send(`<!DOCTYPE html>
@@ -17319,9 +17318,24 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Returning to EcoLogic...</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;color:#475569}
+.c{text-align:center;padding:24px}
+.s{width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px}
+@keyframes r{to{transform:rotate(360deg)}}
+p{font-size:15px;margin-bottom:24px}
+.btn{display:inline-block;padding:14px 32px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn:active{background:#2563eb;transform:scale(0.97)}
+</style>
 </head><body>
+<div class="c">
+<div class="s"></div>
+<p>Returning to EcoLogic...</p>
+<button class="btn" onclick="window.close()">Return to App</button>
+</div>
 <script>
-window.location.href = '${schemeUrl}';
+try { window.close(); } catch(e) {}
 </script>
 </body></html>`);
   });

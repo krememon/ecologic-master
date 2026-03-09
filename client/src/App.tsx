@@ -594,12 +594,6 @@ function useCapacitorDeepLinks() {
             return;
           }
 
-          if (coldPath.includes("stripe-connect-return")) {
-            console.log("[deep-link] Cold start Stripe Connect native return, invalidating queries");
-            queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/company"] });
-          }
-
           const coldTarget = extractDeepLinkTarget(coldPath);
           if (coldTarget) {
             const alreadyPending = sessionStorage.getItem("pendingDeepLink");
@@ -623,14 +617,6 @@ function useCapacitorDeepLinks() {
             console.log("[deep-link] Stripe Connect return detected, navigating to:", pathToMatch);
             try { await closeSystemBrowser(); } catch {}
             window.location.href = pathToMatch;
-            return;
-          }
-
-          if (pathToMatch.includes("stripe-connect-return")) {
-            console.log("[deep-link] Stripe Connect native return detected");
-            try { await closeSystemBrowser(); } catch {}
-            queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/company"] });
             return;
           }
 
