@@ -96,6 +96,23 @@ export function useStripeConnectGate() {
     }
   }, [isReady, showGateModal]);
 
+  const syncStripeStatus = useCallback(async () => {
+    try {
+      await apiRequest("POST", "/api/stripe-connect/sync");
+      await queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
+      const freshData = await queryClientRef.current.fetchQuery<ConnectStatus>({
+        queryKey: ["/api/stripe-connect/status"],
+      });
+      const freshReadiness = deriveReadiness(freshData);
+      if (freshReadiness === "ready") {
+      } else {
+        toastRef.current({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
+      }
+    } catch {
+      toastRef.current({ title: "Could not verify Stripe status", variant: "destructive" });
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnStatus = params.get("stripe_connect_return");
@@ -150,23 +167,6 @@ export function useStripeConnectGate() {
       appStateCleanup?.();
     };
   }, [syncStripeStatus]);
-
-  const syncStripeStatus = useCallback(async () => {
-    try {
-      await apiRequest("POST", "/api/stripe-connect/sync");
-      await queryClientRef.current.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-      const freshData = await queryClientRef.current.fetchQuery<ConnectStatus>({
-        queryKey: ["/api/stripe-connect/status"],
-      });
-      const freshReadiness = deriveReadiness(freshData);
-      if (freshReadiness === "ready") {
-      } else {
-        toastRef.current({ title: "Stripe setup is still incomplete. Please finish your Stripe onboarding.", variant: "destructive" });
-      }
-    } catch {
-      toastRef.current({ title: "Could not verify Stripe status", variant: "destructive" });
-    }
-  }, []);
 
   const ensureReady = useCallback(async (onReady?: () => void): Promise<boolean> => {
     if (isReady) return true;
