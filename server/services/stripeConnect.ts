@@ -19,16 +19,13 @@ export async function createConnectedAccount(companyId: number, companyName: str
     type: "express",
     country: "US",
     email: companyEmail || undefined,
-    business_type: "company",
-    company: {
-      name: companyName,
-    },
     capabilities: {
       card_payments: { requested: true },
       transfers: { requested: true },
     },
     metadata: {
       ecologic_company_id: String(companyId),
+      ecologic_company_name: companyName,
     },
   });
 
