@@ -1774,6 +1774,8 @@ export class DatabaseStorage implements IStorage {
         dueDate: invoices.dueDate,
         issueDate: invoices.issueDate,
         pdfUrl: invoices.pdfUrl,
+        paidAt: invoices.paidAt,
+        paidDate: invoices.paidDate,
         clientId: invoices.clientId,
         customerId: invoices.customerId,
         jobId: invoices.jobId,
@@ -1793,6 +1795,7 @@ export class DatabaseStorage implements IStorage {
           title: jobs.title,
           clientName: jobs.clientName,
           customerId: jobs.customerId,
+          companyId: jobs.companyId,
         },
         customer: {
           id: customers.id,

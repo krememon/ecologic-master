@@ -1,0 +1,84 @@
+Fix the Payments page / invoice payment status so it correctly reflects subcontract split payments.
+
+Problem:
+We just confirmed the Stripe backend split logic is working.
+Example:
+- invoice/job total = $300
+- subcontract/referral split = 50%
+- owed amount for that subcontractor-side payment = $150
+- payment goes through successfully for that owed amount
+But on the Payments page / invoice card, it still shows:
+- Unpaid
+- $300.00 owed
+
+That is wrong.
+
+What needs to happen:
+If the subcontractor-side owed amount has been fully paid, the UI should automatically update from:
+- Unpaid
+to
+- Paid
+
+It should not still show the full original invoice total as owed when the relevant payable amount for that flow has already been collected.
+
+What I need you to do:
+
+1) Trace the exact UI data source for the Payments page status
+Find out what currently determines:
+- unpaid / paid / partial
+- amount owed shown on the payment card
+
+2) Make payment status aware of subcontract/referral split logic
+If a payment scenario includes a split, the UI must not blindly use the gross invoice total.
+It needs to reflect the actual collectible/owed amount for that specific payment flow.
+
+For this example:
+- original total = $300
+- split = 50%
+- collectible amount = $150
+- if $150 is paid successfully, the card should show Paid
+
+3) Define proper rules
+Please implement correct payment state logic for at least these cases:
+
+A. Normal invoice with no split
+- owed = full invoice amount
+- paid only when full amount collected
+
+B. Split/subcontract/referral invoice where the payment being collected is only the owed share
+- owed = calculated payable share for that flow
+- paid when that share is fully collected
+
+C. Partial payments if applicable
+- show Partial if less than owed share has been collected
+
+4) Fix displayed amount
+The payment card should show the correct owed amount for the current scenario.
+For the tested split case, it should not still say:
+- $300.00 owed
+if the relevant collectible amount was only $150 and that $150 was paid
+
+5) Auto-refresh after payment
+As soon as the payment succeeds:
+- payment status should update immediately
+- amount owed should update immediately
+- no hard reset
+- no stale unpaid badge
+
+6) Check backend/source-of-truth alignment
+Make sure the Payments page is using the correct source of truth:
+- invoice total
+- collected payment amounts
+- split calculation
+- referral/subcontract payable share
+Do not hardcode UI-only math if backend already knows the right payable amount.
+
+7) Preserve normal invoice behavior
+Do not break standard non-split invoice payments.
+
+8) Deliverables
+Please:
+- fix the payment card status/owed logic
+- explain root cause
+- list files changed
+- tell me exactly how to retest the $300 / 50% split case so the card changes from Unpaid to Paid automatically

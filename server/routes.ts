@@ -52,7 +52,7 @@ import {
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents } from "../shared/schema";
+import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
@@ -11451,6 +11451,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allInvoices = await storage.getInvoices(company.id);
 
+      const referredOutJobIds = new Set<number>();
+      const referralFeeByJob: Record<number, number> = {};
+      const referralPayoutStatusByJob: Record<number, string> = {};
+      try {
+        const outReferrals = await db.select().from(jobReferrals).where(
+          and(eq(jobReferrals.senderCompanyId, company.id), eq(jobReferrals.status, 'accepted'))
+        );
+        for (const ref of outReferrals) {
+          if (ref.jobId) {
+            referredOutJobIds.add(ref.jobId);
+            referralFeeByJob[ref.jobId] = ref.companyShareAmountCents || 0;
+          }
+        }
+        if (referredOutJobIds.size > 0) {
+          const auditRecords = await db.select().from(subcontractPayoutAudit).where(
+            eq(subcontractPayoutAudit.ownerCompanyId, company.id)
+          );
+          for (const a of auditRecords) {
+            if (a.jobId && referredOutJobIds.has(a.jobId)) {
+              if (a.status === 'completed') {
+                referralPayoutStatusByJob[a.jobId] = 'completed';
+              } else if (!referralPayoutStatusByJob[a.jobId]) {
+                referralPayoutStatusByJob[a.jobId] = a.status || 'pending';
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[ledger] Error loading referral data:", e);
+      }
+
       const allCompanyPayments = await db
         .select()
         .from(payments)
@@ -11529,12 +11560,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          const balanceDueCents = Math.max(0, totalCents - paidCents);
+          let balanceDueCents = Math.max(0, totalCents - paidCents);
           const refundedCents = refundTotalsByInvoice[inv.id] || 0;
+
+          const isReferredOut = inv.jobId && referredOutJobIds.has(inv.jobId) &&
+            inv.job?.companyId && inv.job.companyId !== inv.companyId;
 
           const dbStatus = (inv.status || '').toLowerCase();
           let computedStatus: string;
-          if (dbStatus === 'refunded' || dbStatus === 'partially_refunded') {
+          let referralFeeCents = 0;
+
+          if (isReferredOut) {
+            referralFeeCents = referralFeeByJob[inv.jobId!] || 0;
+            const payoutStatus = referralPayoutStatusByJob[inv.jobId!];
+            if (payoutStatus === 'completed') {
+              computedStatus = 'referred_paid';
+              balanceDueCents = 0;
+            } else {
+              computedStatus = 'referred';
+              balanceDueCents = 0;
+            }
+          } else if (dbStatus === 'refunded' || dbStatus === 'partially_refunded') {
             computedStatus = dbStatus;
           } else if (balanceDueCents === 0 && totalCents > 0) {
             computedStatus = 'paid';
@@ -11571,6 +11617,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paidCents,
             balanceDueCents,
             refundedCents,
+            referralFeeCents,
+            isReferredOut: !!isReferredOut,
             computedStatus,
             dueDate: inv.dueDate,
             issueDate: inv.issueDate,

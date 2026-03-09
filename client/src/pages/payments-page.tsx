@@ -28,6 +28,8 @@ type LedgerItem = {
   paidCents: number;
   balanceDueCents: number;
   refundedCents: number;
+  referralFeeCents?: number;
+  isReferredOut?: boolean;
   computedStatus: string;
   dueDate: string | null;
   issueDate: string | null;
@@ -113,7 +115,7 @@ export default function PaymentsPage() {
     if (activeTab !== "all") {
       list = list.filter((item) => {
         if (activeTab === "paid") {
-          return item.computedStatus === "paid" || item.computedStatus === "refunded" || item.computedStatus === "partially_refunded";
+          return item.computedStatus === "paid" || item.computedStatus === "refunded" || item.computedStatus === "partially_refunded" || item.computedStatus === "referred" || item.computedStatus === "referred_paid";
         }
         return item.computedStatus === activeTab;
       });
@@ -137,6 +139,8 @@ export default function PaymentsPage() {
       paid: { color: "bg-green-50 text-green-600 border-green-200/60 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800/40", label: "Paid" },
       partial: { color: "bg-yellow-50 text-yellow-600 border-yellow-200/60 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800/40", label: "Partial" },
       unpaid: { color: "bg-amber-50 text-amber-600 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40", label: "Unpaid" },
+      referred_paid: { color: "bg-blue-50 text-blue-600 border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40", label: "Referred" },
+      referred: { color: "bg-blue-50 text-blue-500 border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40", label: "Referred" },
       refunded: { color: "bg-red-50 text-red-600 border-red-200/60 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/40", label: "Refunded" },
       partially_refunded: { color: "bg-amber-50 text-amber-600 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40", label: "Partial refund" },
     };
@@ -312,14 +316,19 @@ export default function PaymentsPage() {
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
             const status = item.computedStatus;
-            const isOwed = status === "unpaid" || status === "partial";
+            const isReferred = status === "referred" || status === "referred_paid";
+            const isOwed = !isReferred && (status === "unpaid" || status === "partial");
             const hasRefunds = (item.refundedCents || 0) > 0;
 
             let displayAmount: number;
             let amountSuffix = "";
             let amountColor: string;
 
-            if (isOwed) {
+            if (isReferred) {
+              displayAmount = item.referralFeeCents || 0;
+              amountSuffix = displayAmount > 0 ? " fee" : "";
+              amountColor = "text-blue-600 dark:text-blue-400";
+            } else if (isOwed) {
               displayAmount = item.balanceDueCents;
               amountSuffix = " owed";
               amountColor = status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400";
@@ -332,7 +341,8 @@ export default function PaymentsPage() {
             }
 
             let subtitle: string;
-            if (status === "paid") subtitle = `Paid · ${dateStr}`;
+            if (isReferred) subtitle = `Referred · ${dateStr}`;
+            else if (status === "paid") subtitle = `Paid · ${dateStr}`;
             else if (status === "partial") subtitle = `Partial · ${dateStr}`;
             else if (status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;
             else if (status === "partially_refunded") subtitle = `Paid · Refunded ${formatCents(item.refundedCents || 0)} · ${dateStr}`;
