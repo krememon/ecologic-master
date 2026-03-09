@@ -65,8 +65,16 @@ export default function StripeConnectSettings() {
       const res = await apiRequest("POST", "/api/stripe-connect/onboarding-link");
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.url) {
+        try {
+          const { isNativePlatform } = await import("@/lib/capacitor");
+          if (isNativePlatform()) {
+            const { Browser } = await import("@capacitor/browser");
+            await Browser.open({ url: data.url, presentationStyle: "fullscreen" });
+            return;
+          }
+        } catch {}
         window.open(data.url, "_blank");
       }
     },

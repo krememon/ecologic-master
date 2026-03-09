@@ -1,0 +1,75 @@
+Fix the Stripe Connect return flow so that after onboarding/verification is completed, the user is redirected back into the native EcoLogic app instead of landing on the browser/web version.
+
+Current problem:
+- Stripe onboarding itself is working
+- verification/setup completes successfully
+- but when Stripe finishes, it returns to the EcoLogic browser page
+- I do NOT want users dumped into the web app after finishing Stripe setup
+- I want them redirected back into the native app flow
+
+Goal:
+After Stripe Connect onboarding completes, the user should return directly to the native EcoLogic app and land back in the Stripe/card payment flow cleanly.
+
+What to investigate and fix:
+
+1) Return URL / refresh URL setup
+Inspect the Stripe Connect onboarding link generation.
+Check what we are passing for:
+- return_url
+- refresh_url
+
+I suspect these are pointing to the web app URL right now.
+I need the native app flow to be used instead.
+
+2) Implement proper native deep link return
+Use the app’s native deep link / URL scheme / app link so Stripe can send the user back into EcoLogic app after completion.
+
+Examples conceptually:
+- ecologic://stripe-connect/return
+or whatever deep link structure our native app already supports
+
+Do NOT guess blindly — inspect the existing native deep link setup already used in the app and plug Stripe return into that.
+
+3) Native app handling
+Make sure the native app can receive the Stripe return deep link and route correctly.
+When the deep link opens:
+- detect Stripe Connect return
+- sync Stripe status
+- update UI
+- continue into the payment flow or show ready state cleanly
+
+4) Browser fallback
+If native deep linking fails or app is not installed, there should still be a safe fallback.
+But the PRIMARY intended behavior for native builds should be:
+- return directly into app
+not browser
+
+5) Preserve current success logic
+Keep the current working pieces:
+- onboarding success
+- sync status
+- Stripe ready state
+- payment flow handoff
+
+Only fix the return destination behavior.
+
+6) iOS + native build compatibility
+This is especially for the native mobile build.
+Verify the return flow works in the iOS native wrapper, not just web.
+
+7) UX result wanted
+Desired final behavior:
+- user taps Connect Stripe in app
+- Stripe onboarding opens
+- user completes setup
+- Stripe returns directly into EcoLogic native app
+- app syncs status
+- app shows Stripe ready / continues to payment flow
+- no browser landing page confusion
+
+8) Deliverables
+- identify exactly where return_url and refresh_url are currently being built
+- update them to use the correct native deep link/app return flow
+- ensure the native app handles the incoming link and routes properly
+- preserve browser fallback where needed
+- give me a short summary of what changed and how to test it
