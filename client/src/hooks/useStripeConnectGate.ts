@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -33,7 +33,7 @@ const ACTION_LABELS: Record<StripeConnectReadiness, string> = {
   loading: "",
   not_connected: "Connect Stripe",
   setup_incomplete: "Finish setup",
-  ready: "Continue",
+  ready: "Continue to Payment",
   needs_attention: "Update Stripe",
 };
 
@@ -53,6 +53,7 @@ export function useStripeConnectGate() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showGateModal, setShowGateModal] = useState(false);
   const [showOwnerOnlyMessage, setShowOwnerOnlyMessage] = useState(false);
+  const onReadyCallbackRef = useRef<(() => void) | null>(null);
 
   const role = (user as any)?.role?.toUpperCase?.() || "";
   const isOwner = role === "OWNER";
@@ -64,6 +65,20 @@ export function useStripeConnectGate() {
 
   const readiness = statusLoading ? "loading" : deriveReadiness(statusData);
   const isReady = readiness === "ready";
+
+  useEffect(() => {
+    if (isReady && showGateModal) {
+      const timer = setTimeout(() => {
+        setShowGateModal(false);
+        setShowOwnerOnlyMessage(false);
+        if (onReadyCallbackRef.current) {
+          onReadyCallbackRef.current();
+          onReadyCallbackRef.current = null;
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isReady, showGateModal]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -99,8 +114,12 @@ export function useStripeConnectGate() {
     }
   }, [queryClient, toast, isOwner]);
 
-  const ensureReady = useCallback(async (): Promise<boolean> => {
+  const ensureReady = useCallback(async (onReady?: () => void): Promise<boolean> => {
     if (isReady) return true;
+
+    if (onReady) {
+      onReadyCallbackRef.current = onReady;
+    }
 
     if (!isOwner) {
       setShowOwnerOnlyMessage(true);
@@ -124,7 +143,6 @@ export function useStripeConnectGate() {
 
       if (data.ready) {
         await queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-        setShowGateModal(false);
         toast({ title: "Stripe is ready! You can now accept card payments." });
         return;
       }
@@ -147,6 +165,7 @@ export function useStripeConnectGate() {
   const dismissGateModal = useCallback(() => {
     setShowGateModal(false);
     setShowOwnerOnlyMessage(false);
+    onReadyCallbackRef.current = null;
   }, []);
 
   return {

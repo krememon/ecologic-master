@@ -195,7 +195,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const handleMethodSelect = async (method: PaymentMethod) => {
     if (partialEnabled && !isPartialValid) return;
     if (method === 'card') {
-      const ready = await stripeGate.ensureReady();
+      const ready = await stripeGate.ensureReady(() => handleCardPayment());
       if (!ready) return;
       handleCardPayment();
     } else {
@@ -978,6 +978,13 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         open={stripeGate.showGateModal}
         onClose={stripeGate.dismissGateModal}
         returnPath={`/jobs/${jobId}/pay/${invoiceId}`}
+        readiness={stripeGate.readiness}
+        isOwner={stripeGate.isOwner}
+        isProcessing={stripeGate.isProcessing}
+        statusLabel={stripeGate.statusLabel}
+        actionLabel={stripeGate.actionLabel}
+        showOwnerOnlyMessage={stripeGate.showOwnerOnlyMessage}
+        startOnboarding={stripeGate.startOnboarding}
       />
     </div>
   );

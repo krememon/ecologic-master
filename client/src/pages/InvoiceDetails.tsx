@@ -159,11 +159,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const isPartialValid = partialAmountCents >= 50 && partialAmountCents <= balanceRemainingCents;
   const paymentAmountCents = partialEnabled ? partialAmountCents : balanceRemainingCents;
 
-  const handlePayWithCard = async () => {
-    if (isCheckoutLoading) return;
-    if (partialEnabled && !isPartialValid) return;
-    const ready = await stripeGate.ensureReady();
-    if (!ready) return;
+  const startCardPaymentFlow = async () => {
     setIsCheckoutLoading(true);
     try {
       const res = await apiRequest('POST', '/api/payments/stripe/create-intent', {
@@ -184,6 +180,14 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     } finally {
       setIsCheckoutLoading(false);
     }
+  };
+
+  const handlePayWithCard = async () => {
+    if (isCheckoutLoading) return;
+    if (partialEnabled && !isPartialValid) return;
+    const ready = await stripeGate.ensureReady(() => startCardPaymentFlow());
+    if (!ready) return;
+    await startCardPaymentFlow();
   };
 
   const handleCardPaymentSuccess = async () => {
@@ -899,6 +903,13 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         open={stripeGate.showGateModal}
         onClose={stripeGate.dismissGateModal}
         returnPath={`/payments/invoice/${invoiceId}`}
+        readiness={stripeGate.readiness}
+        isOwner={stripeGate.isOwner}
+        isProcessing={stripeGate.isProcessing}
+        statusLabel={stripeGate.statusLabel}
+        actionLabel={stripeGate.actionLabel}
+        showOwnerOnlyMessage={stripeGate.showOwnerOnlyMessage}
+        startOnboarding={stripeGate.startOnboarding}
       />
     </div>
   );

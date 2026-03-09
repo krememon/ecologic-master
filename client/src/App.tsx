@@ -540,7 +540,8 @@ function resolveDeepLinkPath(url: string): string {
     if (url.startsWith("ecologic://")) {
       return "/" + url.replace("ecologic://", "").replace(/^\/+/, "");
     }
-    return new URL(url).pathname;
+    const parsed = new URL(url);
+    return parsed.pathname + parsed.search;
   } catch {
     return "";
   }
@@ -586,6 +587,13 @@ function useCapacitorDeepLinks() {
         if (launchUrl?.url) {
           console.log("[deep-link] getLaunchUrl=", launchUrl.url);
           const coldPath = resolveDeepLinkPath(launchUrl.url);
+
+          if (coldPath.includes("stripe_connect_return=")) {
+            console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
+            window.location.href = coldPath;
+            return;
+          }
+
           const coldTarget = extractDeepLinkTarget(coldPath);
           if (coldTarget) {
             const alreadyPending = sessionStorage.getItem("pendingDeepLink");
@@ -604,6 +612,13 @@ function useCapacitorDeepLinks() {
 
           const pathToMatch = resolveDeepLinkPath(url);
           console.log("[deep-link] pathname=", pathToMatch);
+
+          if (pathToMatch.includes("stripe_connect_return=")) {
+            console.log("[deep-link] Stripe Connect return detected, navigating to:", pathToMatch);
+            try { await closeSystemBrowser(); } catch {}
+            window.location.href = pathToMatch;
+            return;
+          }
 
           const target = extractDeepLinkTarget(pathToMatch);
           if (target) {
