@@ -224,47 +224,58 @@ export function useStripeConnectGate() {
       if (useNative) {
         try {
           const { Browser } = await import("@capacitor/browser");
-          console.log("[stripe-connect] Opening in native browser...");
+          const { getApiBaseUrl } = await import("@/lib/capacitor");
+          const baseUrl = getApiBaseUrl();
+          console.log("[stripe-connect] Opening in native browser (popover), baseUrl:", baseUrl);
 
           stopStripePolling();
           let resolved = false;
           let pollInFlight = false;
 
-          const onBrowserDone = async () => {
-            if (resolved) return;
-            resolved = true;
-            console.log("[stripe-connect] Browser done, syncing status...");
-            stopStripePolling();
-            await syncStripeStatus();
-          };
-
           let closedListener: any = null;
           try {
             closedListener = await Browser.addListener("browserFinished", () => {
-              console.log("[stripe-connect] browserFinished event");
-              onBrowserDone();
+              console.log("[stripe-connect] browserFinished event fired");
+              if (!resolved) {
+                resolved = true;
+                stopStripePolling();
+                try { closedListener?.remove(); } catch {}
+                syncStripeStatus();
+              }
             });
           } catch (e) {
             console.warn("[stripe-connect] Could not add browserFinished listener:", e);
           }
 
-          await Browser.open({ url: data.onboardingUrl, presentationStyle: "fullscreen" });
+          await Browser.open({ url: data.onboardingUrl, presentationStyle: "popover" as any });
           console.log("[stripe-connect] Browser.open succeeded");
 
           stripePollInterval = setInterval(async () => {
             if (pollInFlight || resolved) return;
             pollInFlight = true;
             try {
-              await apiRequest("POST", "/api/stripe-connect/sync");
-              const statusRes = await fetch("/api/stripe-connect/status", { credentials: "include" });
+              await fetch(`${baseUrl}/api/stripe-connect/sync`, {
+                method: "POST",
+                credentials: "include",
+                cache: "no-store",
+              });
+              const statusRes = await fetch(`${baseUrl}/api/stripe-connect/status`, {
+                credentials: "include",
+                cache: "no-store",
+              });
               const pollData: ConnectStatus = await statusRes.json();
-              console.log("[stripe-connect] Poll:", pollData.status, "charges:", pollData.chargesEnabled);
+              console.log("[stripe-connect] Poll:", pollData.status,
+                "details:", pollData.detailsSubmitted,
+                "charges:", pollData.chargesEnabled,
+                "payouts:", pollData.payoutsEnabled);
 
-              if (pollData.chargesEnabled && pollData.payoutsEnabled && pollData.detailsSubmitted) {
-                console.log("[stripe-connect] Ready detected via poll!");
+              if (pollData.detailsSubmitted) {
+                console.log("[stripe-connect] detailsSubmitted=true, closing browser");
                 resolved = true;
                 stopStripePolling();
-                try { await Browser.close(); } catch {}
+                try { await Browser.close(); } catch (e) {
+                  console.warn("[stripe-connect] Browser.close() error:", e);
+                }
                 try { closedListener?.remove(); } catch {}
                 await syncStripeStatus();
               }
@@ -273,15 +284,16 @@ export function useStripeConnectGate() {
             } finally {
               pollInFlight = false;
             }
-          }, 3000);
+          }, 2000);
 
-          stripePollTimeout = setTimeout(() => {
+          stripePollTimeout = setTimeout(async () => {
             stopStripePolling();
             if (!resolved) {
               resolved = true;
-              console.log("[stripe-connect] Poll timeout, syncing final state");
+              console.log("[stripe-connect] Poll timeout (5m), force-closing browser");
+              try { await Browser.close(); } catch {}
               try { closedListener?.remove(); } catch {}
-              syncStripeStatus();
+              await syncStripeStatus();
             }
           }, 5 * 60 * 1000);
 

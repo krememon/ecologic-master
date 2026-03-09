@@ -1,0 +1,68 @@
+The Stripe Connect return is still failing.
+
+Current result:
+After finishing onboarding, I still visibly land on:
+https://eco-logic-pjpell077.replit.app/api/stripe-connect/native-return
+
+So the current window.close() fix is not actually dismissing the browser flow.
+
+I need a precise debug + fix, not another guess.
+
+Tasks:
+
+1. Inspect the exact HTML returned by /api/stripe-connect/native-return
+Show me exactly what this route is returning right now.
+I need to know:
+- is window.close() being called automatically
+- how long after page load it is called
+- whether any other redirects/rendering happen
+- whether fallback UI is being shown immediately
+
+2. Instrument the native return page with visible + server logs
+Add logs so we can confirm:
+- the route was reached
+- the page JS executed
+- the auto-close function ran
+- the manual Return to App button was rendered
+- any errors occurred in the page script
+
+3. Instrument the native app Browser listeners
+Log when these fire:
+- browserPageLoaded
+- browserFinished
+- appStateChange
+- any Stripe polling completion
+- any Browser.close() call
+I want to know whether browserFinished is firing at all.
+
+4. Verify what browser context Stripe is actually running in on device
+Do not assume.
+Confirm whether Browser.open() is using:
+- SFSafariViewController
+- external Safari
+- some other context
+Because if this is not actually a closable in-app browser, window.close() will never solve it.
+
+5. Force-close fallback from native side
+If the return URL is detected by polling or page-load listeners, close the browser from the native app side immediately using Browser.close(), instead of relying only on page JS.
+If possible, when the browser navigates to /api/stripe-connect/native-return, the app should treat that as completion and close the browser itself.
+
+6. Add a temporary visible fallback on the return page
+If auto-close fails, the page should show a large obvious button:
+“Back to EcoLogic”
+That button must trigger the best possible close/handoff behavior.
+Do not leave the user stranded on a blank or dead page.
+
+7. Compare against the exact Capacitor Browser docs/behavior already used elsewhere in app
+If another flow already successfully closes Browser.open(), reuse that exact pattern.
+
+8. Tell me the exact root cause
+I want the final answer to include:
+- whether window.close() fired
+- whether browserFinished fired
+- whether Browser.close() was attempted
+- what browser context was actually used
+- what exact code change fixed it
+
+The goal:
+Finish Stripe onboarding -> browser closes immediately -> user is back in native EcoLogic without seeing the native-return page hanging around.
