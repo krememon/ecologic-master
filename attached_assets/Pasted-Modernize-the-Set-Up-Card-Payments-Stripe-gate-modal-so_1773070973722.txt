@@ -1,0 +1,132 @@
+Modernize the “Set Up Card Payments” Stripe gate modal so it matches the same clean, polished aesthetic as the “Select Customer” modal.
+
+Goal:
+The current Stripe modal works functionally, but visually it feels too basic and does not match the modern EcoLogic modal system. I want it to feel like the Select Customer modal:
+- cleaner
+- softer
+- more premium
+- tighter spacing
+- better hierarchy
+- more native iPhone-style
+- less like a generic popup
+
+Reference style:
+Use the same visual language as the Select Customer modal:
+- rounded white card/modal
+- clean header row
+- stronger title treatment
+- softer secondary text
+- better vertical spacing
+- modern buttons
+- consistent corner radius
+- subtle borders/shadows
+- polished spacing/padding
+- same general “Apple / modern SaaS” vibe
+
+What to change on the Stripe gate modal:
+
+1) Modal shell
+- Match the Select Customer modal proportions and feel
+- Cleaner rounded corners
+- More balanced padding
+- Better shadow / elevation
+- Less empty dead space
+- More polished centered layout
+
+2) Header area
+Current:
+- floating icon
+- close X in the corner
+- title below
+
+Wanted:
+- more intentional modal header
+- title should feel stronger and more polished
+- subtitle beneath it should be softer and easier to scan
+- close button should match the style of the Select Customer modal close button
+
+3) Icon treatment
+- Keep the payment/card icon but make it feel more premium
+- Reduce the oversized “generic circle with icon” feeling
+- Make it fit naturally into the modal design system
+- Can still have a subtle tinted background, but more refined
+
+4) Typography hierarchy
+Improve:
+- title weight / size
+- description text color / spacing / line height
+- status text styling
+
+Wanted copy layout:
+- Primary title: “Set Up Card Payments”
+- Supporting text: “To accept card payments, connect your Stripe account. This only takes a few minutes.”
+- Status should feel like a secondary informational row, not random text floating at the bottom
+
+5) Button styling
+Current buttons feel too heavy/basic.
+
+Wanted:
+- primary CTA styled like modern EcoLogic action buttons
+- secondary button cleaner and less clunky
+- better spacing between buttons
+- more consistent height/radius
+- ensure disabled/loading/ready states all look polished
+
+For example:
+- Not connected → primary button “Connect Stripe”
+- Ready state → primary button “Continue”
+- Secondary button should be subtle and clean
+
+6) Status row
+Current status text at the bottom feels disconnected.
+
+Wanted:
+- integrate status into the modal design more intentionally
+- maybe as a soft status pill/row/card section
+- examples:
+  - Not connected
+  - Checking status
+  - Ready to accept payments
+- make it feel designed, not like leftover debug text
+
+7) Loading / ready / success states
+Make each state visually polished:
+- checking status
+- not connected
+- ready
+- owner vs non-owner states
+
+Important:
+Do not break any Stripe gating logic.
+This is a UI/UX polish task only.
+
+8) Maintain functionality
+Keep all current behavior working:
+- connect stripe
+- continue
+- cancel
+- close
+- ready state
+- owner/non-owner logic
+- existing hook/service logic
+
+9) Mobile-first polish
+This modal is being used heavily in native mobile builds, so optimize for:
+- iPhone-size screens
+- comfortable spacing
+- thumb-friendly buttons
+- no awkward vertical gaps
+- elegant stacking
+
+10) Match EcoLogic design system
+Use the same vibe as other polished EcoLogic modals:
+- customer picker
+- cleaner forms
+- modern sheets/cards
+- professional contractor SaaS feel
+
+Deliverables:
+- redesign StripeConnectGateModal UI to match the Select Customer modal aesthetic
+- preserve all existing functionality and states
+- improve visual hierarchy, spacing, buttons, status presentation, and modal shell
+- give me a short summary of what was changed
