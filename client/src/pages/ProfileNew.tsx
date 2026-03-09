@@ -159,7 +159,7 @@ export default function ProfileNew() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = '/auth/google'}
+                          onClick={() => window.location.href = '/api/auth/google'}
                           className="text-xs ml-2"
                         >
                           Link Google Account

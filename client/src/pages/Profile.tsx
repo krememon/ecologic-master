@@ -259,7 +259,7 @@ export default function Profile() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = '/auth/google'}
+                          onClick={() => window.location.href = '/api/auth/google'}
                           className="text-xs"
                         >
                           Link Google Account
@@ -276,7 +276,7 @@ export default function Profile() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = '/auth/google'}
+                          onClick={() => window.location.href = '/api/auth/google'}
                           className="text-xs"
                         >
                           Link Google Account

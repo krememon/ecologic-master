@@ -16,6 +16,56 @@ import { promisify } from "util";
 import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
 import * as appleSignin from "apple-signin-auth";
 import jwt from "jsonwebtoken";
+import { randomBytes as cryptoRandomBytes } from "crypto";
+
+const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
+const nonceCodeStore = new Map<string, { code: string; expiresAt: number }>();
+
+function generateAuthCode(): string {
+  return cryptoRandomBytes(32).toString("hex");
+}
+
+function storeAuthCode(userId: number): string {
+  const code = generateAuthCode();
+  authCodeStore.set(code, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return code;
+}
+
+function storeAuthCodeForNonce(nonce: string, userId: number): string {
+  const code = storeAuthCode(userId);
+  nonceCodeStore.set(nonce, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+  console.log("[auth-nonce] Stored code for nonce:", nonce.substring(0, 8) + "...");
+  return code;
+}
+
+function consumeAuthCode(code: string): number | null {
+  const entry = authCodeStore.get(code);
+  if (!entry) return null;
+  authCodeStore.delete(code);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
+}
+
+function pollAuthCode(nonce: string): string | null {
+  const entry = nonceCodeStore.get(nonce);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    nonceCodeStore.delete(nonce);
+    return null;
+  }
+  nonceCodeStore.delete(nonce);
+  return entry.code;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, entry] of authCodeStore) {
+    if (now > entry.expiresAt) authCodeStore.delete(code);
+  }
+  for (const [nonce, entry] of nonceCodeStore) {
+    if (now > entry.expiresAt) nonceCodeStore.delete(nonce);
+  }
+}, 60 * 1000);
 
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -248,13 +298,16 @@ export async function setupAuth(app: Express) {
   // Replit OAuth strategy removed
 
   // Setup Google OAuth
+  const googleCallbackUrl = process.env.APP_BASE_URL
+    ? `${process.env.APP_BASE_URL}/api/auth/google/callback`
+    : `http://localhost:5000/api/auth/google/callback`;
+  console.log("[GoogleAuth] callbackURL:", googleCallbackUrl);
+
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}/auth/google/callback`
-        : `http://localhost:5000/auth/google/callback`,
+      callbackURL: googleCallbackUrl,
       passReqToCallback: true
     },
     async (req: any, accessToken: string, refreshToken: string, params: any, profile: any, done: any) => {
@@ -497,78 +550,112 @@ export async function setupAuth(app: Express) {
 
   // Replit authentication removed
 
-  // Google authentication routes
-  app.get("/auth/google", 
-    passport.authenticate("google", { 
+  // Google authentication routes (primary: /api/auth/google, legacy: /auth/google)
+  const googleAuthHandler = (req: any, res: any, next: any) => {
+    const platform = (req.query.platform as string) || "web";
+    const nonce = (req.query.nonce as string) || "";
+    const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
+    console.log("[auth/google] hit, platform:", platform, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "state:", state.substring(0, 12));
+    passport.authenticate("google", {
       scope: ["profile", "email"],
+      state,
       prompt: "select_account",
       accessType: "offline",
-      includeGrantedScopes: true
-    })
-  );
+      includeGrantedScopes: true,
+    })(req, res, next);
+  };
+  app.get("/api/auth/google", googleAuthHandler);
+  app.get("/auth/google", googleAuthHandler);
 
-  app.get("/auth/google/callback", (req, res, next) => {
-    console.log("Google OAuth callback received, processing...");
-    
-    passport.authenticate("google", { 
+  const googleCallbackHandler = (req: any, res: any, next: any) => {
+    const rawState = (req.query.state as string) || "web";
+    console.log("[auth/google/callback] hit, rawState:", rawState);
+
+    passport.authenticate("google", {
       failureRedirect: "/?error=google_auth_failed",
       session: true
-    }, (err, user, info) => {
+    }, async (err: any, user: any, info: any) => {
+      const isIos = rawState === "ios" || rawState.startsWith("ios:");
+      const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
+      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "err:", !!err, "user:", !!user);
+
       if (err) {
         console.error("Google OAuth authentication error:", err);
-        
-        // Handle specific OAuth errors with user-friendly messages
+
+        if (isIos) {
+          return res.redirect("/api/auth/google-complete");
+        }
+
         if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
-          console.log("OAuth token expired or invalid, redirecting to retry");
           return res.redirect("/?error=token_expired&message=Please try signing in again");
         }
-        
         if (err.message?.includes('Failed to create user account')) {
           return res.redirect("/?error=account_creation_failed&message=Unable to create your account. Please try again or contact support");
         }
-        
         if (err.message?.includes('Failed to process user account')) {
           return res.redirect("/?error=account_processing_failed&message=There was an issue processing your account. Please try again");
         }
-        
-        // Generic error with helpful message
         return res.redirect("/?error=auth_error&message=Authentication failed. Please try again or use email/password login");
       }
-      
-      // Handle account linking responses
+
       if (info) {
         console.log("Google OAuth callback with info:", info);
-        
         if (info.error === 'account_inactive') {
-          console.log("Google OAuth: User is deactivated, blocking login");
-          return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated. Please contact your company Owner or Supervisor.')}`);
+          if (isIos) return res.redirect("/api/auth/google-complete");
+          return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
         }
-        
         if (info.error === 'email_mismatch') {
           return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
         }
-        
         if (info.success === 'google_linked') {
           return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
         }
       }
-      
+
       if (!user) {
         console.error("Google OAuth authentication failed, no user returned:", info);
+        if (isIos) return res.redirect("/api/auth/google-complete");
         return res.redirect("/?error=no_user");
       }
-      
-      // Regular login flow for new sessions
-      req.logIn(user, (loginErr) => {
+
+      // iOS native flow: store auth code for polling
+      if (isIos) {
+        const fullUser = await storage.getUser(user.id);
+        if (fullUser?.twoFactorEnabled) {
+          console.log("[google-auth] iOS: 2FA required, skipping");
+          return res.redirect("/api/auth/google-complete");
+        }
+        if (nonce) {
+          storeAuthCodeForNonce(nonce, user.id);
+          console.log("[google-auth] iOS: stored auth code for nonce, redirecting to complete page");
+        } else {
+          const code = storeAuthCode(user.id);
+          console.log("[google-auth] iOS: no nonce, stored auth code:", code.substring(0, 8) + "...");
+        }
+        return res.redirect("/api/auth/google-complete");
+      }
+
+      // Web flow: Check 2FA
+      const fullUser = await storage.getUser(user.id);
+      if (fullUser?.twoFactorEnabled) {
+        (req.session as any).twoFactorPendingUserId = user.id;
+        return req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("[google-auth] Session save error:", saveErr);
+            return res.redirect("/auth?error=session_error");
+          }
+          return res.redirect("/two-factor");
+        });
+      }
+
+      // Regular login
+      req.logIn(user, (loginErr: any) => {
         if (loginErr) {
           console.error("Login error after Google OAuth:", loginErr);
           return res.redirect("/?error=login_failed");
         }
-        
         console.log("Google OAuth login successful, user:", user);
-        
-        // Ensure session is saved before redirect
-        req.session.save((saveErr) => {
+        req.session.save((saveErr: any) => {
           if (saveErr) {
             console.error("Session save error:", saveErr);
             return res.redirect("/?error=session_failed");
@@ -578,13 +665,69 @@ export async function setupAuth(app: Express) {
         });
       });
     })(req, res, next);
+  };
+  app.get("/api/auth/google/callback", googleCallbackHandler);
+  app.get("/auth/google/callback", googleCallbackHandler);
+
+  // Native auth completion page
+  app.get("/api/auth/google-complete", (_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    return res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign In Complete</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;color:#166534}
+.card{text-align:center;padding:2rem}.check{font-size:3rem;margin-bottom:1rem}p{font-size:1.1rem;margin:0.5rem 0}</style></head>
+<body><div class="card"><div class="check">&#10003;</div><p><strong>Sign in complete!</strong></p><p>Return to the EcoLogic app.</p></div></body></html>`);
+  });
+
+  // Native auth polling endpoint
+  app.get("/api/auth/poll-code", (req, res) => {
+    const nonce = req.query.nonce as string;
+    if (!nonce) return res.status(400).json({ status: "error", message: "nonce required" });
+    const code = pollAuthCode(nonce);
+    if (code) {
+      console.log("[poll-code] Code found for nonce:", nonce.substring(0, 8) + "...");
+      return res.json({ status: "ready", code });
+    }
+    return res.json({ status: "pending" });
+  });
+
+  // Native auth code exchange endpoint
+  app.post("/api/auth/exchange-code", async (req: any, res) => {
+    try {
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Auth code is required" });
+      }
+      const userId = consumeAuthCode(code);
+      if (!userId) {
+        return res.status(401).json({ message: "Invalid or expired auth code" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      req.login(user, (loginErr: any) => {
+        if (loginErr) {
+          console.error("[exchange-code] Login error:", loginErr);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        return res.json({
+          user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
+          sessionId: req.sessionID,
+        });
+      });
+    } catch (error) {
+      console.error("[exchange-code] Error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   // Apple Sign-In routes
   if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
     const appleRedirectUri = process.env.APPLE_REDIRECT_URI || 
-      (process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}/api/auth/apple/callback`
+      (process.env.APP_BASE_URL 
+        ? `${process.env.APP_BASE_URL}/api/auth/apple/callback`
         : `http://localhost:5000/api/auth/apple/callback`);
 
     function getApplePrivateKey(): string {
