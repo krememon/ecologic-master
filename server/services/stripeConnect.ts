@@ -129,13 +129,6 @@ export function computeSubcontractSplit(referral: {
   companyShareAmountCents?: number | null;
   jobTotalAtAcceptanceCents?: number | null;
 }, paymentAmountCents: number) {
-  if (referral.contractorPayoutAmountCents != null && referral.companyShareAmountCents != null && referral.jobTotalAtAcceptanceCents) {
-    const ratio = paymentAmountCents / referral.jobTotalAtAcceptanceCents;
-    const contractorPayout = Math.round(referral.contractorPayoutAmountCents * ratio);
-    const companyShare = paymentAmountCents - contractorPayout;
-    return { contractorPayoutCents: contractorPayout, companyShareCents: companyShare };
-  }
-
   if (referral.referralType === "percent") {
     const pct = parseFloat(referral.referralValue) / 100;
     const companyShare = Math.round(paymentAmountCents * pct);
@@ -143,12 +136,20 @@ export function computeSubcontractSplit(referral: {
     return { contractorPayoutCents: contractorPayout, companyShareCents: companyShare };
   }
 
-  const flatFeeCents = Math.round(parseFloat(referral.referralValue) * 100);
-  const scaledFee = Math.min(flatFeeCents, paymentAmountCents);
-  return {
-    contractorPayoutCents: paymentAmountCents - scaledFee,
-    companyShareCents: scaledFee,
-  };
+  if (referral.referralType === "flat") {
+    const flatFeeCents = Math.round(parseFloat(referral.referralValue) * 100);
+    if (referral.jobTotalAtAcceptanceCents && referral.jobTotalAtAcceptanceCents > 0) {
+      const ratio = paymentAmountCents / referral.jobTotalAtAcceptanceCents;
+      const scaledFee = Math.round(Math.min(flatFeeCents, referral.jobTotalAtAcceptanceCents) * ratio);
+      const capped = Math.min(scaledFee, paymentAmountCents);
+      return { contractorPayoutCents: paymentAmountCents - capped, companyShareCents: capped };
+    }
+    const scaledFee = Math.min(flatFeeCents, paymentAmountCents);
+    return { contractorPayoutCents: paymentAmountCents - scaledFee, companyShareCents: scaledFee };
+  }
+
+  const companyShare = Math.round(paymentAmountCents * 0);
+  return { contractorPayoutCents: paymentAmountCents, companyShareCents: companyShare };
 }
 
 export function generateDeterministicIdempotencyKey(paymentId: number, referralId: number): string {
@@ -181,6 +182,19 @@ export async function checkExistingPayout(paymentId: number, referralId: number)
 async function getCumulativePayoutForReferral(referralId: number): Promise<number> {
   const [result] = await db
     .select({ total: sql<number>`COALESCE(SUM(${subcontractPayoutAudit.contractorPayoutAmountCents}), 0)` })
+    .from(subcontractPayoutAudit)
+    .where(
+      and(
+        eq(subcontractPayoutAudit.referralId, referralId),
+        eq(subcontractPayoutAudit.status, "completed"),
+      )
+    );
+  return Number(result?.total || 0);
+}
+
+async function getCumulativeGrossForReferral(referralId: number): Promise<number> {
+  const [result] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${subcontractPayoutAudit.grossAmountCents}), 0)` })
     .from(subcontractPayoutAudit)
     .where(
       and(
@@ -278,6 +292,9 @@ export async function executeSubcontractPayout(params: {
 
   const split = computeSubcontractSplit(referral, paymentAmountCents);
 
+  console.log(`[SubPayExec] splitCalc: paymentAmountCents=${paymentAmountCents} jobTotalAtAcceptance=${referral.jobTotalAtAcceptanceCents || "N/A"} snapshotContractorPayout=${referral.contractorPayoutAmountCents || "N/A"} snapshotCompanyShare=${referral.companyShareAmountCents || "N/A"}`);
+  console.log(`[SubPayExec] splitCalc: computedContractorPayout=${split.contractorPayoutCents} computedCompanyShare=${split.companyShareCents} referralType=${referral.referralType} referralValue=${referral.referralValue}`);
+
   if (split.contractorPayoutCents <= 0) {
     console.log(`[SubPayExec] blockedReason=contractor_payout_zero_or_negative`);
     const audit = await createPayoutAuditRecord({
@@ -329,12 +346,21 @@ export async function executeSubcontractPayout(params: {
     return { status: "blocked", auditId: audit.id, reason: "Payout exceeds collected amount" };
   }
 
-  if (referral.contractorPayoutAmountCents) {
-    const cumulativePaid = await getCumulativePayoutForReferral(referral.id);
-    const maxPayout = referral.contractorPayoutAmountCents;
-    const remaining = maxPayout - cumulativePaid;
+  {
+    const cumulativePaidToContractor = await getCumulativePayoutForReferral(referral.id);
+    const cumulativeGross = await getCumulativeGrossForReferral(referral.id);
+
+    const feePercent = referral.referralType === "percent" ? parseFloat(referral.referralValue) / 100 : 0;
+    const totalGrossIncludingThis = cumulativeGross + paymentAmountCents;
+    const dynamicMaxPayout = referral.referralType === "percent"
+      ? Math.round(totalGrossIncludingThis * (1 - feePercent))
+      : (referral.contractorPayoutAmountCents || split.contractorPayoutCents);
+    const remaining = dynamicMaxPayout - cumulativePaidToContractor;
+
+    console.log(`[SubPayExec] cumulativeCap: cumulativePaidToContractor=${cumulativePaidToContractor} cumulativeGross=${cumulativeGross} totalGrossIncludingThis=${totalGrossIncludingThis} feePercent=${feePercent} dynamicMaxPayout=${dynamicMaxPayout} remaining=${remaining}`);
+
     if (remaining <= 0) {
-      console.log(`[SubPayExec] blockedReason=cumulative_overpayment cumulativePaid=${cumulativePaid} maxPayout=${maxPayout}`);
+      console.log(`[SubPayExec] blockedReason=cumulative_overpayment cumulativePaid=${cumulativePaidToContractor} dynamicMax=${dynamicMaxPayout}`);
       const audit = await createPayoutAuditRecord({
         jobId, invoiceId, paymentId, paymentIntentId, ownerCompanyId,
         subcontractorCompanyId: referral.receiverCompanyId,
@@ -344,7 +370,7 @@ export async function executeSubcontractPayout(params: {
         companyShareAmountCents: paymentAmountCents,
         status: "blocked",
         idempotencyKey: generateDeterministicIdempotencyKey(paymentId, referral.id),
-        failureReason: `Cumulative payout cap reached: paid=${cumulativePaid} max=${maxPayout}`,
+        failureReason: `Cumulative payout cap reached: paid=${cumulativePaidToContractor} dynamicMax=${dynamicMaxPayout}`,
       });
       console.log(`[SubPayExec] finalResult=blocked auditId=${audit.id}`);
       return { status: "blocked", auditId: audit.id, reason: "Cumulative payout cap reached" };

@@ -634,23 +634,17 @@ async function test5_PartialPayment() {
 
     const totalPaidToSub = (audit1?.contractorPayoutAmountCents || 0) + (audit2?.contractorPayoutAmountCents || 0);
     details.cumulativePaidToSubcontractor = totalPaidToSub;
-    details.lockedMaxPayout = 80000;
-    details.overpaymentRisk = totalPaidToSub > 80000;
+    details.expectedTotalPayout = 80000;
 
-    if (!assert(totalPaidToSub <= 80000, `Cumulative payout ${totalPaidToSub} <= max 80000`)) errors.push("Cumulative overpayment!");
-    if (!assert(totalPaidToSub === 80000, `Cumulative payout matches locked max: ${totalPaidToSub} === 80000`)) {
-      log(`Note: cumulative = ${totalPaidToSub}, max = 80000 — difference = ${80000 - totalPaidToSub}`);
+    if (!assert(totalPaidToSub === 80000, `Cumulative payout matches expected: ${totalPaidToSub} === 80000`)) {
+      log(`Note: cumulative = ${totalPaidToSub}, expected = 80000 — difference = ${80000 - totalPaidToSub}`);
+      errors.push("Cumulative payout mismatch");
     }
 
-    log("--- Payment 3: overpayment attempt ($200 extra) ---");
+    log("--- Payment 3: $200 extra beyond original job total ---");
+    log("Business rule: subcontractor gets their % of whatever the customer actually pays");
     const payment3 = await createTestPayment(invoice.id, 20000);
 
-    // For this test, we need to mark the first two as "completed" to trigger cumulative cap
-    // In pending mode they aren't counted. Let's test the cumulative cap logic directly.
-    // Actually, the cumulative check only counts status=completed records.
-    // In disabled mode, status=pending, so the cumulative check won't fire.
-    // This is actually correct behavior - cumulative protection only applies when transfers are enabled.
-    // Let's verify the split computation is still correct even for overpayment scenario:
     const result3 = await stripeConnectService.executeSubcontractPayout({
       jobId: job.id,
       invoiceId: invoice.id,
@@ -658,7 +652,7 @@ async function test5_PartialPayment() {
       paymentIntentId: payment3.stripePaymentIntentId || null,
       paymentAmountCents: 20000,
       ownerCompanyId: OWNER_COMPANY_ID,
-      source: "test5-overpayment",
+      source: "test5-extra-payment",
     });
 
     details.payment3Result = result3;
@@ -670,10 +664,16 @@ async function test5_PartialPayment() {
       companyShareAmountCents: audit3.companyShareAmountCents,
     } : null;
 
-    log(`Payment 3 (overpayment): payout=${audit3?.contractorPayoutAmountCents}, share=${audit3?.companyShareAmountCents}`);
+    const expectedPayout3 = Math.round(20000 * 0.80);
+    const expectedShare3 = 20000 - expectedPayout3;
+    log(`Payment 3: payout=${audit3?.contractorPayoutAmountCents} (expected ${expectedPayout3}), share=${audit3?.companyShareAmountCents} (expected ${expectedShare3})`);
 
-    log("--- Testing cumulative cap with completed records ---");
-    // Manually mark payment1 and payment2 audits as "completed" to test cumulative cap
+    if (!assert(audit3?.contractorPayoutAmountCents === expectedPayout3,
+      `Payment 3 payout is ${expectedPayout3} (got: ${audit3?.contractorPayoutAmountCents})`)) errors.push("P3 payout wrong");
+    if (!assert(audit3?.companyShareAmountCents === expectedShare3,
+      `Payment 3 share is ${expectedShare3} (got: ${audit3?.companyShareAmountCents})`)) errors.push("P3 share wrong");
+
+    log("--- Testing duplicate replay protection ---");
     if (audit1) {
       await db.update(subcontractPayoutAudit).set({ status: "completed" }).where(eq(subcontractPayoutAudit.id, audit1.id));
     }
@@ -681,32 +681,30 @@ async function test5_PartialPayment() {
       await db.update(subcontractPayoutAudit).set({ status: "completed" }).where(eq(subcontractPayoutAudit.id, audit2.id));
     }
 
-    const payment4 = await createTestPayment(invoice.id, 20000);
+    const payment4 = await createTestPayment(invoice.id, 50000);
     const result4 = await stripeConnectService.executeSubcontractPayout({
       jobId: job.id,
       invoiceId: invoice.id,
       paymentId: payment4.id,
       paymentIntentId: payment4.stripePaymentIntentId || null,
-      paymentAmountCents: 20000,
+      paymentAmountCents: 50000,
       ownerCompanyId: OWNER_COMPANY_ID,
-      source: "test5-cumulative-cap",
+      source: "test5-additional-payment",
     });
 
-    details.payment4_cumulativeCapResult = result4;
+    details.payment4Result = result4;
     const audits4 = await getAuditRecords(job.id);
     const audit4 = audits4.find(a => a.paymentId === payment4.id && a.status !== "duplicate_skipped");
     details.payment4Audit = audit4 ? {
       status: audit4.status,
       contractorPayoutAmountCents: audit4.contractorPayoutAmountCents,
-      failureReason: audit4.failureReason,
+      companyShareAmountCents: audit4.companyShareAmountCents,
     } : null;
 
-    if (!assert(result4?.status === "blocked", `Cumulative cap blocks excess: status=${result4?.status}`)) {
-      errors.push("Cumulative cap not blocking");
-    }
-    if (audit4?.failureReason) {
-      log(`Cumulative cap reason: ${audit4.failureReason}`);
-    }
+    const expectedPayout4 = Math.round(50000 * 0.80);
+    log(`Payment 4 ($500 additional): payout=${audit4?.contractorPayoutAmountCents} (expected ${expectedPayout4})`);
+    if (!assert(audit4?.contractorPayoutAmountCents === expectedPayout4,
+      `Payment 4 payout is ${expectedPayout4} (got: ${audit4?.contractorPayoutAmountCents})`)) errors.push("P4 payout wrong");
 
   } catch (err: any) {
     errors.push(`Exception: ${err.message}`);
