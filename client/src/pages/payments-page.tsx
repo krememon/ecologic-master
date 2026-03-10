@@ -326,7 +326,7 @@ export default function PaymentsPage() {
 
             if (isReferred) {
               displayAmount = item.referralFeeCents || 0;
-              amountSuffix = displayAmount > 0 ? " fee" : "";
+              amountSuffix = "";
               amountColor = "text-blue-600 dark:text-blue-400";
             } else if (isOwed) {
               displayAmount = item.balanceDueCents;
