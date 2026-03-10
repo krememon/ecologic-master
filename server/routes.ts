@@ -11454,6 +11454,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const referredOutJobIds = new Set<number>();
       const referralFeeByJob: Record<number, number> = {};
       const referralPayoutStatusByJob: Record<number, string> = {};
+      const referredInJobIds = new Set<number>();
+      const referredInShareByJob: Record<number, { contractorPayoutPct: number; referralType: string; referralValue: string }> = {};
       try {
         const outReferrals = await db.select().from(jobReferrals).where(
           and(eq(jobReferrals.senderCompanyId, company.id), eq(jobReferrals.status, 'accepted'))
@@ -11464,7 +11466,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             referralFeeByJob[ref.jobId] = ref.companyShareAmountCents || 0;
           }
         }
-        if (referredOutJobIds.size > 0) {
+
+        const inReferrals = await db.select().from(jobReferrals).where(
+          and(eq(jobReferrals.receiverCompanyId, company.id), eq(jobReferrals.status, 'accepted'))
+        );
+        for (const ref of inReferrals) {
+          if (ref.jobId) {
+            referredInJobIds.add(ref.jobId);
+            referredInShareByJob[ref.jobId] = {
+              referralType: ref.referralType,
+              referralValue: ref.referralValue,
+              contractorPayoutPct: ref.referralType === 'percent' ? parseFloat(ref.referralValue) / 100 : 0,
+            };
+          }
+        }
+
+        const allReferralJobIds = new Set([...referredOutJobIds, ...referredInJobIds]);
+        if (allReferralJobIds.size > 0) {
           const auditRecords = await db.select().from(subcontractPayoutAudit).where(
             eq(subcontractPayoutAudit.ownerCompanyId, company.id)
           );
@@ -11560,11 +11578,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          let balanceDueCents = Math.max(0, totalCents - paidCents);
           const refundedCents = refundTotalsByInvoice[inv.id] || 0;
 
           const isReferredOut = inv.jobId && referredOutJobIds.has(inv.jobId) &&
             inv.job?.companyId && inv.job.companyId !== inv.companyId;
+
+          const isReferredIn = !isReferredOut && inv.jobId && referredInJobIds.has(inv.jobId);
+
+          let displayTotalCents = totalCents;
+          if (isReferredIn) {
+            const shareInfo = referredInShareByJob[inv.jobId!];
+            if (shareInfo && shareInfo.referralType === 'percent') {
+              displayTotalCents = Math.round(totalCents * shareInfo.contractorPayoutPct);
+            }
+          }
+
+          let balanceDueCents = Math.max(0, displayTotalCents - paidCents);
 
           const dbStatus = (inv.status || '').toLowerCase();
           let computedStatus: string;
@@ -11613,12 +11642,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             customerName,
             jobId: inv.jobId,
             jobTitle: inv.job?.title || null,
-            totalCents,
-            paidCents,
+            totalCents: displayTotalCents,
+            paidCents: isReferredIn ? Math.min(paidCents, displayTotalCents) : paidCents,
             balanceDueCents,
             refundedCents,
             referralFeeCents,
             isReferredOut: !!isReferredOut,
+            isReferredIn: !!isReferredIn,
             computedStatus,
             dueDate: inv.dueDate,
             issueDate: inv.issueDate,

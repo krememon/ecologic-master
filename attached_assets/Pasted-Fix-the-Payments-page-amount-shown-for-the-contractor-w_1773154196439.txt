@@ -1,0 +1,55 @@
+Fix the Payments page amount shown for the contractor who RECEIVES the referred/subcontracted job.
+
+Problem:
+We confirmed the backend split logic is working correctly.
+
+Example test:
+- original payment = $4,000
+- split = 70% / 30%
+- receiver/contractor side should show = $2,800
+- sender side should show = $1,200
+
+Current issue:
+- on the receiver/contractor payment card, it is still showing the full $4,000
+- on the sender side, the amount is already showing correctly
+- so the receiver-side Payments UI is using the wrong amount source
+
+What needs to happen:
+For the contractor/company that receives the job and earns the larger split, the Payments page should show THEIR actual share amount, not the gross invoice total.
+
+For this exact case:
+- receiver view should show $2,800
+- sender view should show $1,200
+- not $4,000 on the receiver side
+
+What I need you to do:
+
+1) Trace the exact data source used for payment cards on BOTH sides
+Find out why:
+- sender-side amount is correct
+- receiver-side amount is still gross/full invoice amount
+
+2) Make the receiver-side payment card split-aware
+If the job/payment is a referred/subcontracted split case, the displayed amount must reflect the share that belongs to the logged-in company viewing that card.
+
+3) Define the correct rule
+For referred/subcontracted jobs:
+- if viewer is sender company → show sender share
+- if viewer is receiver company → show receiver share
+- do NOT show gross invoice amount unless this is a normal unsplit payment
+
+4) Preserve normal payment behavior
+Do not break regular non-split invoices/payments.
+
+5) Keep status logic intact
+The Paid badge/status can remain, but the amount on the receiver card must be corrected from $4,000 to $2,800 in this test case.
+
+6) Use backend/source-of-truth data
+Prefer using the actual split/payout amounts already computed/stored by backend rather than duplicating fragile frontend math.
+
+7) Deliverables
+Please:
+- fix the receiver-side payment amount display
+- explain root cause
+- list files changed
+- tell me how to retest the $4,000 / 70-30 case so receiver shows $2,800 and sender shows $1,200
