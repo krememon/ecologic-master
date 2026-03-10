@@ -11839,6 +11839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let isReferredIn = false;
       let isSenderViewing = false;
       let companySharePct = 1;
+      let referralRef: any = null;
       if (invoice.jobId) {
         const { job_referrals } = await import('@shared/schema');
         const { eq, and } = await import('drizzle-orm');
@@ -11850,13 +11851,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         );
         if (refs.length > 0) {
-          const ref = refs[0];
-          if (ref.referralType === 'percent' && ref.referralValue) {
-            const pct = parseFloat(ref.referralValue) / 100;
-            if (ref.receiverCompanyId === company.id) {
+          referralRef = refs[0];
+          if (referralRef.referralType === 'percent' && referralRef.referralValue) {
+            const pct = parseFloat(referralRef.referralValue) / 100;
+            if (referralRef.receiverCompanyId === company.id) {
               isReferredIn = true;
               companySharePct = pct;
-            } else if (ref.senderCompanyId === company.id) {
+            } else if (referralRef.senderCompanyId === company.id) {
               isSenderViewing = true;
               companySharePct = 1 - pct;
             }
@@ -11865,6 +11866,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const isSplitPayment = isReferredIn || isSenderViewing;
+
+      if (isSenderViewing && totalPaymentsCents === 0 && invoice.jobId && referralRef) {
+        const { subcontract_payout_audit } = await import('@shared/schema');
+        const { eq, and } = await import('drizzle-orm');
+        const { db } = await import('./db');
+        const receiverInvoices = await db.select().from(invoices)
+          .where(and(
+            eq(invoices.jobId, invoice.jobId),
+            eq(invoices.companyId, referralRef.receiverCompanyId)
+          ));
+
+        if (receiverInvoices.length > 0) {
+          const recvInv = receiverInvoices[0];
+          const recvPayments = await storage.getPaymentsByInvoiceId(recvInv.id);
+          const countedStatuses = ['succeeded', 'settled', 'paid', 'completed', 'posted'];
+          const countedSet = new Set(countedStatuses);
+
+          for (const p of recvPayments) {
+            const st = (p.status || '').toLowerCase();
+            if (countedSet.has(st)) {
+              totalPaymentsCents += (p as any).amountCents || 0;
+            }
+          }
+
+          const recvEnriched = recvPayments.filter((p: any) => countedSet.has((p.status || '').toLowerCase())).map((p: any) => ({
+            ...p,
+            amountCents: Math.round((p.amountCents || 0) * companySharePct),
+            originalAmountCents: p.amountCents,
+            customerName: customerName || "Unknown Customer",
+            collectedByName: null,
+          }));
+          enrichedPayments.push(...recvEnriched);
+        }
+      }
+
       const displayTotalCents = isSplitPayment ? Math.round(invoiceTotalCents * companySharePct) : invoiceTotalCents;
       const displayPaymentsCents = isSplitPayment ? Math.min(Math.round(totalPaymentsCents * companySharePct), displayTotalCents) : totalPaymentsCents;
       const displayRefundsCents = isSplitPayment ? Math.round(totalRefundsCents * companySharePct) : totalRefundsCents;
@@ -11892,7 +11928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
 
       let canRecordManualPayment = false;
-      if (isReceiverViewing) {
+      if (isSplitPayment) {
         canRecordManualPayment = false;
       } else if (['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR'].includes(userRole)) {
         canRecordManualPayment = true;
@@ -11904,8 +11940,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const shareEnrichedPayments = isSplitPayment
         ? enrichedPayments.map((p: any) => ({
             ...p,
-            amountCents: Math.round((p.amountCents || 0) * companySharePct),
-            originalAmountCents: p.amountCents,
+            amountCents: p.originalAmountCents ? p.amountCents : Math.round((p.amountCents || 0) * companySharePct),
+            originalAmountCents: p.originalAmountCents || p.amountCents,
           }))
         : enrichedPayments;
 
