@@ -1,0 +1,80 @@
+The payment detail screen is still showing the wrong information for referred/subcontracted payments.
+
+Current problem:
+On the detail screen for a referred/subcontracted payment, it is showing the gross invoice as if this company is responsible for or received the full $4,000.
+
+Example from current broken screen:
+- Header amount: $4,000.00
+- Status: Unpaid
+- Invoice total: $4,000.00
+- Balance due: $4,000.00
+- Payment history: empty
+
+That is wrong for this scenario.
+
+Context:
+This payment was part of a subcontract/referral split with a 70% / 30% split.
+So the detail screen must be viewer-company-aware.
+
+Expected behavior:
+If the logged-in company is the receiver/contractor side:
+- show only the receiver share amount (example: $2,800)
+- do NOT show unpaid/balance due as if they owe the full $4,000
+- payment history should reflect the actual split payment(s) relevant to that company view
+
+If the logged-in company is the sender side:
+- show only the sender share amount (example: $1,200)
+
+Important:
+The gross invoice total can still exist somewhere as reference if needed, but it cannot be the primary displayed amount/status/balance as if that company owns the full invoice financially.
+
+What I need fixed:
+
+1) Detail page primary amount
+For referred/subcontracted payments, the large top amount must be the logged-in company’s actual share, not the full invoice gross.
+
+2) Status logic
+The current “Unpaid” badge is wrong if the split payment already happened.
+Make status viewer-aware and split-aware:
+- if that company’s share has been paid, show Paid
+- if partially paid, show Partial
+- do not use the full invoice status blindly
+
+3) Balance due logic
+Balance due should be based on the logged-in company’s share for that payment context, not the gross invoice amount.
+
+4) Payment history section
+It should display the actual split-aware payment history relevant to that payment/detail screen.
+If payment happened, it should not say “No payments recorded yet.”
+
+5) Referred/subcontract context
+This detail page needs to understand:
+- sender company
+- receiver company
+- split percentage
+- logged-in viewer company
+- actual share amount for viewer
+- actual paid amount for viewer
+
+6) Preserve normal invoice behavior
+Do not break standard non-split invoice/payment detail pages.
+
+7) Root cause analysis
+Trace exactly why this page is still using the gross invoice fields instead of the split-aware/company-aware values.
+It looks like the detail screen is still bound to the raw invoice record rather than the resolved payment-share record for the current viewer.
+
+8) Deliverables
+Please fix:
+- top amount
+- status badge
+- balance due
+- payment history
+- split-aware company-specific detail rendering
+
+Then tell me:
+- root cause
+- files changed
+- how to retest this exact $4,000 / 70-30 scenario so:
+  - receiver view shows $2,800 and correct Paid/Partial status
+  - sender view shows $1,200 and correct Paid/Partial status
+  - detail screen no longer shows the full gross $4,000 as if that company owes/received it

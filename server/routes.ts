@@ -11756,6 +11756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let isReceiverViewing = false;
+      let isCrossCompanyAccess = false;
       if (invoice.companyId !== company.id) {
         if (invoice.jobId) {
           const { job_referrals } = await import('@shared/schema');
@@ -11764,15 +11765,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const refs = await db.select().from(job_referrals).where(
             and(
               eq(job_referrals.jobId, invoice.jobId),
-              eq(job_referrals.receiverCompanyId, company.id),
               eq(job_referrals.status, 'accepted')
             )
           );
-          if (refs.length > 0) {
-            isReceiverViewing = true;
+          for (const ref of refs) {
+            if (ref.receiverCompanyId === company.id) {
+              isReceiverViewing = true;
+              isCrossCompanyAccess = true;
+            } else if (ref.senderCompanyId === company.id) {
+              isCrossCompanyAccess = true;
+            }
           }
         }
-        if (!isReceiverViewing) {
+        if (!isCrossCompanyAccess) {
           return res.status(404).json({ message: "Invoice not found" });
         }
       }
@@ -11832,31 +11837,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let isReferredIn = false;
+      let isSenderViewing = false;
       let companySharePct = 1;
-      if (isReceiverViewing && invoice.jobId) {
+      if (invoice.jobId) {
         const { job_referrals } = await import('@shared/schema');
         const { eq, and } = await import('drizzle-orm');
         const { db } = await import('./db');
-        const inboundRefs = await db.select().from(job_referrals).where(
+        const refs = await db.select().from(job_referrals).where(
           and(
             eq(job_referrals.jobId, invoice.jobId),
-            eq(job_referrals.receiverCompanyId, company.id),
             eq(job_referrals.status, 'accepted')
           )
         );
-        if (inboundRefs.length > 0) {
-          const ref = inboundRefs[0];
+        if (refs.length > 0) {
+          const ref = refs[0];
           if (ref.referralType === 'percent' && ref.referralValue) {
-            isReferredIn = true;
-            companySharePct = parseFloat(ref.referralValue) / 100;
+            const pct = parseFloat(ref.referralValue) / 100;
+            if (ref.receiverCompanyId === company.id) {
+              isReferredIn = true;
+              companySharePct = pct;
+            } else if (ref.senderCompanyId === company.id) {
+              isSenderViewing = true;
+              companySharePct = 1 - pct;
+            }
           }
         }
       }
 
-      const displayTotalCents = isReferredIn ? Math.round(invoiceTotalCents * companySharePct) : invoiceTotalCents;
-      const displayPaymentsCents = isReferredIn ? Math.min(Math.round(totalPaymentsCents * companySharePct), displayTotalCents) : totalPaymentsCents;
-      const displayRefundsCents = isReferredIn ? Math.round(totalRefundsCents * companySharePct) : totalRefundsCents;
-      const displayPendingRefundsCents = isReferredIn ? Math.round(pendingRefundsCents * companySharePct) : pendingRefundsCents;
+      const isSplitPayment = isReferredIn || isSenderViewing;
+      const displayTotalCents = isSplitPayment ? Math.round(invoiceTotalCents * companySharePct) : invoiceTotalCents;
+      const displayPaymentsCents = isSplitPayment ? Math.min(Math.round(totalPaymentsCents * companySharePct), displayTotalCents) : totalPaymentsCents;
+      const displayRefundsCents = isSplitPayment ? Math.round(totalRefundsCents * companySharePct) : totalRefundsCents;
+      const displayPendingRefundsCents = isSplitPayment ? Math.round(pendingRefundsCents * companySharePct) : pendingRefundsCents;
 
       const balanceDueCents = Math.max(0, displayTotalCents - displayPaymentsCents);
       const netCollectedCents = Math.max(0, displayPaymentsCents - displayRefundsCents);
@@ -11889,7 +11901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         canRecordManualPayment = assignments.some(a => a.jobId === invoice.jobId);
       }
 
-      const shareEnrichedPayments = isReferredIn
+      const shareEnrichedPayments = isSplitPayment
         ? enrichedPayments.map((p: any) => ({
             ...p,
             amountCents: Math.round((p.amountCents || 0) * companySharePct),
@@ -11901,7 +11913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
         invoiceTotalCents: displayTotalCents,
-        grossInvoiceTotalCents: isReferredIn ? invoiceTotalCents : undefined,
+        grossInvoiceTotalCents: isSplitPayment ? invoiceTotalCents : undefined,
         paidAmountCents: displayPaymentsCents,
         totalPaymentsCents: displayPaymentsCents,
         totalRefundsCents: displayRefundsCents,
@@ -11910,7 +11922,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         balanceDueCents,
         invoiceStatus: computedStatus,
         isReferredIn,
-        companySharePct: isReferredIn ? companySharePct : undefined,
+        isSenderViewing,
+        isSplitPayment,
+        companySharePct: isSplitPayment ? companySharePct : undefined,
         customerName: customerName || "Unknown Customer",
         jobTitle,
         jobId: invoice.jobId,

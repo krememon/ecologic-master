@@ -257,10 +257,12 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   }
 
   const isReferredIn = data.isReferredIn || false;
+  const isSenderViewing = data.isSenderViewing || false;
+  const isSplitPayment = data.isSplitPayment || false;
   const grossInvoiceTotalCents = data.grossInvoiceTotalCents || totalCents;
 
   const statusPill = (() => {
-    if (isReferredIn) {
+    if (isSplitPayment) {
       return <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-semibold px-3 py-1 rounded-full">Referred</span>;
     }
     switch (computedStatus) {
@@ -281,7 +283,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
     ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
     ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
-    ...(isReferredIn
+    ...(isSplitPayment
       ? [
           { icon: DollarSign, label: "Gross Invoice", value: formatCents(grossInvoiceTotalCents), valueColor: "text-slate-400 dark:text-slate-500" },
           { icon: DollarSign, label: "Your Share", value: formatCents(totalCents) },
