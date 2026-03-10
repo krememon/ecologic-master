@@ -11751,8 +11751,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(invoiceId)) return res.status(400).json({ message: "Invalid invoice ID" });
 
       const invoice = await storage.getInvoice(invoiceId);
-      if (!invoice || invoice.companyId !== company.id) {
+      if (!invoice) {
         return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      let isReceiverViewing = false;
+      if (invoice.companyId !== company.id) {
+        if (invoice.jobId) {
+          const { job_referrals } = await import('@shared/schema');
+          const { eq, and } = await import('drizzle-orm');
+          const { db } = await import('./db');
+          const refs = await db.select().from(job_referrals).where(
+            and(
+              eq(job_referrals.jobId, invoice.jobId),
+              eq(job_referrals.receiverCompanyId, company.id),
+              eq(job_referrals.status, 'accepted')
+            )
+          );
+          if (refs.length > 0) {
+            isReceiverViewing = true;
+          }
+        }
+        if (!isReceiverViewing) {
+          return res.status(404).json({ message: "Invoice not found" });
+        }
       }
 
       const invoicePayments = await storage.getPaymentsByInvoiceId(invoiceId);
@@ -11811,7 +11833,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let isReferredIn = false;
       let companySharePct = 1;
-      if (invoice.jobId) {
+      if (isReceiverViewing && invoice.jobId) {
         const { job_referrals } = await import('@shared/schema');
         const { eq, and } = await import('drizzle-orm');
         const { db } = await import('./db');
@@ -11858,7 +11880,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
 
       let canRecordManualPayment = false;
-      if (['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR'].includes(userRole)) {
+      if (isReceiverViewing) {
+        canRecordManualPayment = false;
+      } else if (['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR'].includes(userRole)) {
         canRecordManualPayment = true;
       } else if (userRole === 'TECHNICIAN' && invoice.jobId) {
         const assignments = await storage.getUserJobAssignments(userId);

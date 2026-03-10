@@ -1,0 +1,58 @@
+Fix the payment card information/details display.
+
+Current status:
+The previous split/referred payment fixes are now working, but the last remaining issue is that inside the payment cards, the information is not being displayed properly.
+
+Observed problem:
+When opening/viewing the payment card/details, the screen is not rendering the expected invoice/payment information correctly, and in at least one case it shows:
+- “Invoice not found”
+
+So the remaining problem is with the payment detail/card data loading/rendering.
+
+What I need you to do:
+
+1) Trace the payment card/detail data source
+Inspect how the payment card/detail page loads:
+- invoice id
+- payment id
+- referred/subcontract context
+- sender/receiver company context
+
+2) Fix missing information rendering
+The payment card/details should correctly show the expected payment info instead of being blank/missing or showing “Invoice not found.”
+
+Make sure it correctly loads:
+- customer
+- invoice number
+- job
+- payment status
+- split-aware amount for the logged-in company
+- payment history rows
+- referred/subcontract context where relevant
+
+3) Fix referred/subcontract invoice lookup
+If this page is being opened for a referred/subcontracted payment, and it is trying to load the wrong invoice/company context, fix that.
+It should resolve the correct record for the logged-in viewer and not fail with “Invoice not found” when the payment clearly exists.
+
+4) Preserve split-aware display logic
+Do not undo the prior fixes.
+The detail view should still remain:
+- viewer-company-aware
+- split-aware
+- referred-aware
+
+So if receiver company is viewing:
+- show receiver share
+If sender company is viewing:
+- show sender share
+
+5) Preserve normal payment behavior
+Do not break non-referred / non-split payment details.
+
+6) Deliverables
+Please:
+- fix the payment detail/card information display
+- fix the “Invoice not found” issue where it applies
+- explain root cause
+- list files changed
+- tell me how to retest opening one of the referred payment cards to verify the detail screen loads correctly
