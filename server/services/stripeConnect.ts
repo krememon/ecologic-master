@@ -128,8 +128,8 @@ export function computeSubcontractSplit(referral: {
 }, paymentAmountCents: number) {
   if (referral.referralType === "percent") {
     const pct = parseFloat(referral.referralValue) / 100;
-    const companyShare = Math.round(paymentAmountCents * pct);
-    const contractorPayout = paymentAmountCents - companyShare;
+    const contractorPayout = Math.round(paymentAmountCents * pct);
+    const companyShare = paymentAmountCents - contractorPayout;
     return { contractorPayoutCents: contractorPayout, companyShareCents: companyShare };
   }
 
