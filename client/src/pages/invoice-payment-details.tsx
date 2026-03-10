@@ -256,7 +256,13 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     refundsByPaymentId[pid].push(r);
   }
 
+  const isReferredIn = data.isReferredIn || false;
+  const grossInvoiceTotalCents = data.grossInvoiceTotalCents || totalCents;
+
   const statusPill = (() => {
+    if (isReferredIn) {
+      return <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-semibold px-3 py-1 rounded-full">Referred</span>;
+    }
     switch (computedStatus) {
       case "paid":
         return <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">Paid</span>;
@@ -275,15 +281,20 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
     ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
     ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
-    ...(hasDiscount
+    ...(isReferredIn
       ? [
-          { icon: DollarSign, label: "Subtotal", value: formatCents(originalSubtotalCents) },
-          { icon: DollarSign, label: discountLabel, value: `-${formatCents(discountAmountCents)}`, valueColor: "text-emerald-600 dark:text-emerald-400" },
-          { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+          { icon: DollarSign, label: "Gross Invoice", value: formatCents(grossInvoiceTotalCents), valueColor: "text-slate-400 dark:text-slate-500" },
+          { icon: DollarSign, label: "Your Share", value: formatCents(totalCents) },
         ]
-      : [
-          { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
-        ]
+      : hasDiscount
+        ? [
+            { icon: DollarSign, label: "Subtotal", value: formatCents(originalSubtotalCents) },
+            { icon: DollarSign, label: discountLabel, value: `-${formatCents(discountAmountCents)}`, valueColor: "text-emerald-600 dark:text-emerald-400" },
+            { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+          ]
+        : [
+            { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
+          ]
     ),
     ...(totalPaymentsCents > 0 ? [{ icon: DollarSign, label: "Total Payments", value: formatCents(totalPaymentsCents) }] : []),
     ...(totalRefundsCents > 0 ? [{ icon: RotateCcw, label: "Total Refunded", value: `-${formatCents(totalRefundsCents)}`, valueColor: "text-red-500 dark:text-red-400" }] : []),

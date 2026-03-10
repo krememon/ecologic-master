@@ -30,6 +30,7 @@ type LedgerItem = {
   refundedCents: number;
   referralFeeCents?: number;
   isReferredOut?: boolean;
+  isReferredIn?: boolean;
   computedStatus: string;
   dueDate: string | null;
   issueDate: string | null;
@@ -316,15 +317,17 @@ export default function PaymentsPage() {
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
             const status = item.computedStatus;
-            const isReferred = status === "referred" || status === "referred_paid";
-            const isOwed = !isReferred && (status === "unpaid" || status === "partial");
+            const isReferredOut = status === "referred" || status === "referred_paid";
+            const isReferredIn = !!item.isReferredIn;
+            const isAnyReferred = isReferredOut || isReferredIn;
+            const isOwed = !isReferredOut && (status === "unpaid" || status === "partial");
             const hasRefunds = (item.refundedCents || 0) > 0;
 
             let displayAmount: number;
             let amountSuffix = "";
             let amountColor: string;
 
-            if (isReferred) {
+            if (isReferredOut) {
               displayAmount = item.referralFeeCents || 0;
               amountSuffix = "";
               amountColor = "text-blue-600 dark:text-blue-400";
@@ -340,8 +343,10 @@ export default function PaymentsPage() {
               amountColor = "text-slate-900 dark:text-slate-100";
             }
 
+            const displayBadgeStatus = isReferredIn ? "referred" : status;
+
             let subtitle: string;
-            if (isReferred) subtitle = `Referred · ${dateStr}`;
+            if (isAnyReferred) subtitle = `Referred · ${dateStr}`;
             else if (status === "paid") subtitle = `Paid · ${dateStr}`;
             else if (status === "partial") subtitle = `Partial · ${dateStr}`;
             else if (status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;
@@ -359,7 +364,7 @@ export default function PaymentsPage() {
                     <p className="font-semibold text-[14px] text-slate-900 dark:text-slate-100 leading-snug break-words">
                       {item.customerName}
                     </p>
-                    {getStatusBadge(status)}
+                    {getStatusBadge(displayBadgeStatus)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
                     {subtitle}

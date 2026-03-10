@@ -11566,12 +11566,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (countedSet.has(st)) {
               paidCents += (p.amountCents || 0);
               succeededCount++;
-
-              const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
-              if (paidDate) {
-                if (paidDate >= todayStart && paidDate <= todayEnd) paidTodayCents += (p.amountCents || 0);
-                if (paidDate >= rangeStart) earningsRangeCents += (p.amountCents || 0);
-              }
             }
             if (!lastPayment || (p.paidDate && (!lastPayment.paidDate || new Date(p.paidDate) > new Date(lastPayment.paidDate)))) {
               lastPayment = p;
@@ -11585,11 +11579,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const isReferredIn = !isReferredOut && inv.jobId && referredInJobIds.has(inv.jobId);
 
+          let shareMultiplier = 1;
           let displayTotalCents = totalCents;
           if (isReferredIn) {
             const shareInfo = referredInShareByJob[inv.jobId!];
             if (shareInfo && shareInfo.referralType === 'percent') {
-              displayTotalCents = Math.round(totalCents * shareInfo.contractorPayoutPct);
+              shareMultiplier = shareInfo.contractorPayoutPct;
+              displayTotalCents = Math.round(totalCents * shareMultiplier);
+            }
+          } else if (isReferredOut) {
+            const refInfo = referredOutJobIds.has(inv.jobId!) ? referralFeeByJob[inv.jobId!] : 0;
+            shareMultiplier = 0;
+          }
+
+          for (const p of invPayments) {
+            const st = (p.status || '').toLowerCase();
+            if (countedSet.has(st)) {
+              const pAmt = p.amountCents || 0;
+              const shareAmt = isReferredOut ? 0 : Math.round(pAmt * shareMultiplier);
+              const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
+              if (paidDate) {
+                if (paidDate >= todayStart && paidDate <= todayEnd) paidTodayCents += shareAmt;
+                if (paidDate >= rangeStart) earningsRangeCents += shareAmt;
+              }
             }
           }
 
@@ -11797,18 +11809,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
-      const netCollectedCents = Math.max(0, totalPaymentsCents - totalRefundsCents);
+      let isReferredIn = false;
+      let companySharePct = 1;
+      if (invoice.jobId) {
+        const { job_referrals } = await import('@shared/schema');
+        const { eq, and } = await import('drizzle-orm');
+        const { db } = await import('./db');
+        const inboundRefs = await db.select().from(job_referrals).where(
+          and(
+            eq(job_referrals.jobId, invoice.jobId),
+            eq(job_referrals.receiverCompanyId, company.id),
+            eq(job_referrals.status, 'accepted')
+          )
+        );
+        if (inboundRefs.length > 0) {
+          const ref = inboundRefs[0];
+          if (ref.referralType === 'percent' && ref.referralValue) {
+            isReferredIn = true;
+            companySharePct = parseFloat(ref.referralValue) / 100;
+          }
+        }
+      }
+
+      const displayTotalCents = isReferredIn ? Math.round(invoiceTotalCents * companySharePct) : invoiceTotalCents;
+      const displayPaymentsCents = isReferredIn ? Math.min(Math.round(totalPaymentsCents * companySharePct), displayTotalCents) : totalPaymentsCents;
+      const displayRefundsCents = isReferredIn ? Math.round(totalRefundsCents * companySharePct) : totalRefundsCents;
+      const displayPendingRefundsCents = isReferredIn ? Math.round(pendingRefundsCents * companySharePct) : pendingRefundsCents;
+
+      const balanceDueCents = Math.max(0, displayTotalCents - displayPaymentsCents);
+      const netCollectedCents = Math.max(0, displayPaymentsCents - displayRefundsCents);
 
       let computedStatus: string;
-      if (totalPaymentsCents === 0) {
+      if (displayPaymentsCents === 0) {
         computedStatus = 'unpaid';
-      } else if (totalPaymentsCents < invoiceTotalCents) {
+      } else if (displayPaymentsCents < displayTotalCents) {
         computedStatus = 'partial';
       } else {
-        if (totalRefundsCents === 0) {
+        if (displayRefundsCents === 0) {
           computedStatus = 'paid';
-        } else if (totalRefundsCents >= totalPaymentsCents) {
+        } else if (displayRefundsCents >= displayPaymentsCents) {
           computedStatus = 'refunded';
         } else {
           computedStatus = 'partially_refunded';
@@ -11826,21 +11865,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         canRecordManualPayment = assignments.some(a => a.jobId === invoice.jobId);
       }
 
+      const shareEnrichedPayments = isReferredIn
+        ? enrichedPayments.map((p: any) => ({
+            ...p,
+            amountCents: Math.round((p.amountCents || 0) * companySharePct),
+            originalAmountCents: p.amountCents,
+          }))
+        : enrichedPayments;
+
       res.json({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
-        invoiceTotalCents,
-        paidAmountCents: totalPaymentsCents,
-        totalPaymentsCents,
-        totalRefundsCents,
-        pendingRefundsCents,
+        invoiceTotalCents: displayTotalCents,
+        grossInvoiceTotalCents: isReferredIn ? invoiceTotalCents : undefined,
+        paidAmountCents: displayPaymentsCents,
+        totalPaymentsCents: displayPaymentsCents,
+        totalRefundsCents: displayRefundsCents,
+        pendingRefundsCents: displayPendingRefundsCents,
         netCollectedCents,
         balanceDueCents,
         invoiceStatus: computedStatus,
+        isReferredIn,
+        companySharePct: isReferredIn ? companySharePct : undefined,
         customerName: customerName || "Unknown Customer",
         jobTitle,
         jobId: invoice.jobId,
-        payments: enrichedPayments,
+        payments: shareEnrichedPayments,
         refunds: invoiceRefunds,
         canRecordManualPayment,
       });

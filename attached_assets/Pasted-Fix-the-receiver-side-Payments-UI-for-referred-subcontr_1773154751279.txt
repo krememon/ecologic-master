@@ -1,0 +1,130 @@
+Fix the receiver-side Payments UI for referred/subcontracted payments.
+
+Current status:
+The split amounts are now correct on the list cards:
+- receiver-side cards show the correct share amount (example: $2,800)
+- sender-side referred cards also show correct share amounts
+
+But there are still 3 UI/data problems on the receiver side:
+
+==================================================
+ISSUE 1 — ADD REFERRED BADGE ON RECEIVER SIDE
+==================================================
+
+Problem:
+On the receiver-side payment cards, the amount is correct, but there is no blue “Referred” badge.
+Users need to be able to visually tell the difference between:
+- a normal direct payment
+- a referred/subcontracted payment
+
+Wanted:
+If a payment/invoice/job came through the subcontract/referral flow, show the same blue “Referred” badge on the receiver-side card too.
+
+Do not only show it on the sender side.
+It should be obvious on both sides that this payment came from a referred/subcontracted job.
+
+==================================================
+ISSUE 2 — EARNINGS COUNTER IS WRONG
+==================================================
+
+Problem:
+The earnings total at the top (example: “This month $24.3k”) is wrong.
+It looks like it is summing the gross invoice totals / undivided payment amounts instead of the actual share that belongs to the current logged-in company.
+
+That is incorrect.
+
+Wanted:
+The earnings counters must be split-aware and company-aware.
+
+Rules:
+- For a normal non-split payment: count the full amount for that company
+- For a referred/subcontracted payment:
+  - if current viewer is receiver company → count only receiver share
+  - if current viewer is sender company → count only sender share
+- Do NOT add the full original invoice total into earnings if the logged-in company only earned part of it
+
+This affects:
+- This Month
+- Paid Today
+- any other earnings/payment aggregates on this page
+
+==================================================
+ISSUE 3 — PAYMENT DETAIL SCREEN SHOWS WRONG PAID AMOUNT
+==================================================
+
+Problem:
+On the payment detail screen for the receiver-side referred payment:
+- top amount shows $4,000.00
+- invoice total shows $4,000.00
+- total payments shows $4,000.00
+- payment history line shows +$4,000.00
+
+That is wrong for the receiver-side view in a split case.
+For example, if the receiver share is $2,800, the detail screen should reflect the amount that belongs to that company’s view, not the gross invoice total as if they collected the whole thing.
+
+Wanted:
+For referred/subcontracted payment detail screens, make the displayed paid amount company-aware.
+
+For receiver-side example:
+- header amount should show $2,800.00
+- total payments should reflect $2,800.00 for that company’s view
+- payment history line should reflect the company’s share amount
+- do not misleadingly show the full gross amount as if that company received all of it
+
+Important:
+Invoice total can still exist as a reference if needed, but it must be clearly separated from:
+- company share / actual received amount
+- total payments credited to this company
+
+If keeping invoice total, then present it separately and clearly.
+But the primary displayed amount should be the company’s actual share.
+
+==================================================
+WHAT I NEED YOU TO DO
+==================================================
+
+1. Trace the data sources for:
+- receiver-side payment cards
+- earnings counters
+- payment detail screen
+- payment history amount rows
+
+2. Make all of them split-aware and viewer-company-aware
+
+3. Add the blue “Referred” badge on receiver-side cards and detail context where appropriate
+
+4. Ensure the receiver side shows receiver share amount
+5. Ensure the sender side shows sender share amount
+6. Preserve normal non-split payment behavior
+
+==================================================
+RULES TO IMPLEMENT
+==================================================
+
+For referred/subcontracted payments:
+- if viewer company is sender → show sender share
+- if viewer company is receiver → show receiver share
+- badges/labels should indicate referred/subcontracted context
+- earnings totals should use share amounts only
+- detail screen primary money display should use share amount only
+
+For normal payments:
+- continue using the full payment amount
+
+==================================================
+DELIVERABLES
+==================================================
+
+Please fix all 3 issues:
+1. receiver-side blue “Referred” badge
+2. earnings counters using split-aware amounts
+3. payment detail screen showing correct company-specific paid amount
+
+Then tell me:
+- root cause for each issue
+- files changed
+- exact retest steps for a $4,000 70/30 case so:
+  - receiver card shows Referred + $2,800
+  - sender card shows Referred + $1,200
+  - earnings totals only count each company’s true share
+  - receiver detail screen no longer shows the gross $4,000 as the paid amount
