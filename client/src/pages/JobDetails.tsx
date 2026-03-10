@@ -272,6 +272,8 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       companyShareAmountCents: number;
       transferAmountCents: number;
       stripeTransferId: string | null;
+      secondTransferAmountCents: number | null;
+      secondStripeTransferId: string | null;
       status: string;
       failureReason: string | null;
       createdAt: string;
@@ -1363,24 +1365,38 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               <div className="border-t pt-3 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Transfer History</p>
                 {payoutAuditData.payouts.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2 bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={
-                          p.status === 'completed' ? 'default' :
-                          p.status === 'pending' ? 'secondary' :
-                          p.status === 'failed' || p.status === 'blocked' ? 'destructive' :
-                          'outline'
-                        }
-                        className="text-xs capitalize"
-                      >
-                        {p.status}
-                      </Badge>
-                      <span className="font-medium">${(p.transferAmountCents / 100).toFixed(2)}</span>
+                  <div key={p.id} className="text-sm border rounded-lg px-3 py-2 bg-muted/30 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            p.status === 'completed' ? 'default' :
+                            p.status === 'pending' ? 'secondary' :
+                            p.status === 'failed' || p.status === 'blocked' ? 'destructive' :
+                            'outline'
+                          }
+                          className="text-xs capitalize"
+                        >
+                          {p.status}
+                        </Badge>
+                        <span className="text-muted-foreground">Payment ${(p.grossAmountCents / 100).toFixed(2)}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(p.createdAt), 'MMM d, yyyy')}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(p.createdAt), 'MMM d, yyyy')}
-                    </span>
+                    {p.transferAmountCents > 0 && (
+                      <div className="text-xs flex justify-between pl-6">
+                        <span>Receiver share</span>
+                        <span className="font-medium">${(p.transferAmountCents / 100).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {(p.secondTransferAmountCents ?? 0) > 0 && (
+                      <div className="text-xs flex justify-between pl-6">
+                        <span>Sender share</span>
+                        <span className="font-medium">${((p.secondTransferAmountCents ?? 0) / 100).toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

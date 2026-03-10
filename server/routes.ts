@@ -17321,6 +17321,8 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
           companyShareAmountCents: a.companyShareAmountCents,
           transferAmountCents: a.transferAmountCents,
           stripeTransferId: a.stripeTransferId,
+          secondTransferAmountCents: a.secondTransferAmountCents,
+          secondStripeTransferId: a.secondStripeTransferId,
           status: a.status,
           failureReason: a.failureReason,
           createdAt: a.createdAt,
@@ -17534,6 +17536,19 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     } catch (error: any) {
       console.error('[StripeConnect] Error in ensure-ready:', error);
       res.status(500).json({ error: 'Failed to check Stripe Connect readiness' });
+    }
+  });
+
+  app.get('/api/stripe-connect/check-job-readiness/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      if (!jobId || isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+      const result = await stripeConnectService.checkBothPartiesConnected(jobId);
+      res.json(result);
+    } catch (error: any) {
+      console.error('[StripeConnect] Error checking job readiness:', error);
+      res.status(500).json({ error: 'Failed to check job payment readiness' });
     }
   });
 
