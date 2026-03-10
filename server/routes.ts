@@ -11759,13 +11759,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let isCrossCompanyAccess = false;
       if (invoice.companyId !== company.id) {
         if (invoice.jobId) {
-          const { job_referrals } = await import('@shared/schema');
-          const { eq, and } = await import('drizzle-orm');
-          const { db } = await import('./db');
-          const refs = await db.select().from(job_referrals).where(
+          const refs = await db.select().from(jobReferrals).where(
             and(
-              eq(job_referrals.jobId, invoice.jobId),
-              eq(job_referrals.status, 'accepted')
+              eq(jobReferrals.jobId, invoice.jobId),
+              eq(jobReferrals.status, 'accepted')
             )
           );
           for (const ref of refs) {
@@ -11841,13 +11838,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let companySharePct = 1;
       let referralRef: any = null;
       if (invoice.jobId) {
-        const { job_referrals } = await import('@shared/schema');
-        const { eq, and } = await import('drizzle-orm');
-        const { db } = await import('./db');
-        const refs = await db.select().from(job_referrals).where(
+        const refs = await db.select().from(jobReferrals).where(
           and(
-            eq(job_referrals.jobId, invoice.jobId),
-            eq(job_referrals.status, 'accepted')
+            eq(jobReferrals.jobId, invoice.jobId),
+            eq(jobReferrals.status, 'accepted')
           )
         );
         if (refs.length > 0) {
@@ -11868,9 +11862,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isSplitPayment = isReferredIn || isSenderViewing;
 
       if (isSenderViewing && totalPaymentsCents === 0 && invoice.jobId && referralRef) {
-        const { subcontract_payout_audit } = await import('@shared/schema');
-        const { eq, and } = await import('drizzle-orm');
-        const { db } = await import('./db');
         const receiverInvoices = await db.select().from(invoices)
           .where(and(
             eq(invoices.jobId, invoice.jobId),
