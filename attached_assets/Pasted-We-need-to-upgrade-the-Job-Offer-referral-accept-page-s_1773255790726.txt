@@ -1,0 +1,271 @@
+We need to upgrade the Job Offer / referral accept page so the receiving contractor can see a much fuller job summary before accepting or declining.
+
+Goal
+
+Right now the job offer page is too bare. I want it to display far more of the actual job information that the sender entered when creating/updating the job.
+
+The receiving contractor should be able to clearly review:
+
+full date
+
+full start time
+
+full end time
+
+address
+
+job type
+
+notes
+
+payment / referral breakdown
+
+and other useful job details that already exist on the sender side
+
+Main requirement
+
+This page should show real job details based on what the sender actually filled out for the job.
+
+That means:
+
+if the sender entered a field, show it
+
+if the sender did not enter a field, hide it cleanly
+
+do not invent placeholder data
+
+do not show empty labels/rows
+
+Fields I want shown
+
+Please expose and render as many of these as already exist in the job/referral/company data model:
+
+Core job info
+
+Job title / job name
+
+Job type
+
+Customer name
+
+Job description / scope
+
+Notes
+
+Status only if relevant and safe to show
+
+Schedule info
+
+Full job date
+
+Start time
+
+End time
+
+If there is only one time stored, still render it cleanly
+
+If start/end both exist, show them both clearly
+
+Location info
+
+Full service address
+
+City
+
+State
+
+ZIP
+
+Any location fields already stored and intended to be shared
+
+Contact info
+
+Customer phone if available and intended to be shared
+
+Customer email if available and intended to be shared
+
+Any site contact / contact person if that exists
+
+Payment / money section
+
+I want a full payment breakdown section instead of just one simple pill.
+
+If the data exists, show things like:
+
+Total job value
+
+Referral percentage
+
+Sender share
+
+Receiver share
+
+Any platform/service fee only if relevant and already part of the flow
+
+Any payout amount / expected earnings for the receiving contractor
+
+Make this very clear and easy to understand
+
+The receiving contractor should be able to tell:
+
+what the total job is worth
+
+what percentage they are getting
+
+what that means in dollars if the amount is known
+
+UI structure I want
+
+Please redesign the content area of the page so it feels more informative and premium while still matching the app.
+
+Suggested structure
+1. Company card
+
+Top card should show:
+
+company logo if available
+
+company name
+
+location
+
+2. Job summary card
+
+A clean grouped details card with rows like:
+
+Job title
+
+Job type
+
+Customer
+
+Date
+
+Start time
+
+End time
+
+Address
+
+Description
+
+Notes
+
+3. Payment breakdown card
+
+Separate card for money details:
+
+total job amount
+
+referral %
+
+payout/share breakdown
+
+anything else relevant and available
+
+4. Action buttons
+
+Keep Decline and Accept Job
+Do not break the current action flow
+
+Rendering rules
+
+Only show populated fields
+
+Hide empty/null fields cleanly
+
+Keep spacing polished even when some fields are missing
+
+No awkward blank rows
+
+No fake values
+
+No exposing unrelated private internal-only data
+
+Data / backend work
+
+Please trace the full data path for this job offer page.
+
+Check:
+
+the API/route powering the referral offer page
+
+serializer/response payload
+
+native rendering component / public job-offer component
+
+field mapping from Job + Referral + Company data
+
+If missing data is not currently included in the response:
+
+Update the backend response to include the needed fields that are already stored for this job and safe for the intended recipient to see, including:
+
+full date
+
+start time
+
+end time
+
+address fields
+
+job type
+
+notes
+
+description
+
+money breakdown fields
+
+company logo
+
+any other relevant shared job fields
+
+Important constraints
+
+Do not break accept/decline logic
+
+Do not break native app rendering
+
+Do not break public token-based offer flow
+
+Do not change unrelated pages
+
+Do not expose sensitive/private fields that should not be shared with the receiving contractor
+
+Only show fields that make sense for the recipient to review before accepting
+
+UX expectations
+
+Make it feel:
+
+more informative
+
+more trustworthy
+
+more professional
+
+easier to review at a glance
+
+still mobile-first and clean
+
+The current version feels too empty. I want this to feel like a real job offer review screen.
+
+Deliverables
+
+Expand the job offer page to show all relevant job information entered by the sender
+
+Add a real payment breakdown section
+
+Show full date/start/end time/address/job type/notes/etc when available
+
+Hide missing fields cleanly
+
+Keep the design polished and mobile-friendly
+
+After implementation, tell me:
+
+which fields are now rendered
+
+which fields had to be added to the API response
+
+where the payment breakdown values are coming from

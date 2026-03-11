@@ -16871,6 +16871,39 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         }
       }
 
+      let jobTotalCents: number | null = null;
+      if (job) {
+        const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
+        if (lineItems.length > 0) {
+          jobTotalCents = lineItems.reduce((sum, item) => {
+            const qty = parseFloat(String(item.quantity || '1'));
+            const unitPrice = item.unitPriceCents || 0;
+            let lineTotal = Math.round(qty * unitPrice);
+            if (item.taxable && item.taxRatePercentSnapshot) {
+              const taxRate = parseFloat(String(item.taxRatePercentSnapshot));
+              lineTotal += Math.round(lineTotal * taxRate / 100);
+            }
+            return sum + lineTotal;
+          }, 0);
+        } else {
+          const est = parseFloat(String(job.estimatedCost || '0'));
+          if (est > 0) jobTotalCents = Math.round(est * 100);
+        }
+      }
+
+      const refVal = parseFloat(String(referral.referralValue || '0'));
+      let receiverShareCents: number | null = null;
+      let senderShareCents: number | null = null;
+      if (jobTotalCents && jobTotalCents > 0 && refVal > 0) {
+        if (referral.referralType === 'percent') {
+          receiverShareCents = Math.round(jobTotalCents * refVal / 100);
+          senderShareCents = jobTotalCents - receiverShareCents;
+        } else {
+          receiverShareCents = Math.round(refVal * 100);
+          senderShareCents = jobTotalCents - receiverShareCents;
+        }
+      }
+
       res.json({
         referralId: referral.id,
         jobId: referral.jobId,
@@ -16902,6 +16935,9 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         customerAddress,
         customerPhone,
         customerEmail,
+        jobTotalCents,
+        receiverShareCents,
+        senderShareCents,
       });
     } catch (error: any) {
       console.error('[job-offer] Error fetching:', error);
