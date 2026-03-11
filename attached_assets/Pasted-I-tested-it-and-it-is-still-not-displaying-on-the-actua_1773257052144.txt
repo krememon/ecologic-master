@@ -1,0 +1,132 @@
+I tested it and it is still not displaying on the actual job offer page, so we need to stop describing intended behavior and debug the real issue.
+
+You said:
+
+Payment Breakdown was added
+
+Line Items card was added
+
+math is computed server-side from real data
+
+hidden if no line items exist
+
+But on the real screen I still do not see those sections/values.
+
+What I need now
+
+Do a real end-to-end debug on the actual job offer page that is rendering in native/public flow and find exactly why it is not showing.
+
+Step 1 — Identify the exact screen path
+
+Find the exact code path for the page in my screenshots:
+
+frontend component name
+
+route/path
+
+whether it is using native app route, public token route, or a separate offer component
+
+the exact API endpoint/request powering it
+
+I want the exact files/functions, not guesses.
+
+Step 2 — Log the actual payload reaching that screen
+
+Add targeted logs and inspect the real response payload that the job offer page receives.
+
+Log whether these fields are actually present:
+
+total job price
+
+referral percentage
+
+contractor gets amount
+
+your share amount
+
+lineItems array
+
+For line items, log each item’s:
+
+name/title
+
+description
+
+quantity
+
+unit price
+
+total
+
+Step 3 — Verify frontend field mapping
+
+Check whether the frontend is reading the correct field names from the payload.
+
+Possible issue:
+
+backend returns fields but component is using different names
+
+component rendering condition is wrong
+
+data exists on a nested object and the UI is looking somewhere else
+
+native/public offer screen is a different component than the one you updated
+
+Step 4 — Verify source-of-truth data
+
+Trace where the values are actually coming from:
+
+job total
+
+estimate total
+
+invoice total
+
+line items
+
+referral split %
+
+Make sure the offer page is using the correct source for the referred job.
+
+Step 5 — Fix the actual missing link
+
+Once you find the exact break, fix it properly.
+
+I do not want another “it should now work” response unless you verified:
+
+the payload includes the fields
+
+the component receives them
+
+the component renders them on the actual offer page I am testing
+
+Output I want back
+
+After debugging, tell me:
+
+exact frontend file rendering this page
+
+exact backend endpoint/handler powering it
+
+whether payout fields were missing from payload or just not rendered
+
+whether line items were missing from payload or just not rendered
+
+exact fix made
+
+the actual console/log output proving the fields are now reaching the screen
+
+Important
+
+Use targeted logs only. Do not add noisy unrelated logs.
+Do not change accept/decline behavior.
+Do not change unrelated pages.
+Focus only on why the real job offer page still is not displaying:
+
+Job Price
+
+Contractor Gets
+
+Your Share
+
+Line Items

@@ -2,11 +2,24 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, MapPin, Calendar, DollarSign, FileText, CheckCircle2, XCircle, AlertTriangle, ArrowRight } from "lucide-react";
+import {
+  Loader2, Building2, MapPin, Calendar, DollarSign, FileText,
+  CheckCircle2, XCircle, AlertTriangle, ArrowRight,
+  Clock, User, Phone, Mail, Tag, MessageSquare, List,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface LineItemData {
+  name: string;
+  description: string | null;
+  quantity: string;
+  unitPriceCents: number;
+  unit: string;
+  lineTotalCents: number;
+}
 
 interface InviteData {
   referralId: number;
@@ -18,18 +31,68 @@ interface InviteData {
   senderCompanyName: string | null;
   senderCompanyCity: string | null;
   senderCompanyState: string | null;
+  senderCompanyLogo: string | null;
   job: {
     id: number;
     title: string;
     status: string;
     description: string | null;
-    scheduledDate: string | null;
+    startDate: string | null;
     scheduledTime: string | null;
+    scheduledEndTime: string | null;
     estimatedCost: string | null;
+    location: string | null;
+    jobType: string | null;
+    priority: string | null;
     notes: string | null;
   } | null;
   customerName: string | null;
   customerAddress: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  jobTotalCents: number | null;
+  receiverShareCents: number | null;
+  senderShareCents: number | null;
+  lineItems: LineItemData[] | null;
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatTime(timeStr: string): string {
+  try {
+    const [h, m] = timeStr.split(":");
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${m} ${ampm}`;
+  } catch {
+    return timeStr;
+  }
+}
+
+function formatCents(cents: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 py-3">
+      <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider leading-none">{label}</p>
+        <p className="text-[14px] text-slate-800 dark:text-slate-200 mt-1 leading-snug whitespace-pre-wrap">{value}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function JobOfferInvite() {
@@ -90,7 +153,6 @@ export default function JobOfferInvite() {
   });
 
   if (actionTaken === "accepted") {
-    console.log("[JobOfferPage] rendering state: accepted");
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
         <Card className="w-full max-w-md">
@@ -117,7 +179,6 @@ export default function JobOfferInvite() {
   }
 
   if (actionTaken === "declined") {
-    console.log("[JobOfferPage] rendering state: declined");
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
         <Card className="w-full max-w-md">
@@ -150,7 +211,6 @@ export default function JobOfferInvite() {
     const referralStatus = err.status;
 
     if (referralStatus === "accepted" || referralStatus === "declined") {
-      console.log("[JobOfferPage] rendering state: already-" + referralStatus);
       return (
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card className="w-full max-w-md">
@@ -178,7 +238,6 @@ export default function JobOfferInvite() {
     }
 
     if (httpStatus === 410) {
-      console.log("[JobOfferPage] rendering state: expired");
       return (
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card className="w-full max-w-md">
@@ -193,7 +252,6 @@ export default function JobOfferInvite() {
     }
 
     if (httpStatus === 403) {
-      console.log("[JobOfferPage] rendering state: not-for-company");
       return (
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card className="w-full max-w-md">
@@ -207,7 +265,6 @@ export default function JobOfferInvite() {
       );
     }
 
-    console.log("[JobOfferPage] rendering state: error, reason:", err.error || "unknown");
     return (
       <div className="flex items-center justify-center min-h-[60vh] px-4">
         <Card className="w-full max-w-md">
@@ -223,157 +280,261 @@ export default function JobOfferInvite() {
 
   if (!data) return null;
 
-  console.log("[JobOfferPage] rendering state: pending");
-
   const feeDisplay = data.referralType === "percent"
     ? `${data.referralValue}%`
     : `$${parseFloat(data.referralValue).toFixed(2)}`;
 
   const senderLocation = [data.senderCompanyCity, data.senderCompanyState].filter(Boolean).join(", ");
+  const jobAddress = data.job?.location || data.customerAddress || null;
+  const dateStr = data.job?.startDate ? formatDate(data.job.startDate) : null;
+  const startTimeStr = data.job?.scheduledTime ? formatTime(data.job.scheduledTime) : null;
+  const endTimeStr = data.job?.scheduledEndTime ? formatTime(data.job.scheduledEndTime) : null;
+  const hasPaymentBreakdown = data.jobTotalCents && data.jobTotalCents > 0;
 
   return (
-    <div className="min-h-[60vh] px-4 py-6 max-w-lg mx-auto">
-      <div className="text-center mb-6">
-        <Badge variant="secondary" className="mb-3 text-sm px-3 py-1">Job Offer</Badge>
-        <h1 className="text-2xl font-bold text-foreground">You've received a job offer</h1>
+    <div className="min-h-[60vh] px-4 py-6 max-w-lg mx-auto space-y-4">
+
+      {/* Header */}
+      <div className="text-center pb-1">
+        <Badge variant="secondary" className="mb-3 text-xs px-3 py-1 font-medium">Job Offer</Badge>
+        <h1 className="text-xl font-bold text-foreground">You've received a job offer</h1>
       </div>
 
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-blue-600" />
+      {/* 1. Company card */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3.5">
+            {data.senderCompanyLogo ? (
+              <img
+                src={data.senderCompanyLogo}
+                alt={data.senderCompanyName || "Company"}
+                className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  const fallback = (e.target as HTMLImageElement).nextElementSibling;
+                  if (fallback) fallback.classList.remove("hidden");
+                }}
+              />
+            ) : null}
+            <div
+              className={`w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 ${data.senderCompanyLogo ? "hidden" : ""}`}
+            >
+              <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <div>
-              <CardTitle className="text-base">{data.senderCompanyName || "Unknown Company"}</CardTitle>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {data.senderCompanyName || "Unknown Company"}
+              </p>
               {senderLocation && (
-                <p className="text-sm text-muted-foreground">{senderLocation}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  {senderLocation}
+                </p>
               )}
             </div>
           </div>
-        </CardHeader>
+        </CardContent>
       </Card>
 
+      {/* 2. Job details card */}
       {data.job && (
-        <Card className="mb-4">
-          <CardContent className="pt-5 space-y-4">
-            <div>
-              <h3 className="font-semibold text-base mb-1">{data.job.title}</h3>
-              {data.job.description && (
-                <p className="text-sm text-muted-foreground">{data.job.description}</p>
+        <Card>
+          <CardContent className="p-4">
+            <div className="pb-3 mb-1 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-[16px] font-semibold text-slate-900 dark:text-slate-100 leading-tight">{data.job.title}</h3>
+              {data.job.jobType && (
+                <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-0.5 uppercase tracking-wider">
+                  <Tag className="w-3 h-3" />
+                  {data.job.jobType}
+                </span>
               )}
             </div>
 
-            {data.customerName && (
-              <div className="flex items-start gap-3">
-                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Customer</p>
-                  <p className="text-sm text-muted-foreground">{data.customerName}</p>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {data.job.description && (
+                <DetailRow icon={FileText} label="Description" value={data.job.description} />
+              )}
+              {data.customerName && (
+                <DetailRow icon={User} label="Customer" value={data.customerName} />
+              )}
+              {jobAddress && (
+                <div className="flex items-start gap-3 py-3">
+                  <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                    <MapPin className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider leading-none">Service Address</p>
+                    <p className="text-[14px] text-slate-800 dark:text-slate-200 mt-1 leading-snug">{jobAddress}</p>
+                    <a
+                      href={`https://maps.apple.com/?q=${encodeURIComponent(jobAddress)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1 inline-block"
+                    >
+                      Open in Maps
+                    </a>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {data.customerAddress && (
-              <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Address</p>
-                  <p className="text-sm text-muted-foreground">{data.customerAddress}</p>
-                  <a
-                    href={`https://maps.apple.com/?q=${encodeURIComponent(data.customerAddress)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1 inline-block"
-                  >
-                    Open in Maps
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {(data.job.scheduledDate || data.job.scheduledTime) && (
-              <div className="flex items-start gap-3">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Schedule</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[data.job.scheduledDate, data.job.scheduledTime].filter(Boolean).join(" at ")}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {data.job.estimatedCost && data.allowPriceChange && (
-              <div className="flex items-start gap-3">
-                <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Estimated Cost</p>
-                  <p className="text-sm text-muted-foreground">${parseFloat(data.job.estimatedCost).toFixed(2)}</p>
-                </div>
-              </div>
-            )}
-
-            {data.job.notes && (
-              <div className="flex items-start gap-3">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Notes</p>
-                  <p className="text-sm text-muted-foreground">{data.job.notes}</p>
-                </div>
-              </div>
-            )}
+              )}
+              {dateStr && (
+                <DetailRow icon={Calendar} label="Date" value={dateStr} />
+              )}
+              {startTimeStr && (
+                <DetailRow icon={Clock} label={endTimeStr ? "Start Time" : "Time"} value={startTimeStr} />
+              )}
+              {endTimeStr && (
+                <DetailRow icon={Clock} label="End Time" value={endTimeStr} />
+              )}
+              {data.customerPhone && (
+                <DetailRow icon={Phone} label="Contact Phone" value={data.customerPhone} />
+              )}
+              {data.customerEmail && (
+                <DetailRow icon={Mail} label="Contact Email" value={data.customerEmail} />
+              )}
+              {data.job.notes && (
+                <DetailRow icon={FileText} label="Notes" value={data.job.notes} />
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
 
+      {/* Message from sender */}
       {data.message && (
-        <Card className="mb-4">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium mb-1">Message from sender</p>
-            <p className="text-sm text-muted-foreground italic">"{data.message}"</p>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                <MessageSquare className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider leading-none">Message from sender</p>
+                <p className="text-[14px] text-slate-700 dark:text-slate-300 mt-1.5 italic leading-snug">"{data.message}"</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      <Card className="mb-6">
-        <CardContent className="pt-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Referral Fee</span>
-            <Badge variant="outline" className="text-sm">{feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}</Badge>
+      {/* 3. Line items card */}
+      {data.lineItems && data.lineItems.length > 0 && (
+        <Card>
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <List className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <h4 className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Line Items</h4>
+            </div>
           </div>
-          {data.job?.estimatedCost && parseFloat(data.job.estimatedCost) > 0 && (
-            <div className="flex items-center justify-between pt-1 border-t">
-              <span className="text-sm font-medium">Estimated Earnings</span>
-              <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                ${data.referralType === "percent"
-                  ? (parseFloat(data.job.estimatedCost) * (1 - parseFloat(data.referralValue) / 100)).toFixed(2)
-                  : (parseFloat(data.job.estimatedCost) - parseFloat(data.referralValue)).toFixed(2)
-                }
-              </span>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {data.lineItems.map((item, idx) => {
+                const qty = parseFloat(item.quantity);
+                const qtyDisplay = qty === Math.floor(qty) ? String(Math.floor(qty)) : qty.toFixed(2);
+                return (
+                  <div key={idx} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-medium text-slate-800 dark:text-slate-200 leading-snug">{item.name}</p>
+                        {item.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{item.description}</p>
+                        )}
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          {qtyDisplay} {item.unit} × {formatCents(item.unitPriceCents)}
+                        </p>
+                      </div>
+                      <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap flex-shrink-0 pt-0.5">
+                        {formatCents(item.lineTotalCents)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {hasPaymentBreakdown && (
+              <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatCents(data.jobTotalCents!)}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Payment breakdown card */}
+      <Card className="border-emerald-200/60 dark:border-emerald-800/30 overflow-hidden">
+        <div className="bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 border-b border-emerald-100 dark:border-emerald-900/30">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <h4 className="text-[13px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Payment Breakdown</h4>
+          </div>
+        </div>
+        <CardContent className="p-4 space-y-0">
+          {hasPaymentBreakdown ? (
+            <div className="space-y-0 divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-slate-600 dark:text-slate-400">Job Price</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCents(data.jobTotalCents!)}</span>
+              </div>
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-slate-600 dark:text-slate-400">Referral Rate</span>
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{feeDisplay}</span>
+              </div>
+              {data.receiverShareCents != null && (
+                <div className="flex items-center justify-between py-3 -mx-4 px-4 bg-emerald-50 dark:bg-emerald-950/30">
+                  <span className="text-[14px] font-semibold text-emerald-700 dark:text-emerald-400">Contractor Gets</span>
+                  <span className="text-[16px] font-bold text-emerald-700 dark:text-emerald-300">{formatCents(data.receiverShareCents)}</span>
+                </div>
+              )}
+              {data.senderShareCents != null && (
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-sm text-slate-500 dark:text-slate-500">Your Share</span>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-500">{formatCents(data.senderShareCents)}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-slate-600 dark:text-slate-400">Referral Fee</span>
+                <Badge className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-sm font-semibold px-3 py-1">
+                  {feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}
+                </Badge>
+              </div>
+              {data.job?.estimatedCost && data.allowPriceChange && (
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Estimated Cost</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">${parseFloat(data.job.estimatedCost).toFixed(2)}</span>
+                </div>
+              )}
+              <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">Final payout will be calculated when the job is invoiced and paid.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={() => declineMutation.mutate()}
-          disabled={declineMutation.isPending || acceptMutation.isPending}
-        >
-          {declineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-          Decline
-        </Button>
-        <Button
-          className="flex-1 bg-green-600 hover:bg-green-700"
-          onClick={() => acceptMutation.mutate()}
-          disabled={acceptMutation.isPending || declineMutation.isPending}
-        >
-          {acceptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-          Accept Job
-        </Button>
+      {/* 5. Action buttons */}
+      <div className="pt-2 pb-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            className="h-12 rounded-xl text-[15px] font-medium border-slate-200 dark:border-slate-700"
+            onClick={() => declineMutation.mutate()}
+            disabled={declineMutation.isPending || acceptMutation.isPending}
+          >
+            {declineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Decline
+          </Button>
+          <Button
+            className="h-12 rounded-xl text-[15px] font-medium bg-green-600 hover:bg-green-700"
+            onClick={() => acceptMutation.mutate()}
+            disabled={acceptMutation.isPending || declineMutation.isPending}
+          >
+            {acceptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Accept Job
+          </Button>
+        </div>
       </div>
     </div>
   );

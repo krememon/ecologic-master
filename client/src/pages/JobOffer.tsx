@@ -8,10 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Building2, MapPin, Calendar, DollarSign, FileText,
   CheckCircle2, XCircle, AlertTriangle, ArrowRight, LogIn,
-  Clock, User, Phone, Mail, Tag, MessageSquare, Percent,
+  Clock, User, Phone, Mail, Tag, MessageSquare, List,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+
+interface LineItemData {
+  name: string;
+  description: string | null;
+  quantity: string;
+  unitPriceCents: number;
+  unit: string;
+  lineTotalCents: number;
+}
 
 interface JobOfferData {
   referralId: number;
@@ -47,6 +56,7 @@ interface JobOfferData {
   jobTotalCents: number | null;
   receiverShareCents: number | null;
   senderShareCents: number | null;
+  lineItems: LineItemData[] | null;
 }
 
 function formatDate(dateStr: string): string {
@@ -74,10 +84,10 @@ function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-function DetailRow({ icon: Icon, label, value, iconBg }: { icon: typeof MapPin; label: string; value: string; iconBg?: string }) {
+function DetailRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3 py-3">
-      <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${iconBg || "bg-slate-100 dark:bg-slate-800"}`}>
+      <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
         <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
       </div>
       <div className="min-w-0 flex-1">
@@ -263,19 +273,10 @@ export default function JobOffer() {
     : `$${parseFloat(data.referralValue).toFixed(2)}`;
 
   const senderLocation = [data.senderCompanyCity, data.senderCompanyState].filter(Boolean).join(", ");
-
   const jobAddress = data.job?.location || data.customerAddress || null;
-
   const dateStr = data.job?.startDate ? formatDate(data.job.startDate) : null;
   const startTimeStr = data.job?.scheduledTime ? formatTime(data.job.scheduledTime) : null;
   const endTimeStr = data.job?.scheduledEndTime ? formatTime(data.job.scheduledEndTime) : null;
-
-  const timeDisplay = (() => {
-    if (startTimeStr && endTimeStr) return `${startTimeStr} – ${endTimeStr}`;
-    if (startTimeStr) return startTimeStr;
-    return null;
-  })();
-
   const hasPaymentBreakdown = data.jobTotalCents && data.jobTotalCents > 0;
 
   return (
@@ -323,7 +324,7 @@ export default function JobOffer() {
         </CardContent>
       </Card>
 
-      {/* 2. Job summary card */}
+      {/* 2. Job details card */}
       {data.job && (
         <Card>
           <CardContent className="p-4">
@@ -391,7 +392,53 @@ export default function JobOffer() {
         </Card>
       )}
 
-      {/* 3. Payment breakdown card */}
+      {/* 3. Line items card */}
+      {data.lineItems && data.lineItems.length > 0 && (
+        <Card>
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <List className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <h4 className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Line Items</h4>
+            </div>
+          </div>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              {data.lineItems.map((item, idx) => {
+                const qty = parseFloat(item.quantity);
+                const qtyDisplay = qty === Math.floor(qty) ? String(Math.floor(qty)) : qty.toFixed(2);
+                return (
+                  <div key={idx} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-medium text-slate-800 dark:text-slate-200 leading-snug">{item.name}</p>
+                        {item.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{item.description}</p>
+                        )}
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          {qtyDisplay} {item.unit} × {formatCents(item.unitPriceCents)}
+                        </p>
+                      </div>
+                      <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap flex-shrink-0 pt-0.5">
+                        {formatCents(item.lineTotalCents)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {hasPaymentBreakdown && (
+              <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatCents(data.jobTotalCents!)}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Payment breakdown card */}
       <Card className="border-emerald-200/60 dark:border-emerald-800/30 overflow-hidden">
         <div className="bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 border-b border-emerald-100 dark:border-emerald-900/30">
           <div className="flex items-center gap-2">
@@ -399,52 +446,51 @@ export default function JobOffer() {
             <h4 className="text-[13px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Payment Breakdown</h4>
           </div>
         </div>
-        <CardContent className="p-4 space-y-3">
+        <CardContent className="p-4 space-y-0">
           {hasPaymentBreakdown ? (
-            <>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Total Job Value</span>
+            <div className="space-y-0 divide-y divide-slate-100 dark:divide-slate-800/60">
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-slate-600 dark:text-slate-400">Job Price</span>
                 <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCents(data.jobTotalCents!)}</span>
               </div>
-              <div className="flex items-center justify-between py-1.5">
+              <div className="flex items-center justify-between py-2.5">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Referral Rate</span>
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{feeDisplay}{data.referralType === "percent" ? " of job value" : " flat fee"}</span>
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{feeDisplay}</span>
               </div>
-              <div className="border-t border-dashed border-slate-200 dark:border-slate-700 my-1" />
               {data.receiverShareCents != null && (
-                <div className="flex items-center justify-between py-1.5 bg-emerald-50 dark:bg-emerald-950/30 -mx-4 px-4 rounded-lg">
-                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Your Earnings</span>
-                  <span className="text-base font-bold text-emerald-700 dark:text-emerald-300">{formatCents(data.receiverShareCents)}</span>
+                <div className="flex items-center justify-between py-3 -mx-4 px-4 bg-emerald-50 dark:bg-emerald-950/30">
+                  <span className="text-[14px] font-semibold text-emerald-700 dark:text-emerald-400">Contractor Gets</span>
+                  <span className="text-[16px] font-bold text-emerald-700 dark:text-emerald-300">{formatCents(data.receiverShareCents)}</span>
                 </div>
               )}
               {data.senderShareCents != null && (
-                <div className="flex items-center justify-between py-1.5">
-                  <span className="text-sm text-slate-500 dark:text-slate-500">Sender Keeps</span>
-                  <span className="text-sm text-slate-500 dark:text-slate-500">{formatCents(data.senderShareCents)}</span>
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-sm text-slate-500 dark:text-slate-500">Your Share</span>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-500">{formatCents(data.senderShareCents)}</span>
                 </div>
               )}
-            </>
+            </div>
           ) : (
-            <>
-              <div className="flex items-center justify-between py-1.5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Referral Fee</span>
                 <Badge className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-sm font-semibold px-3 py-1">
                   {feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}
                 </Badge>
               </div>
               {data.job?.estimatedCost && data.allowPriceChange && (
-                <div className="flex items-center justify-between py-1.5">
+                <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-slate-600 dark:text-slate-400">Estimated Cost</span>
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">${parseFloat(data.job.estimatedCost).toFixed(2)}</span>
                 </div>
               )}
               <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">Final payout will be calculated when the job is invoiced and paid.</p>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* 4. Action buttons */}
+      {/* 5. Action buttons */}
       <div className="pt-2 pb-4">
         {!isAuthenticated ? (
           <div className="space-y-3">

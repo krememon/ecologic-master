@@ -16693,13 +16693,62 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       const senderCompany = await storage.getCompany(referral.senderCompanyId);
       let customerName: string | null = null;
       let customerAddress: string | null = null;
+      let customerPhone: string | null = null;
+      let customerEmail: string | null = null;
       if (job?.customerId) {
         const customer = await storage.getCustomer(job.customerId);
         if (customer) {
           customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
-          customerAddress = [customer.addressLine1, customer.city, customer.state, customer.postalCode].filter(Boolean).join(', ') || null;
+          customerAddress = [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || null;
+          customerPhone = customer.phone || null;
+          customerEmail = customer.email || null;
         }
       }
+
+      let inviteJobTotalCents: number | null = null;
+      let inviteLineItemsData: { name: string; description: string | null; quantity: string; unitPriceCents: number; unit: string; lineTotalCents: number }[] = [];
+      if (job) {
+        const li = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
+        if (li.length > 0) {
+          inviteJobTotalCents = 0;
+          for (const item of li) {
+            const qty = parseFloat(String(item.quantity || '1'));
+            const unitPrice = item.unitPriceCents || 0;
+            let lineTotal = Math.round(qty * unitPrice);
+            if (item.taxable && item.taxRatePercentSnapshot) {
+              const taxRate = parseFloat(String(item.taxRatePercentSnapshot));
+              lineTotal += Math.round(lineTotal * taxRate / 100);
+            }
+            inviteJobTotalCents += lineTotal;
+            inviteLineItemsData.push({
+              name: item.name,
+              description: item.description || null,
+              quantity: String(item.quantity || '1'),
+              unitPriceCents: unitPrice,
+              unit: item.unit || 'each',
+              lineTotalCents: lineTotal,
+            });
+          }
+        } else {
+          const est = parseFloat(String(job.estimatedCost || '0'));
+          if (est > 0) inviteJobTotalCents = Math.round(est * 100);
+        }
+      }
+
+      const inviteRefVal = parseFloat(String(referral.referralValue || '0'));
+      let inviteReceiverShareCents: number | null = null;
+      let inviteSenderShareCents: number | null = null;
+      if (inviteJobTotalCents && inviteJobTotalCents > 0 && inviteRefVal > 0) {
+        if (referral.referralType === 'percent') {
+          inviteReceiverShareCents = Math.round(inviteJobTotalCents * inviteRefVal / 100);
+          inviteSenderShareCents = inviteJobTotalCents - inviteReceiverShareCents;
+        } else {
+          inviteReceiverShareCents = Math.round(inviteRefVal * 100);
+          inviteSenderShareCents = inviteJobTotalCents - inviteReceiverShareCents;
+        }
+      }
+
+      console.log(`[referral-invite] payload: jobTotalCents=${inviteJobTotalCents} receiverShare=${inviteReceiverShareCents} senderShare=${inviteSenderShareCents} lineItems=${inviteLineItemsData.length}`);
 
       res.json({
         referralId: referral.id,
@@ -16711,18 +16760,29 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         senderCompanyName: senderCompany?.name || null,
         senderCompanyCity: senderCompany?.city || null,
         senderCompanyState: senderCompany?.state || null,
+        senderCompanyLogo: senderCompany?.logo || null,
         job: job ? {
           id: job.id,
           title: job.title,
           status: job.status,
           description: job.description,
-          scheduledDate: job.scheduledDate,
+          startDate: job.startDate,
           scheduledTime: job.scheduledTime,
+          scheduledEndTime: job.scheduledEndTime,
           estimatedCost: referral.allowPriceChange ? job.estimatedCost : null,
+          location: job.location,
+          jobType: job.jobType,
+          priority: job.priority,
           notes: job.notes,
         } : null,
         customerName,
         customerAddress,
+        customerPhone,
+        customerEmail,
+        jobTotalCents: inviteJobTotalCents,
+        receiverShareCents: inviteReceiverShareCents,
+        senderShareCents: inviteSenderShareCents,
+        lineItems: inviteLineItemsData.length > 0 ? inviteLineItemsData : null,
       });
     } catch (error: any) {
       console.error('[referrals] Error fetching invite:', error);
@@ -16872,10 +16932,12 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       }
 
       let jobTotalCents: number | null = null;
+      let jobLineItemsData: { name: string; description: string | null; quantity: string; unitPriceCents: number; unit: string; lineTotalCents: number }[] = [];
       if (job) {
         const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, job.id));
         if (lineItems.length > 0) {
-          jobTotalCents = lineItems.reduce((sum, item) => {
+          jobTotalCents = 0;
+          for (const item of lineItems) {
             const qty = parseFloat(String(item.quantity || '1'));
             const unitPrice = item.unitPriceCents || 0;
             let lineTotal = Math.round(qty * unitPrice);
@@ -16883,8 +16945,16 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
               const taxRate = parseFloat(String(item.taxRatePercentSnapshot));
               lineTotal += Math.round(lineTotal * taxRate / 100);
             }
-            return sum + lineTotal;
-          }, 0);
+            jobTotalCents += lineTotal;
+            jobLineItemsData.push({
+              name: item.name,
+              description: item.description || null,
+              quantity: String(item.quantity || '1'),
+              unitPriceCents: unitPrice,
+              unit: item.unit || 'each',
+              lineTotalCents: lineTotal,
+            });
+          }
         } else {
           const est = parseFloat(String(job.estimatedCost || '0'));
           if (est > 0) jobTotalCents = Math.round(est * 100);
@@ -16938,6 +17008,7 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         jobTotalCents,
         receiverShareCents,
         senderShareCents,
+        lineItems: jobLineItemsData.length > 0 ? jobLineItemsData : null,
       });
     } catch (error: any) {
       console.error('[job-offer] Error fetching:', error);

@@ -1,0 +1,192 @@
+We’re very close. The Job Offer / accept page now shows more job info, but it is still missing two critical things:
+
+The payout breakdown for both contractors
+
+The line items attached to the job
+
+I want both added to this page.
+
+What needs to be added
+1) Show payout breakdown for both sides
+
+Right now it shows the referral fee %, but I also need it to explicitly show the dollar breakdown like this:
+
+Job Price
+
+Contractor Gets
+
+Your Share
+
+Use the real values from the job / referral / invoice context, like in the screenshot example:
+
+Job Price = total value of the job
+
+Contractor Gets = what the receiving contractor will make
+
+Your Share = what the sending contractor keeps
+
+Important
+
+This should not just be another percent pill. I want it displayed as a real breakdown section with rows and dollar values.
+
+Example structure:
+
+Job Price .............. $4,750.00
+
+Contractor Gets .... $2,375.00
+
+Your Share ............ $2,375.00
+
+Logic expectations
+
+Please make sure the math is correct based on the referral percentage / split that was actually set.
+
+For example:
+
+If referral fee means receiver gets X% of job value, calculate that correctly
+
+Sender share should be the remaining amount
+
+Use the actual stored amount, not fake placeholders
+
+If total job value is unavailable, fall back gracefully and don’t invent numbers
+
+2) Show line items attached to the job
+
+I also want this page to display the line items that are attached to the job.
+
+If the sender created line items for the job, show them on the offer page so the receiving contractor can review what the job includes.
+
+What to show for each line item
+
+As available from the existing data model:
+
+line item name / title
+
+description if present
+
+quantity if present
+
+unit price if present
+
+line total if present
+
+UI direction for line items
+
+Add a separate card/section like:
+
+Line Items
+
+Item name
+
+optional description
+
+qty × unit price = total
+
+Make it clean, readable, and mobile-friendly.
+If there are multiple line items, stack them nicely.
+If there are no line items, hide the section completely.
+
+Rendering rules
+
+Only show real stored data
+
+Hide empty fields cleanly
+
+No blank rows
+
+No fake values
+
+Keep layout polished and easy to scan on mobile
+
+Data/backend tracing
+
+Please trace the full data path for this job-offer page and verify the response includes everything needed.
+
+Check:
+
+referral/job offer API response
+
+any serializer / formatter for the public/native offer page
+
+how job price is currently derived
+
+where referral percentage is stored
+
+where line items are stored for the job/invoice/estimate context
+
+If backend fields are missing
+
+Update the backend response to include:
+
+total job value
+
+receiver payout amount
+
+sender share amount
+
+attached line items
+
+any necessary line item fields (name, description, qty, unit price, total)
+
+But:
+
+do not break accept/decline flow
+
+do not change unrelated pages
+
+do not expose data that should not be visible to the receiving contractor
+
+do not invent values when source data is missing
+
+UI structure I want
+
+Please update the page to have:
+
+1. Company card
+
+Keep as-is with logo/fallback icon
+
+2. Job details card
+
+Keep the current improved job details
+
+3. Payment breakdown card
+
+Upgrade it so it includes:
+
+Referral Fee %
+
+Job Price
+
+Contractor Gets
+
+Your Share
+
+4. Line items card
+
+New section showing all attached line items if they exist
+
+5. Action buttons
+
+Keep Decline and Accept Job unchanged
+
+Deliverables
+
+Add payout breakdown rows for both contractors
+
+Add attached line items section
+
+Use real data only
+
+Hide the line items section if none exist
+
+Keep the page clean and mobile-friendly
+
+After implementation, tell me:
+
+where Job Price is coming from
+
+how Contractor Gets and Your Share are calculated
+
+where the line items are being sourced from
