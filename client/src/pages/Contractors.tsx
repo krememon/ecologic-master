@@ -819,16 +819,6 @@ export default function Contractors() {
         {/* ====== SENT TAB ====== */}
         {canView && (
           <TabsContent value="sent" className="mt-4 space-y-4">
-            {canSend && (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => { resetSendForm(); setSendModalOpen(true); }}
-                  className="h-[42px] rounded-xl text-[13px] font-medium px-5"
-                >
-                  <Send className="w-4 h-4 mr-2" />Send Job
-                </Button>
-              </div>
-            )}
             {outgoingLoading ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
             ) : outgoingReferrals.length === 0 ? (
