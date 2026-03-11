@@ -514,44 +514,58 @@ export default function Contractors() {
 
   const pendingCount = incomingReferrals.filter((r: any) => r.status === 'pending').length;
 
+  const tabConfig = [
+    { value: "contractors", label: "Contractors", icon: Building2, disabled: false, badge: 0 },
+    { value: "incoming", label: "Incoming", icon: Inbox, disabled: !canView, badge: pendingCount },
+    { value: "sent", label: "Sent", icon: ArrowUpRight, disabled: !canView, badge: 0 },
+  ];
+
+  const sectionHeadings: Record<string, string> = {
+    contractors: "Contractors",
+    incoming: "Incoming",
+    sent: "Sent",
+  };
+
+  const sectionCounts: Record<string, number> = {
+    contractors: subcontractors.length,
+    incoming: incomingReferrals.length,
+    sent: outgoingReferrals.length,
+  };
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Contractor Network</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage contractors and job referrals</p>
-      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="bg-slate-100/80 dark:bg-slate-800/60 rounded-xl p-1 border border-slate-200/60 dark:border-slate-700/40">
-          <div className="grid grid-cols-3 gap-1">
-            {[
-              { value: "contractors", label: "Contractors", icon: Building2, disabled: false, badge: 0 },
-              { value: "incoming", label: "Incoming", icon: Inbox, disabled: !canView, badge: pendingCount },
-              { value: "sent", label: "Sent", icon: ArrowUpRight, disabled: !canView, badge: 0 },
-            ].map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => !tab.disabled && setActiveTab(tab.value)}
-                disabled={tab.disabled}
-                className={`
-                  relative flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-all duration-200 outline-none
-                  ${activeTab === tab.value
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
-                    : tab.disabled
-                      ? "text-slate-400 dark:text-slate-600 cursor-not-allowed"
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                  }
-                `}
-              >
-                <tab.icon className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" />
-                <span>{tab.label}</span>
-                {tab.badge > 0 && (
-                  <span className="ml-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            ))}
+
+        {/* ROW 1 — Segmented Tabs */}
+        <div className="rounded-[14px] bg-slate-100 dark:bg-slate-800/80 p-[3px]">
+          <div className="grid grid-cols-3 gap-[3px]">
+            {tabConfig.map((tab) => {
+              const isActive = activeTab === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => !tab.disabled && setActiveTab(tab.value)}
+                  disabled={tab.disabled}
+                  className={[
+                    "relative flex items-center justify-center gap-1.5 h-[38px] rounded-[11px] text-[13px] font-semibold tracking-wide transition-all duration-150 outline-none select-none",
+                    isActive
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.3),0_0_0_0.5px_rgba(255,255,255,0.06)]"
+                      : tab.disabled
+                        ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                        : "text-slate-500 dark:text-slate-400 active:bg-white/40 dark:active:bg-slate-700/40",
+                  ].join(" ")}
+                >
+                  <tab.icon className="w-[14px] h-[14px] flex-shrink-0 opacity-70" />
+                  <span>{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className="absolute -top-1 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-[5px] leading-none ring-2 ring-slate-100 dark:ring-slate-800">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -561,8 +575,41 @@ export default function Contractors() {
           <TabsTrigger value="sent" />
         </TabsList>
 
+        {/* ROW 2 — Section header */}
+        <div className="flex items-center justify-between pt-5 pb-1">
+          <h2 className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 leading-none">
+            {sectionHeadings[activeTab] || "Contractors"}
+          </h2>
+          <span className="text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-0.5 tabular-nums leading-none">
+            {sectionCounts[activeTab] ?? 0}
+          </span>
+        </div>
+
+        {/* ROW 3 — Action buttons (Contractors tab only) */}
+        {activeTab === "contractors" && (
+          <div className={`grid gap-2.5 pt-1 pb-1 ${canSend ? "grid-cols-2" : "grid-cols-1"}`}>
+            {canSend && (
+              <Button
+                onClick={() => { resetSendForm(); setSendModalOpen(true); }}
+                variant="outline"
+                className="h-[42px] rounded-xl border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-[13px] font-medium shadow-none w-full"
+              >
+                <Send className="w-4 h-4 mr-2 opacity-60" />
+                Send Job
+              </Button>
+            )}
+            <Button
+              onClick={() => setIsDialogOpen(true)}
+              className="h-[42px] rounded-xl text-[13px] font-medium w-full"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Contractor
+            </Button>
+          </div>
+        )}
+
         {/* ====== CONTRACTORS TAB ====== */}
-        <TabsContent value="contractors" className="mt-5 space-y-5">
+        <TabsContent value="contractors" className="mt-4 space-y-4">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
               <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
@@ -591,38 +638,6 @@ export default function Contractors() {
               </div>
             </DialogContent>
           </Dialog>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
-                All Contractors
-              </h3>
-              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 tabular-nums">
-                {subcontractors.length}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {canSend && (
-                <Button
-                  onClick={() => { resetSendForm(); setSendModalOpen(true); }}
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3.5 rounded-lg border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-[13px] font-medium shadow-none"
-                >
-                  <Send className="w-3.5 h-3.5 mr-1.5" />
-                  Send Job
-                </Button>
-              )}
-              <Button
-                onClick={() => setIsDialogOpen(true)}
-                size="sm"
-                className="h-9 px-3.5 rounded-lg text-[13px] font-medium shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Add Contractor
-              </Button>
-            </div>
-          </div>
 
           {subcontractors.length > 0 && (
             <div className="relative">
@@ -735,7 +750,7 @@ export default function Contractors() {
 
         {/* ====== INCOMING TAB ====== */}
         {canView && (
-          <TabsContent value="incoming" className="mt-5 space-y-3">
+          <TabsContent value="incoming" className="mt-4 space-y-4">
             {incomingLoading ? (
               <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
             ) : incomingReferrals.length === 0 ? (
@@ -803,15 +818,14 @@ export default function Contractors() {
 
         {/* ====== SENT TAB ====== */}
         {canView && (
-          <TabsContent value="sent" className="mt-5 space-y-3">
+          <TabsContent value="sent" className="mt-4 space-y-4">
             {canSend && (
-              <div className="flex justify-end mb-1">
+              <div className="flex justify-end">
                 <Button
                   onClick={() => { resetSendForm(); setSendModalOpen(true); }}
-                  size="sm"
-                  className="h-9 px-3.5 rounded-lg text-[13px] font-medium shadow-sm"
+                  className="h-[42px] rounded-xl text-[13px] font-medium px-5"
                 >
-                  <Send className="w-3.5 h-3.5 mr-1.5" />Send Job
+                  <Send className="w-4 h-4 mr-2" />Send Job
                 </Button>
               </div>
             )}

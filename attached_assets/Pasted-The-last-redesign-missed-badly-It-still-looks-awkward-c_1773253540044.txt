@@ -1,0 +1,212 @@
+The last redesign missed badly. It still looks awkward, cramped, and cheap. I want to completely rethink only this top section of the Subcontractor page and make it feel high-end, clean, modern, and actually well designed. Do not keep iterating on the current bad layout. Start fresh.
+
+Scope
+
+Only redesign this top area:
+
+segmented tabs: Contractors / Incoming / Sent
+
+page title / count
+
+top actions: Send Job and Add Contractor
+
+Do not change anything below this section.
+Do not change backend logic, data fetching, routing, permissions, or tab functionality.
+
+Main problem with the current version
+
+What it looks like now:
+
+title breaks awkwardly into two lines
+
+count placement looks random and disconnected
+
+buttons feel jammed into the same row with no breathing room
+
+“Add Contractor” is too dominant in a bad way and gets cut off visually
+
+overall composition feels unbalanced and ugly
+
+nothing feels premium or intentional
+
+New direction: complete layout reset
+
+I want this section rebuilt with a clear vertical hierarchy instead of trying to force everything into one cramped horizontal cluster.
+
+Layout I want
+
+Build it as 3 clean rows:
+
+Row 1 — Segmented tabs
+
+Full-width premium segmented control
+
+Clean outer container
+
+Better active state
+
+More refined spacing and radius
+
+Should feel like native iOS / premium SaaS mobile UI
+
+Width should fit naturally within page padding
+
+No chunky gray slab look
+
+Row 2 — Header row
+
+Make this a clean header area under the tabs:
+
+Left: Contractors
+
+Right: a small refined count treatment like 2 in a subtle badge / pill / muted stat style
+
+Do not use “All Contractors” if it causes ugly wrapping
+
+The heading should stay on one line
+
+This row should feel balanced and minimal
+
+Row 3 — Action buttons
+
+Put the actions on their own row underneath
+
+Do not cram them beside the title
+
+Make both buttons same height
+
+Give them proper spacing
+
+Make them fill the row in a balanced way if that looks best
+
+“Add Contractor” = primary CTA
+
+“Send Job” = secondary CTA
+
+Must look polished and intentional on mobile
+
+Visual style requirements
+
+I want the entire section to feel:
+
+cleaner
+
+lighter
+
+better spaced
+
+more premium
+
+more native
+
+more modern
+
+more in line with the rest of EcoLogic
+
+Specifically:
+
+Better padding above/below each row
+
+Better use of white space
+
+Stronger alignment
+
+Cleaner typography hierarchy
+
+Softer but more intentional corner radii
+
+Subtle borders/shadows only if they truly improve polish
+
+No awkward wrapping
+
+No oversized clunky pills
+
+No layout where items feel smashed together
+
+Button direction
+Add Contractor
+
+Primary filled EcoLogic blue button
+
+Plus icon aligned correctly
+
+Text fully visible
+
+Comfortable horizontal padding
+
+Nice radius
+
+Should feel like the main CTA without overpowering the section
+
+Send Job
+
+Secondary button with premium style
+
+Either subtle outline, tinted background, or soft neutral fill depending on what best matches app styling
+
+Paper plane icon aligned nicely
+
+Should look elegant, not weak/generic
+
+Tabs direction
+
+Redesign tabs so they do not look like a giant gray rectangle with random pills inside.
+Need:
+
+cleaner shell
+
+better inner spacing
+
+improved active pill
+
+more elegant inactive states
+
+something that feels truly app-quality
+
+Mobile-first rules
+
+This is critical:
+
+Must look excellent on narrow iPhone widths
+
+No truncated text
+
+No awkward text wrapping
+
+No off-center visual balance
+
+Buttons should adapt cleanly on smaller screens
+
+Preserve proper tap targets
+
+Technical constraints
+
+UI-only change
+
+Keep exact existing behavior
+
+Keep exact existing actions and tab logic
+
+Reuse app tokens/components where possible
+
+No backend changes
+
+No RBAC changes
+
+No data changes
+
+Deliverable
+
+Rebuild this section from scratch with a new layout structure that is visually strong and clearly better than the current version.
+
+After finishing, give me:
+
+what layout structure you changed
+
+what styles/components were updated
+
+why the new version is better on mobile
+
+Important
+
+Do not give me a “slightly improved” version of what’s there now. I want a noticeably different, much better composition. The current one feels amateur and crowded. Fix it properly.
