@@ -512,40 +512,53 @@ export default function Contractors() {
     );
   }
 
+  const pendingCount = incomingReferrals.filter((r: any) => r.status === 'pending').length;
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Contractor Network</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage contractors and job referrals</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage contractors and job referrals</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-3 h-11">
-          <TabsTrigger value="contractors" className="text-xs sm:text-sm">
-            <Building2 className="w-4 h-4 mr-1.5 hidden sm:inline-block" />
-            Contractors
-          </TabsTrigger>
-          {canView ? (
-            <TabsTrigger value="incoming" className="text-xs sm:text-sm relative">
-              <Inbox className="w-4 h-4 mr-1.5 hidden sm:inline-block" />
-              Incoming
-              {incomingReferrals.filter((r: any) => r.status === 'pending').length > 0 && (
-                <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {incomingReferrals.filter((r: any) => r.status === 'pending').length}
-                </span>
-              )}
-            </TabsTrigger>
-          ) : (
-            <TabsTrigger value="incoming" disabled className="text-xs sm:text-sm opacity-40">Incoming</TabsTrigger>
-          )}
-          {canView ? (
-            <TabsTrigger value="sent" className="text-xs sm:text-sm">
-              <ArrowUpRight className="w-4 h-4 mr-1.5 hidden sm:inline-block" />
-              Sent
-            </TabsTrigger>
-          ) : (
-            <TabsTrigger value="sent" disabled className="text-xs sm:text-sm opacity-40">Sent</TabsTrigger>
-          )}
+        <div className="bg-slate-100/80 dark:bg-slate-800/60 rounded-xl p-1 border border-slate-200/60 dark:border-slate-700/40">
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              { value: "contractors", label: "Contractors", icon: Building2, disabled: false, badge: 0 },
+              { value: "incoming", label: "Incoming", icon: Inbox, disabled: !canView, badge: pendingCount },
+              { value: "sent", label: "Sent", icon: ArrowUpRight, disabled: !canView, badge: 0 },
+            ].map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => !tab.disabled && setActiveTab(tab.value)}
+                disabled={tab.disabled}
+                className={`
+                  relative flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-all duration-200 outline-none
+                  ${activeTab === tab.value
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
+                    : tab.disabled
+                      ? "text-slate-400 dark:text-slate-600 cursor-not-allowed"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                  }
+                `}
+              >
+                <tab.icon className="w-3.5 h-3.5 hidden sm:block flex-shrink-0" />
+                <span>{tab.label}</span>
+                {tab.badge > 0 && (
+                  <span className="ml-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none">
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <TabsList className="hidden">
+          <TabsTrigger value="contractors" />
+          <TabsTrigger value="incoming" />
+          <TabsTrigger value="sent" />
         </TabsList>
 
         {/* ====== CONTRACTORS TAB ====== */}
@@ -579,19 +592,33 @@ export default function Contractors() {
             </DialogContent>
           </Dialog>
 
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-              All Contractors ({subcontractors.length})
-            </h3>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+                All Contractors
+              </h3>
+              <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 tabular-nums">
+                {subcontractors.length}
+              </span>
+            </div>
             <div className="flex gap-2">
               {canSend && (
-                <Button onClick={() => { resetSendForm(); setSendModalOpen(true); }} variant="outline" size="sm">
-                  <Send className="w-4 h-4 mr-1.5" />
+                <Button
+                  onClick={() => { resetSendForm(); setSendModalOpen(true); }}
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3.5 rounded-lg border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-[13px] font-medium shadow-none"
+                >
+                  <Send className="w-3.5 h-3.5 mr-1.5" />
                   Send Job
                 </Button>
               )}
-              <Button onClick={() => setIsDialogOpen(true)} size="sm">
-                <Plus className="w-4 h-4 mr-1.5" />
+              <Button
+                onClick={() => setIsDialogOpen(true)}
+                size="sm"
+                className="h-9 px-3.5 rounded-lg text-[13px] font-medium shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Add Contractor
               </Button>
             </div>
@@ -779,8 +806,12 @@ export default function Contractors() {
           <TabsContent value="sent" className="mt-5 space-y-3">
             {canSend && (
               <div className="flex justify-end mb-1">
-                <Button onClick={() => { resetSendForm(); setSendModalOpen(true); }} size="sm">
-                  <Send className="w-4 h-4 mr-1.5" />Send Job
+                <Button
+                  onClick={() => { resetSendForm(); setSendModalOpen(true); }}
+                  size="sm"
+                  className="h-9 px-3.5 rounded-lg text-[13px] font-medium shadow-sm"
+                >
+                  <Send className="w-3.5 h-3.5 mr-1.5" />Send Job
                 </Button>
               </div>
             )}

@@ -1,0 +1,181 @@
+We need to redesign only the top section of the Subcontractor page UI. Do not change backend logic, data flow, permissions, tabs functionality, or page behavior. This is a UI-only polish/refactor for the section currently showing:
+
+segmented tabs: Contractors / Incoming / Sent
+
+heading: All Contractors (2)
+
+action buttons: Send Job and Add Contractor
+
+Goal
+
+Make this section feel much more polished, modern, and aligned with the rest of EcoLogic’s app aesthetic. Right now it feels too plain/blocky. I want it to feel more premium, cleaner, and more “Apple / modern SaaS mobile app” while still matching the rest of the app.
+
+Important constraints
+
+Only change this section
+
+Keep the same functionality
+
+Keep same labels unless a tiny visual improvement requires a subtle text treatment
+
+Must remain mobile-first and look great on iPhone-sized screens
+
+Must match EcoLogic styling used elsewhere in the app
+
+Preserve dark/light mode behavior if applicable
+
+Do not introduce anything that feels off-brand or too flashy
+
+Keep accessibility and tap targets good
+
+Design direction
+
+Redesign this section with these principles:
+
+1) Segmented control redesign
+
+The current segmented tabs look too bulky and generic. Redesign them to feel cleaner and more integrated with the app.
+
+What I want:
+
+A more premium segmented control container
+
+Softer rounded corners
+
+Better spacing/padding
+
+Active tab should feel crisp and elevated, not just like a white block
+
+Inactive tabs should still feel intentional and readable
+
+Better visual hierarchy
+
+Subtle border/shadow/background treatment that matches the rest of EcoLogic
+
+Think:
+
+modern iOS segmented control
+
+clean, soft, polished
+
+not overly dark/heavy
+
+better balance between background, active pill, and text
+
+2) Heading area redesign
+
+The “All Contractors (2)” text needs a more polished layout.
+
+What I want:
+
+Better spacing between tabs and heading
+
+Make the heading feel more intentional
+
+Style the contractor count in a cleaner way
+
+Could be same line, but visually refined
+
+Should feel like a real section header, not just default text
+
+3) Action buttons redesign
+
+The current Send Job and Add Contractor buttons feel too generic and not well balanced.
+
+I want:
+
+Better alignment and spacing
+
+Better visual hierarchy between primary and secondary action
+
+“Add Contractor” should clearly be the primary CTA
+
+“Send Job” should look premium as a secondary action
+
+Both should match the app’s aesthetic and existing button language
+
+Improve icon sizing/alignment
+
+Improve height, padding, radius, and typography
+
+The whole row should feel tighter and more intentional
+
+Potential direction:
+
+Primary button remains filled with EcoLogic blue
+
+Secondary button could be outlined / soft filled / tinted depending on what best matches app styling
+
+Avoid making them too giant or too cramped
+
+Make sure they stack/wrap gracefully if needed on smaller screens
+
+4) Overall section polish
+
+This whole block should feel like a polished top control area.
+
+Please improve:
+
+vertical rhythm
+
+horizontal spacing
+
+alignment consistency
+
+section balance
+
+typography weights/sizes
+
+container breathing room
+
+The final result should feel:
+
+modern
+
+premium
+
+native-app-like
+
+clean and minimal
+
+consistent with EcoLogic
+
+Implementation guidance
+
+Reuse existing app design tokens / spacing / border radius / colors if available
+
+Reuse shared components if possible
+
+If there is an existing segmented control/button pattern elsewhere in the app, visually align with that language
+
+Avoid overengineering
+
+No backend changes
+
+No data/model changes
+
+No permission/RBAC changes
+
+No tab logic changes
+
+Deliverables
+
+Redesign the UI for this top section only
+
+Keep functionality exactly the same
+
+Make it visually cleaner and more premium
+
+Ensure it matches the rest of the EcoLogic app aesthetic
+
+After implementation, give me a short summary of:
+
+what UI was changed
+
+what components/styles were updated
+
+anything responsive/mobile-specific you adjusted
+
+Extra note
+
+I care a lot about the look here, so don’t just slightly tweak it. Actually make it feel noticeably better and more polished while still fitting naturally into the current app.
