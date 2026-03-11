@@ -16859,11 +16859,15 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
 
       let customerName: string | null = null;
       let customerAddress: string | null = null;
+      let customerPhone: string | null = null;
+      let customerEmail: string | null = null;
       if (job?.customerId) {
         const customer = await storage.getCustomer(job.customerId);
         if (customer) {
           customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || null;
-          customerAddress = [customer.addressLine1, customer.city, customer.state, customer.postalCode].filter(Boolean).join(', ') || null;
+          customerAddress = [customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || null;
+          customerPhone = customer.phone || null;
+          customerEmail = customer.email || null;
         }
       }
 
@@ -16878,19 +16882,26 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         senderCompanyName: senderCompany?.name || null,
         senderCompanyCity: senderCompany?.city || null,
         senderCompanyState: senderCompany?.state || null,
+        senderCompanyLogo: senderCompany?.logo || null,
         tokenValid: true,
         job: job ? {
           id: job.id,
           title: job.title,
           status: job.status,
           description: job.description,
-          scheduledDate: job.scheduledDate,
+          startDate: job.startDate,
           scheduledTime: job.scheduledTime,
+          scheduledEndTime: job.scheduledEndTime,
           estimatedCost: referral.allowPriceChange ? job.estimatedCost : null,
+          location: job.location,
+          jobType: job.jobType,
+          priority: job.priority,
           notes: job.notes,
         } : null,
         customerName,
         customerAddress,
+        customerPhone,
+        customerEmail,
       });
     } catch (error: any) {
       console.error('[job-offer] Error fetching:', error);

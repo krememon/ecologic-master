@@ -2,10 +2,14 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, MapPin, Calendar, DollarSign, FileText, CheckCircle2, XCircle, AlertTriangle, ArrowRight, LogIn } from "lucide-react";
+import {
+  Loader2, Building2, MapPin, Calendar, DollarSign, FileText,
+  CheckCircle2, XCircle, AlertTriangle, ArrowRight, LogIn,
+  Clock, User, Phone, Mail, Briefcase, MessageSquare, Tag,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -20,19 +24,61 @@ interface JobOfferData {
   senderCompanyName: string | null;
   senderCompanyCity: string | null;
   senderCompanyState: string | null;
+  senderCompanyLogo: string | null;
   tokenValid: boolean;
   job: {
     id: number;
     title: string;
     status: string;
     description: string | null;
-    scheduledDate: string | null;
+    startDate: string | null;
     scheduledTime: string | null;
+    scheduledEndTime: string | null;
     estimatedCost: string | null;
+    location: string | null;
+    jobType: string | null;
+    priority: string | null;
     notes: string | null;
   } | null;
   customerName: string | null;
   customerAddress: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatTime(timeStr: string): string {
+  try {
+    const [h, m] = timeStr.split(":");
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${m} ${ampm}`;
+  } catch {
+    return timeStr;
+  }
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</p>
+        <p className="text-sm text-slate-800 dark:text-slate-200 mt-0.5 whitespace-pre-wrap">{value}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function JobOffer() {
@@ -211,144 +257,178 @@ export default function JobOffer() {
 
   const senderLocation = [data.senderCompanyCity, data.senderCompanyState].filter(Boolean).join(", ");
 
+  const scheduleStr = (() => {
+    const parts: string[] = [];
+    if (data.job?.startDate) parts.push(formatDate(data.job.startDate));
+    if (data.job?.scheduledTime) {
+      let timeStr = formatTime(data.job.scheduledTime);
+      if (data.job.scheduledEndTime) timeStr += ` – ${formatTime(data.job.scheduledEndTime)}`;
+      parts.push(timeStr);
+    }
+    return parts.join(" · ");
+  })();
+
+  const jobAddress = data.job?.location || data.customerAddress || null;
+
   return (
-    <div className="min-h-[60vh] px-4 py-6 max-w-lg mx-auto">
-      <div className="text-center mb-6">
-        <Badge variant="secondary" className="mb-3 text-sm px-3 py-1">Job Offer</Badge>
-        <h1 className="text-2xl font-bold text-foreground">You've received a job offer</h1>
+    <div className="min-h-[60vh] px-4 py-6 max-w-lg mx-auto space-y-4">
+
+      {/* Header badge */}
+      <div className="text-center pb-1">
+        <Badge variant="secondary" className="mb-3 text-xs px-3 py-1 font-medium">Job Offer</Badge>
+        <h1 className="text-xl font-bold text-foreground">You've received a job offer</h1>
       </div>
 
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-blue-600" />
+      {/* Company card */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3.5">
+            {data.senderCompanyLogo ? (
+              <img
+                src={data.senderCompanyLogo}
+                alt={data.senderCompanyName || "Company"}
+                className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                }}
+              />
+            ) : null}
+            <div
+              className={`w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 ${data.senderCompanyLogo ? "hidden" : ""}`}
+            >
+              <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <div>
-              <CardTitle className="text-base">{data.senderCompanyName || "Unknown Company"}</CardTitle>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {data.senderCompanyName || "Unknown Company"}
+              </p>
               {senderLocation && (
-                <p className="text-sm text-muted-foreground">{senderLocation}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  {senderLocation}
+                </p>
               )}
             </div>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {data.job && (
-        <Card className="mb-4">
-          <CardContent className="pt-5 space-y-4">
-            <div>
-              <h3 className="font-semibold text-base mb-1">{data.job.title}</h3>
-              {data.job.description && (
-                <p className="text-sm text-muted-foreground">{data.job.description}</p>
-              )}
-            </div>
-
-            {data.customerName && (
-              <div className="flex items-start gap-3">
-                <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Customer</p>
-                  <p className="text-sm text-muted-foreground">{data.customerName}</p>
-                </div>
-              </div>
-            )}
-
-            {data.customerAddress && (
-              <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Address</p>
-                  <p className="text-sm text-muted-foreground">{data.customerAddress}</p>
-                </div>
-              </div>
-            )}
-
-            {(data.job.scheduledDate || data.job.scheduledTime) && (
-              <div className="flex items-start gap-3">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Schedule</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[data.job.scheduledDate, data.job.scheduledTime].filter(Boolean).join(" at ")}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {data.job.estimatedCost && data.allowPriceChange && (
-              <div className="flex items-start gap-3">
-                <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Estimated Cost</p>
-                  <p className="text-sm text-muted-foreground">${parseFloat(data.job.estimatedCost).toFixed(2)}</p>
-                </div>
-              </div>
-            )}
-
-            {data.job.notes && (
-              <div className="flex items-start gap-3">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Notes</p>
-                  <p className="text-sm text-muted-foreground">{data.job.notes}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {data.message && (
-        <Card className="mb-4">
-          <CardContent className="pt-5">
-            <p className="text-sm font-medium mb-1">Message from sender</p>
-            <p className="text-sm text-muted-foreground italic">"{data.message}"</p>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="mb-6">
-        <CardContent className="pt-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Referral Fee</span>
-            <Badge variant="outline" className="text-sm">{feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}</Badge>
           </div>
         </CardContent>
       </Card>
 
-      {!isAuthenticated ? (
-        <div className="space-y-3">
-          <p className="text-center text-sm text-muted-foreground">Log in to accept or decline this job offer</p>
-          <Button
-            className="w-full"
-            onClick={() => setLocation(`/login?redirect=/job-offer/${jobId}/${token}`)}
-          >
-            <LogIn className="h-4 w-4 mr-2" />
-            Log In to Respond
-          </Button>
-        </div>
-      ) : (
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => declineMutation.mutate()}
-            disabled={declineMutation.isPending || acceptMutation.isPending}
-          >
-            {declineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Decline
-          </Button>
-          <Button
-            className="flex-1 bg-green-600 hover:bg-green-700"
-            onClick={() => acceptMutation.mutate()}
-            disabled={acceptMutation.isPending || declineMutation.isPending}
-          >
-            {acceptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Accept Job
-          </Button>
-        </div>
+      {/* Job details card */}
+      {data.job && (
+        <Card>
+          <CardContent className="p-4 space-y-0">
+            {/* Job title header */}
+            <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{data.job.title}</h3>
+              {data.job.jobType && (
+                <span className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-0.5">
+                  <Tag className="w-3 h-3" />
+                  {data.job.jobType}
+                </span>
+              )}
+            </div>
+
+            {/* Detail rows */}
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {data.job.description && (
+                <DetailRow icon={FileText} label="Description" value={data.job.description} />
+              )}
+              {data.customerName && (
+                <DetailRow icon={User} label="Customer" value={data.customerName} />
+              )}
+              {jobAddress && (
+                <DetailRow icon={MapPin} label="Address" value={jobAddress} />
+              )}
+              {scheduleStr && (
+                <DetailRow icon={Calendar} label="Schedule" value={scheduleStr} />
+              )}
+              {data.customerPhone && (
+                <DetailRow icon={Phone} label="Contact Phone" value={data.customerPhone} />
+              )}
+              {data.customerEmail && (
+                <DetailRow icon={Mail} label="Contact Email" value={data.customerEmail} />
+              )}
+              {data.job.estimatedCost && data.allowPriceChange && (
+                <DetailRow icon={DollarSign} label="Estimated Cost" value={`$${parseFloat(data.job.estimatedCost).toFixed(2)}`} />
+              )}
+              {data.job.notes && (
+                <DetailRow icon={FileText} label="Notes" value={data.job.notes} />
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      {/* Message from sender */}
+      {data.message && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                <MessageSquare className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">Message from sender</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1 italic">"{data.message}"</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Referral fee */}
+      <Card className="border-blue-200 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-950/20">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                <DollarSign className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Referral Fee</span>
+            </div>
+            <Badge className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 text-sm font-semibold px-3 py-1">
+              {feeDisplay} {data.referralType === "percent" ? "of job value" : "flat fee"}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Actions */}
+      <div className="pt-2 pb-4">
+        {!isAuthenticated ? (
+          <div className="space-y-3">
+            <p className="text-center text-sm text-muted-foreground">Log in to accept or decline this job offer</p>
+            <Button
+              className="w-full h-12 rounded-xl text-[15px] font-medium"
+              onClick={() => setLocation(`/login?redirect=/job-offer/${jobId}/${token}`)}
+            >
+              <LogIn className="h-4 w-4 mr-2" />
+              Log In to Respond
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="outline"
+              className="h-12 rounded-xl text-[15px] font-medium border-slate-200 dark:border-slate-700"
+              onClick={() => declineMutation.mutate()}
+              disabled={declineMutation.isPending || acceptMutation.isPending}
+            >
+              {declineMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Decline
+            </Button>
+            <Button
+              className="h-12 rounded-xl text-[15px] font-medium bg-green-600 hover:bg-green-700"
+              onClick={() => acceptMutation.mutate()}
+              disabled={acceptMutation.isPending || declineMutation.isPending}
+            >
+              {acceptMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Accept Job
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

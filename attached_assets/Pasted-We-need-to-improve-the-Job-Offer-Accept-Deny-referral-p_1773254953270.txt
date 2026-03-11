@@ -1,0 +1,189 @@
+We need to improve the Job Offer / Accept-Deny referral page so it gives the receiving contractor much more context before accepting.
+
+Goal
+
+On the job offer page, I want:
+
+All important job details displayed
+
+The company’s profile picture/logo displayed instead of just the generic company icon
+
+Right now the page feels too bare and generic. A contractor should be able to clearly see who the offer is from and all the relevant job info before deciding.
+
+What to change
+1) Show the company profile picture/logo
+
+In the company card at the top (currently showing EcoLogic and Sayville, NY), replace the generic icon with the actual company profile image/logo if one exists.
+
+Desired behavior
+
+If the sending company has a saved company logo/profile image, display it there
+
+If no logo exists, then fall back to the current generic company icon
+
+The image should look polished:
+
+square or rounded-square
+
+properly cropped
+
+not stretched
+
+aligned nicely with the company name/location
+
+match EcoLogic’s current UI style
+
+2) Show all key job details
+
+Expand the job details section so the receiving contractor can see the full important information for the offered job.
+
+I want this page to show as much relevant job information as we already have available for that referral/job, such as:
+
+customer name
+
+job title / job name
+
+job description / scope of work
+
+schedule / date / time
+
+service address / job location
+
+contact info if available
+
+job notes if available
+
+internal job details that are intended to be shared with the receiving contractor
+
+referral fee / payout structure
+
+any other relevant job fields already attached to the job/referral that make sense to show here
+
+Important rules
+
+Do not invent data.
+Only display fields that actually exist from the current job/referral/company data.
+
+That means:
+
+if a field exists, show it
+
+if a field is empty/null, hide that row cleanly
+
+do not leave awkward blank spaces
+
+do not show labels for missing values
+
+Layout / UI expectations
+
+Keep the same overall aesthetic as the rest of the app, but make this page more informative and polished.
+
+Top company card
+
+show company logo/profile image on the left
+
+company name
+
+location if available
+
+keep it looking clean and premium
+
+Job details card
+
+Turn this into a more complete details card with clean grouped rows.
+
+Potential structure:
+
+Job title at top
+
+then a stacked list of detail rows underneath
+
+each row with icon + label + value
+
+consistent spacing
+
+only show populated rows
+
+Examples of rows:
+
+Customer
+
+Description
+
+Date
+
+Time
+
+Address
+
+Contact
+
+Notes
+
+Referral fee section
+
+Keep the referral fee section, but make sure it still looks aligned with the updated page.
+
+Data / logic requirements
+
+Please trace the full data path for this page and make sure the public/native job-offer view is receiving enough data to render these details.
+
+If backend/API is missing fields:
+
+Update the relevant route/serializer/response so the page can access:
+
+company logo / company image
+
+all relevant job detail fields already stored in the DB
+
+But:
+
+do not break existing flow
+
+do not change accept/decline behavior
+
+do not change permissions/security rules beyond what is needed to expose the correct referral/job details for the intended recipient
+
+do not expose unrelated private data that should not be shared
+
+Fallback behavior
+
+If company logo missing → show current default icon
+
+If a job detail field is missing → hide that field entirely
+
+If location missing → hide location row/text cleanly
+
+Maintain a polished layout in all cases
+
+Technical scope
+
+Please check:
+
+public sign / public referral job offer page component
+
+native app rendering of the same page if shared
+
+API response powering this screen
+
+company profile/logo field mapping
+
+job/referral detail mapping
+
+Deliverables
+
+Show actual company logo/profile image on the job offer page
+
+Expand page to display all relevant available job details
+
+Hide empty fields cleanly
+
+Keep the UI polished and mobile-friendly
+
+After implementation, tell me:
+
+what fields are now shown
+
+where the company logo is coming from
+
+whether any backend response had to be updated to supply missing fields
