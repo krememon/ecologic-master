@@ -11993,40 +11993,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return db2 - da;
       });
 
-      // Second pass: interleave subcontractor_fee rows directly after their matching
-      // collected-payment row (paired by invoiceId + jobId). This prevents all positives
-      // grouping first and all negatives last when multiple referrals share the same date.
-      {
-        const feeRows = (items as any[]).filter((item: any) => item.computedStatus === 'subcontractor_fee');
-        if (feeRows.length > 0) {
-          const nonFeeItems = (items as any[]).filter((item: any) => item.computedStatus !== 'subcontractor_fee');
-          const reordered: any[] = [];
-          for (const item of nonFeeItems) {
-            const matchingFee = feeRows.find(
-              (fee: any) => fee.invoiceId === item.invoiceId && fee.jobId === item.jobId
-            );
-            if (matchingFee) {
-              reordered.push(matchingFee);
-            }
-            reordered.push(item);
-          }
-          // Any fee rows that had no matching parent (safety net) go at end
-          const pairedFeeInvoiceKeys = new Set(
-            reordered
-              .filter((r: any) => r.computedStatus === 'subcontractor_fee')
-              .map((r: any) => `${r.invoiceId}-${r.jobId}`)
+      // Second pass: interleave subcontractor_fee rows directly before their matching
+      // collected-payment row (paired by invoiceId + jobId), so each pair reads:
+      //   -$X Subcontractor Fee  →  +$Y Paid
+      const feeRows = (items as any[]).filter((r: any) => r.computedStatus === 'subcontractor_fee');
+      let finalItems: any[];
+      if (feeRows.length > 0) {
+        const nonFeeItems = (items as any[]).filter((r: any) => r.computedStatus !== 'subcontractor_fee');
+        const paired: any[] = [];
+        for (const item of nonFeeItems) {
+          const matchingFee = feeRows.find(
+            (fee: any) => fee.invoiceId === item.invoiceId && fee.jobId === item.jobId
           );
-          for (const fee of feeRows) {
-            if (!pairedFeeInvoiceKeys.has(`${fee.invoiceId}-${fee.jobId}`)) {
-              reordered.push(fee);
-            }
-          }
-          (items as any[]).splice(0, (items as any[]).length, ...reordered);
+          if (matchingFee) paired.push(matchingFee); // fee FIRST
+          paired.push(item);                          // then collected payment
         }
+        // Safety net: any fee rows with no parent go at end
+        const usedKeys = new Set(
+          paired.filter((r: any) => r.computedStatus === 'subcontractor_fee')
+               .map((r: any) => `${r.invoiceId}:${r.jobId}`)
+        );
+        for (const fee of feeRows) {
+          if (!usedKeys.has(`${fee.invoiceId}:${fee.jobId}`)) paired.push(fee);
+        }
+        finalItems = paired;
+      } else {
+        finalItems = items as any[];
       }
+      console.log(`[ledger-order] company=${company.id} finalItems:`,
+        finalItems.map((r: any) => `${r.computedStatus}:inv${r.invoiceId}:job${r.jobId}`).join(' → '));
 
       res.json({
-        items,
+        items: finalItems,
         stats: {
           stillOwedCents,
           paidTodayCents,

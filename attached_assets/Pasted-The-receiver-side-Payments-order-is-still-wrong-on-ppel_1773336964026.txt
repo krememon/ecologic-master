@@ -1,0 +1,144 @@
+The receiver-side Payments order is still wrong on ppellegrino@ecologicc.
+
+Current wrong order
+
+It is still rendering like:
+
+$4,000.00 Paid
+
+-$2,000.00 Subcontractor Fee
+
+$4,000.00 Paid
+
+-$2,000.00 Subcontractor Fee
+
+Correct order I want
+
+For each matched subcontract/payment pair, the negative Subcontractor Fee row must appear above the matching $4,000 paid row.
+
+So the order should be:
+
+James Doherty — Subcontractor Fee — -$2,000.00
+
+James Doherty — Paid — $4,000.00
+
+James Doherty — Subcontractor Fee — -$2,000.00
+
+James Doherty — Paid — $4,000.00
+
+So in short:
+
+-2000
+
++4000
+
+-2000
+
++4000
+
+Important
+
+This is not a styling issue.
+This is not a vague preference.
+This is a specific ordering bug that is still not fixed.
+
+The negative row should be directly above its matching collected payment row.
+
+What I need you to do
+1) Stop sorting these as generic payments
+
+The list is clearly still being ordered by the base payment rows first and then the fee rows after them.
+
+I need you to explicitly build/display the receiver-side referred payment entries as paired ledger groups in the right order.
+
+2) Pair by the same underlying referred payment/referral/job
+
+Use the real linking relationship between:
+
+collected receiver payment row
+
+subcontractor fee row
+
+Then render each pair as:
+
+first the negative fee row
+
+then the matching positive collected row
+
+3) Make this deterministic
+
+Do not rely on generic timestamp sorting if both rows have the same date/time and that causes the wrong order.
+
+Within each pair, force:
+
+fee row first
+
+collected row second
+
+Scope
+
+Fix only the receiver-side Payments ordering on ppellegrino@ecologicc for these subcontract/payment ledger pairs.
+
+Do not change:
+
+amounts
+
+labels
+
+colors
+
+filters
+
+sender-side behavior
+
+other payment types
+
+Expected result
+
+For the James Doherty entries, I should see:
+
+Subcontractor Fee -$2,000.00
+
+Paid $4,000.00
+
+Subcontractor Fee -$2,000.00
+
+Paid $4,000.00
+
+Not the other way around.
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+the pairing key/relationship used
+
+the final ordered array for the receiver-side payment list
+
+for each pair, which row is flagged fee vs collected
+
+the exact final render order
+
+Deliverables
+
+Fix the receiver-side Payments list so each -$2,000 Subcontractor Fee row renders directly above its matching $4,000 Paid row
+
+Make the order deterministic and pair-based
+
+After implementation, tell me:
+
+what field/relationship is being used to pair the rows
+
+what exact sorting/render logic was changed
+
+confirmation that the final order on ppellegrino@ecologicc is now:
+
+-2000
+
++4000
+
+-2000
+
++4000
