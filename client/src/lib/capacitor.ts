@@ -195,9 +195,13 @@ export async function registerPushNotifications(): Promise<PushResult> {
         }
 
         try {
+          const nativeSid = localStorage.getItem("nativeSessionId");
+          const bearerHeaders: Record<string, string> = nativeSid
+            ? { Authorization: `Bearer ${nativeSid}` }
+            : {};
           const res = await fetch("/api/push/register", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...bearerHeaders },
             credentials: "include",
             body: JSON.stringify({
               token: token.value,

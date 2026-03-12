@@ -1091,13 +1091,34 @@ export function setupAuth(app: Express) {
   app.get("/api/auth/google", (req, res, next) => {
     const platform = req.query.platform as string || "web";
     const nonce = req.query.nonce as string || "";
-    const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
+    // returnTo is forwarded by the cross-domain redirect so the callback can
+    // send the preview browser back with a one-time auth code.
+    const returnTo = req.query.returnTo as string || "";
+
+    // Build the OAuth state param:
+    //   ios:<nonce>  — native iOS nonce flow
+    //   ios          — native iOS without nonce
+    //   web:<b64url> — web request coming from preview (has returnTo)
+    //   web          — regular web
+    let state: string;
+    if (platform === "ios" && nonce) {
+      state = `ios:${nonce}`;
+    } else if (platform === "ios") {
+      state = "ios";
+    } else if (returnTo) {
+      // Encode returnTo so it survives the round-trip through Google's state param
+      state = `web:${Buffer.from(returnTo).toString("base64url")}`;
+    } else {
+      state = "web";
+    }
 
     // Cross-domain session fix: If the request arrives from a preview/dev domain
     // (not the stable production host), redirect the browser to the production
     // host before starting the OAuth flow. This ensures the session cookie that
     // Passport stores the OAuth `state` in is bound to the same domain that
     // Google will call back to, preventing a state-mismatch rejection.
+    // We also pass `returnTo` pointing back to the preview origin so the
+    // callback can redirect the user back to the preview with a webAuthCode.
     const productionBase = process.env.APP_BASE_URL;
     if (productionBase) {
       try {
@@ -1108,15 +1129,17 @@ export function setupAuth(app: Express) {
           const qs = new URLSearchParams();
           if (platform && platform !== "web") qs.set("platform", platform);
           if (nonce) qs.set("nonce", nonce);
-          const qsStr = qs.toString() ? `?${qs.toString()}` : "";
-          const target = `${productionBase}/api/auth/google${qsStr}`;
-          console.log(`[auth/google] cross-domain redirect: ${currentHost} → ${prodHost}`);
+          // Tell production where to send the user back after auth
+          const proto = req.headers["x-forwarded-proto"] || "https";
+          qs.set("returnTo", `${proto}://${currentHost}`);
+          const target = `${productionBase}/api/auth/google?${qs.toString()}`;
+          console.log(`[auth/google] cross-domain redirect: ${currentHost} → ${prodHost} (returnTo set)`);
           return res.redirect(302, target);
         }
       } catch (_) {}
     }
 
-    console.log(`[auth/google] starting OAuth on host=${req.headers.host} state=${state.substring(0, 12)} platform=${platform}`);
+    console.log(`[auth/google] starting OAuth on host=${req.headers.host} state=${state.substring(0, 12)} platform=${platform} returnTo=${returnTo || "(none)"}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state,
@@ -1147,23 +1170,35 @@ export function setupAuth(app: Express) {
 
   app.get("/api/auth/google/callback", (req, res, next) => {
     const rawState = (req.query.state as string) || "web";
-    console.log("[auth/google/callback] hit, rawState:", rawState);
+    console.log("[auth/google/callback] hit, rawState:", rawState.substring(0, 20));
     passport.authenticate("google", async (err: any, user: any, info: any) => {
       const isIos = rawState === "ios" || rawState.startsWith("ios:");
       const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
-      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "err:", !!err, "user:", !!user);
+
+      // Decode optional returnTo (set when request came from a preview domain)
+      let returnTo: string | null = null;
+      if (rawState.startsWith("web:")) {
+        try {
+          returnTo = Buffer.from(rawState.substring(4), "base64url").toString("utf8");
+          // Validate it looks like a proper origin URL
+          const parsed = new URL(returnTo);
+          if (!["http:", "https:"].includes(parsed.protocol)) returnTo = null;
+        } catch {
+          returnTo = null;
+        }
+      }
+
+      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "returnTo:", returnTo || "(none)", "err:", !!err, "user:", !!user);
 
       if (err) {
         console.error("[google-auth] Error:", err);
-        if (isIos) {
-          return res.redirect("/api/auth/google-complete");
-        }
+        if (isIos) return res.redirect("/api/auth/google-complete");
+        if (returnTo) return res.redirect(`${returnTo}/?error=oauth_failed`);
         return res.redirect("/auth?error=oauth_failed");
       }
       if (!user) {
-        if (isIos) {
-          return res.redirect("/api/auth/google-complete");
-        }
+        if (isIos) return res.redirect("/api/auth/google-complete");
+        if (returnTo) return res.redirect(`${returnTo}/?error=oauth_cancelled`);
         return res.redirect("/auth?error=oauth_cancelled");
       }
 
@@ -1182,8 +1217,25 @@ export function setupAuth(app: Express) {
         }
         return res.redirect("/api/auth/google-complete");
       }
+
+      // Preview cross-domain flow: redirect back to the originating preview domain
+      // with a one-time webAuthCode the client will exchange for a Bearer token.
+      if (returnTo) {
+        const code = storeAuthCode(user.id);
+        const redirectUrl = `${returnTo}/?webAuthCode=${encodeURIComponent(code)}`;
+        console.log("[google-auth] preview returnTo flow: redirecting to", returnTo, "with webAuthCode");
+        // We still need to create a session on the production domain so the exchange-code
+        // endpoint has a valid session to log the user into (req.login creates it).
+        return req.login(user, (loginErr) => {
+          if (loginErr) {
+            console.error("[google-auth] Login error (returnTo):", loginErr);
+            return res.redirect(`${returnTo}/?error=login_failed`);
+          }
+          return res.redirect(redirectUrl);
+        });
+      }
       
-      // Web flow: Check if 2FA is enabled for this user
+      // Standard web flow: Check if 2FA is enabled for this user
       const fullUser = await storage.getUser(user.id);
       if (fullUser?.twoFactorEnabled) {
         (req.session as any).twoFactorPendingUserId = user.id;
@@ -1208,7 +1260,26 @@ export function setupAuth(app: Express) {
   });
 
   // Auth code exchange endpoint for native app deep-link flow
+  // Handle preflight for cross-origin exchange-code requests (preview → production)
+  app.options("/api/auth/exchange-code", (req, res) => {
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    }
+    res.sendStatus(204);
+  });
+
   app.post("/api/auth/exchange-code", async (req, res) => {
+    // Allow cross-origin requests from Replit preview domains
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+
     try {
       const { code } = req.body;
       if (!code || typeof code !== "string") {

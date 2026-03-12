@@ -282,7 +282,65 @@ function useColdStartRedirect(ready: boolean) {
 function AuthenticatedRouter() {
   const path = window.location.pathname;
   const { isAuthenticated, isLoading, user } = useAuth();
-  
+
+  // Safety net: never let the loading screen hang forever.
+  // After 8 seconds we force the app to render regardless of loading state.
+  const [authTimedOut, setAuthTimedOut] = React.useState(false);
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      if (!authTimedOut) {
+        console.warn("[auth] Loading timeout reached (8s) — forcing render");
+        setAuthTimedOut(true);
+      }
+    }, 8000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Exchange a one-time webAuthCode issued by the production server (for preview
+  // Google OAuth cross-domain redirect) into a Bearer session token.
+  // IMPORTANT: the code lives in the production server's memory, so we must
+  // POST to the production server regardless of which domain the client is on.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const webAuthCode = params.get("webAuthCode");
+    if (!webAuthCode) return;
+
+    console.log("[auth] Found webAuthCode in URL — exchanging for session...");
+    // Remove the code from the URL immediately so it can't be replayed
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    // Use the stable production URL so the code is found in the right memory store.
+    const prodBase = (import.meta.env.VITE_APP_BASE_URL as string | undefined) || "";
+    const exchangeUrl = prodBase
+      ? `${prodBase}/api/auth/exchange-code`
+      : "/api/auth/exchange-code";
+    console.log("[auth] webAuthCode exchange URL:", exchangeUrl);
+
+    fetch(exchangeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: webAuthCode }),
+      credentials: "include",
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          console.error("[auth] webAuthCode exchange failed:", res.status);
+          return;
+        }
+        const data = await res.json();
+        if (data.sessionId) {
+          localStorage.setItem("nativeSessionId", data.sessionId);
+          console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId");
+        }
+        // Reload so queries re-run with the new Bearer token
+        window.location.reload();
+      })
+      .catch((err) => {
+        console.error("[auth] webAuthCode exchange error:", err);
+      });
+  }, []);
+
   useWebSocket();
   usePushNotifications();
 
@@ -310,7 +368,8 @@ function AuthenticatedRouter() {
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry, subActive })
     : null;
 
-  if (isLoading || (isAuthenticated && hasCompany && subLoading)) {
+  // Show loading screen ONLY while genuinely in-flight and the safety timer hasn't expired.
+  if (!authTimedOut && (isLoading || (isAuthenticated && hasCompany && subLoading))) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

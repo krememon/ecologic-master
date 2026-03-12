@@ -1,0 +1,335 @@
+We need to stop patching this piece by piece and do a full auth stabilization pass right now.
+
+Priority
+
+There are now 2 critical auth regressions:
+
+1. Infinite loading screen
+
+The app is getting stuck on the “Loading EcoLogic…” screen and never resolves.
+
+2. Google sign-in is still broken
+
+Google sign-in still does not work correctly on:
+
+mobile
+
+Replit preview
+
+This needs to be fully fixed end-to-end.
+
+Goal
+
+I want a stable auth flow that works in all the environments I’m actively using:
+
+mobile native app
+
+Replit preview
+
+published Replit app domain
+
+And I want the app to never get stuck forever on the loading screen.
+
+PART 1 — Fix the infinite loading screen first
+Current problem
+
+Right now the app can get stuck on the splash/auth loading screen forever:
+
+spinner shows
+
+“Loading EcoLogic…” shows
+
+app never resolves to logged-in or logged-out state
+
+That is unacceptable.
+
+What I need
+
+Find the exact auth/bootstrap logic causing the app to hang.
+
+Trace the startup/auth initialization flow
+
+Identify the exact code path for:
+
+app startup
+
+session check
+
+/api/auth/user
+
+any loading gate / suspense / bootstrap state
+
+any mobile nativeSessionId logic
+
+any query retry loop
+
+any redirect loop
+
+any condition where auth state never resolves
+
+Likely causes to inspect
+
+/api/auth/user request hanging or retrying forever
+
+auth hook not resolving on 401/403/error
+
+query state stuck in loading because of retry policy
+
+mobile token path waiting on something that never finishes
+
+app redirect loop between unauthenticated/authenticated states
+
+startup path assuming auth must succeed before rendering anything
+
+stale nativeSessionId causing unresolved auth fetch behavior
+
+Required behavior
+
+The app must always resolve into one of these states:
+
+State A
+
+Authenticated → enter app
+
+State B
+
+Unauthenticated → show login screen
+
+State C
+
+Auth error → fail gracefully and show login / recoverable error
+
+Never acceptable
+
+infinite loading forever
+
+What to fix
+
+Make the loading screen have a deterministic exit path.
+
+Even if auth fails, the app should stop loading and render the login screen.
+
+PART 2 — Fix Google sign-in properly across environments
+Current problem
+
+Google sign-in is still broken/inconsistent across:
+
+mobile
+
+Replit preview
+
+We need a real architecture fix, not more fragile patches.
+
+What I need you to do
+Step 1 — Trace the exact auth flows separately
+
+I want you to explicitly map and verify the auth flow for each environment:
+
+A. Mobile native
+
+where login starts
+
+what domain is used
+
+what callback is used
+
+how session is finalized
+
+how user gets back into app
+
+how /api/auth/user authenticates afterward
+
+B. Replit preview
+
+where login starts
+
+what domain is used
+
+what callback is used
+
+whether Google is allowed to use this host
+
+how session is finalized afterward
+
+C. Published Replit domain
+
+where login starts
+
+callback URL
+
+session completion path
+
+Do not treat these as one vague flow. I want them separated clearly.
+
+Step 2 — Fix Google OAuth so it actually works in both mobile and preview
+
+Right now, preview is still showing Google 403, and mobile has gone through multiple broken states.
+
+I want one stable approach that works.
+
+Important
+
+If Google OAuth cannot reliably support the random Replit preview URL, then do not keep pretending it should.
+
+Instead, implement a proper strategy such as:
+
+preview login button routes auth through the stable published domain
+
+callback always happens on the stable published domain
+
+preview app session is finalized in a valid way afterward
+
+mobile uses the same stable OAuth origin but correctly returns to the app
+
+But I need this designed properly and verified, not guessed.
+
+Step 3 — Fix mobile Google sign-in end-to-end
+
+For mobile, the final result must be:
+
+tap Google sign-in
+
+choose Google account
+
+auth completes
+
+app returns inside EcoLogic
+
+correct user is actually signed in
+
+no Safari handoff
+
+no infinite loading
+
+Step 4 — Fix Replit preview Google sign-in
+
+For preview, either:
+
+Option A
+
+make Google sign-in truly work from preview
+
+or
+
+Option B
+
+if preview must route through the stable published domain, then implement that flow cleanly so login still works for preview testing
+
+But I need it working in practice, not theoretically.
+
+PART 3 — Clean up auth architecture
+I want you to inspect and stabilize all of this:
+
+useAuth
+
+startup loading gate
+
+/api/auth/user
+
+Google auth start route
+
+Google callback route
+
+mobile exchange-code flow
+
+nativeSessionId
+
+bearer token fallback
+
+session cookie fallback
+
+preview vs published domain behavior
+
+logout cleanup
+
+Critical rules
+
+Do not break email/password login
+
+Do not leave app stuck on loading if auth fails
+
+Do not leave preview in a 403 state
+
+Do not leave mobile in a half-authenticated state
+
+Do not rely on fragile hacks that only work in one environment
+
+If preview auth must rely on published domain, implement that intentionally and cleanly
+
+Debug requirements
+
+Use targeted logs only.
+
+I want logs for:
+
+Startup / loading
+
+app startup auth path entered
+
+/api/auth/user requested
+
+response status
+
+whether loading state resolves
+
+final auth state chosen
+
+Google login
+
+exact auth start URL per environment
+
+exact callback URL per environment
+
+whether callback fires
+
+whether session is created
+
+whether nativeSessionId is stored
+
+whether bearer header is sent
+
+whether /api/auth/user resolves authenticated user
+
+final redirect target / final app state
+
+Deliverables
+
+Fix the infinite loading screen so auth always resolves cleanly
+
+Fix Google sign-in so it actually works on mobile
+
+Fix Google sign-in so it actually works on Replit preview
+
+Preserve working published-domain auth
+
+Preserve email/password auth
+
+Verify all 3 environments:
+
+mobile
+
+Replit preview
+
+published Replit app domain
+
+After implementation, tell me:
+
+what exact file/component caused the infinite loading screen
+
+what exact auth/bootstrap fix resolved it
+
+how Google auth now works on mobile
+
+how Google auth now works on Replit preview
+
+what domains/callbacks are used for each environment
+
+confirmation that all of these now work without:
+
+infinite loading
+
+Google 403
+
+Safari redirect
+
+fake half-login states

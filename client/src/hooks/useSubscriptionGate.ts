@@ -11,6 +11,16 @@ interface SubscriptionStatus {
   reason?: string;
 }
 
+function getNativeBearerHeader(): Record<string, string> {
+  try {
+    const sid = typeof localStorage !== "undefined"
+      ? localStorage.getItem("nativeSessionId")
+      : null;
+    if (sid) return { Authorization: `Bearer ${sid}` };
+  } catch {}
+  return {};
+}
+
 export function useSubscriptionGate({
   authed,
   loadingAuth,
@@ -38,9 +48,10 @@ export function useSubscriptionGate({
       const res = await fetch("/api/subscriptions/status", {
         credentials: "include",
         cache: "no-store",
+        headers: getNativeBearerHeader(),
       });
       if (res.status === 401) {
-        console.warn("[sub-gate] 401 from subscriptions/status — waiting for auth");
+        console.warn("[sub-gate] 401 from subscriptions/status — treating as resolved");
         return null;
       }
       if (!res.ok) {
@@ -57,8 +68,13 @@ export function useSubscriptionGate({
   });
 
   const gotValidResponse = isFetched && subStatus != null;
-  const active = gotValidResponse && subStatus.active === true && !isError;
-  const stillLoading = loadingAuth || !authed || !hasCompany || (shouldFetch && (loadingSub || (!gotValidResponse && !isError)));
+  const active = gotValidResponse && subStatus!.active === true && !isError;
+
+  // FIX: Only "loading" while the query is actively in-flight and hasn't fetched yet.
+  // Once isFetched=true (even if response was null/401), we are done loading.
+  // Previously the formula used !gotValidResponse which stayed true when 401
+  // returned null, causing an infinite loading screen.
+  const stillLoading = loadingAuth || !authed || !hasCompany || (shouldFetch && !isFetched);
 
   if (!loggedRef.current && isFetched) {
     loggedRef.current = true;
