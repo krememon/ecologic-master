@@ -11578,8 +11578,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (ref.jobId) {
             referredOutJobIds.add(ref.jobId);
             referralFeeByJob[ref.jobId] = ref.companyShareAmountCents || 0;
+            // Referral completion (from any payment method) is the primary paid signal
+            if (ref.status === 'completed') {
+              referralPayoutStatusByJob[ref.jobId] = 'completed';
+              console.log(`[ledger] referred-out job ${ref.jobId} referral completed → referred_paid for company ${company.id}`);
+            }
           }
         }
+        console.log(`[ledger] company=${company.id} outReferrals=${outReferrals.length} referredOutJobIds=[${[...referredOutJobIds].join(',')}]`);
 
         const inReferrals = await db.select().from(jobReferrals).where(
           and(eq(jobReferrals.receiverCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
@@ -11594,6 +11600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           }
         }
+        console.log(`[ledger] company=${company.id} inReferrals=${inReferrals.length} referredInJobIds=[${[...referredInJobIds].join(',')}]`);
 
         const allReferralJobIds = new Set([...referredOutJobIds, ...referredInJobIds]);
         if (allReferralJobIds.size > 0) {
@@ -11693,6 +11700,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const isReferredIn = !isReferredOut && inv.jobId && referredInJobIds.has(inv.jobId);
 
+          if (isReferredOut || isReferredIn) {
+            console.log(`[ledger-item] invoiceId=${inv.id} jobId=${inv.jobId} invCompany=${inv.companyId} jobCompany=${inv.job?.companyId} isReferredOut=${!!isReferredOut} isReferredIn=${!!isReferredIn} dbStatus=${inv.status} paidCents=${paidCents}`);
+          }
+
           let shareMultiplier = 1;
           let displayTotalCents = totalCents;
           if (isReferredIn) {
@@ -11735,6 +11746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               computedStatus = 'referred';
               balanceDueCents = 0;
             }
+            console.log(`[ledger-status] invoiceId=${inv.id} isReferredOut payoutStatus=${payoutStatus} → computedStatus=${computedStatus} referralFeeCents=${referralFeeCents}`);
           } else if (dbStatus === 'refunded' || dbStatus === 'partially_refunded') {
             computedStatus = dbStatus;
           } else if (balanceDueCents === 0 && totalCents > 0) {
@@ -11743,6 +11755,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             computedStatus = 'partial';
           } else {
             computedStatus = 'unpaid';
+          }
+
+          if (isReferredIn) {
+            console.log(`[ledger-status] invoiceId=${inv.id} isReferredIn jobId=${inv.jobId} dbStatus=${dbStatus} paidCents=${paidCents} displayTotal=${displayTotalCents} balanceDue=${balanceDueCents} → computedStatus=${computedStatus}`);
           }
 
           if (balanceDueCents > 0) {

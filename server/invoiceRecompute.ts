@@ -123,11 +123,16 @@ export async function markReferralCompleted(jobId: number, now?: Date): Promise<
       .set({ status: 'completed' } as any)
       .where(and(eq(jobReferrals.jobId, jobId), sql`${jobReferrals.status} = 'accepted'`));
 
-    console.log(`[referral] Job ${jobId} referral marked completed`);
+    console.log(`[referral] Job ${jobId} referral marked completed senderCompanyId=${referral?.senderCompanyId} receiverCompanyId=${referral?.receiverCompanyId}`);
 
     // Create receiver-side payout records so the receiver company has financial history
     if (referral?.receiverCompanyId && referral?.contractorPayoutAmountCents && referral.contractorPayoutAmountCents > 0) {
       await ensureReceiverPayoutRecord(jobId, referral, ts);
+    }
+
+    // Create sender-side earnings records so the sender company has financial history
+    if (referral?.senderCompanyId && referral?.companyShareAmountCents && referral.companyShareAmountCents > 0) {
+      await ensureSenderEarningsRecord(jobId, referral, ts);
     }
   } catch (err: any) {
     console.error(`[referral] Failed to mark referral completed for job ${jobId}:`, err?.message);
@@ -207,5 +212,112 @@ async function ensureReceiverPayoutRecord(
     console.log(`[payout-record] Created receiver payout invoice ${payoutInvoice.id} + payment for company ${receiverCompanyId}, job ${jobId}, $${payoutDollars}`);
   } catch (err: any) {
     console.error(`[payout-record] Failed to create receiver payout record for job ${jobId}:`, err?.message);
+  }
+}
+
+async function ensureSenderEarningsRecord(
+  jobId: number,
+  referral: { senderCompanyId: number | null; companyShareAmountCents: number | null },
+  now: Date,
+): Promise<void> {
+  try {
+    const senderCompanyId = referral.senderCompanyId!;
+    const earningsCents = referral.companyShareAmountCents!;
+
+    // Idempotency: skip if sender already has any invoice for this job
+    const [existing] = await db.select({ id: invoices.id }).from(invoices)
+      .where(and(
+        eq(invoices.jobId, jobId),
+        eq(invoices.companyId, senderCompanyId),
+        isNull(invoices.deletedAt),
+      ));
+
+    if (existing) {
+      console.log(`[sender-earnings] Job ${jobId} sender company ${senderCompanyId} already has invoice ${existing.id}, skipping`);
+      return;
+    }
+
+    // Get job info for invoice context
+    const [job] = await db.select({
+      customerId: jobs.customerId,
+      clientId: jobs.clientId,
+      title: jobs.title,
+    }).from(jobs).where(eq(jobs.id, jobId));
+
+    const earningsDollars = (earningsCents / 100).toFixed(2);
+    const invoiceNumber = `EARNINGS-${jobId}`;
+
+    // Create an earnings invoice for the sender (represents their company share)
+    const [earningsInvoice] = await db.insert(invoices).values({
+      companyId: senderCompanyId,
+      jobId,
+      customerId: job?.customerId ?? null,
+      clientId: job?.clientId ?? null,
+      invoiceNumber,
+      amount: earningsDollars,
+      subtotalCents: earningsCents,
+      taxCents: 0,
+      totalCents: earningsCents,
+      paidAmountCents: earningsCents,
+      balanceDueCents: 0,
+      status: 'paid',
+      issueDate: now.toISOString().split('T')[0],
+      paidAt: now,
+      paidDate: now.toISOString().split('T')[0],
+      notes: `Subcontract earnings for job #${jobId} — company share from referral`,
+      createdAt: now,
+      updatedAt: now,
+    } as any).returning();
+
+    // Create a matching payment record so it appears in the payments table
+    await db.insert(payments).values({
+      companyId: senderCompanyId,
+      jobId,
+      invoiceId: earningsInvoice.id,
+      customerId: job?.customerId ?? null,
+      amount: earningsDollars,
+      amountCents: earningsCents,
+      paymentMethod: 'stripe',
+      status: 'paid',
+      paidDate: now,
+      notes: `Subcontract earnings — company share from referral job #${jobId}`,
+      createdAt: now,
+      updatedAt: now,
+    } as any).returning();
+
+    console.log(`[sender-earnings] Created sender earnings invoice ${earningsInvoice.id} + payment for company ${senderCompanyId}, job ${jobId}, $${earningsDollars}`);
+  } catch (err: any) {
+    console.error(`[sender-earnings] Failed to create sender earnings record for job ${jobId}:`, err?.message);
+  }
+}
+
+/**
+ * Backfill: for any completed referrals missing sender earnings invoices,
+ * create them now. Safe to run on every startup — fully idempotent.
+ */
+export async function backfillReferralEarnings(): Promise<void> {
+  try {
+    const completedReferrals = await db.select().from(jobReferrals)
+      .where(sql`${jobReferrals.status} = 'completed' AND ${jobReferrals.companyShareAmountCents} > 0`);
+
+    const now = new Date();
+    let created = 0;
+    for (const ref of completedReferrals) {
+      if (ref.senderCompanyId && ref.companyShareAmountCents && ref.jobId) {
+        const [existing] = await db.select({ id: invoices.id }).from(invoices)
+          .where(and(
+            eq(invoices.jobId, ref.jobId),
+            eq(invoices.companyId, ref.senderCompanyId),
+            isNull(invoices.deletedAt),
+          ));
+        if (!existing) {
+          await ensureSenderEarningsRecord(ref.jobId, ref, now);
+          created++;
+        }
+      }
+    }
+    console.log(`[backfill-earnings] Checked ${completedReferrals.length} completed referrals, created ${created} missing sender earnings records`);
+  } catch (err: any) {
+    console.error(`[backfill-earnings] Failed:`, err?.message);
   }
 }

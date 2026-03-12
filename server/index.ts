@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
+import { backfillReferralEarnings } from "./invoiceRecompute";
 import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
@@ -1097,6 +1098,10 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize database constraints and triggers
   await initializeDatabase();
+
+  // Backfill sender earnings records for completed referrals (idempotent)
+  backfillReferralEarnings().catch(err =>
+    console.error('[startup] backfillReferralEarnings error:', err?.message));
   
   const server = await registerRoutes(app);
 

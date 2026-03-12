@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoLogic | Stop Chasing Paperwork</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0D2137;
+      --secondary: #00C2A8;
+      --accent: #FFFFFF;
+      --dark: #091929;
+      --text-gray: #A0AEC0;
+      --bg-light: #F7FAFC;
+      --text-dark: #1A202C;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--accent);
+      background-color: var(--primary);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    /* Navbar */
+    header {
+      padding: 24px 0;
+      position: absolute;
+      width: 100%;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      fill: var(--secondary);
+    }
+
+    .logo-text {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 24px;
+      color: var(--accent);
+    }
+
+    .nav-cta {
+      background-color: var(--secondary);
+      color: var(--accent);
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 16px;
+      transition: background-color 0.2s;
+    }
+
+    .nav-cta:hover {
+      background-color: #00a892;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      background-color: var(--dark);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-content {
+      display: flex;
+      align-items: center;
+      gap: 64px;
+    }
+
+    .hero-text {
+      flex: 1;
+    }
+
+    .hero h1 {
+      font-size: 64px;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero h1 span {
+      color: var(--secondary);
+    }
+
+    .hero p {
+      font-size: 20px;
+      color: var(--text-gray);
+      margin-bottom: 40px;
+      max-width: 500px;
+    }
+
+    .hero-visual {
+      flex: 1;
+      position: relative;
+      height: 400px;
+    }
+
+    .ui-mockup {
+      background-color: var(--primary);
+      border: 2px solid #2D3748;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 24px 24px 0px rgba(0, 194, 168, 0.1);
+      position: absolute;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .ui-skeleton-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .ui-avatar {
+      width: 48px;
+      height: 48px;
+      background-color: #2D3748;
+      border-radius: 50%;
+    }
+
+    .ui-pill {
+      background-color: var(--secondary);
+      padding: 8px 16px;
+      border-radius: 20px;
+      width: 100px;
+      height: 24px;
+    }
+
+    .ui-card {
+      background-color: var(--dark);
+      padding: 24px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ui-line {
+      height: 12px;
+      background-color: #2D3748;
+      border-radius: 6px;
+      width: 100%;
+    }
+    .ui-line.short { width: 60%; }
+    .ui-line.medium { width: 80%; }
+
+    .check-badge {
+      position: absolute;
+      top: -20px;
+      left: -20px;
+      width: 80px;
+      height: 80px;
+      background-color: var(--secondary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
+
+    .check-badge svg {
+      width: 40px;
+      height: 40px;
+      stroke: var(--accent);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    /* Features */
+    .features {
+      padding: 100px 0;
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-header h2 {
+      font-size: 40px;
+      color: var(--primary);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+    }
+
+    .feature-card {
+      background: var(--accent);
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      text-align: left;
+      border-bottom: 4px solid var(--secondary);
+    }
+
+    .feature-icon {
+      width: 64px;
+      height: 64px;
+      background-color: rgba(0, 194, 168, 0.1);
+      color: var(--secondary);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .feature-icon svg {
+      width: 32px;
+      height: 32px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .feature-card h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: var(--primary);
+    }
+
+    .feature-card p {
+      color: #4A5568;
+    }
+
+    /* Before/After */
+    .comparison {
+      padding: 100px 0;
+      background-color: var(--primary);
+    }
+
+    .comp-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 48px;
+    }
+
+    .comp-card {
+      padding: 48px;
+      border-radius: 16px;
+    }
+
+    .comp-card.before {
+      background-color: var(--dark);
+      border: 1px solid #2D3748;
+    }
+
+    .comp-card.after {
+      background-color: var(--secondary);
+      color: var(--primary);
+    }
+
+    .comp-card h3 {
+      font-size: 32px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .comp-list {
+      list-style: none;
+    }
+
+    .comp-list li {
+      margin-bottom: 16px;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .comp-list svg {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .before .comp-list svg { stroke: #F56565; }
+    .after .comp-list svg { stroke: var(--primary); }
+    
+    .after h3 { color: var(--primary); }
+
+    /* Testimonials */
+    .testimonials {
+      padding: 100px 0;
+      background-color: var(--dark);
+    }
+
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-top: 48px;
+    }
+
+    .test-card {
+      background-color: var(--primary);
+      padding: 32px;
+      border-radius: 16px;
+      position: relative;
+    }
+
+    .stars {
+      color: #F6E05E;
+      margin-bottom: 16px;
+      font-size: 20px;
+    }
+
+    .test-card p {
+      font-size: 16px;
+      color: #E2E8F0;
+      margin-bottom: 24px;
+      font-style: italic;
+    }
+
+    .test-author {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .author-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-color: #2D3748;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: var(--secondary);
+    }
+
+    .author-info h4 {
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+
+    .author-info span {
+      font-size: 14px;
+      color: var(--text-gray);
+    }
+
+    /* Final CTA */
+    .final-cta {
+      padding: 120px 0;
+      background-color: var(--secondary);
+      text-align: center;
+      color: var(--primary);
+    }
+
+    .final-cta h2 {
+      font-size: 56px;
+      margin-bottom: 32px;
+    }
+
+    .btn-large {
+      display: inline-block;
+      background-color: var(--primary);
+      color: var(--accent);
+      padding: 20px 48px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 20px;
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: transform 0.2s;
+    }
+
+    .btn-large:hover {
+      transform: translateY(-4px);
+    }
+
+    /* Footer */
+    footer {
+      background-color: var(--dark);
+      padding: 40px 0;
+      text-align: center;
+      color: var(--text-gray);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container nav-container">
+      <a href="#" class="logo">
+        <svg class="logo-icon" viewBox="0 0 24 24">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+        </svg>
+        <span class="logo-text">EcoLogic</span>
+      </a>
+      <a href="#" class="nav-cta">Get EcoLogic Free</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container hero-content">
+      <div class="hero-text">
+        <h1>Stop Chasing <span>Paperwork.</span></h1>
+        <p>Run jobs. Not invoices. The all-in-one app built for plumbers, HVAC, and trade businesses to manage everything from their phone.</p>
+        <a href="#" class="nav-cta" style="font-size: 20px; padding: 16px 32px;">Start Free Trial</a>
+      </div>
+      <div class="hero-visual">
+        <div class="ui-mockup">
+          <div class="check-badge">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="ui-skeleton-header">
+            <div class="ui-avatar"></div>
+            <div class="ui-pill"></div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-line"></div>
+            <div class="ui-line medium"></div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-line"></div>
+            <div class="ui-line short"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Everything you need, in one place.</h2>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          </div>
+          <h3>Smart Scheduling</h3>
+          <p>Dispatch jobs instantly. Your techs get notified on their phones with full job details, maps, and client history.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path><path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"></path></svg>
+          </div>
+          <h3>1-Click Invoicing</h3>
+          <p>Turn completed jobs into professional invoices in seconds. Stop building invoices from scratch every night.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          </div>
+          <h3>Fast Payments</h3>
+          <p>Get paid on the job site. Accept credit cards, cash, or checks immediately before leaving the driveway.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="comparison">
+    <div class="container">
+      <div class="section-header">
+        <h2 style="color: var(--accent);">Why trades choose EcoLogic</h2>
+      </div>
+      <div class="comp-grid">
+        <div class="comp-card before">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#F56565" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            The Old Way
+          </h3>
+          <ul class="comp-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg> Lost paper invoices in truck dashboards</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg> Spending weekends doing data entry</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg> Chasing customers for late payments</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg> Disorganized scheduling via text message</li>
+          </ul>
+        </div>
+        <div class="comp-card after">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            With EcoLogic
+          </h3>
+          <ul class="comp-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> All job details organized in one app</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Invoices generated instantly</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Get paid digitally on the spot</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Drag-and-drop live calendar dispatching</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="testimonials">
+    <div class="container">
+      <div class="test-grid">
+        <div class="test-card">
+          <div class="stars">★★★★★</div>
+          <p>"I used to spend 3 hours every Sunday doing invoices. With EcoLogic, I do them in the truck before I even leave the client's house. Life changing."</p>
+          <div class="test-author">
+            <div class="author-avatar">MS</div>
+            <div class="author-info">
+              <h4>Mike Sullivan</h4>
+              <span>Sullivan Plumbing</span>
+            </div>
+          </div>
+        </div>
+        <div class="test-card">
+          <div class="stars">★★★★★</div>
+          <p>"Finally an app that doesn't require a computer science degree. My guys actually use it, and we get paid way faster. Highly recommend."</p>
+          <div class="test-author">
+            <div class="author-avatar">JD</div>
+            <div class="author-info">
+              <h4>John Davis</h4>
+              <span>JD HVAC Services</span>
+            </div>
+          </div>
+        </div>
+        <div class="test-card">
+          <div class="stars">★★★★★</div>
+          <p>"The scheduling feature alone is worth it. I can see where all my techs are and dispatch emergency jobs without making 5 phone calls."</p>
+          <div class="test-author">
+            <div class="author-avatar">RW</div>
+            <div class="author-info">
+              <h4>Rick Wallace</h4>
+              <span>Elite Electrical</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <div class="container">
+      <h2>Run your business from your phone.</h2>
+      <a href="#" class="btn-large">Get EcoLogic Free</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2024 EcoLogic. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
