@@ -1,0 +1,222 @@
+Next fix: on the client detail page, I want a dedicated Subcontracted section/tab for subcontracted job history.
+
+Goal
+
+Right now, subcontracted jobs are mixed into the normal Jobs history for the client, and that creates confusion.
+
+I want to add a separate tab inside the client card tabs, probably alongside:
+
+Jobs
+
+Estimates
+
+Notes
+
+Add:
+
+Subcontracted
+
+This tab should only show jobs tied to that client that were subcontracted/referred out.
+
+Desired tab layout
+
+Inside the client detail page tabs, I want the tab set to become something like:
+
+Jobs
+
+Subcontracted
+
+Estimates
+
+Notes
+
+Use whatever order/layout fits best visually, but Subcontracted should be its own tab and should feel native to the existing client-card tab style.
+
+Do not make it look like a separate random widget.
+It should match the same style as the current client tabs.
+
+Behavior I want
+Jobs tab
+
+This should show the client’s normal/non-subcontracted jobs.
+
+Meaning:
+
+regular jobs for that client
+
+not jobs that were referred/subcontracted out
+
+Subcontracted tab
+
+This should show only jobs for that client that were:
+
+subcontracted
+
+referred out
+
+tied to a referral/subcontract workflow
+
+This is where the subcontract history for that client should live.
+
+Estimates / Notes
+
+Leave these working as they already do.
+
+Main reason
+
+Right now, if a subcontracted job ends up in the normal client Jobs history, it causes confusion and broken navigation, especially if the underlying active job has been cleaned up/archived and the link no longer works properly.
+
+I want subcontracted client history to be represented intentionally in its own section instead of pretending it is a normal active/standard job history item.
+
+What I need displayed in the Subcontracted tab
+
+For each subcontracted job card tied to that client, show a clean summary card using real data such as:
+
+job title / job name
+
+subcontract/referral status
+
+date created / date sent
+
+scheduled date if available
+
+amount / share info if appropriate
+
+receiving contractor/company if available
+
+payment status if available
+
+any other useful summary data already in the model
+
+Do not invent data.
+Only show fields that actually exist.
+
+If some fields are missing:
+
+hide them cleanly
+
+keep the card polished
+
+Navigation behavior
+
+This is important.
+
+Some subcontracted jobs may no longer behave like normal active job records after payment/archival, so do not blindly use the same broken job-detail route if it results in Job not found.
+
+Please make the Subcontracted history cards route to the correct place.
+
+If there is a better destination
+
+A subcontracted history card could go to something like:
+
+referral detail
+
+invoice/payment detail
+
+a subcontract summary/detail page
+
+or a safe read-only job summary view
+
+Main point:
+
+clicking a subcontracted history card should not just dump the user into a broken “Job not found” screen
+
+If needed, add a proper safe destination for subcontracted client history cards.
+
+Data rules
+
+This should be scoped to the current client.
+
+Jobs tab
+
+Show only normal jobs for that client
+
+Subcontracted tab
+
+Show only subcontracted/referred jobs for that client
+
+Do not mix them together.
+
+Backend/data work
+
+Please trace the actual data source for the client detail page tabs and update it properly.
+
+I want you to identify:
+
+which frontend component renders the client detail tabs and history cards
+
+which backend endpoint/query powers the client history data
+
+how to detect whether a client job is subcontracted/referred
+
+how to return separate arrays if needed, for example:
+
+jobs
+
+subcontractedJobs
+
+estimates
+
+notes
+
+If the current endpoint only returns one combined jobs list, update it so the frontend can cleanly separate:
+
+normal jobs
+
+subcontracted jobs
+
+UI expectations
+
+match the current client tab aesthetic
+
+keep it mobile-first
+
+keep spacing clean
+
+no clunky redesign
+
+make the new tab feel like it has always belonged there
+
+Important constraints
+
+do not break normal client Jobs history
+
+do not break Estimates or Notes tabs
+
+do not break subcontract/referral payment/history logic
+
+do not leave subcontracted jobs in the normal Jobs tab
+
+do not route subcontracted history cards to broken job pages
+
+do not invent fake mock data
+
+Empty state
+
+If a client has no subcontracted jobs, show a clean empty state like:
+
+No subcontracted jobs for this client yet.
+
+Keep it polished and consistent with app empty states.
+
+Deliverables
+
+Add a Subcontracted tab to the client detail page tabs
+
+Move subcontracted/referred client job history into that tab
+
+Keep normal Jobs tab for non-subcontracted jobs only
+
+Make subcontracted cards route somewhere valid and useful, not “Job not found”
+
+Leave Estimates and Notes working normally
+
+After implementation, tell me:
+
+what frontend file/component was updated
+
+what backend endpoint/query was updated
+
+how a client job is classified as subcontracted vs normal
+
+where subcontracted history cards now route when tapped

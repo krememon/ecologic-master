@@ -7670,38 +7670,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allJobs = await storage.getJobs(company.id);
       const ownedCustomerJobs = allJobs.filter(job => job.customerId === customerId);
 
-      // 2. Jobs that were referred OUT from this company but transferred to a different company
-      //    (the job's customerId still points to this company's customer)
+      // 2. Exclude jobs that have been referred/subcontracted out — those go in the Subcontracted tab
       const referredOutRows = await db.select({ jobId: jobReferrals.jobId })
         .from(jobReferrals)
         .where(eq(jobReferrals.senderCompanyId, company.id));
-      const referredJobIds = referredOutRows.map(r => r.jobId).filter(Boolean) as number[];
+      const referredJobIdSet = new Set(referredOutRows.map(r => r.jobId).filter(Boolean) as number[]);
 
-      let referredCustomerJobs: any[] = [];
-      if (referredJobIds.length > 0) {
-        const transferredJobs = await db.select().from(jobs)
-          .where(and(
-            inArray(jobs.id, referredJobIds),
-            eq(jobs.customerId, customerId)
-          ));
-        // Only include jobs NOT already in ownedCustomerJobs (transferred away, different companyId)
-        const ownedIds = new Set(ownedCustomerJobs.map((j: any) => j.id));
-        referredCustomerJobs = transferredJobs.filter(j => !ownedIds.has(j.id));
-      }
-
-      const customerJobs = [...ownedCustomerJobs, ...referredCustomerJobs];
+      // Regular jobs = owned by this company, for this customer, NOT referred out
+      const regularJobs = ownedCustomerJobs.filter((j: any) => !referredJobIdSet.has(j.id));
       
       // Sort by createdAt descending (newest first)
-      customerJobs.sort((a, b) => {
+      regularJobs.sort((a: any, b: any) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       });
       
-      res.json(customerJobs);
+      res.json(regularJobs);
     } catch (error) {
       console.error("Error fetching customer jobs:", error);
       res.status(500).json({ message: "Failed to fetch customer jobs" });
+    }
+  });
+
+  // GET /api/customers/:id/subcontracted-jobs - Get subcontracted/referred jobs for a customer
+  app.get('/api/customers/:id/subcontracted-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+
+      // All referrals sent by this company
+      const refs = await db.select().from(jobReferrals)
+        .where(eq(jobReferrals.senderCompanyId, company.id))
+        .orderBy(desc(jobReferrals.createdAt));
+      if (refs.length === 0) return res.json([]);
+
+      const referredJobIds = refs.map(r => r.jobId).filter(Boolean) as number[];
+
+      // Find which referred jobs belong to this customer (check both company-owned and transferred)
+      const customerReferredJobs = await db.select().from(jobs)
+        .where(and(inArray(jobs.id, referredJobIds), eq(jobs.customerId, customerId)));
+      if (customerReferredJobs.length === 0) return res.json([]);
+
+      const customerReferredJobIdSet = new Set(customerReferredJobs.map(j => j.id));
+      const matchingRefs = refs.filter(r => r.jobId && customerReferredJobIdSet.has(r.jobId));
+
+      // Receiver company names
+      const receiverIds = [...new Set(matchingRefs.map(r => r.receiverCompanyId).filter(Boolean))] as number[];
+      const receiverComps = receiverIds.length > 0
+        ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, receiverIds))
+        : [];
+      const receiverNameMap = new Map(receiverComps.map(c => [c.id, c.name]));
+
+      // Invoices for these jobs (sender-side, same companyId)
+      const jobInvoiceRows = await db.select({
+        id: invoices.id, jobId: invoices.jobId, status: invoices.status, totalCents: invoices.totalCents,
+      }).from(invoices).where(and(
+        eq(invoices.companyId, company.id),
+        inArray(invoices.jobId, [...customerReferredJobIdSet] as number[]),
+      ));
+      const invoiceByJobId = new Map(jobInvoiceRows.map(inv => [inv.jobId, inv]));
+
+      const jobMap = new Map(customerReferredJobs.map(j => [j.id, j]));
+      const result = matchingRefs.map(ref => {
+        const job = ref.jobId ? jobMap.get(ref.jobId) : null;
+        const invoice = ref.jobId ? invoiceByJobId.get(ref.jobId) : null;
+        const referralValueNum = parseFloat(ref.referralValue || '0');
+        const rateLabel = ref.referralType === 'percent'
+          ? `${referralValueNum % 1 === 0 ? referralValueNum.toFixed(0) : referralValueNum}%`
+          : `$${referralValueNum.toFixed(0)} flat`;
+        return {
+          referralId: ref.id,
+          jobId: ref.jobId,
+          jobTitle: job?.title || job?.jobType || 'Untitled Job',
+          jobLocation: job?.location || null,
+          jobCreatedAt: job?.createdAt || ref.createdAt,
+          referralStatus: ref.status,
+          referralType: ref.referralType,
+          rateLabel,
+          inviteSentAt: ref.inviteSentAt,
+          acceptedAt: ref.acceptedAt,
+          createdAt: ref.createdAt,
+          jobTotalAtAcceptanceCents: ref.jobTotalAtAcceptanceCents,
+          contractorPayoutAmountCents: ref.contractorPayoutAmountCents,
+          companyShareAmountCents: ref.companyShareAmountCents,
+          receiverCompanyName: ref.receiverCompanyId ? receiverNameMap.get(ref.receiverCompanyId) || null : null,
+          invoiceId: invoice?.id || null,
+          invoiceStatus: invoice?.status || null,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching customer subcontracted jobs:", error);
+      res.status(500).json({ message: "Failed to fetch subcontracted jobs" });
     }
   });
 

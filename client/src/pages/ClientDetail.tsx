@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X, Bell } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X, Bell, ArrowRightLeft, Building2, DollarSign, ChevronRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
@@ -17,6 +17,26 @@ import type { Customer, Job, Estimate } from "@shared/schema";
 
 interface ClientDetailProps {
   customerId: string;
+}
+
+interface SubcontractedJob {
+  referralId: number;
+  jobId: number | null;
+  jobTitle: string;
+  jobLocation: string | null;
+  jobCreatedAt: string | null;
+  referralStatus: string;
+  referralType: string;
+  rateLabel: string;
+  inviteSentAt: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+  jobTotalAtAcceptanceCents: number | null;
+  contractorPayoutAmountCents: number | null;
+  companyShareAmountCents: number | null;
+  receiverCompanyName: string | null;
+  invoiceId: number | null;
+  invoiceStatus: string | null;
 }
 
 function formatCurrency(cents: number): string {
@@ -47,10 +67,28 @@ function getStatusBadgeVariant(status: string): "default" | "secondary" | "destr
   }
 }
 
-function getJobDisplayStatus(job: Job & { paymentStatus?: string }): string {
-  if (job.paymentStatus === 'paid') {
-    return 'paid';
+function getReferralStatusColor(status: string): string {
+  switch (status) {
+    case 'completed': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+    case 'accepted': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+    case 'declined': return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+    case 'pending': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300';
+    default: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
   }
+}
+
+function getReferralStatusLabel(status: string): string {
+  switch (status) {
+    case 'completed': return 'Completed';
+    case 'accepted': return 'Accepted';
+    case 'declined': return 'Declined';
+    case 'pending': return 'Pending';
+    default: return status;
+  }
+}
+
+function getJobDisplayStatus(job: Job & { paymentStatus?: string }): string {
+  if (job.paymentStatus === 'paid') return 'paid';
   return job.status || 'pending';
 }
 
@@ -60,7 +98,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { role } = useCan();
   
-  const [activeTab, setActiveTab] = useState<'jobs' | 'estimates' | 'notes'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'subcontracted' | 'estimates' | 'notes'>('jobs');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState('');
 
@@ -73,6 +111,11 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
 
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: [`/api/customers/${customerId}/jobs`],
+    enabled: !!customerId && isAuthenticated,
+  });
+
+  const { data: subcontractedJobs = [] } = useQuery<SubcontractedJob[]>({
+    queryKey: [`/api/customers/${customerId}/subcontracted-jobs`],
     enabled: !!customerId && isAuthenticated,
   });
 
@@ -124,6 +167,14 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
     updateNotesMutation.mutate(editedNotes);
   };
 
+  const handleSubcontractedCardClick = (job: SubcontractedJob) => {
+    if (job.invoiceId) {
+      navigate(`/invoicing/${job.invoiceId}`);
+    } else if (job.jobId) {
+      navigate(`/jobs/${job.jobId}?from=client&clientId=${customerId}`);
+    }
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -153,6 +204,13 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
   const getJobPrimaryText = (job: Job) => {
     return job.title || job.jobType || 'Untitled Job';
   };
+
+  const tabs: { key: typeof activeTab; label: string; count?: number }[] = [
+    { key: 'jobs', label: 'Jobs', count: jobs.length },
+    { key: 'subcontracted', label: 'Subcontracted', count: subcontractedJobs.length },
+    { key: 'estimates', label: 'Estimates', count: estimates.length },
+    { key: 'notes', label: 'Notes' },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -274,40 +332,23 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setActiveTab('jobs')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'jobs'
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-          }`}
-        >
-          Jobs ({jobs.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('estimates')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'estimates'
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-          }`}
-        >
-          Estimates ({estimates.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('notes')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'notes'
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-          }`}
-        >
-          Notes
-        </button>
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto no-scrollbar">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+              activeTab === tab.key
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            {tab.label}{tab.count !== undefined ? ` (${tab.count})` : ''}
+          </button>
+        ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Jobs Tab */}
       {activeTab === 'jobs' && (
         <div className="space-y-3">
           {jobs.length === 0 ? (
@@ -359,6 +400,105 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
         </div>
       )}
 
+      {/* Subcontracted Tab */}
+      {activeTab === 'subcontracted' && (
+        <div className="space-y-3">
+          {subcontractedJobs.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <ArrowRightLeft className="h-12 w-12 text-slate-400 mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No subcontracted jobs</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-center">
+                  No subcontracted jobs for this client yet.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            subcontractedJobs.map((job) => (
+              <Card
+                key={job.referralId}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => handleSubcontractedCardClick(job)}
+              >
+                <CardContent className="py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      {/* Job title + referral status */}
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h4 className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {job.jobTitle}
+                        </h4>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${getReferralStatusColor(job.referralStatus)}`}>
+                          {getReferralStatusLabel(job.referralStatus)}
+                        </span>
+                      </div>
+
+                      {/* Receiver company */}
+                      {job.receiverCompanyName && (
+                        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                          <Building2 className="h-3 w-3 flex-shrink-0" />
+                          <span>Subcontracted to <span className="font-medium text-slate-700 dark:text-slate-300">{job.receiverCompanyName}</span></span>
+                        </div>
+                      )}
+
+                      {/* Meta row */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                        {job.jobLocation && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {job.jobLocation}
+                          </span>
+                        )}
+                        {job.jobCreatedAt && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(job.jobCreatedAt), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                        {job.rateLabel && (
+                          <span className="flex items-center gap-1">
+                            <ArrowRightLeft className="h-3 w-3" />
+                            {job.rateLabel} referral
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Financial snapshot */}
+                      {(job.jobTotalAtAcceptanceCents || job.companyShareAmountCents) && (
+                        <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {job.jobTotalAtAcceptanceCents && (
+                            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                              <DollarSign className="h-3 w-3" />
+                              <span>Job: <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(job.jobTotalAtAcceptanceCents)}</span></span>
+                            </div>
+                          )}
+                          {job.companyShareAmountCents !== null && job.companyShareAmountCents !== undefined && (
+                            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                              <DollarSign className="h-3 w-3" />
+                              <span>Your share: <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(job.companyShareAmountCents)}</span></span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      {job.invoiceStatus && (
+                        <Badge variant={getStatusBadgeVariant(job.invoiceStatus)} className="text-[10px]">
+                          {job.invoiceStatus}
+                        </Badge>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Estimates Tab */}
       {activeTab === 'estimates' && (
         <div className="space-y-3">
           {estimates.length === 0 ? (
@@ -411,6 +551,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
         </div>
       )}
 
+      {/* Notes Tab */}
       {activeTab === 'notes' && (
         <Card>
           <CardHeader className="pb-3">
