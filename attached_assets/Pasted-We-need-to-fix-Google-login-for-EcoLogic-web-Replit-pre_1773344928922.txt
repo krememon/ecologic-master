@@ -1,0 +1,110 @@
+We need to fix Google login for EcoLogic web/Replit preview.
+
+CURRENT SYMPTOMS
+- Google sign-in used to work.
+- Now when clicking “Log in with Google” from Replit preview, it forwards out and ends on a Google 403 page.
+- Logs show:
+  [auth/google] hit, platform: web nonce: none state: web
+  GET /api/auth/google 302
+- Preview host in logs is an ephemeral Replit preview domain like:
+  8ba406dd-3601-4e6d-b203-72607ec69813-00-23v869p3ury5l.picard.replit.dev
+- Google OAuth client currently allows:
+  Authorized JS origin: https://eco-logic-pjpell077.replit.app
+  Redirect URI: https://eco-logic-pjpell077.replit.app/api/auth/google/callback
+  plus localhost callbacks.
+
+GOAL
+When I click “Log in with Google” on Replit preview/web, it should open Google account chooser, let me select an account, then sign me back into EcoLogic successfully like before.
+
+ROOT CAUSE TO FIX
+The app is likely generating the Google OAuth URL / callback / origin from the current request host (the temporary preview .picard.replit.dev host) instead of a canonical public app URL. Google rejects that because it is not whitelisted in the OAuth client.
+
+WHAT I NEED YOU TO DO
+1. Find the Google auth route and callback handling.
+   - Search for:
+     /api/auth/google
+     google callback
+     passport-google
+     googleStrategy
+     GOOGLE_CALLBACK_URL
+     BASE_URL
+     APP_URL
+     REPLIT_DEV_DOMAIN
+     replit.app
+     picard.replit.dev
+
+2. Make Google OAuth use ONE canonical public base URL for web auth.
+   - Add or use an env var like:
+     APP_BASE_URL=https://eco-logic-pjpell077.replit.app
+   - For ALL Google auth URL generation and callback URL generation, use APP_BASE_URL, not req.headers.host, req.hostname, origin, or the preview domain.
+   - The callback should always be:
+     https://eco-logic-pjpell077.replit.app/api/auth/google/callback
+
+3. For web login from preview, redirect users to the canonical auth entrypoint.
+   - If request host is a preview/dev host such as *.picard.replit.dev or other temporary preview domain,
+     then before starting OAuth, redirect to:
+     https://eco-logic-pjpell077.replit.app/api/auth/google?platform=web
+   - Do NOT build the Google OAuth request from the preview host.
+
+4. Preserve post-login return path cleanly.
+   - If we currently use state / returnTo / next, keep it working.
+   - But do not let untrusted hosts leak into callback generation.
+   - Keep state values simple and safe.
+
+5. Tighten session/cookie behavior so login stays valid after callback.
+   - Review express-session / cookie config.
+   - For HTTPS production/replit.app:
+     secure: true
+   - Use a sane sameSite setting that works with OAuth redirect flow.
+   - Make sure cookie domain is NOT incorrectly pinned to the preview host.
+   - Do not break existing native/mobile auth flow.
+
+6. Do not change native app behavior.
+   - Only fix web/Replit preview Google sign-in.
+   - Preserve any platform branching for mobile/native.
+
+7. Add targeted debug logs temporarily:
+   - On /api/auth/google log:
+     host
+     x-forwarded-host
+     origin
+     referer
+     chosen base URL
+     computed callback URL
+     platform
+   - On callback log:
+     host
+     chosen base URL
+     user email/id if success
+     redirect destination
+   - Keep logs concise and prefixed like:
+     [auth/google][debug]
+
+8. If there is any frontend code directly hitting a relative /api/auth/google from preview and causing the bad host problem,
+   update it so web preview uses the canonical absolute URL:
+   https://eco-logic-pjpell077.replit.app/api/auth/google?platform=web
+   BUT only if needed.
+   Prefer solving on the backend first.
+
+9. Check for any code that recently changed behavior from “worked before” to “broken now”:
+   - host/origin detection
+   - callback URL builder
+   - proxy trust
+   - session cookie options
+   - any recent “platform” auth branching
+
+GOOGLE CONSOLE MATCH
+Assume the Google Console should stay aligned to:
+- Authorized JavaScript origins:
+  https://eco-logic-pjpell077.replit.app
+- Authorized redirect URIs:
+  https://eco-logic-pjpell077.replit.app/api/auth/google/callback
+
+DO NOT start depending on ephemeral preview hosts for OAuth because they change.
+
+DELIVERABLES
+1. Fix the code so Google login from Replit preview works again.
+2. Show me exactly which files/lines were changed.
+3. Give me the final env vars required.
+4. Tell me if I need to add/change anything in Google Cloud Console.
+5. Keep the fix minimal and do not break existing auth/session behavior.

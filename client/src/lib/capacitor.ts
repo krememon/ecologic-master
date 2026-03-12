@@ -67,22 +67,25 @@ function isInsideIframe(): boolean {
 export async function startGoogleAuthNative(): Promise<void> {
   if (!isNativePlatform()) {
     if (isInsideIframe()) {
-      // Replit preview runs inside an iframe. Google blocks its OAuth page
-      // from rendering in iframes (X-Frame-Options: DENY), which causes
-      // the "403. That's an error" page. We work around this by opening
-      // the OAuth flow in a popup window. The popup completes auth,
-      // stores nativeSessionId in localStorage, and the iframe picks it
-      // up via the 'storage' event (fired cross-window on the same origin).
-      console.log("[auth] In iframe — opening Google auth as popup window");
-      const popup = window.open(
-        "/api/auth/google",
-        "ecologic_google_auth",
-        "popup,width=500,height=650"
-      );
-      if (!popup) {
-        console.error("[auth] Popup blocked — falling back to redirect");
-        window.location.href = "/api/auth/google";
+      const appBaseUrl = (import.meta.env.VITE_APP_BASE_URL as string) || "";
+      if (appBaseUrl) {
+        const returnTo = encodeURIComponent(window.location.origin);
+        const target = `${appBaseUrl}/api/auth/google?platform=web&returnTo=${returnTo}`;
+        console.log("[auth] In iframe — navigating top frame to production:", target);
+        try {
+          window.top!.location.href = target;
+          return;
+        } catch (e) {
+          console.log("[auth] Top navigation blocked, trying popup");
+        }
+        const popup = window.open(target, "ecologic_google_auth", "popup,width=500,height=650");
+        if (popup) {
+          console.log("[auth] Popup opened successfully");
+          return;
+        }
+        console.log("[auth] Popup also blocked — navigating iframe to server trampoline");
       }
+      window.location.href = "/api/auth/google";
       return;
     }
     window.location.href = "/api/auth/google";

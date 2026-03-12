@@ -561,124 +561,16 @@ export async function setupAuth(app: Express) {
 
   // Replit authentication removed
 
-  // Google authentication routes (primary: /api/auth/google, legacy: /auth/google)
-  const googleAuthHandler = (req: any, res: any, next: any) => {
-    const platform = (req.query.platform as string) || "web";
-    const nonce = (req.query.nonce as string) || "";
-    const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
-    console.log("[auth/google] hit, platform:", platform, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "state:", state.substring(0, 12));
-    passport.authenticate("google", {
-      scope: ["profile", "email"],
-      state,
-      prompt: "select_account",
-      accessType: "offline",
-      includeGrantedScopes: true,
-    })(req, res, next);
-  };
-  app.get("/api/auth/google", googleAuthHandler);
-  app.get("/auth/google", googleAuthHandler);
-
-  const googleCallbackHandler = (req: any, res: any, next: any) => {
-    const rawState = (req.query.state as string) || "web";
-    console.log("[auth/google/callback] hit, rawState:", rawState);
-
-    passport.authenticate("google", {
-      failureRedirect: "/?error=google_auth_failed",
-      session: true
-    }, async (err: any, user: any, info: any) => {
-      const isIos = rawState === "ios" || rawState.startsWith("ios:");
-      const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
-      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "err:", !!err, "user:", !!user);
-
-      if (err) {
-        console.error("Google OAuth authentication error:", err);
-
-        if (isIos) {
-          return res.redirect("/api/auth/google-complete");
-        }
-
-        if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
-          return res.redirect("/?error=token_expired&message=Please try signing in again");
-        }
-        if (err.message?.includes('Failed to create user account')) {
-          return res.redirect("/?error=account_creation_failed&message=Unable to create your account. Please try again or contact support");
-        }
-        if (err.message?.includes('Failed to process user account')) {
-          return res.redirect("/?error=account_processing_failed&message=There was an issue processing your account. Please try again");
-        }
-        return res.redirect("/?error=auth_error&message=Authentication failed. Please try again or use email/password login");
-      }
-
-      if (info) {
-        console.log("Google OAuth callback with info:", info);
-        if (info.error === 'account_inactive') {
-          if (isIos) return res.redirect("/api/auth/google-complete");
-          return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
-        }
-        if (info.error === 'email_mismatch') {
-          return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
-        }
-        if (info.success === 'google_linked') {
-          return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
-        }
-      }
-
-      if (!user) {
-        console.error("Google OAuth authentication failed, no user returned:", info);
-        if (isIos) return res.redirect("/api/auth/google-complete");
-        return res.redirect("/?error=no_user");
-      }
-
-      // iOS native flow: store auth code for polling
-      if (isIos) {
-        const fullUser = await storage.getUser(user.id);
-        if (fullUser?.twoFactorEnabled) {
-          console.log("[google-auth] iOS: 2FA required, skipping");
-          return res.redirect("/api/auth/google-complete");
-        }
-        if (nonce) {
-          storeAuthCodeForNonce(nonce, user.id);
-          console.log("[google-auth] iOS: stored auth code for nonce, redirecting to complete page");
-        } else {
-          const code = storeAuthCode(user.id);
-          console.log("[google-auth] iOS: no nonce, stored auth code:", code.substring(0, 8) + "...");
-        }
-        return res.redirect("/api/auth/google-complete");
-      }
-
-      // Web flow: Check 2FA
-      const fullUser = await storage.getUser(user.id);
-      if (fullUser?.twoFactorEnabled) {
-        (req.session as any).twoFactorPendingUserId = user.id;
-        return req.session.save((saveErr: any) => {
-          if (saveErr) {
-            console.error("[google-auth] Session save error:", saveErr);
-            return res.redirect("/auth?error=session_error");
-          }
-          return res.redirect("/two-factor");
-        });
-      }
-
-      // Regular login
-      req.logIn(user, (loginErr: any) => {
-        if (loginErr) {
-          console.error("Login error after Google OAuth:", loginErr);
-          return res.redirect("/?error=login_failed");
-        }
-        console.log("Google OAuth login successful, user:", user);
-        req.session.save((saveErr: any) => {
-          if (saveErr) {
-            console.error("Session save error:", saveErr);
-            return res.redirect("/?error=session_failed");
-          }
-          console.log("Session saved successfully, redirecting to dashboard");
-          res.redirect("/");
-        });
-      });
-    })(req, res, next);
-  };
-  app.get("/api/auth/google/callback", googleCallbackHandler);
-  app.get("/auth/google/callback", googleCallbackHandler);
+  // Google auth routes are registered in auth.ts (loaded below via setupMfaAuth).
+  // Legacy path aliases:
+  app.get("/auth/google", (req, res) => {
+    const qs = req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "";
+    res.redirect(302, `/api/auth/google${qs}`);
+  });
+  app.get("/auth/google/callback", (req, res) => {
+    const qs = req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "";
+    res.redirect(302, `/api/auth/google/callback${qs}`);
+  });
 
   // Native auth completion page
   app.get("/api/auth/google-complete", (_req, res) => {

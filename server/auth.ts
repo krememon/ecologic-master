@@ -1091,34 +1091,21 @@ export function setupAuth(app: Express) {
   app.get("/api/auth/google", (req, res, next) => {
     const platform = req.query.platform as string || "web";
     const nonce = req.query.nonce as string || "";
-    // returnTo is forwarded by the cross-domain redirect so the callback can
-    // send the preview browser back with a one-time auth code.
     const returnTo = req.query.returnTo as string || "";
 
-    // Build the OAuth state param:
-    //   ios:<nonce>  — native iOS nonce flow
-    //   ios          — native iOS without nonce
-    //   web:<b64url> — web request coming from preview (has returnTo)
-    //   web          — regular web
+    console.log(`[auth/google][debug] host=${req.headers.host} x-fwd-host=${req.headers["x-forwarded-host"] || "-"} origin=${req.headers.origin || "-"} referer=${req.headers.referer || "-"} platform=${platform}`);
+
     let state: string;
     if (platform === "ios" && nonce) {
       state = `ios:${nonce}`;
     } else if (platform === "ios") {
       state = "ios";
     } else if (returnTo) {
-      // Encode returnTo so it survives the round-trip through Google's state param
       state = `web:${Buffer.from(returnTo).toString("base64url")}`;
     } else {
       state = "web";
     }
 
-    // Cross-domain session fix: If the request arrives from a preview/dev domain
-    // (not the stable production host), redirect the browser to the production
-    // host before starting the OAuth flow. This ensures the session cookie that
-    // Passport stores the OAuth `state` in is bound to the same domain that
-    // Google will call back to, preventing a state-mismatch rejection.
-    // We also pass `returnTo` pointing back to the preview origin so the
-    // callback can redirect the user back to the preview with a webAuthCode.
     const productionBase = process.env.APP_BASE_URL;
     if (productionBase) {
       try {
@@ -1129,21 +1116,55 @@ export function setupAuth(app: Express) {
           const qs = new URLSearchParams();
           if (platform && platform !== "web") qs.set("platform", platform);
           if (nonce) qs.set("nonce", nonce);
-          // Tell production where to send the user back after auth
           const proto = req.headers["x-forwarded-proto"] || "https";
           qs.set("returnTo", `${proto}://${currentHost}`);
           const target = `${productionBase}/api/auth/google?${qs.toString()}`;
-          console.log(`[auth/google] cross-domain redirect: ${currentHost} → ${prodHost} (returnTo set)`);
-          return res.redirect(302, target);
+          console.log(`[auth/google][debug] cross-domain → serving trampoline to ${prodHost} (returnTo=${proto}://${currentHost})`);
+          res.setHeader("Content-Type", "text/html");
+          const escapedTarget = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+          return res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting…</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc}
+.c{text-align:center;padding:2rem}.s{font-size:1.5rem;margin-bottom:1rem}
+a{display:inline-block;margin-top:1rem;padding:12px 28px;background:#166534;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:1rem}
+a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75rem}</style></head><body>
+<div class="c">
+<div class="s">&#x1F512;</div>
+<p>Redirecting to Google Sign-In…</p>
+<a id="fl" href="${escapedTarget}" target="_blank" rel="noopener" style="display:none">Open Google Sign-In</a>
+<p class="sub" id="hint" style="display:none">If nothing happened, tap the button above.</p>
+</div>
+<script>
+(function(){
+  var target = ${JSON.stringify(target)};
+  var done = false;
+  try { window.top.location.href = target; done = true; } catch(e) {}
+  if (!done) {
+    try { var w = window.open(target, '_blank'); if (w) done = true; } catch(e2) {}
+  }
+  if (!done) {
+    document.getElementById('fl').style.display = 'inline-block';
+    document.getElementById('hint').style.display = 'block';
+  }
+  setTimeout(function(){
+    document.getElementById('fl').style.display = 'inline-block';
+    document.getElementById('hint').style.display = 'block';
+  }, 2000);
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=${escapedTarget}"></noscript>
+</body></html>`);
         }
       } catch (_) {}
     }
 
-    console.log(`[auth/google] starting OAuth on host=${req.headers.host} state=${state.substring(0, 12)} platform=${platform} returnTo=${returnTo || "(none)"}`);
+    const callbackURL = `${productionBase || ""}/api/auth/google/callback`;
+    console.log(`[auth/google][debug] starting OAuth: host=${req.headers.host} state=${state.substring(0, 12)} callbackURL=${callbackURL} platform=${platform} returnTo=${returnTo || "(none)"}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state,
       prompt: "select_account",
+      accessType: "offline",
+      includeGrantedScopes: true,
     })(req, res, next);
   });
 
@@ -1188,15 +1209,37 @@ export function setupAuth(app: Express) {
         }
       }
 
-      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "returnTo:", returnTo || "(none)", "err:", !!err, "user:", !!user);
+      console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} err=${!!err} user=${!!user} info=${JSON.stringify(info || null)}`);
 
       if (err) {
         console.error("[google-auth] Error:", err);
         if (isIos) return res.redirect("/api/auth/google-complete");
         if (returnTo) return res.redirect(`${returnTo}/?error=oauth_failed`);
+        if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
+          return res.redirect("/?error=token_expired&message=Please try signing in again");
+        }
+        if (err.message?.includes('Failed to create user account')) {
+          return res.redirect("/?error=account_creation_failed&message=Unable to create your account");
+        }
         return res.redirect("/auth?error=oauth_failed");
       }
+
+      if (info) {
+        if (info.error === 'account_inactive') {
+          if (isIos) return res.redirect("/api/auth/google-complete");
+          if (returnTo) return res.redirect(`${returnTo}/?error=account_inactive`);
+          return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
+        }
+        if (info.error === 'email_mismatch') {
+          return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
+        }
+        if (info.success === 'google_linked') {
+          return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
+        }
+      }
+
       if (!user) {
+        console.error("[google-auth] No user returned, info:", info);
         if (isIos) return res.redirect("/api/auth/google-complete");
         if (returnTo) return res.redirect(`${returnTo}/?error=oauth_cancelled`);
         return res.redirect("/auth?error=oauth_cancelled");
@@ -1248,13 +1291,16 @@ export function setupAuth(app: Express) {
         });
       }
       
-      // No 2FA - complete login normally
       req.login(user, (loginErr) => {
         if (loginErr) {
           console.error("[google-auth] Login error:", loginErr);
           return res.redirect("/auth?error=login_failed");
         }
-        return res.redirect("/");
+        console.log(`[auth/google/callback][debug] login success, user=${user?.email || user?.id}, redirecting to /`);
+        req.session.save((saveErr) => {
+          if (saveErr) console.error("[google-auth] Session save warning:", saveErr);
+          return res.redirect("/");
+        });
       });
     })(req, res, next);
   });
