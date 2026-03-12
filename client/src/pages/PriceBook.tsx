@@ -172,7 +172,7 @@ export default function PriceBook() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
       </div>
     );

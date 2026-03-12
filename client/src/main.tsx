@@ -12,6 +12,34 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[UnhandledRejection]", e.reason);
 });
 
+// Global fetch interceptor — automatically attaches Bearer token to every
+// same-origin API request so native sessions work without modifying each fetch call.
+(function installFetchInterceptor() {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    try {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+      const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
+      if (isSameOrigin) {
+        const sid = localStorage.getItem("nativeSessionId");
+        if (sid) {
+          const existingHeaders = (init?.headers || {}) as Record<string, string>;
+          if (!existingHeaders["Authorization"]) {
+            init = { ...init, headers: { ...existingHeaders, Authorization: `Bearer ${sid}` } };
+          }
+        }
+      }
+    } catch {
+      // never break fetch
+    }
+    return _fetch(input, init);
+  };
+})();
+
 import { initPushDebug } from "./utils/pushDebug";
 
 (() => {

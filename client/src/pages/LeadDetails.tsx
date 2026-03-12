@@ -151,7 +151,7 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
   if (!isValidId) {
     console.log("[LeadDetails] invalid leadId, showing loading");
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -160,7 +160,7 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
   if (isLoading || isFetching || isRetrying) {
     console.log("[LeadDetails] loading state - isLoading:", isLoading, "isFetching:", isFetching, "isRetrying:", isRetrying);
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -189,7 +189,7 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
   if (error || !lead) {
     console.log("[LeadDetails] error or no lead, retrying...", "error:", error, "lead:", lead);
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );

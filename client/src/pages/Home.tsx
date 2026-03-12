@@ -111,27 +111,28 @@ export default function Home() {
 
   const { data: jobs = [], isLoading: jobsLoading, isError: jobsError } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!user,
   });
 
   const { data: leads = [], isLoading: leadsLoading, isError: leadsError } = useQuery<LeadWithCustomer[]>({
     queryKey: ["/api/leads"],
-    enabled: isAuthenticated && role !== 'TECHNICIAN',
+    enabled: isAuthenticated && !!user && role !== 'TECHNICIAN',
   });
 
   const { data: estimates = [], isLoading: estimatesLoading, isError: estimatesError } = useQuery<Estimate[]>({
     queryKey: ["/api/estimates", { includeArchived: "true" }],
     queryFn: async () => {
       const res = await fetch("/api/estimates?includeArchived=true", { credentials: "include" });
+      if (res.status === 401) return [];
       if (!res.ok) throw new Error("Failed to fetch estimates");
       return res.json();
     },
-    enabled: isAuthenticated && role !== 'TECHNICIAN',
+    enabled: isAuthenticated && !!user && role !== 'TECHNICIAN',
   });
 
   const { data: invoices = [], isLoading: invoicesLoading, isError: invoicesError } = useQuery<InvoiceWithDetails[]>({
     queryKey: ["/api/invoices"],
-    enabled: isAuthenticated && (role === 'OWNER' || role === 'SUPERVISOR'),
+    enabled: isAuthenticated && !!user && (role === 'OWNER' || role === 'SUPERVISOR'),
   });
 
   const queryClient = useQueryClient();
@@ -255,7 +256,11 @@ export default function Home() {
     }
   };
 
-  const hasDataError = jobsError || (role !== 'TECHNICIAN' && leadsError) || (role !== 'TECHNICIAN' && estimatesError) || ((role === 'OWNER' || role === 'SUPERVISOR') && invoicesError);
+  const initialLoadDone = !jobsLoading && !leadsLoading && !estimatesLoading && !invoicesLoading && !timeLoading;
+  const hasDataError = initialLoadDone && (
+    jobsError ||
+    ((role === 'OWNER' || role === 'SUPERVISOR') && invoicesError)
+  );
 
   if (isLoading || !isAuthenticated) {
     return (

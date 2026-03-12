@@ -189,7 +189,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -197,7 +197,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
 
   if (error || !customer) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Client not found</h2>
           <p className="text-slate-600 dark:text-slate-400 mt-2">The client you're looking for doesn't exist.</p>

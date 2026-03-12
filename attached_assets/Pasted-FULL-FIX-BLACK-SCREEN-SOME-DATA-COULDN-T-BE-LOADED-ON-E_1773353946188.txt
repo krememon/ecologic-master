@@ -1,0 +1,202 @@
+FULL FIX — BLACK SCREEN + “SOME DATA COULDN’T BE LOADED” ON ECOLOGIC DASHBOARD / SCREEN LOAD
+
+Issue:
+I tested EcoLogic natively and I’m seeing 2 problems that need to be fixed together:
+
+Sometimes a screen goes completely black instead of rendering properly.
+
+On the dashboard/home screen I’m getting the warning:
+“Some data couldn’t be loaded”
+
+From the screenshot, the dashboard still partially renders, but key data is failing and there is clearly at least one broken query / fetch / auth-dependent request. I want both problems fully fixed.
+
+Goals:
+
+No black screen ever during app load, navigation, or screen transitions
+
+Dashboard/home data should load correctly
+
+Remove the “Some data couldn’t be loaded” warning unless there is a real unavoidable failure
+
+If one request fails, the screen should still render gracefully without blanking or breaking the whole page
+
+What I need you to do:
+
+Trace the exact black screen cause
+Audit all possible causes:
+
+html, body, #root
+
+app shell / layout wrappers
+
+router transitions
+
+lazy-loaded screens / Suspense fallbacks
+
+auth/session restore states
+
+native webview background
+
+any screen that returns null or empty fragment while loading
+
+any fatal render path caused by failed API data
+
+Fix requirement:
+The app must always show:
+
+app background
+
+proper loading shell
+
+skeleton state
+
+or previous screen until next screen is ready
+
+Never black.
+
+Investigate the dashboard “Some data couldn’t be loaded” error
+Find the exact request(s) failing on dashboard/home.
+Check things like:
+
+/api/auth/user
+
+notifications count
+
+dashboard metrics endpoints
+
+jobs today
+
+open jobs
+
+team/crew counts
+
+any summary cards
+
+any mobile-only/native-only requests
+
+any auth cookie/session issue causing partial 401s
+
+any React Query / fetch wrapper swallowing the real error
+
+I want the exact failing endpoint(s), exact status codes, and exact reason.
+
+Fix partial data loading properly
+If one dashboard request fails:
+
+do not break the whole screen
+
+do not show a generic ugly warning unless needed
+
+load each card/widget independently where possible
+
+use fallback values/skeletons where appropriate
+
+only show an error state for the specific failed module, not the whole dashboard
+
+Fix auth/session-related causes
+If the failed dashboard data is happening because some requests are losing auth/session on native:
+
+fix credentials/cookies/session restore
+
+ensure all protected requests send the correct auth/session info
+
+ensure startup waits for auth restore before firing dependent dashboard queries
+
+remove race conditions where dashboard fetches before user session is ready
+
+Fix React Query / data loader behavior
+Audit dashboard query setup:
+
+query keys
+
+enabled conditions
+
+retry behavior
+
+staleTime/refetch behavior
+
+error boundaries
+
+dependent queries
+
+loading states
+
+Make sure queries do not fire too early and do not cause blank/black transitions.
+
+Make black screen impossible even on data failure
+Even if dashboard data fails:
+
+screen background must still render
+
+top nav / page shell must still render
+
+cards should show fallback content
+
+no fatal blank state
+
+no black base layer
+
+Add targeted logs
+Add minimal, useful logs only for:
+
+route/screen name when black-screen-prone screens mount
+
+dashboard query start/success/failure
+
+auth restore completion
+
+any request returning 401/403/500 on dashboard
+
+any component returning an error state instead of rendering
+
+Do not spam logs.
+
+Improve the user-facing error handling
+Replace the generic “Some data couldn’t be loaded” behavior with something more resilient:
+
+ideally fix the root cause so this warning disappears
+
+if a specific card fails, show a softer inline fallback in that card only
+
+keep the rest of the dashboard usable and polished
+
+Deliverables:
+
+Fix the black screen issue fully
+
+Fix the dashboard data loading failure fully
+
+Tell me the exact root cause(s)
+
+List the exact files changed
+
+Tell me which endpoint(s) were failing and why
+
+Confirm whether this was auth/session, query timing, native wrapper, or rendering related
+
+Confirm what loading/error UI was changed
+
+Important constraints:
+
+Do NOT break existing navigation, RBAC, auth, or business logic
+
+Do NOT redesign the dashboard unnecessarily
+
+Keep current UI styling consistent
+
+Preserve native feel on iPhone
+
+No black screens ever
+
+No generic dashboard failure when only one card/request has an issue
+
+Success condition:
+I can open EcoLogic natively, go to the dashboard and other screens, and:
+
+never see a black screen
+
+never get stuck on a blank view
+
+see dashboard metrics load correctly
+
+and if one piece of data fails, the rest of the screen still works cleanly without ugly global failure banners.

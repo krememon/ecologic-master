@@ -8,6 +8,7 @@ import { GlobalCreateMenu } from "./GlobalCreateMenu";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Sheet,
   SheetContent,
@@ -112,6 +113,7 @@ interface HeaderProps {
 
 export default function Header({ title, subtitle, user, className }: HeaderProps) {
   const { toggle } = useSidebar();
+  const { isAuthenticated } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectMode, setSelectMode] = useState(false);
@@ -122,20 +124,23 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
     queryKey: ['/api/notifications/unread-count', { view: 'home' }],
     queryFn: async () => {
       const res = await fetch('/api/notifications/unread-count?view=home', { credentials: 'include' });
+      if (res.status === 401) return { unreadCount: 0 };
       if (!res.ok) throw new Error('Failed to fetch unread count');
       return res.json();
     },
-    refetchInterval: 30000,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 30000 : false,
   });
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['/api/notifications', { view: 'home' }],
     queryFn: async () => {
       const res = await fetch('/api/notifications?view=home', { credentials: 'include' });
+      if (res.status === 401) return [];
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
-    enabled: notificationsOpen,
+    enabled: isAuthenticated && notificationsOpen,
   });
 
   const sortedAndFiltered = useMemo(() => {

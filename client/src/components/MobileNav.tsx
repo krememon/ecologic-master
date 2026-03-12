@@ -143,24 +143,29 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const [location, setLocation] = useLocation();
   const { can, canAny, role } = useCan();
   
+  const isAuthed = !!user;
+
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
     queryKey: ['/api/notifications/unread-count', { view: 'home' }],
     queryFn: async () => {
       const res = await fetch('/api/notifications/unread-count?view=home', { credentials: 'include' });
+      if (res.status === 401) return { unreadCount: 0 };
       if (!res.ok) throw new Error('Failed to fetch unread count');
       return res.json();
     },
-    refetchInterval: 30000,
+    enabled: isAuthed,
+    refetchInterval: isAuthed ? 30000 : false,
   });
 
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery<Notification[]>({
     queryKey: ['/api/notifications', { view: 'home' }],
     queryFn: async () => {
       const res = await fetch('/api/notifications?view=home', { credentials: 'include' });
+      if (res.status === 401) return [];
       if (!res.ok) throw new Error('Failed to fetch notifications');
       return res.json();
     },
-    enabled: notificationsOpen,
+    enabled: isAuthed && notificationsOpen,
   });
 
   const markReadMutation = useMutation({

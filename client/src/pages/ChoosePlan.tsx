@@ -7,7 +7,7 @@ export default function ChoosePlan() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
         <h1 className="text-2xl font-bold mb-4">Redirecting to Dashboard...</h1>
         <p className="text-gray-600">The app is now free to use!</p>

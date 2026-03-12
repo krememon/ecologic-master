@@ -6,6 +6,7 @@ EcoLogic is a professional construction management platform designed for trade c
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Design preferences: Bold, uppercase "EcoLogic" branding with wide letter spacing
+Black Screen Fix: Global fetch interceptor in main.tsx auto-attaches Bearer token to all same-origin fetch calls. HTML/CSS base layer ensures background color is always visible before React mounts.
 Authentication: Quad authentication options (Email/Password + Replit + Google OAuth + Apple Sign-In)
 Registration: Enhanced form with password strength meter and show/hide toggles
 User Flow: Automatic login and dashboard redirect after account creation
