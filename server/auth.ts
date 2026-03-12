@@ -1093,6 +1093,17 @@ export function setupAuth(app: Express) {
     const nonce = req.query.nonce as string || "";
     const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
     console.log("[auth/google] hit, platform:", platform, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "state:", state.substring(0, 12));
+    console.log("[auth/google] GOOGLE_CLIENT_ID prefix:", process.env.GOOGLE_CLIENT_ID?.substring(0, 12) + "...");
+    console.log("[auth/google] APP_BASE_URL:", process.env.APP_BASE_URL);
+    console.log("[auth/google] redirect_uri that will be sent to Google:", `${process.env.APP_BASE_URL || 'http://localhost:5000'}/api/auth/google/callback`);
+    
+    // Intercept the redirect to log the exact Google OAuth URL
+    const originalRedirect = res.redirect.bind(res);
+    (res as any).redirect = function(url: string) {
+      console.log("[auth/google] EXACT URL sent to Google:", url);
+      return originalRedirect(url);
+    };
+    
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state,

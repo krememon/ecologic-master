@@ -1,0 +1,118 @@
+Fix Google sign-in so it works from the actual app environment being used.
+
+What I need you to do
+Step 1 — Trace the exact Google OAuth request being built
+
+Find the exact code path for /api/auth/google and log/inspect:
+
+OAuth client ID being used
+
+redirect URI being sent to Google
+
+origin/domain being used
+
+callback route
+
+any platform-specific logic for web/native
+
+I want the actual values being used, with secrets redacted if needed.
+
+Step 2 — Compare those values against Google Cloud Console config
+
+Check the Google OAuth credentials for this app and verify that the exact current environment is authorized.
+
+Specifically verify:
+
+Authorized JavaScript origins
+
+Must include the exact domain/origin being used for login if required by this flow
+
+Authorized redirect URIs
+
+Must include the exact callback URI being sent to Google
+
+Pay close attention to whether the app is using:
+
+the temporary Replit preview domain
+
+a published Replit domain
+
+a custom domain
+
+a different callback host than expected
+
+Most likely root cause
+
+The current preview host:
+
+8ba406dd-3601-4e6d-b203-72607ec69813-00-23v869p3ury5l.picard.replit.dev
+
+is probably not whitelisted in the Google OAuth credential config, or the callback URI derived from it is not whitelisted.
+
+If the app is using a changing preview URL for OAuth, that is likely the reason for the Google 403.
+
+Step 3 — Fix the architecture properly
+
+Do not leave Google login dependent on a random temporary preview URL if that is the problem.
+
+If needed, update the app so Google OAuth uses a stable authorized domain/callback, such as:
+
+the published Replit domain
+
+the real production app domain
+
+an explicit environment-based callback config
+
+The important part is:
+
+dev/test uses the correct authorized callback
+
+prod uses the correct authorized callback
+
+we are not sending Google a redirect URI that is not whitelisted
+
+Step 4 — Verify end-to-end
+
+After fixing, test the real flow:
+
+click Google sign in
+
+Google account chooser opens normally
+
+no 403 page
+
+callback returns to EcoLogic
+
+session completes
+
+/api/auth/user returns authenticated user instead of 401
+
+Important constraints
+
+do not break email/password auth
+
+do not break production auth
+
+do not hardcode a one-off temporary URL unless it is part of a proper environment config
+
+if preview URLs are unstable, do not rely on them for Google OAuth
+
+Deliverables
+
+Identify the exact redirect URI and origin currently being sent to Google
+
+Identify the exact mismatch in Google OAuth config causing the 403
+
+Fix the OAuth config / callback strategy properly
+
+Verify successful Google sign-in end-to-end
+
+After implementation, tell me:
+
+what exact redirect URI was being sent before the fix
+
+what exact Google OAuth config entry was missing/wrong
+
+what stable callback/origin strategy is now being used
+
+confirmation that Google sign-in now works without the 403 page
