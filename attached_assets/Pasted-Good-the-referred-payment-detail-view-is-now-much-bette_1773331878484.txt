@@ -1,0 +1,176 @@
+Good — the referred payment detail view is now much better.
+
+Next fix
+
+On the payment detail page/card, the top status currently only says:
+
+Referred
+
+But this job has not been paid yet, so the detail view should communicate both:
+
+Referred
+
+Owed
+
+Right now, the list/card view already does this correctly by showing:
+
+Referred pill
+
+$2,000.00 owed
+
+I want the payment detail page to reflect that same meaning instead of only saying Referred.
+
+Goal
+
+For an accepted referred/subcontracted payment that is still unpaid, the payment detail page should clearly show that it is:
+
+a Referred payment
+
+and it is still Owed
+
+So the detail page should not feel like it is missing the payment-state context.
+
+What I want changed
+Current behavior on payment detail page
+
+It shows:
+
+amount
+
+Referred
+
+What it should show
+
+It should show the equivalent of:
+
+Referred
+
+Owed
+
+I am open to the cleanest UI solution, as long as the detail page clearly communicates both states.
+
+Acceptable design directions
+
+Use whichever fits the app best, but it needs to be clear and polished.
+
+Option A
+
+Two pills/badges near the amount:
+
+Referred
+
+Owed
+
+Option B
+
+One line that communicates both, such as:
+
+Referred • Owed
+or similar
+
+Option C
+
+Keep the Referred pill, but add a clear payment-state label nearby that says:
+
+Owed
+
+Main point:
+The detail page must match the meaning already shown on the payment row/card:
+
+referred type/state
+
+unpaid/owed payment state
+
+Important behavior
+For unpaid referred payments
+
+Show both:
+
+Referred
+
+Owed
+
+For paid referred payments
+
+Do not leave it saying owed.
+Once it is paid, it should reflect the correct paid state.
+
+So the logic should be:
+
+referred + unpaid → show Referred + Owed
+
+referred + paid → show correct Paid state
+
+normal non-referred payments → leave existing behavior alone
+
+Scope
+
+This task is only for the payment detail page/card view.
+
+Do not change:
+
+payment list/card behavior that is already correct
+
+invoice page
+
+payment math
+
+receiver/sender financial calculations
+
+unrelated status behavior
+
+Source of truth
+
+Use the real existing fields to determine:
+
+referred/referral status
+
+whether payment is still unpaid / owed
+
+whether payment is paid
+
+Do not hardcode this in the UI.
+
+The detail page should use the same underlying truth as the list/card row that already knows this item is owed.
+
+Expected result for this exact case
+
+For the unpaid James Doherty referred payment detail page, I should see the page clearly communicate:
+
+Referred
+
+Owed
+
+not just:
+
+Referred
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+invoice/payment ID
+
+whether item is referred
+
+whether item is unpaid/owed
+
+final status/badge values rendered in the detail page
+
+Deliverables
+
+Update the payment detail page so unpaid referred payments show both Referred and Owed
+
+Keep paid referred payments showing the correct paid state
+
+Leave normal non-referred payment detail pages unchanged
+
+After implementation, tell me:
+
+what component/file was updated
+
+what fields drive Referred vs Owed
+
+what the exact unpaid referred detail-page display now is

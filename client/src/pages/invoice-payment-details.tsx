@@ -261,10 +261,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const isSplitPayment = data.isSplitPayment || false;
   const grossInvoiceTotalCents = data.grossInvoiceTotalCents || totalCents;
 
-  const statusPill = (() => {
-    if (isSplitPayment) {
-      return <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-semibold px-3 py-1 rounded-full">Referred</span>;
-    }
+  const paymentStatePill = (() => {
     switch (computedStatus) {
       case "paid":
         return <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">Paid</span>;
@@ -275,9 +272,16 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       case "partial":
         return <span className="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full">Partial</span>;
       default:
-        return <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">Unpaid</span>;
+        return <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">Owed</span>;
     }
   })();
+
+  const statusPill = isSplitPayment ? (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-semibold px-3 py-1 rounded-full">Referred</span>
+      {paymentStatePill}
+    </span>
+  ) : paymentStatePill;
 
   const details = [
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
