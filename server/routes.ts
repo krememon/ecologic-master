@@ -12002,13 +12002,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const nonFeeItems = (items as any[]).filter((item: any) => item.computedStatus !== 'subcontractor_fee');
           const reordered: any[] = [];
           for (const item of nonFeeItems) {
-            reordered.push(item);
             const matchingFee = feeRows.find(
               (fee: any) => fee.invoiceId === item.invoiceId && fee.jobId === item.jobId
             );
             if (matchingFee) {
               reordered.push(matchingFee);
             }
+            reordered.push(item);
           }
           // Any fee rows that had no matching parent (safety net) go at end
           const pairedFeeInvoiceKeys = new Set(
