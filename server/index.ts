@@ -1104,6 +1104,9 @@ app.use((req, res, next) => {
     console.error('[startup] backfillReferralEarnings error:', err?.message));
   backfillReceiverCollectionInvoices().catch(err =>
     console.error('[startup] backfillReceiverCollectionInvoices error:', err?.message));
+  // Backfill missing subcontract payouts for succeeded Stripe payments (idempotent)
+  stripeConnectService.backfillMissingSubcontractPayouts().catch(err =>
+    console.error('[startup] backfillMissingSubcontractPayouts error:', err?.message));
   
   const server = await registerRoutes(app);
 

@@ -1,0 +1,114 @@
+We need to fix a Stripe subcontract payout failure in EcoLogic.
+
+CURRENT FACTS
+Working correctly:
+- Company 415 "EcoLogic" → acct_1T9A2CBSypzcKZqQ — active, charges + payouts enabled
+- Company 533 "ZSL" → acct_1T99kdBMkUx58ysf — active, charges + payouts enabled
+- Session auth correctly resolves pjpell077@gmail.com to company 415
+
+Broken:
+- Jobs 740 and 741 both have successful $4,000 Stripe payments under company 533
+- Referrals 123 and 124 between 415 → 533 show status=completed
+- Zero payout audit records exist for either job
+- executeSubcontractPayout appears to only run when matchedPayment.status === 'processing'
+- If payment is already succeeded before the polling logic reaches that branch, payout is skipped entirely
+
+IMPORTANT
+Do this in the safest order:
+1. investigate PaymentIntent / charge architecture first
+2. fix the race condition in payout triggering
+3. only then retroactively trigger missing payouts for jobs 740 and 741 if valid
+
+GOAL
+Make sure subcontract payouts always trigger correctly for valid Stripe payments, even if payment status is already `succeeded`, and safely recover the missing payouts for jobs 740 and 741.
+
+STEP 1 — INVESTIGATE PAYMENTINTENT / CHARGE ARCHITECTURE
+For jobs 740 and 741, inspect the full Stripe flow and determine:
+- how the PaymentIntent was created
+- whether the charge was:
+  - a platform charge
+  - destination charge
+  - separate charges and transfers
+  - direct charge on connected account 533
+- which Stripe account owns the charge
+- whether source_transaction-based transfer from that payment is valid
+- whether the current EcoLogic payout model is architecturally compatible with these payments
+
+Report exactly:
+- PaymentIntent ID(s)
+- charge ID(s)
+- Stripe account context used at creation
+- whether retro payout is safe and valid
+- whether the current implementation should be using transfer_group / separate charges and transfers instead
+
+Do NOT guess. Trace the actual code path and actual stored records.
+
+STEP 2 — FIX THE RACE CONDITION
+Find the payout trigger logic around the current stripe confirm/polling flow (agent mentioned line ~10701).
+
+Fix the logic so subcontract payout execution is not dependent only on:
+- matchedPayment.status === 'processing'
+
+Requirements:
+- payout should trigger when payment becomes payable and is confirmed successful, even if the row is already `succeeded`
+- avoid duplicate payout execution
+- add a proper idempotency guard before creating transfers/audit records
+- ensure webhook-first and poll-first timing both work
+- if payment is already succeeded and no payout audit exists for a completed subcontract referral, payout logic should still run
+- keep existing payment success logic intact otherwise
+
+Use a durable guard such as:
+- existing payout audit record check
+- referral payout status check
+- transfer ID / audit existence
+- any existing idempotent marker already in schema
+
+Do NOT rely on fragile UI timing.
+
+STEP 3 — RETROACTIVELY RECOVER JOBS 740 AND 741
+Only after Steps 1 and 2 are done and only if architecture is valid:
+
+- safely trigger the missing subcontract payout flow for jobs 740 and 741
+- create the correct payout audit records
+- ensure no duplicate transfers occur
+- update any related payout/referral status fields correctly
+- log exactly what happened for each job
+
+If architecture shows these are not valid for transfer execution, do NOT force the payout. Instead report the blocker clearly.
+
+STEP 4 — ADD TARGETED LOGS
+Add concise logs for:
+- payment success path entered
+- whether payment row is processing or already succeeded
+- whether referral exists and is completed
+- whether payout audit already exists
+- whether payout execution is skipped or started
+- result of payout execution
+- retro recovery results for jobs 740 and 741
+
+Avoid noisy logs.
+
+STEP 5 — VERIFY END TO END
+Verify for jobs 740 and 741:
+- payment records still correct
+- payout audit record now exists if valid
+- referral payout status reflects reality
+- no duplicate transfers
+- sender/receiver payment displays remain correct
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause summary
+3. whether PaymentIntents were platform-compatible for payout or not
+4. exact race condition fix implemented
+5. whether jobs 740 and 741 were successfully recovered
+6. any manual follow-up needed
+7. short safe regression test plan
+
+SUCCESS CRITERIA
+- payout logic no longer misses cases where payment is already `succeeded`
+- payout execution is idempotent
+- jobs 740 and 741 are recovered if valid
+- no duplicate transfers are created
+- future subcontract Stripe payments reliably trigger payout flow

@@ -10677,27 +10677,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: 'pending' });
       }
 
+      // Resolve charge ID once — needed for both processing→succeeded AND safety-net paths
+      let confirmChargeId: string | null = null;
+      try {
+        const piObj = await stripe.paymentIntents.retrieve(pi);
+        confirmChargeId = piObj.latest_charge
+          ? (typeof piObj.latest_charge === "string" ? piObj.latest_charge : piObj.latest_charge.id)
+          : null;
+      } catch (e: any) {
+        console.warn(`[SubPayExec] stripe-confirm: Could not resolve charge: ${e.message}`);
+      }
+
+      console.log(`[StripeConfirm] paymentId=${matchedPayment.id} status=${matchedPayment.status} pi=${pi} chargeId=${confirmChargeId}`);
+
       if (matchedPayment.status === 'processing') {
         await db.update(payments).set({ status: 'succeeded', paidDate: new Date() }).where(eq(payments.id, matchedPayment.id));
-        console.log(`[StripeConfirm] Upgraded payment ${matchedPayment.id} from 'processing' to 'succeeded' (PI confirmed by Stripe)`);
+        console.log(`[StripeConfirm] paymentId=${matchedPayment.id} upgraded processing→succeeded`);
         await persistRecomputedTotals(invoiceId);
         matchedPayment = { ...matchedPayment, status: 'succeeded' };
 
         const [inv] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
         if (inv?.jobId) {
           await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
-
-          let confirmChargeId: string | null = null;
-          try {
-            const piObj = await stripe.paymentIntents.retrieve(pi);
-            confirmChargeId = piObj.latest_charge
-              ? (typeof piObj.latest_charge === "string" ? piObj.latest_charge : piObj.latest_charge.id)
-              : null;
-          } catch (e: any) {
-            console.warn(`[SubPayExec] stripe-confirm: Could not resolve charge: ${e.message}`);
-          }
           console.log(`[SubPayExec] stripe-confirm: invoiceId=${invoiceId} jobId=${inv.jobId} paymentId=${matchedPayment.id} pi=${pi} chargeId=${confirmChargeId}`);
-
           stripeConnectService.executeSubcontractPayout({
             jobId: inv.jobId,
             invoiceId,
@@ -10712,6 +10714,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         sendReceiptForPayment(matchedPayment.id).catch(err =>
           console.error('[receipt] stripe-confirm error:', err?.message));
+      } else if (matchedPayment.status === 'succeeded') {
+        // Safety net: payment already succeeded — payout may have been skipped due to race condition or referral status bug.
+        // executeSubcontractPayout is fully idempotent (checkExistingPayout prevents duplicate transfers).
+        const [inv] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+        if (inv?.jobId) {
+          console.log(`[StripeConfirm] paymentId=${matchedPayment.id} already succeeded — running subcontract payout safety net for jobId=${inv.jobId}`);
+          stripeConnectService.executeSubcontractPayout({
+            jobId: inv.jobId,
+            invoiceId,
+            paymentId: matchedPayment.id,
+            paymentIntentId: pi,
+            paymentAmountCents: matchedPayment.amountCents || Math.round(parseFloat(matchedPayment.amount) * 100),
+            ownerCompanyId: inv.companyId,
+            source: "stripe-confirm-safetynet",
+            chargeId: confirmChargeId,
+          }).catch(err => console.error('[SubPayExec] stripe-confirm-safetynet error:', err?.message));
+        }
       }
 
       const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);

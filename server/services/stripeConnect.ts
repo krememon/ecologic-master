@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import crypto from "crypto";
 import { db } from "../db";
 import { companies, jobReferrals, subcontractPayoutAudit, payments } from "../../shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-04-30.basil" as any,
@@ -157,7 +157,7 @@ export async function getAcceptedReferralForJob(jobId: number) {
   const [referral] = await db
     .select()
     .from(jobReferrals)
-    .where(and(eq(jobReferrals.jobId, jobId), eq(jobReferrals.status, "accepted")))
+    .where(and(eq(jobReferrals.jobId, jobId), inArray(jobReferrals.status, ["accepted", "completed"])))
     .limit(1);
   return referral || null;
 }
@@ -606,4 +606,76 @@ export async function getPayoutAuditForPayment(paymentId: number) {
     .where(eq(subcontractPayoutAudit.paymentId, paymentId))
     .orderBy(subcontractPayoutAudit.createdAt);
   return records;
+}
+
+/**
+ * Backfill: find all completed/accepted referrals whose Stripe payments
+ * succeeded but never produced a payout audit record, and trigger the payout now.
+ * Safe to run at startup — idempotency guard in executeSubcontractPayout prevents duplicates.
+ */
+export async function backfillMissingSubcontractPayouts(): Promise<void> {
+  console.log("[SubPayBackfill] Starting backfill scan for missing subcontract payouts...");
+
+  const referrals = await db
+    .select()
+    .from(jobReferrals)
+    .where(inArray(jobReferrals.status, ["accepted", "completed"]));
+
+  if (!referrals.length) {
+    console.log("[SubPayBackfill] No accepted/completed referrals found. Skipping.");
+    return;
+  }
+
+  let checked = 0;
+  let recovered = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const referral of referrals) {
+    const jobId = referral.jobId;
+    if (!jobId) continue;
+
+    const jobPayments = await db
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.jobId, jobId),
+          eq(payments.status, "succeeded"),
+          sql`${payments.stripePaymentIntentId} IS NOT NULL`,
+        )
+      );
+
+    for (const payment of jobPayments) {
+      checked++;
+      const existingAudit = await checkExistingPayout(payment.id, referral.id);
+      if (existingAudit) {
+        console.log(`[SubPayBackfill] jobId=${jobId} paymentId=${payment.id} referralId=${referral.id} — audit exists (${existingAudit.status}), skipping`);
+        skipped++;
+        continue;
+      }
+
+      console.log(`[SubPayBackfill] jobId=${jobId} paymentId=${payment.id} referralId=${referral.id} — no audit, triggering payout`);
+      try {
+        const result = await executeSubcontractPayout({
+          jobId,
+          invoiceId: payment.invoiceId || null,
+          paymentId: payment.id,
+          paymentIntentId: payment.stripePaymentIntentId || null,
+          paymentAmountCents: payment.amountCents || Math.round(parseFloat(String(payment.amount)) * 100),
+          ownerCompanyId: payment.companyId,
+          source: "startup-backfill",
+        });
+        if (result) {
+          console.log(`[SubPayBackfill] jobId=${jobId} paymentId=${payment.id} referralId=${referral.id} — payout result: ${result.status} auditId=${result.auditId}`);
+          recovered++;
+        }
+      } catch (err: any) {
+        console.error(`[SubPayBackfill] jobId=${jobId} paymentId=${payment.id} referralId=${referral.id} — ERROR: ${err?.message}`);
+        failed++;
+      }
+    }
+  }
+
+  console.log(`[SubPayBackfill] Complete. checked=${checked} recovered=${recovered} skipped=${skipped} failed=${failed}`);
 }
