@@ -67,6 +67,18 @@ function getStatusBadgeVariant(status: string): "default" | "secondary" | "destr
   }
 }
 
+function deriveSubcontractPillStatus(referralStatus: string, invoiceStatus: string | null): string {
+  if (referralStatus === 'declined') return 'declined';
+  if (referralStatus === 'completed') {
+    return invoiceStatus === 'paid' ? 'paid' : 'completed';
+  }
+  if (referralStatus === 'accepted') {
+    return invoiceStatus === 'paid' ? 'paid' : 'unpaid';
+  }
+  // pending referral — not yet accepted
+  return 'pending';
+}
+
 function getReferralStatusColor(status: string): string {
   switch (status) {
     case 'completed': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
@@ -483,11 +495,14 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
                     </div>
 
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      {job.invoiceStatus && (
-                        <Badge variant={getStatusBadgeVariant(job.invoiceStatus)} className="text-[10px]">
-                          {job.invoiceStatus}
-                        </Badge>
-                      )}
+                      {(() => {
+                        const pillStatus = deriveSubcontractPillStatus(job.referralStatus, job.invoiceStatus);
+                        return (
+                          <Badge variant={getStatusBadgeVariant(pillStatus)} className="text-[10px]">
+                            {pillStatus}
+                          </Badge>
+                        );
+                      })()}
                       <ChevronRight className="h-4 w-4 text-slate-400" />
                     </div>
                   </div>

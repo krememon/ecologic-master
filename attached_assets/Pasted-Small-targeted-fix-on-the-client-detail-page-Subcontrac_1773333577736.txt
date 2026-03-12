@@ -1,0 +1,154 @@
+Small targeted fix on the client detail page → Subcontracted tab.
+
+Current problem
+
+On the subcontracted history cards, the large colored status badge is updating correctly, for example:
+
+ACCEPTED
+
+COMPLETED
+
+But the small pill on the right side is still saying:
+
+pending
+
+even when the subcontracted job is already completed and paid.
+
+That is wrong and confusing.
+
+Goal
+
+Fix the right-side status pill on subcontracted client-history cards so it reflects the real current subcontract/payment lifecycle state, instead of always/defaulting to pending.
+
+What I want
+
+The right-side pill should match the real state of the subcontracted history item.
+
+Example
+
+If the subcontracted job is:
+
+completed
+
+and/or paid
+
+then the small right-side pill should not still say pending.
+
+It should show the correct state instead.
+
+Likely expected behavior
+
+Please use the real existing source-of-truth status fields, but the idea is:
+
+If subcontract is accepted but not yet completed/paid
+
+Show an appropriate current state such as:
+
+pending
+or
+
+unpaid
+or whatever matches the actual business logic
+
+If subcontract is completed and paid
+
+Show:
+
+paid
+or the correct completed/paid equivalent used elsewhere in the app
+
+Main point
+
+The small right-side pill must not contradict the actual subcontracted job state.
+
+Important
+
+Do not just key this off the old active job status if that is stale or no longer relevant.
+
+This tab is a subcontracted history view, so the pill should be based on the durable current state of the subcontract/referral/payment record.
+
+That may involve things like:
+
+referral status
+
+payment status
+
+invoice paid state
+
+archived/completed status
+
+receiver payment completion
+
+Use the real source of truth.
+
+Scope
+
+Fix only the right-side small status pill on the Subcontracted cards in the client detail page.
+
+Do not change:
+
+the big left status badge if it is already correct
+
+normal Jobs tab
+
+Estimates tab
+
+Notes tab
+
+unrelated payment or invoice screens
+
+What I need you to do
+
+Trace what field currently powers that small right-side pill
+
+Find why it is still resolving to pending
+
+Update it so it reflects the actual current subcontract/payment state
+
+Make sure completed/paid subcontracted history no longer shows a conflicting pending pill
+
+Expected result for the screenshot case
+
+For the subcontracted history card that is already:
+
+COMPLETED
+
+paid/completed in the subcontract flow
+
+the right-side pill should no longer say:
+
+pending
+
+It should show the correct final/current state instead.
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+client ID
+
+subcontracted record ID
+
+big badge status source/value
+
+small pill status source/value before fix
+
+small pill status source/value after fix
+
+Deliverables
+
+Fix the right-side small status pill on subcontracted client-history cards
+
+Make it reflect the real current state instead of incorrectly staying pending
+
+Leave the rest of the subcontracted card layout unchanged
+
+After implementation, tell me:
+
+what field was previously driving the incorrect pending pill
+
+what field now drives the corrected pill
+
+what exact status will show for completed/paid subcontracted history cards
