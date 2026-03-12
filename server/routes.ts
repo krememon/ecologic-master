@@ -12294,12 +12294,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
+
+      // Referral breakdown: detect if this invoice belongs to a referred job
+      let referralBreakdown: Record<string, any> | null = null;
+      let overrideBalanceDueCents: number | null = null;
+      if (invoice.jobId) {
+        try {
+          const [ref] = await db.select().from(jobReferrals).where(eq(jobReferrals.jobId, invoice.jobId)).limit(1);
+          if (ref && ref.status !== 'pending' && ref.jobTotalAtAcceptanceCents) {
+            const isSenderSide = ref.senderCompanyId === company.id;
+            const isReceiverSide = ref.receiverCompanyId === company.id;
+            if (isSenderSide || isReceiverSide) {
+              const referralValueNum = parseFloat(ref.referralValue || '0');
+              const rateLabel = ref.referralType === 'percent'
+                ? `${referralValueNum % 1 === 0 ? referralValueNum.toFixed(0) : referralValueNum}%`
+                : `$${(referralValueNum).toFixed(0)} flat`;
+              referralBreakdown = {
+                jobTotalCents: ref.jobTotalAtAcceptanceCents,
+                referralType: ref.referralType,
+                referralValue: ref.referralValue,
+                rateLabel,
+                contractorPayoutCents: ref.contractorPayoutAmountCents || 0,
+                companyShareCents: ref.companyShareAmountCents || 0,
+                isSenderSide,
+                isReceiverSide,
+                referralStatus: ref.status,
+              };
+              // For sender-side: override balanceDueCents to the sender's share, not the full job amount
+              if (isSenderSide) {
+                const senderShare = ref.companyShareAmountCents || 0;
+                overrideBalanceDueCents = ref.status === 'completed' ? 0 : senderShare;
+              }
+              console.log(`[invoice-detail-referral] invoiceId=${invoiceId} companyId=${company.id} isSenderSide=${isSenderSide} isReceiverSide=${isReceiverSide} jobTotal=${ref.jobTotalAtAcceptanceCents} contractorPayout=${ref.contractorPayoutAmountCents} companyShare=${ref.companyShareAmountCents}`);
+            }
+          }
+        } catch (refErr: any) {
+          console.error('[invoice-detail-referral] Failed to load referral:', refErr?.message);
+        }
+      }
       
       res.json({
         ...invoice,
         paidAmountCents: computed.paidCents,
-        balanceDueCents: computed.owedCents,
+        balanceDueCents: overrideBalanceDueCents !== null ? overrideBalanceDueCents : computed.owedCents,
         computedStatus: computed.computedStatus,
+        ...(referralBreakdown ? { referralBreakdown } : {}),
       });
     } catch (error) {
       console.error("Error fetching invoice:", error);

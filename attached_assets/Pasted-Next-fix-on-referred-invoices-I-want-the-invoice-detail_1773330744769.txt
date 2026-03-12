@@ -1,0 +1,227 @@
+Next fix: on referred invoices, I want the invoice details/totals area to show the actual referral payment breakdown, not just the generic invoice totals card.
+
+Goal
+
+When an invoice is tied to a referred/subcontracted job, the invoice detail view should clearly show the financial breakdown of the referral so the user can understand:
+
+full job price
+
+referral rate
+
+what the contractor gets
+
+what your company gets / your share
+
+and the correct owed/balance context
+
+Right now the invoice card is only showing a generic:
+
+Subtotal
+
+Total
+
+Balance Due
+
+That is not enough for referred jobs.
+
+What I want
+
+For referred invoices only, replace or upgrade that generic totals section so it shows a real payment breakdown similar to the example I attached.
+
+Example structure
+
+Use the real stored data to show rows like:
+
+Job Price → full job amount
+
+Referral Rate → percentage split
+
+Contractor Gets → contractor payout amount
+
+Your Share → sender/company share amount
+
+Then also make sure the invoice still clearly communicates the relevant balance due / owed amount for that side.
+
+Important clarification
+
+This is specifically for referred/subcontracted invoice detail views.
+
+I am not saying every invoice in the app should change.
+
+Normal non-referred invoices
+
+keep current generic totals behavior
+
+Referred invoices
+
+show the richer financial breakdown
+
+What I need the breakdown to communicate
+
+For referred invoices, the user should be able to understand at a glance:
+
+what the full job is worth
+
+what split/referral rate was agreed
+
+what the subcontractor receives
+
+what the sending company keeps
+
+what amount is still owed for that side/view
+
+Sender-side vs receiver-side behavior
+
+Use the correct financial perspective for the side viewing the invoice.
+
+Sender side
+
+The sender invoice detail should still make sense from the sender perspective:
+
+full job amount visible
+
+referral rate visible
+
+contractor gets visible
+
+your share visible
+
+owed/balance text should reflect the correct sender-side amount owed/share where applicable
+
+Receiver side
+
+The receiver invoice detail should also make sense:
+
+full job amount visible
+
+referral rate visible
+
+contractor gets visible
+
+your share visible
+
+owed/balance should reflect the correct receiver-side collection/payment context
+
+Do not fake the numbers. Use the real stored financial snapshot.
+
+Source of truth
+
+Please use the actual stored referral financial fields already in the system, such as:
+
+full job total
+
+referral percentage/rate
+
+contractor payout amount
+
+company share amount
+
+any actual balance/owed field already used for that invoice side
+
+Do not hardcode values in the UI.
+
+UI direction
+
+I do not need an exact clone of the screenshot, but I want that same level of clarity.
+
+Design goals
+
+clean
+
+organized
+
+premium
+
+easy to understand
+
+visually better than the generic totals block
+
+still matches EcoLogic styling
+
+Suggested approach
+
+Inside the invoice detail page/card for referred invoices:
+
+keep the invoice header/info
+
+replace the plain totals card with a referred-job payment breakdown card
+
+use clean rows and labels
+
+use subtle emphasis on the payout rows
+
+still show balance/owed clearly
+
+Important constraints
+
+only apply this special breakdown to referred invoices
+
+do not break normal invoice detail views
+
+do not change payment math
+
+do not change actual invoice/payment logic
+
+do not change unrelated pages
+
+do not invent new values
+
+do not lose the balance due / owed context
+
+What to inspect
+
+Please trace:
+
+the invoice detail component/page that renders this totals section
+
+how it knows whether the invoice is tied to a referred job
+
+which stored fields are already available for:
+
+full total
+
+referral rate
+
+contractor payout
+
+company share
+
+balance due
+
+If any of those fields are not yet being passed into the invoice detail response for referred invoices, add them properly from the real source of truth.
+
+Deliverables
+
+For referred invoices, replace/upgrade the generic totals block with a real referral payment breakdown
+
+Show:
+
+Job Price
+
+Referral Rate
+
+Contractor Gets
+
+Your Share
+
+Keep the correct balance/owed context for that side
+
+Leave normal invoices unchanged
+
+After implementation, tell me:
+
+what component/file was updated
+
+how the invoice detail detects a referred invoice
+
+what fields are powering:
+
+Job Price
+
+Referral Rate
+
+Contractor Gets
+
+Your Share
+
+Balance/Owed display

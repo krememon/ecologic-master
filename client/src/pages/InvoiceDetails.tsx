@@ -80,6 +80,17 @@ interface InvoiceData {
     email?: string | null;
     phone?: string | null;
   } | null;
+  referralBreakdown?: {
+    jobTotalCents: number;
+    referralType: string;
+    referralValue: string;
+    rateLabel: string;
+    contractorPayoutCents: number;
+    companyShareCents: number;
+    isSenderSide: boolean;
+    isReceiverSide: boolean;
+    referralStatus: string;
+  } | null;
 }
 
 function formatCurrency(cents: number): string {
@@ -620,56 +631,128 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Totals
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(invoice.subtotalCents)}</span>
-            </div>
-            {invoice.taxCents > 0 && (
-              <>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>{formatCurrency(invoice.taxCents)}</span>
+        {invoice.referralBreakdown ? (
+          /* ── Referral Payment Breakdown ── */
+          <Card className="border-2 border-slate-200 dark:border-slate-700">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                Referral Payment Breakdown
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {invoice.referralBreakdown.isSenderSide ? 'Sent job · your payout share' : 'Received job · your collection share'}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-0 p-0 pb-1">
+              {/* Job Price */}
+              <div className="flex justify-between items-center px-6 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm text-muted-foreground">Job Price</span>
+                <span className="text-sm font-medium">{formatCurrency(invoice.referralBreakdown.jobTotalCents)}</span>
+              </div>
+              {/* Referral Rate */}
+              <div className="flex justify-between items-center px-6 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm text-muted-foreground">Referral Rate</span>
+                <span className="text-sm font-medium tabular-nums">{invoice.referralBreakdown.rateLabel}</span>
+              </div>
+              {/* Contractor Gets */}
+              <div className={`flex justify-between items-center px-6 py-2.5 border-b border-slate-100 dark:border-slate-800 ${invoice.referralBreakdown.isReceiverSide ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}`}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-muted-foreground">Contractor Gets</span>
+                  {invoice.referralBreakdown.isReceiverSide && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">You</span>
+                  )}
                 </div>
-              </>
-            )}
-            <Separator />
-            <div className="flex justify-between text-lg font-semibold">
-              <span>Total</span>
-              <span>{formatCurrency(invoice.totalCents)}</span>
-            </div>
-            {invoice.status === 'paid' && (
-              <>
-                <Separator />
-                <div className="flex justify-between text-green-600">
-                  <span>Amount Paid</span>
-                  <span>{formatCurrency(invoice.totalCents)}</span>
+                <span className={`text-sm font-semibold ${invoice.referralBreakdown.isReceiverSide ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                  {formatCurrency(invoice.referralBreakdown.contractorPayoutCents)}
+                </span>
+              </div>
+              {/* Your Share / Company Share */}
+              <div className={`flex justify-between items-center px-6 py-2.5 border-b border-slate-100 dark:border-slate-800 ${invoice.referralBreakdown.isSenderSide ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}`}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-muted-foreground">{invoice.referralBreakdown.isSenderSide ? 'Your Share' : 'Company Share'}</span>
+                  {invoice.referralBreakdown.isSenderSide && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">You</span>
+                  )}
                 </div>
-                <div className="flex justify-between font-semibold">
-                  <span>Balance Due</span>
-                  <span>$0.00</span>
-                </div>
-              </>
-            )}
-            {invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled' && (
-              <>
-                <Separator />
-                <div className="flex justify-between font-semibold text-orange-600">
-                  <span>Balance Due</span>
-                  <span>{formatCurrency(invoice.totalCents)}</span>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                <span className={`text-sm font-semibold ${invoice.referralBreakdown.isSenderSide ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                  {formatCurrency(invoice.referralBreakdown.companyShareCents)}
+                </span>
+              </div>
+              {/* Balance Due */}
+              <div className="px-6 pt-3 pb-4">
+                {invoice.referralBreakdown.referralStatus === 'completed' ? (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">Paid</span>
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">$0.00</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">Balance Due</span>
+                    <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+                      {formatCurrency(
+                        invoice.referralBreakdown.isSenderSide
+                          ? invoice.referralBreakdown.companyShareCents
+                          : (invoice.balanceDueCents ?? invoice.referralBreakdown.contractorPayoutCents)
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          /* ── Generic Invoice Totals (non-referred) ── */
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Totals
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatCurrency(invoice.subtotalCents)}</span>
+              </div>
+              {invoice.taxCents > 0 && (
+                <>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tax</span>
+                    <span>{formatCurrency(invoice.taxCents)}</span>
+                  </div>
+                </>
+              )}
+              <Separator />
+              <div className="flex justify-between text-lg font-semibold">
+                <span>Total</span>
+                <span>{formatCurrency(invoice.totalCents)}</span>
+              </div>
+              {invoice.status === 'paid' && (
+                <>
+                  <Separator />
+                  <div className="flex justify-between text-green-600">
+                    <span>Amount Paid</span>
+                    <span>{formatCurrency(invoice.totalCents)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>Balance Due</span>
+                    <span>$0.00</span>
+                  </div>
+                </>
+              )}
+              {invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled' && (
+                <>
+                  <Separator />
+                  <div className="flex justify-between font-semibold text-orange-600">
+                    <span>Balance Due</span>
+                    <span>{formatCurrency(invoice.totalCents)}</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {invoice.notes && (
           <Card>
