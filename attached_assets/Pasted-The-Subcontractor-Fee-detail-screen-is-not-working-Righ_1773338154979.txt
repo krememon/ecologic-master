@@ -1,0 +1,225 @@
+The Subcontractor Fee detail screen is not working. Right now when I tap the negative fee row, the page just says:
+
+Fee detail not found
+
+That is not acceptable. We need this screen to actually load and display the full details for the subcontractor fee entry.
+
+Goal
+
+When I tap a Subcontractor Fee row, I want a real detail page that fully explains that negative ledger entry.
+
+It should not show “Fee detail not found.”
+It should show all the real details tied to that fee.
+
+Current problem
+
+The negative row exists in the Payments list, so the app clearly knows enough to render the row itself.
+
+But when I tap it, the detail page cannot resolve/load the source record and just fails.
+
+So one of these is happening:
+
+the row is routing with the wrong ID/type
+
+the detail page is looking up the wrong backend record
+
+the fee row is derived from a record that is never exposed through a detail endpoint
+
+the detail page route exists but the lookup logic does not support subcontractor-fee entries
+
+the fee row and detail page are using different source-of-truth IDs
+
+What I need you to do
+Step 1 — Trace the exact click path
+
+Find the exact flow when tapping the Subcontractor Fee row:
+
+which frontend component handles the row click
+
+what route/path it navigates to
+
+what params/IDs it passes
+
+what backend endpoint or loader the detail page uses
+
+I want the exact files/functions, not guesses.
+
+Step 2 — Find the real source-of-truth record behind the fee row
+
+The negative fee row must be coming from some durable record, such as:
+
+subcontract payout audit record
+
+referral payout record
+
+fee ledger record
+
+mirrored/referral payment record
+
+or another real financial record
+
+Find the exact source record used to create that row in the Payments list.
+
+Then make the detail page load that same real record.
+
+Important
+
+Do not fake this detail page from random invoice data if the actual fee row comes from a different source.
+
+The detail page needs to match the exact negative row the user tapped.
+
+What I want displayed on the fee detail page
+
+When the fee detail loads, I want it to clearly show all relevant details about the subcontractor fee.
+
+At minimum, show:
+
+Type: Subcontractor Fee
+
+Amount: -$2,000.00
+
+Status: paid/completed or whatever is correct
+
+Related Job: Job for James Doherty
+
+Related Customer: James Doherty
+
+Related Invoice / referral invoice if applicable
+
+Referral Rate: 50%
+
+Gross Collected Amount: $4,000.00
+
+Subcontractor Fee Amount: -$2,000.00
+
+Your Net / Remaining Share: $2,000.00 if available and useful
+
+Created date / paid date
+
+Any related contractor/company info if available
+
+Only show real fields that exist, but this page should feel complete and informative.
+
+Top of page
+
+The top of the detail page should match the fee entry.
+
+I want:
+
+large amount shown as -$2,000.00
+
+clear label/badge showing Subcontractor Fee
+
+correct final state like Paid or equivalent
+
+Not:
+
+generic referred payment info
+
+positive amount
+
+missing detail
+
+Payment history / ledger section
+
+If the page includes a history section, it should line up with the meaning of this fee.
+
+It should not misleadingly show a generic positive incoming payment unless that is truly what the underlying fee record stores.
+
+Main point:
+
+the detail page should correlate to the negative fee ledger row
+
+it should explain the fee, not pretend it is the collected payment
+
+Step 3 — Fix the actual missing link
+
+Once you find why the detail lookup fails, fix it properly.
+
+Possible examples:
+
+wrong row ID passed in route
+
+fee row needs a dedicated detail route
+
+fee row needs a sourceType + sourceId
+
+detail page only supports normal payments, not fee entries
+
+backend query needs to support fee audit/payout records
+
+fee rows are derived in-memory and need stable persisted identifiers for details
+
+But do not guess. Trace the real reason it says Fee detail not found.
+
+Scope
+
+Fix only the Subcontractor Fee detail page flow.
+
+Do not change:
+
+normal payment detail pages
+
+positive $4,000 payment detail pages
+
+list ordering
+
+payment math
+
+sender-side payment detail pages
+
+Expected result for this case
+
+When I tap the Subcontractor Fee -$2,000 row, I should see a real detail page with:
+
+-$2,000.00
+
+Subcontractor Fee
+
+related customer/job/invoice/referral context
+
+all meaningful fee details loaded correctly
+
+No more:
+
+Fee detail not found
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+clicked row type
+
+clicked row ID / sourceType / sourceId
+
+route params passed to the detail page
+
+backend lookup query used
+
+whether the source fee record was found
+
+final detail payload returned to the screen
+
+Deliverables
+
+Fix the Subcontractor Fee detail-page lookup so it loads real data instead of “Fee detail not found”
+
+Make the screen display a full set of meaningful fee details
+
+Show the top amount as -$2,000.00
+
+Keep normal payment detail pages unchanged
+
+After implementation, tell me:
+
+what source-of-truth record powers the fee detail page
+
+what file/component/endpoint was updated
+
+why the lookup was previously failing
+
+what fields are now shown on the fee detail screen
+
+confirmation that tapping the - $2,000 Subcontractor Fee row now opens a real populated detail page instead of the blank not-found screen

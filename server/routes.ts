@@ -12120,18 +12120,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderCompanyName = senderComp?.name || null;
       }
 
-      // Customer name from the invoice
+      // Customer name + job title
       let customerName: string | null = null;
       let jobTitle: string | null = null;
       if (inv.customerId) {
-        const [cust] = await db.select({ name: customers.name }).from(customers)
-          .where(eq(customers.id, inv.customerId)).limit(1);
-        customerName = cust?.name || null;
+        const [cust] = await db
+          .select({ firstName: customers.firstName, lastName: customers.lastName })
+          .from(customers).where(eq(customers.id, inv.customerId)).limit(1);
+        if (cust) customerName = [cust.firstName, cust.lastName].filter(Boolean).join(' ') || null;
       }
       if (inv.jobId) {
-        const [jobRow] = await db.select({ title: jobs.title }).from(jobs)
-          .where(eq(jobs.id, inv.jobId)).limit(1);
-        jobTitle = jobRow?.title || null;
+        const [jobRow] = await db
+          .select({ title: jobs.title, clientName: jobs.clientName })
+          .from(jobs).where(eq(jobs.id, inv.jobId)).limit(1);
+        if (jobRow) {
+          jobTitle = jobRow.title || null;
+          // Fallback: use job's clientName if invoice has no customerId
+          if (!customerName) customerName = jobRow.clientName || null;
+        }
+      }
+      // Final fallback: look up customer via the referral's job (may be in sender's company)
+      if (!customerName && referral.jobId) {
+        const [senderJob] = await db
+          .select({ clientName: jobs.clientName, customerId: jobs.customerId })
+          .from(jobs).where(eq(jobs.id, referral.jobId)).limit(1);
+        if (senderJob) {
+          if (senderJob.clientName) {
+            customerName = senderJob.clientName;
+          } else if (senderJob.customerId) {
+            const [cust2] = await db
+              .select({ firstName: customers.firstName, lastName: customers.lastName })
+              .from(customers).where(eq(customers.id, senderJob.customerId)).limit(1);
+            if (cust2) customerName = [cust2.firstName, cust2.lastName].filter(Boolean).join(' ') || null;
+          }
+        }
       }
 
       const grossCollectedCents = inv.totalCents || 0;
