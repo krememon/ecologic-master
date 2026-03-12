@@ -1,0 +1,138 @@
+Small layout/order fix on the receiver-side Payments page for the new subcontractor-fee ledger rows.
+
+Current problem
+
+The rows are grouped like this:
+
+James Doherty $4,000
+
+James Doherty $4,000
+
+James Doherty -$2,000
+
+James Doherty -$2,000
+
+That is not how I want it ordered.
+
+What I want
+
+Each negative Subcontractor Fee row should appear directly with its matching collected payment row, so the ledger reads as a pair.
+
+Correct order
+
+For each referred payment pair, I want:
+
+James Doherty $4,000.00
+
+James Doherty -$2,000.00
+
+Then for the next one:
+
+James Doherty $4,000.00
+
+James Doherty -$2,000.00
+
+So the final order should be:
+
+collected payment row
+
+matching subcontractor fee row
+
+next collected payment row
+
+next matching subcontractor fee row
+
+Not all positives first and then all negatives.
+
+Goal
+
+Make the receiver-side Payments list read like a proper ledger pair for each subcontracted job/payment.
+
+Each collected payment should have its matching negative subcontractor-fee row placed immediately adjacent to it.
+
+Important behavior
+
+The negative row should stay tied to the same underlying referred payment/job/invoice it belongs to.
+
+So the ordering should be based on the matching relationship between:
+
+collected payment row
+
+subcontractor fee row
+
+Not just by raw amount or generic status grouping.
+
+What I need you to do
+1) Trace the current list sorting/grouping logic
+
+Find why the page is currently grouping all paid positives together and all subcontractor-fee negatives together.
+
+2) Pair the rows by the same underlying referred payment/job
+
+For each referred payment entry, place its corresponding Subcontractor Fee row immediately after it.
+
+3) Preserve existing row data
+
+Do not change:
+
+amounts
+
+labels
+
+colors
+
+paid logic
+
+subcontractor fee logic
+
+This is just an ordering/grouping fix.
+
+Expected result
+
+Instead of:
+
++4000
+
++4000
+
+-2000
+
+-2000
+
+I want:
+
++4000
+
+-2000
+
++4000
+
+-2000
+
+for the matching James Doherty referred payments.
+
+Important constraints
+
+do not create duplicate rows
+
+do not break Payments filtering
+
+do not break sorting for unrelated normal payments
+
+only adjust the ordering/grouping so matched subcontractor-fee rows sit directly with their parent collected payment row
+
+keep this scoped to the receiver-side Payments list behavior
+
+Deliverables
+
+Fix the Payments list ordering so each subcontractor fee row appears directly under its matching collected payment row
+
+Keep all row data/labels/amounts unchanged
+
+After implementation, tell me:
+
+what field/relationship is being used to pair the rows
+
+what file/component/query was updated
+
+confirmation that the order now reads +4000, -2000, +4000, -2000 for this case

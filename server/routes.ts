@@ -11993,6 +11993,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return db2 - da;
       });
 
+      // Second pass: interleave subcontractor_fee rows directly after their matching
+      // collected-payment row (paired by invoiceId + jobId). This prevents all positives
+      // grouping first and all negatives last when multiple referrals share the same date.
+      {
+        const feeRows = (items as any[]).filter((item: any) => item.computedStatus === 'subcontractor_fee');
+        if (feeRows.length > 0) {
+          const nonFeeItems = (items as any[]).filter((item: any) => item.computedStatus !== 'subcontractor_fee');
+          const reordered: any[] = [];
+          for (const item of nonFeeItems) {
+            reordered.push(item);
+            const matchingFee = feeRows.find(
+              (fee: any) => fee.invoiceId === item.invoiceId && fee.jobId === item.jobId
+            );
+            if (matchingFee) {
+              reordered.push(matchingFee);
+            }
+          }
+          // Any fee rows that had no matching parent (safety net) go at end
+          const pairedFeeInvoiceKeys = new Set(
+            reordered
+              .filter((r: any) => r.computedStatus === 'subcontractor_fee')
+              .map((r: any) => `${r.invoiceId}-${r.jobId}`)
+          );
+          for (const fee of feeRows) {
+            if (!pairedFeeInvoiceKeys.has(`${fee.invoiceId}-${fee.jobId}`)) {
+              reordered.push(fee);
+            }
+          }
+          (items as any[]).splice(0, (items as any[]).length, ...reordered);
+        }
+      }
+
       res.json({
         items,
         stats: {
