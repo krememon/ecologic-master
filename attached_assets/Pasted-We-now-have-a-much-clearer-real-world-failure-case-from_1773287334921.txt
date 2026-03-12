@@ -1,0 +1,273 @@
+We now have a much clearer real-world failure case from testing. Please debug this exact subcontract/referral payment flow using the scenario below.
+
+Real test scenario
+
+I created a job from pjpell077 and sent/subcontracted it to ppellegrino@ecologicc.
+
+Then:
+
+I accepted the job from ppellegrino
+
+I clicked Pay
+
+Payment successfully went through
+
+The job successfully deleted from active jobs
+
+What happened after payment
+On pjpell077 (sender side)
+
+It did update:
+
+Payment History
+
+Invoices
+
+But it did not update:
+
+Client History
+
+On ppellegrino (subcontractor / receiver side)
+
+It did not update:
+
+Payments
+
+Invoices
+
+So right now the financial/history propagation is inconsistent across both sides.
+
+What needs to be true after a subcontracted job is paid
+Sender side should retain:
+
+payment history entry
+
+invoice history entry
+
+client history linkage if this is supposed to behave like regular paid jobs
+
+referral/payout history
+
+Receiver/subcontractor side should retain:
+
+payment history entry
+
+invoice history entry if applicable to their view/model
+
+referral/payment history for the subcontracted work they performed
+
+Active job should still disappear
+
+keep the active job cleanup working
+
+Main issue to solve
+
+Please do a real end-to-end trace of what happens after payment succeeds for a subcontracted/referral job.
+
+I want you to identify why:
+
+receiver/subcontractor side is not getting payment + invoice history
+
+sender side is not getting client history updated
+
+active job deletion is happening, but history persistence is only partially happening
+
+Debug this exact flow
+
+Use the exact lifecycle:
+
+sender creates job
+
+sender refers/subcontracts job
+
+receiver accepts job
+
+receiver triggers payment
+
+payment succeeds
+
+job is cleaned up from active jobs
+
+all history should persist correctly for both sides
+
+Do not guess. Trace the actual backend logic.
+
+What I need you to inspect
+1) Payment success handler / post-payment workflow
+
+Find the exact backend code path that runs after a subcontracted payment succeeds.
+
+Identify:
+
+what records are created
+
+what records are updated
+
+what records are only created for sender side
+
+whether subcontract/referral-specific branches are skipping receiver history creation
+
+whether cleanup runs before history persistence finishes
+
+2) Sender-side history updates
+
+Figure out why pjpell077:
+
+gets Payment History
+
+gets Invoices
+
+but does not get Client History updated
+
+Check whether client history depends on:
+
+original job still existing
+
+customer/job linkage being deleted too early
+
+client ledger/history update logic only running for normal non-referred jobs
+
+referred jobs bypassing the normal client-history path
+
+3) Receiver-side history updates
+
+Figure out why ppellegrino:
+
+does not get payment history
+
+does not get invoice history
+
+Check whether:
+
+receiver-side records are never created
+
+receiver-side queries only read company-owned invoices and ignore subcontract/referral records
+
+payment record is only attached to sender invoice/company
+
+receiver history depends on a job record that gets deleted
+
+receiver needs a mirrored history summary record that is not being created
+
+4) Durable source of truth
+
+Make sure history for both sides is powered by durable financial records after active job cleanup.
+
+That means after payment succeeds and active job disappears, both sides should still be able to load history from preserved records such as:
+
+invoices
+
+payments
+
+referral payout records
+
+subcontract audit/payment records
+
+client history records
+
+any existing ledger/history tables already used by normal paid jobs
+
+Do not rely on the active job continuing to exist.
+
+Fix requirements
+A. Sender side
+
+After payment succeeds:
+
+keep payment history
+
+keep invoices
+
+also update/preserve client history correctly
+
+B. Receiver side
+
+After payment succeeds:
+
+preserve payment history
+
+preserve invoice/payment visibility in the subcontractor-facing history area
+
+do not lose history when active job is removed
+
+C. Active cleanup
+
+keep the current active-job deletion/removal working
+
+Important constraints
+
+do not break successful payment flow
+
+do not break active job cleanup
+
+do not duplicate financial records
+
+do not invent fake mirrored invoices unless the current architecture requires a summary/history record
+
+do not break Stripe/payment reconciliation
+
+do not break sender-side financial history that already works
+
+do not change unrelated payment screens unless needed to surface the correct preserved data
+
+Verification steps I want
+
+Please test this exact scenario again after the fix and verify all of the below:
+
+Sender account (pjpell077)
+
+Payment History updated
+
+Invoices updated
+
+Client History updated
+
+Active job removed
+
+Receiver account (ppellegrino)
+
+Payment History updated
+
+Invoice/payment history visible wherever subcontractor-side history is supposed to live
+
+Active job removed
+
+Targeted logs
+
+Use only targeted logs and log these checkpoints:
+
+payment success handler entered
+
+sender history records created/updated
+
+receiver history records created/updated
+
+client history update attempted
+
+cleanup executed
+
+IDs of invoice/payment/referral/history records involved
+
+Deliverables
+
+Trace the exact post-payment flow for subcontracted jobs
+
+Fix missing receiver-side payment/invoice history
+
+Fix missing sender-side client history update
+
+Keep active job deletion working
+
+Verify the exact pjpell077 → ppellegrino scenario after the fix
+
+After implementation, tell me:
+
+what exact step in the post-payment flow was missing or broken
+
+why sender client history was not updating
+
+why receiver payment/invoice history was not updating
+
+what records/queries you changed
+
+confirmation that both sides now retain correct history after payment and job cleanup

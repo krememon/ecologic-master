@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { invoices, payments, jobs, jobReferrals } from "../shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 
 export async function recomputeInvoiceTotalsFromPayments(invoiceId: number): Promise<{ paidCents: number; owedCents: number; computedStatus: string; totalCents: number }> {
   const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
@@ -114,11 +114,98 @@ export async function recomputeJobPaymentAndMaybeArchive(
 export async function markReferralCompleted(jobId: number, now?: Date): Promise<void> {
   try {
     const ts = now || new Date();
-    const result = await db.update(jobReferrals)
+
+    // Fetch the referral BEFORE updating so we have payout details
+    const [referral] = await db.select().from(jobReferrals)
+      .where(and(eq(jobReferrals.jobId, jobId), sql`${jobReferrals.status} = 'accepted'`));
+
+    await db.update(jobReferrals)
       .set({ status: 'completed' } as any)
       .where(and(eq(jobReferrals.jobId, jobId), sql`${jobReferrals.status} = 'accepted'`));
+
     console.log(`[referral] Job ${jobId} referral marked completed`);
+
+    // Create receiver-side payout records so the receiver company has financial history
+    if (referral?.receiverCompanyId && referral?.contractorPayoutAmountCents && referral.contractorPayoutAmountCents > 0) {
+      await ensureReceiverPayoutRecord(jobId, referral, ts);
+    }
   } catch (err: any) {
     console.error(`[referral] Failed to mark referral completed for job ${jobId}:`, err?.message);
+  }
+}
+
+async function ensureReceiverPayoutRecord(
+  jobId: number,
+  referral: { receiverCompanyId: number | null; contractorPayoutAmountCents: number | null },
+  now: Date,
+): Promise<void> {
+  try {
+    const receiverCompanyId = referral.receiverCompanyId!;
+    const payoutCents = referral.contractorPayoutAmountCents!;
+
+    // Idempotency: skip if receiver already has an invoice for this job
+    const [existing] = await db.select({ id: invoices.id }).from(invoices)
+      .where(and(
+        eq(invoices.jobId, jobId),
+        eq(invoices.companyId, receiverCompanyId),
+        isNull(invoices.deletedAt),
+      ));
+
+    if (existing) {
+      console.log(`[payout-record] Job ${jobId} receiver company ${receiverCompanyId} already has invoice ${existing.id}, skipping`);
+      return;
+    }
+
+    // Get job info for invoice context
+    const [job] = await db.select({
+      customerId: jobs.customerId,
+      clientId: jobs.clientId,
+      title: jobs.title,
+    }).from(jobs).where(eq(jobs.id, jobId));
+
+    const payoutDollars = (payoutCents / 100).toFixed(2);
+    const invoiceNumber = `PAYOUT-${jobId}`;
+
+    // Create a payout invoice for the receiver (represents their earned share)
+    const [payoutInvoice] = await db.insert(invoices).values({
+      companyId: receiverCompanyId,
+      jobId,
+      customerId: job?.customerId ?? null,
+      clientId: job?.clientId ?? null,
+      invoiceNumber,
+      amount: payoutDollars,
+      subtotalCents: payoutCents,
+      taxCents: 0,
+      totalCents: payoutCents,
+      paidAmountCents: payoutCents,
+      balanceDueCents: 0,
+      status: 'paid',
+      issueDate: now.toISOString().split('T')[0],
+      paidAt: now,
+      paidDate: now.toISOString().split('T')[0],
+      notes: `Referral payout for job #${jobId} — subcontract earnings`,
+      createdAt: now,
+      updatedAt: now,
+    } as any).returning();
+
+    // Create a matching payment record for the receiver
+    await db.insert(payments).values({
+      companyId: receiverCompanyId,
+      jobId,
+      invoiceId: payoutInvoice.id,
+      customerId: job?.customerId ?? null,
+      amount: payoutDollars,
+      amountCents: payoutCents,
+      paymentMethod: 'stripe',
+      status: 'paid',
+      paidDate: now,
+      notes: `Subcontract payout via Stripe transfer`,
+      createdAt: now,
+      updatedAt: now,
+    } as any).returning();
+
+    console.log(`[payout-record] Created receiver payout invoice ${payoutInvoice.id} + payment for company ${receiverCompanyId}, job ${jobId}, $${payoutDollars}`);
+  } catch (err: any) {
+    console.error(`[payout-record] Failed to create receiver payout record for job ${jobId}:`, err?.message);
   }
 }

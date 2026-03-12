@@ -7666,8 +7666,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get jobs for this customer (Job table has customerId field)
+      // 1. Jobs currently owned by this company
       const allJobs = await storage.getJobs(company.id);
-      const customerJobs = allJobs.filter(job => job.customerId === customerId);
+      const ownedCustomerJobs = allJobs.filter(job => job.customerId === customerId);
+
+      // 2. Jobs that were referred OUT from this company but transferred to a different company
+      //    (the job's customerId still points to this company's customer)
+      const referredOutRows = await db.select({ jobId: jobReferrals.jobId })
+        .from(jobReferrals)
+        .where(eq(jobReferrals.senderCompanyId, company.id));
+      const referredJobIds = referredOutRows.map(r => r.jobId).filter(Boolean) as number[];
+
+      let referredCustomerJobs: any[] = [];
+      if (referredJobIds.length > 0) {
+        const transferredJobs = await db.select().from(jobs)
+          .where(and(
+            inArray(jobs.id, referredJobIds),
+            eq(jobs.customerId, customerId)
+          ));
+        // Only include jobs NOT already in ownedCustomerJobs (transferred away, different companyId)
+        const ownedIds = new Set(ownedCustomerJobs.map((j: any) => j.id));
+        referredCustomerJobs = transferredJobs.filter(j => !ownedIds.has(j.id));
+      }
+
+      const customerJobs = [...ownedCustomerJobs, ...referredCustomerJobs];
       
       // Sort by createdAt descending (newest first)
       customerJobs.sort((a, b) => {
