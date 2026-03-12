@@ -1,0 +1,117 @@
+Do not stop at “click the button and come back.” I need you to fully debug this Google OAuth 403 using the real request that is being sent to Google.
+
+What we already know
+
+/api/auth/google is being hit
+
+backend returns 302
+
+/api/auth/google/callback never appears
+
+so Google is rejecting the OAuth request before callback
+
+That means the next step is to capture the exact OAuth authorize URL and exact parameters being sent to Google, then compare them against the Google Cloud OAuth credential config.
+
+What I need you to do now
+Step 1 — Add exact OAuth request logging
+
+When /api/auth/google is hit, log the exact values used to build the Google authorize request:
+
+host
+
+protocol
+
+computed callback URL
+
+client ID being used
+
+redirect URI being sent
+
+scope
+
+state
+
+prompt
+
+accessType / approvalPrompt if present
+
+Also log the full final authorize URL being sent to Google, with only secrets redacted if needed.
+
+I want the exact URL/params, not a guess.
+
+Step 2 — Tell me exactly what user action you need
+
+If you need one click from me to trigger the logs, say exactly this:
+
+click Google Sign-In once
+
+wait for the 403
+
+return here
+
+Then you pull the logs and compare them.
+
+Do not stop at asking me to click.
+Once I trigger it, I want you to continue the debugging and identify the actual mismatch.
+
+Step 3 — Compare against Google Cloud Console config
+
+After capturing the exact authorize URL, compare it against the Google OAuth credential settings and identify the mismatch.
+
+Check the exact:
+
+authorized redirect URI
+
+authorized JavaScript origin if relevant
+
+client ID in use
+
+callback host/domain
+
+whether the current Replit preview/published host is actually whitelisted
+
+I want the exact missing/wrong entry identified.
+
+Important
+
+Do not just say “Google is blocking it.”
+
+I need the exact reason, such as:
+
+redirect URI mismatch
+
+wrong client ID
+
+unauthorized origin
+
+wrong callback host
+
+preview URL not whitelisted
+
+stale env var
+
+Step 4 — Fix it properly
+
+Once you identify the mismatch, fix the OAuth config/callback strategy properly and then retest.
+
+The final result should be:
+
+click Google Sign-In
+
+Google chooser opens without 403
+
+callback hits /api/auth/google/callback
+
+session completes successfully
+
+Output I want back after I click once
+
+After I trigger one login attempt, tell me:
+
+the exact authorize URL/redirect URI Google received
+
+the exact mismatch you found
+
+the exact config entry you changed
+
+confirmation that the callback now fires and login works

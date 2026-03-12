@@ -1092,18 +1092,31 @@ export function setupAuth(app: Express) {
     const platform = req.query.platform as string || "web";
     const nonce = req.query.nonce as string || "";
     const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
-    console.log("[auth/google] hit, platform:", platform, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "state:", state.substring(0, 12));
-    console.log("[auth/google] GOOGLE_CLIENT_ID prefix:", process.env.GOOGLE_CLIENT_ID?.substring(0, 12) + "...");
-    console.log("[auth/google] APP_BASE_URL:", process.env.APP_BASE_URL);
-    console.log("[auth/google] redirect_uri that will be sent to Google:", `${process.env.APP_BASE_URL || 'http://localhost:5000'}/api/auth/google/callback`);
-    
-    // Intercept the redirect to log the exact Google OAuth URL
-    const originalRedirect = res.redirect.bind(res);
-    (res as any).redirect = function(url: string) {
-      console.log("[auth/google] EXACT URL sent to Google:", url);
-      return originalRedirect(url);
-    };
-    
+
+    // Cross-domain session fix: If the request arrives from a preview/dev domain
+    // (not the stable production host), redirect the browser to the production
+    // host before starting the OAuth flow. This ensures the session cookie that
+    // Passport stores the OAuth `state` in is bound to the same domain that
+    // Google will call back to, preventing a state-mismatch rejection.
+    const productionBase = process.env.APP_BASE_URL;
+    if (productionBase) {
+      try {
+        const prodHost = new URL(productionBase).host;
+        const currentHost = req.headers.host || "";
+        const isLocalhost = currentHost.includes("localhost") || currentHost.includes("127.0.0.1");
+        if (!isLocalhost && currentHost !== prodHost) {
+          const qs = new URLSearchParams();
+          if (platform && platform !== "web") qs.set("platform", platform);
+          if (nonce) qs.set("nonce", nonce);
+          const qsStr = qs.toString() ? `?${qs.toString()}` : "";
+          const target = `${productionBase}/api/auth/google${qsStr}`;
+          console.log(`[auth/google] cross-domain redirect: ${currentHost} → ${prodHost}`);
+          return res.redirect(302, target);
+        }
+      } catch (_) {}
+    }
+
+    console.log(`[auth/google] starting OAuth on host=${req.headers.host} state=${state.substring(0, 12)} platform=${platform}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state,
