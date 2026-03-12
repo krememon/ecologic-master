@@ -1,0 +1,105 @@
+The contractor detail page is crashing now after the Referral Activity changes.
+
+Current error
+
+On /subcontractors/337, the app throws:
+
+Cannot read properties of undefined (reading 'status')
+
+The stack trace points to:
+
+src/pages/ContractorDetail.tsx
+
+around line 75
+
+looks like it is happening inside the referral activity rendering logic
+
+What I need
+
+Fix this crash first before doing anything else.
+
+Likely cause
+
+One of the referral activity items is being rendered as if it always exists and has a .status, but in reality:
+
+the item may be undefined
+
+or one of the sent/received arrays may contain incomplete/null data
+
+or the code is assuming a field exists before the data is loaded
+
+or the frontend shape does not match the backend response shape
+
+Tasks
+1) Find the exact crash point
+
+Open src/pages/ContractorDetail.tsx around the failing line and identify:
+
+which variable is undefined
+
+which object is being read with .status
+
+whether this is in Sent tab, Received tab, empty state logic, or item card rendering
+
+2) Fix the rendering defensively
+
+Make the Referral Activity section null-safe.
+
+That means:
+
+do not read .status unless the object exists
+
+do not assume sent/received arrays always contain valid items
+
+add safe guards for undefined/null items
+
+normalize the data before rendering if needed
+
+ensure empty arrays render the empty state cleanly
+
+3) Verify backend/frontend data shape
+
+Check whether the frontend is expecting fields like:
+
+status
+
+job.status
+
+referral.status
+
+Make sure the component is using the actual returned shape.
+
+If needed:
+
+map/normalize the backend response before rendering
+
+or update the backend response so the frontend gets a consistent structure
+
+4) Keep the page stable
+
+Even if some referral activity fields are missing, the contractor detail page should still load.
+
+Rules:
+
+no full-page crash
+
+missing activity data should just render empty state or partial card
+
+contractor info card should still load normally
+
+Important
+
+Do not keep guessing.
+I want the actual crash fixed at the source.
+
+After fixing, tell me:
+
+the exact line/component causing the crash
+
+which object was undefined
+
+what defensive fix you added
+
+whether the issue was frontend-only or response-shape mismatch
+
+confirm the contractor detail page now loads without crashing

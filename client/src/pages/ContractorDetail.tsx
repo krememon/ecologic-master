@@ -74,7 +74,7 @@ function feeBadge(type: string, value: string) {
   return type === "percent" ? `${v}%` : `$${v.toFixed(2)}`;
 }
 
-function ReferralCard({ ref: item, direction }: { ref: ReferralActivityItem; direction: "sent" | "received" }) {
+function ReferralCard({ item, direction }: { item: ReferralActivityItem; direction: "sent" | "received" }) {
   const sc = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
   const StatusIcon = sc.icon;
   const payout = direction === "received"
@@ -335,7 +335,7 @@ export default function ContractorDetail({ contractorId }: ContractorDetailProps
           ) : (
             <div className="space-y-3">
               {activeList.map((item) => (
-                <ReferralCard key={item.id} ref={item} direction={activityTab} />
+                <ReferralCard key={item.id} item={item} direction={activityTab} />
               ))}
             </div>
           )}
