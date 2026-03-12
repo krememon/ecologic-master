@@ -1,0 +1,182 @@
+We broke the mobile Google auth flow.
+
+Current problem
+
+After the recent Google OAuth changes, on mobile I can now select a Google account, but after selecting it, it does not actually log me into the app.
+
+So the Google account chooser appears, but the auth/session is not completing on mobile.
+
+Goal
+
+Fix the mobile Google sign-in flow end-to-end so that after I select my Google account, the user is actually authenticated inside EcoLogic.
+
+Important context
+
+We recently changed Google OAuth to use the published domain / stable callback instead of the preview domain.
+
+That may have fixed one part of web OAuth, but it looks like it broke the mobile flow.
+
+So I need you to debug the actual mobile auth callback/session completion path now.
+
+What I need you to do
+Step 1 — Trace the exact mobile Google auth flow
+
+Find the exact code path for mobile Google login.
+
+I want you to identify:
+
+frontend button/component that starts Google login on mobile
+
+whether mobile uses the same /api/auth/google route as web or a different one
+
+what platform / state / nonce / callback params are used for mobile
+
+what URL opens after Google account selection
+
+how the session is supposed to be finalized back inside the app
+
+Do not guess.
+
+Step 2 — Find where the mobile flow is failing
+
+The failure point is likely one of these:
+
+Google auth succeeds but callback never reaches the app session
+
+callback lands on the published domain but mobile app/webview does not pick up the session
+
+state/platform mismatch between web and mobile
+
+cookie/session is created on one domain but the mobile app is on another context
+
+deep link / redirect back to native app is broken
+
+mobile is being treated like web and never completing the native handoff
+
+callback completes but /api/auth/user still returns unauthenticated
+
+secure cookie / sameSite / domain config is wrong for mobile wrapper flow
+
+I need the actual root cause.
+
+Step 3 — Inspect the callback and session completion
+
+After selecting the Google account on mobile, trace:
+
+did Google hit the callback?
+
+what callback URL was used?
+
+did the server create/login the user?
+
+was a session cookie set?
+
+did the app receive the authenticated session afterward?
+
+if native wrapper/deep link is involved, did it redirect back properly?
+
+Use targeted logs around:
+
+/api/auth/google
+
+/api/auth/google/callback
+
+session creation
+
+post-auth redirect
+
+/api/auth/user
+
+Step 4 — Separate web vs mobile behavior correctly
+
+If needed, make the OAuth flow explicitly environment-aware:
+
+web should use the stable published-domain callback flow
+
+mobile/native should use the correct callback/finalization flow for the app wrapper
+
+Do not force both into the exact same flow if that breaks mobile.
+
+Main point:
+
+web Google login must work
+
+mobile Google login must also work
+
+one fix should not break the other
+
+Step 5 — Fix the mobile auth completion
+
+I want the final mobile behavior to be:
+
+tap Google sign in
+
+select Google account
+
+callback completes successfully
+
+app returns authenticated
+
+user lands inside EcoLogic signed in
+
+No silent failure after account selection.
+
+Important constraints
+
+do not break email/password auth
+
+do not break working web Google login
+
+do not rely on preview-domain auth hacks if we now use a stable domain
+
+if cookies/session differ between mobile and web, handle that properly
+
+if native/deep-link logic exists, use it correctly instead of bypassing it
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+whether mobile is detected as mobile or web
+
+exact /api/auth/google URL hit on mobile
+
+exact callback URL used
+
+whether callback route fires
+
+whether session/user is created
+
+whether /api/auth/user succeeds or fails after callback
+
+final redirect target after callback
+
+Deliverables
+
+Find the real reason mobile Google sign-in stops after account selection
+
+Fix the mobile auth completion/session flow
+
+Preserve working web Google login
+
+Verify end-to-end on mobile:
+
+tap Google
+
+choose account
+
+land back in app authenticated
+
+After implementation, tell me:
+
+what exact file/component starts mobile Google auth
+
+whether mobile uses the same or different callback path as web
+
+what the root cause of the mobile failure was
+
+what code/config was changed to fix it
+
+confirmation that mobile Google sign-in now fully completes after account selection

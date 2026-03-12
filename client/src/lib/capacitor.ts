@@ -19,9 +19,17 @@ export function getPlatform(): string {
 
 export function getApiBaseUrl(): string {
   if (isNativePlatform()) {
-    const origin = window.location.origin;
-    console.log("[capacitor] getApiBaseUrl native, origin:", origin);
-    return origin;
+    // Always use the stable production URL for native apps so that the Google
+    // OAuth nonce flow (start auth → browser → callback → poll → exchange) all
+    // land on the same server process/in-memory store.  Without this, a dev
+    // WebView on the preview domain would start OAuth there, the callback would
+    // hit the published domain (a different process), the nonce code would be
+    // stored in the published process's memory, and the poll from the preview
+    // process would never find it.
+    const configured = import.meta.env.VITE_APP_BASE_URL as string | undefined;
+    const resolved = configured || window.location.origin;
+    console.log("[capacitor] getApiBaseUrl native, resolved:", resolved, "(configured:", configured, ")");
+    return resolved;
   }
   return "";
 }
@@ -85,12 +93,14 @@ export async function startGoogleAuthNative(): Promise<void> {
           });
 
           if (exchangeRes.ok) {
-            console.log("[capacitor] Auth exchange successful, refreshing auth state...");
+            console.log("[capacitor] Auth exchange successful, navigating to app...");
             await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-            window.location.href = "/";
+            // Navigate to the production base URL's root so the session cookie
+            // (bound to that domain) is sent with subsequent API requests.
+            window.location.href = baseUrl ? `${baseUrl}/` : "/";
           } else {
             console.error("[capacitor] Auth exchange failed:", exchangeRes.status);
-            window.location.href = "/login?error=exchange_failed";
+            window.location.href = baseUrl ? `${baseUrl}/login?error=exchange_failed` : "/login?error=exchange_failed";
           }
         }
       } catch (err) {
