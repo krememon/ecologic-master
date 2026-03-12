@@ -1,0 +1,211 @@
+New task: inside the individual contractor detail page/card view, I want to redesign the Referral Activity section so it has 2 tabs:
+
+Sent
+
+Received
+
+Goal
+
+When viewing a specific contractor profile/detail page, the Referral Activity section should clearly show the referral history between the two companies in both directions.
+
+That means:
+
+Sent tab
+
+Shows all jobs I sent to that contractor
+
+Received tab
+
+Shows all jobs that contractor sent to me
+
+This should be based on real referral/subcontract data between the current company and that specific contractor.
+
+What I want changed
+1) Add tabs inside the Referral Activity section
+
+Inside the existing Referral Activity card, add a clean tab switcher at the top of that section:
+
+Sent
+
+Received
+
+Keep it styled in the EcoLogic aesthetic:
+
+clean
+
+minimal
+
+mobile friendly
+
+same design language as the rest of the app
+
+not bulky or awkward
+
+Do not confuse this with the main page tabs.
+This is only for the Referral Activity card inside a contractor detail page.
+
+2) Sent tab behavior
+
+In the Sent tab, show all referral/job offers where:
+
+current logged-in company = sender
+
+this contractor/company = receiver
+
+For each item, show the real referral/job information.
+
+3) Received tab behavior
+
+In the Received tab, show all referral/job offers where:
+
+this contractor/company = sender
+
+current logged-in company = receiver
+
+For each item, show the real referral/job information.
+
+4) What each referral activity item should show
+
+For each job/referral row/card in either tab, show as much relevant information as we already have available, such as:
+
+job title / job name
+
+customer name
+
+job status / referral status
+
+date sent / created date
+
+scheduled date if available
+
+address/location if available
+
+referral percentage / split if available
+
+job total / payout amount if available
+
+accepted / pending / declined state if that exists
+
+any other useful summary info already in the model
+
+Do not invent data.
+Only show fields that actually exist.
+
+If some fields are missing:
+
+hide them cleanly
+
+keep the card layout polished
+
+5) Empty states
+
+If there are no records in one of the tabs, show a clean empty state.
+
+Sent empty state example
+
+No jobs sent to this contractor yet.
+
+Received empty state example
+
+No jobs received from this contractor yet.
+
+Keep the empty state polished and centered like current EcoLogic empty states.
+
+6) Data rules
+
+This section should reflect the real relationship between:
+
+current company
+
+selected contractor/company
+
+It should not show all referrals in the system.
+It should only show referral history specifically between these two parties.
+
+7) Backend/data work
+
+Please trace the actual subcontract/referral data model and wire this correctly.
+
+We need the contractor detail page to load:
+
+sent referrals to this contractor
+
+received referrals from this contractor
+
+If needed, add/update the backend endpoint powering the contractor detail page so it returns something like:
+
+sentReferralActivity[]
+
+receivedReferralActivity[]
+
+Each item should include the fields needed for the UI summary cards.
+
+Do not break existing referral flow or contractor detail page behavior.
+
+8) UI layout direction
+
+Inside the Referral Activity card:
+
+Header
+
+keep the title: Referral Activity
+
+Tab switcher
+
+add Sent / Received toggle directly under or beside the header
+
+make it feel clean and native
+
+Content
+
+stack activity cards/rows underneath
+
+each item should be easy to scan on mobile
+
+spacing should feel premium and balanced
+
+Potential card layout:
+
+top row: job title + status badge
+
+second row: customer / date
+
+third row: address or schedule
+
+bottom row: payout/referral info if available
+
+9) Important constraints
+
+Do not change unrelated pages
+
+Do not change global subcontract tabs unless necessary
+
+Do not break contractor detail routing
+
+Do not break referral sending/accepting logic
+
+Do not invent fake data
+
+Keep it mobile-first
+
+Maintain EcoLogic styling
+
+Deliverables
+
+Add Sent and Received tabs inside the contractor detail page’s Referral Activity section
+
+Show real referral/job history in each tab
+
+Show useful job/referral summary info for each item
+
+Add polished empty states for each tab
+
+Scope the data only to the relationship between current company and this contractor
+
+After implementation, tell me:
+
+what frontend component was updated
+
+what backend query/endpoint powers Sent vs Received
+
+what fields are displayed in each referral activity item

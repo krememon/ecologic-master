@@ -50,7 +50,7 @@ import {
   type DocumentVisibility
 } from "../shared/documentPermissions";
 import { db } from "./db";
-import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
+import { eq, and, lt, gt, sql, desc, ilike } from "drizzle-orm";
 import Stripe from "stripe";
 import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
@@ -4539,18 +4539,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
-      if (!company) {
-        return res.status(404).json({ message: "Company not found" });
-      }
+      if (!company) return res.status(404).json({ message: "Company not found" });
       const subId = parseInt(req.params.id);
-      if (isNaN(subId)) {
-        return res.status(400).json({ message: "Invalid subcontractor ID" });
-      }
+      if (isNaN(subId)) return res.status(400).json({ message: "Invalid subcontractor ID" });
       const sub = await storage.getSubcontractor(subId);
-      if (!sub || sub.companyId !== company.id) {
-        return res.status(404).json({ message: "Contractor not found" });
+      if (!sub || sub.companyId !== company.id) return res.status(404).json({ message: "Contractor not found" });
+
+      const subEmail = sub.email?.trim().toLowerCase() || null;
+
+      async function enrichReferral(ref: any) {
+        const job = ref.jobId ? await storage.getJob(ref.jobId) : null;
+        let customerName: string | null = null;
+        if (job?.customerId) {
+          const cust = await storage.getCustomer(job.customerId);
+          if (cust) {
+            customerName = [cust.firstName, cust.lastName].filter(Boolean).join(' ') || cust.companyName || null;
+          }
+        }
+        return {
+          id: ref.id,
+          jobId: ref.jobId,
+          status: ref.status,
+          referralType: ref.referralType,
+          referralValue: ref.referralValue,
+          message: ref.message,
+          createdAt: ref.createdAt,
+          acceptedAt: ref.acceptedAt,
+          inviteSentTo: ref.inviteSentTo,
+          jobTotalAtAcceptanceCents: ref.jobTotalAtAcceptanceCents,
+          contractorPayoutAmountCents: ref.contractorPayoutAmountCents,
+          companyShareAmountCents: ref.companyShareAmountCents,
+          jobTitle: job?.title || null,
+          jobStatus: job?.status || null,
+          jobLocation: job?.location || null,
+          jobStartDate: job?.startDate || null,
+          jobScheduledTime: job?.scheduledTime || null,
+          jobEstimatedCost: job?.estimatedCost || null,
+          customerName,
+        };
       }
-      res.json({ incoming: [], outgoing: [] });
+
+      // SENT: referrals where we are the sender, matched to this contractor by email
+      const sentRefs = await db
+        .select()
+        .from(jobReferrals)
+        .where(
+          and(
+            eq(jobReferrals.senderCompanyId, company.id),
+            subEmail
+              ? ilike(jobReferrals.inviteSentTo, subEmail)
+              : sql`false`
+          )
+        )
+        .orderBy(desc(jobReferrals.createdAt));
+
+      // RECEIVED: find the other company via the sub's email, then get referrals they sent us
+      let receivedRefs: any[] = [];
+      if (subEmail) {
+        const otherUser = await storage.getUserByEmail(subEmail);
+        if (otherUser) {
+          const otherCompany = await storage.getUserCompany(otherUser.id);
+          if (otherCompany) {
+            receivedRefs = await db
+              .select()
+              .from(jobReferrals)
+              .where(
+                and(
+                  eq(jobReferrals.senderCompanyId, otherCompany.id),
+                  eq(jobReferrals.receiverCompanyId, company.id)
+                )
+              )
+              .orderBy(desc(jobReferrals.createdAt));
+          }
+        }
+      }
+
+      const [sent, received] = await Promise.all([
+        Promise.all(sentRefs.map(enrichReferral)),
+        Promise.all(receivedRefs.map(enrichReferral)),
+      ]);
+
+      console.log(`[subcontractor-referrals] sub#${subId} email=${subEmail} sent=${sent.length} received=${received.length}`);
+      res.json({ sent, received });
     } catch (error) {
       console.error("Error fetching subcontractor referrals:", error);
       res.status(500).json({ message: "Failed to fetch referrals" });
