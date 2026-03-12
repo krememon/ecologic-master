@@ -53,7 +53,7 @@ export default function Welcome() {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFFFFF' }}>
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );

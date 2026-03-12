@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" style="background-color:#F8FAFC">
+<html lang="en" style="background-color:#FFFFFF">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Contractor Management Platform</title>
     <meta name="description" content="Professional contractor management platform with AI-powered scheduling" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0EA5E9" />
+    <meta name="theme-color" content="#FFFFFF" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Contractor Platform" />
@@ -17,7 +17,8 @@
       (function(){
         try {
           var t = localStorage.getItem('ui-theme');
-          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+          var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme:dark)').matches);
+          if (isDark) {
             document.documentElement.classList.add('dark');
             document.documentElement.style.backgroundColor = '#0F172A';
           }
