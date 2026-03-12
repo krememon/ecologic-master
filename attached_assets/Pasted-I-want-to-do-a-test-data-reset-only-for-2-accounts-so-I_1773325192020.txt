@@ -1,0 +1,144 @@
+I want to do a test-data reset only for 2 accounts so I can get a completely clean slate for testing subcontract/payment flows.
+
+Important
+
+This is not a product/code feature change.
+I am not asking you to change app logic.
+I only want you to clear existing test history/data for these two accounts so I can retest without confusion from old records.
+
+Accounts to reset
+
+pjpell077@gmail.com
+
+ppellegrino@ecologicc.com
+
+What I want cleared for both accounts
+
+Please remove/reset all existing test history/data tied to these two accounts, including:
+
+Financial history
+
+payment history
+
+invoice history
+
+invoice/payment records tied to old test jobs
+
+referral/subcontract payment history
+
+payout/audit history related to old test flows
+
+Job/client history
+
+client job history
+
+old completed/archived jobs tied to these tests
+
+old subcontract/referral jobs tied to these tests
+
+any old active jobs that only exist from test runs
+
+Referral/subcontract history
+
+sent referrals
+
+received referrals
+
+accepted/completed referral records from prior test runs
+
+any mirrored receiver-side invoice/history records created for prior tests
+
+Goal
+
+After this reset, both of these accounts should be a fresh slate for testing:
+
+no old payment history
+
+no old invoice history
+
+no old client job history
+
+no confusing old subcontract/referral records
+
+no stale archived/completed test jobs showing up
+
+Very important constraints
+
+Only clear data for these 2 specific accounts/companies
+
+Do not affect any other users/companies
+
+Do not change code/business logic
+
+Do not touch schema/migrations unless absolutely necessary for a one-time admin cleanup script
+
+Do not leave orphaned records
+
+Preserve referential integrity while deleting/resetting related test data
+
+What I need you to do
+1. First identify the exact companies/users for these emails
+
+Map:
+
+user IDs
+
+company IDs
+
+any related contractor/referral relationships tied to them
+
+2. Trace all related data that must be cleared
+
+Find all records connected to these companies/accounts across:
+
+jobs
+
+invoices
+
+payments
+
+client history
+
+referrals/subcontracts
+
+payout/audit/history tables
+
+any receiver-side mirrored invoice/payment records
+
+3. Perform a safe cleanup
+
+Run a targeted cleanup for only those records tied to these test accounts.
+
+4. Verify the result
+
+After cleanup, confirm for both accounts:
+
+Payments page should be empty/clean
+
+Invoices history should be empty/clean
+
+Client history should be empty/clean
+
+old subcontract/referral records should be gone
+
+Jobs page should not show stale old test jobs
+
+Safety requirement
+
+Before deleting anything, tell me:
+
+which company IDs match these emails
+
+which tables/record types you are about to clear
+
+Then do the cleanup.
+
+After cleanup, tell me:
+
+which company IDs were reset
+
+what record types were removed
+
+whether any records had to be preserved for integrity
+
+confirmation that both accounts are now clean for fresh testing
