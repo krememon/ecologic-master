@@ -158,11 +158,12 @@ export default function Invoicing() {
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'paid':
+      case 'referred_paid':
         return 'default';
       case 'partial':
-        return 'secondary';
       case 'sent':
       case 'pending':
+      case 'referred':
         return 'secondary';
       case 'draft':
         return 'outline';
@@ -173,10 +174,14 @@ export default function Invoicing() {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    if (status === 'referred') return 'Referred';
+    if (status === 'referred_paid') return 'Referred · Paid';
+    return status;
+  };
+
   const formatAmount = (invoice: Invoice) => {
     const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
-    const paid = (invoice as any).paidAmountCents || 0;
-    const owed = Math.max(total - paid, 0);
     return `$${(total / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
   };
 
@@ -391,7 +396,7 @@ export default function Invoicing() {
                     {invoice.invoiceNumber || `Invoice #${invoice.id}`}
                   </CardTitle>
                   <Badge variant={getStatusBadgeVariant(getDisplayStatus(invoice))}>
-                    {getDisplayStatus(invoice)}
+                    {getStatusLabel(getDisplayStatus(invoice))}
                   </Badge>
                 </div>
               </CardHeader>
@@ -429,7 +434,8 @@ export default function Invoicing() {
                 {(() => {
                   const owedCents = formatOwed(invoice);
                   const displayStatus = getDisplayStatus(invoice);
-                  if (displayStatus === 'paid' || displayStatus === 'void' || displayStatus === 'cancelled' || displayStatus === 'draft') return null;
+                  if (displayStatus === 'paid' || displayStatus === 'referred_paid' || displayStatus === 'void' || displayStatus === 'cancelled' || displayStatus === 'draft') return null;
+                  if (owedCents <= 0) return null;
                   return (
                     <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
                       ${(owedCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })} owed

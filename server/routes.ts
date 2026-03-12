@@ -11766,6 +11766,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stillOwedCents += balanceDueCents;
             if (inv.dueDate && inv.dueDate < todayStr) overdueCount++;
           }
+          // For referred-out pending jobs the sender is owed their company share.
+          // balanceDueCents is forced to 0 for all isReferredOut rows, so we must
+          // add referralFeeCents separately when the referral is not yet completed.
+          if (computedStatus === 'referred' && referralFeeCents > 0) {
+            stillOwedCents += referralFeeCents;
+            console.log(`[ledger-owed] invoiceId=${inv.id} jobId=${inv.jobId} added senderShare=${referralFeeCents} to stillOwedCents`);
+          }
 
           let customerName = 'Unknown Customer';
           if (inv.customer?.firstName || inv.customer?.lastName) {
@@ -12224,6 +12231,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           computedStatus,
         };
       });
+
+      // Referral-awareness: for invoices where this company is the SENDER (referred-out),
+      // override totalCents/balanceDueCents/computedStatus to reflect the sender's share
+      // (companyShareAmountCents) rather than the full job amount collected by the receiver.
+      try {
+        const outReferrals = await db.select().from(jobReferrals).where(
+          and(eq(jobReferrals.senderCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
+        );
+        const outReferralByJobId: Record<number, typeof outReferrals[0]> = {};
+        for (const ref of outReferrals) {
+          if (ref.jobId) outReferralByJobId[ref.jobId] = ref;
+        }
+
+        for (const inv of enriched as any[]) {
+          if (!inv.jobId) continue;
+          const ref = outReferralByJobId[inv.jobId];
+          if (!ref) continue;
+          // Confirm this invoice still belongs to the sender (job transferred out)
+          const isReferredOut = inv.job?.companyId && inv.job.companyId !== inv.companyId;
+          if (!isReferredOut) continue;
+
+          const senderShareCents = ref.companyShareAmountCents || 0;
+          const isCompleted = ref.status === 'completed';
+          inv.referralFeeCents = senderShareCents;
+          inv.isReferredOut = true;
+          // Override display amounts: sender sees their share, not the full job total
+          inv.totalCents = senderShareCents;
+          inv.balanceDueCents = isCompleted ? 0 : senderShareCents;
+          inv.paidAmountCents = isCompleted ? senderShareCents : 0;
+          inv.computedStatus = isCompleted ? 'referred_paid' : 'referred';
+          console.log(`[invoices-referral] invoiceId=${inv.id} jobId=${inv.jobId} senderShare=${senderShareCents} isCompleted=${isCompleted} → computedStatus=${inv.computedStatus} balanceDue=${inv.balanceDueCents}`);
+        }
+      } catch (refErr: any) {
+        console.error('[invoices-referral] Failed to enrich with referral data:', refErr?.message);
+      }
 
       res.json(enriched);
     } catch (error) {

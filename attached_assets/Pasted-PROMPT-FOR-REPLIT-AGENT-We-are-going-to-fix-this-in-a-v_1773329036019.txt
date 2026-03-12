@@ -1,0 +1,187 @@
+PROMPT FOR REPLIT AGENT
+
+We are going to fix this in a very organized, step-by-step way.
+
+Scope for this task only
+
+Focus only on the sender side for pjpell077 and only on the pre-payment state.
+
+Do not try to fix everything at once.
+For this task, fix only these 2 issues:
+
+Issue 1 — Payments header total is wrong on sender side
+Current problem
+
+On the Payments page for the sender side (pjpell077), the payment card itself is showing the owed amount correctly, but the header summary is not.
+
+From my test:
+
+the card displayed the sender-side owed amount correctly
+
+but the header showed STILL OWED $0.00
+
+that is wrong
+
+What it should do
+
+For a sent subcontracted/referral job before payment, the sender-side Payments header should include the sender’s actual outstanding amount.
+
+So if the sender is owed $2,000, then the header should reflect that real sender-side owed value — not $0.00.
+
+Issue 2 — Invoice tab owed amount is wrong on sender side
+Current problem
+
+On the Invoices tab for the sender side (pjpell077), it is displaying:
+
+$4,000 owed
+
+But for the sender side, that is wrong.
+
+What it should do
+
+It should display:
+
+$2,000 owed
+
+Because on the sender side, the sender should only be seeing their share, not the full receiver collection amount.
+
+So to be crystal clear:
+
+Receiver side can collect/display the full invoice amount if that is the intended workflow
+
+Sender side should display only the sender/company share owed amount
+
+In this test case, sender side should show $2,000 owed, not $4,000 owed
+
+Important constraints
+
+For this task, do not touch:
+
+receiver-side logic
+
+post-payment behavior
+
+job cleanup
+
+payment history recording
+
+paid status logic
+
+unrelated invoice/payment screens unless needed for these exact sender-side fixes
+
+Keep this fix tightly scoped to:
+
+sender-side Payments header total
+
+sender-side Invoices owed amount before payment
+
+What I need you to do
+1) Trace sender-side Payments header logic
+
+Find the exact logic that computes the sender-side Payments page header totals, especially:
+
+Still Owed
+
+any summary total above the cards
+
+Figure out why the row/card knows the correct sender owed amount, but the header total does not.
+
+Likely causes could be:
+
+header is summing full-payment records incorrectly
+
+header is excluding referred/sender-share rows
+
+header is using collected amount instead of sender outstanding share
+
+header is filtering subcontract rows out of “still owed”
+
+header is reading the wrong field compared to the card row
+
+I want the actual source of truth fixed so the sender header reflects the sender’s true outstanding share.
+
+2) Trace sender-side Invoices owed amount logic
+
+Find why the sender-side Invoices tab is showing the full $4,000 owed instead of the sender share $2,000 owed.
+
+Check:
+
+which invoice record the sender invoice list is using
+
+whether it is incorrectly reading the receiver collection invoice
+
+whether display amount logic is using full job total instead of sender/company share
+
+whether referred/sender-side invoices need special display logic using companyShareAmountCents or equivalent
+
+The sender invoice display should show the sender-side owed/share amount, not the full receiver collection amount.
+
+Source of truth
+
+Please use the actual backend/source-of-truth financial fields already in the referral snapshot, such as the real stored values for:
+
+full job total
+
+contractor payout amount
+
+company share amount
+
+unpaid balance / outstanding amount
+
+Do not hardcode this in the UI.
+
+Expected result for this task
+
+Using the sender-side pre-payment example:
+
+Payments page
+
+card can keep showing the correct sender-side owed amount
+
+header must also show that same sender-side owed amount
+
+should not show $0.00 if sender is still owed money
+
+Invoices tab
+
+sender-side invoice row should show $2,000 owed
+
+should not show the receiver’s full $4,000 owed
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+sender company ID
+
+referral/job ID used in the test
+
+full job amount
+
+contractor payout amount
+
+company share amount
+
+Payments header total input values
+
+Invoices row display amount input values
+
+Deliverables
+
+Fix sender-side Payments header so it reflects the true sender outstanding amount before payment
+
+Fix sender-side Invoices tab so it shows sender share owed, not full receiver amount
+
+Keep the fix tightly scoped to these two sender-side pre-payment issues
+
+After implementation, tell me:
+
+what field now powers the sender Payments header owed total
+
+what field now powers the sender Invoices owed display
+
+what files/components were changed
+
+confirmation of the exact expected pre-payment values for the sender test case
