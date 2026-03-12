@@ -1,0 +1,181 @@
+The claimed referred-invoice breakdown change is not actually showing up in the UI. I still see the old generic Totals card, so we need to stop assuming it worked and debug the real rendered path.
+
+Current problem
+
+You said you updated:
+
+GET /api/invoices/:id
+
+client/src/pages/InvoiceDetails.tsx
+
+and that referred invoices should now render a custom breakdown card.
+
+But in the actual UI, I still see:
+
+the old generic Totals block
+
+no referral breakdown card
+
+no visible change at all
+
+So one of these is true:
+
+InvoiceDetails.tsx is not the screen actually rendering this invoice view
+
+the UI is not calling GET /api/invoices/:id
+
+referralBreakdown is not actually present in the real response
+
+the referred invoice detection is failing
+
+the page is using cached/old data
+
+a different component is rendering the totals card
+
+the condition for rendering the new card is never being hit
+
+What I need you to do
+
+Do a real end-to-end trace of the actual invoice detail page I am looking at and find the exact break.
+
+Step 1 — Identify the exact frontend screen path
+
+Find the exact frontend file/component that is rendering the invoice detail page shown in my screenshot.
+
+I want the exact:
+
+route/path
+
+component file
+
+child component responsible for the totals section
+
+Do not assume it is InvoiceDetails.tsx unless you confirm it.
+
+Step 2 — Identify the exact API request this screen is using
+
+I want you to verify the actual network/data path for this invoice detail screen.
+
+Tell me:
+
+which endpoint is being called
+
+whether it is really GET /api/invoices/:id
+
+what invoice ID was requested in my test
+
+whether the response actually contains referralBreakdown
+
+Step 3 — Log the real response payload
+
+Add targeted logs and inspect the real response for the invoice I am viewing.
+
+Log:
+
+invoice ID
+
+job ID
+
+whether a related referral was found
+
+referral status
+
+whether referralBreakdown was attached
+
+the exact referralBreakdown values:
+
+jobTotalCents
+
+rateLabel
+
+contractorPayoutCents
+
+companyShareCents
+
+balanceDueCents
+
+If referralBreakdown is missing, find out exactly why.
+
+Step 4 — Verify the frontend render condition
+
+If the backend response does include referralBreakdown, then inspect the frontend and verify:
+
+is the component actually receiving it?
+
+is the type/interface correct?
+
+is the conditional render correct?
+
+is the page using stale data shape or a different query key?
+
+is a different totals component being rendered instead of the updated one?
+
+I want you to find the exact reason the old Totals card is still showing.
+
+Step 5 — Fix the actual missing link
+
+Once you find the break, fix it properly.
+
+Possible examples:
+
+wrong component updated
+
+wrong endpoint updated
+
+referred invoice detection query is failing
+
+invoice detail screen uses a different data fetcher
+
+referralBreakdown not serialized correctly
+
+conditional render never triggered
+
+build/hot reload mismatch
+
+page is using a cached shape and needs proper invalidation/reload
+
+But do not guess — trace the real issue.
+
+Important clarification on expected UI
+
+For a referred invoice detail page, I expect the generic Totals section to be replaced or upgraded with a referred payment breakdown showing at least:
+
+Job Price
+
+Referral Rate
+
+Contractor Gets
+
+Your Share
+
+correct Balance Due for that side
+
+If the invoice is not referred, then the old generic totals card is fine.
+
+Important constraints
+
+do not change normal invoice pages
+
+do not break invoice loading
+
+do not change payment math unless necessary
+
+do not tell me it is implemented unless you verified it on the actual rendered page
+
+use targeted logs only
+
+Output I want back
+
+After debugging, tell me:
+
+the exact frontend file rendering the invoice detail page
+
+the exact API endpoint the page is using
+
+whether referralBreakdown was actually present in the real response
+
+whether the issue was backend missing data, wrong frontend component, or render condition failure
+
+the exact fix you made
+
+the actual log output proving the invoice page now receives and renders the referred breakdown instead of the old generic totals card

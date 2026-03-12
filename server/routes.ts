@@ -12320,16 +12320,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 isReceiverSide,
                 referralStatus: ref.status,
               };
-              // For sender-side: override balanceDueCents to the sender's share, not the full job amount
               if (isSenderSide) {
                 const senderShare = ref.companyShareAmountCents || 0;
                 overrideBalanceDueCents = ref.status === 'completed' ? 0 : senderShare;
               }
-              console.log(`[invoice-detail-referral] invoiceId=${invoiceId} companyId=${company.id} isSenderSide=${isSenderSide} isReceiverSide=${isReceiverSide} jobTotal=${ref.jobTotalAtAcceptanceCents} contractorPayout=${ref.contractorPayoutAmountCents} companyShare=${ref.companyShareAmountCents}`);
             }
           }
         } catch (refErr: any) {
-          console.error('[invoice-detail-referral] Failed to load referral:', refErr?.message);
+          console.error('[invoice-detail-referral] Failed to load referral breakdown:', refErr?.message);
         }
       }
       
