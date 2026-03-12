@@ -1,0 +1,277 @@
+We are reworking the post-payment Payments page behavior for subcontracted jobs.
+
+Scenario
+
+Use this exact mental model:
+
+pjpell077 sends a $4,000 job to ppellegrino
+
+referral fee = 50%
+
+so:
+
+pjpell077 share = $2,000
+
+ppellegrino collects = $4,000
+
+ppellegrino owes subcontractor fee back out = -$2,000
+
+net retained by ppellegrino after subcontractor fee = $2,000
+
+Desired Payments-page behavior
+Before payment
+On pjpell077 sender side
+
+Show a payment row with:
+
+referred / owed state
+
+$2,000 owed
+
+On ppellegrino receiver side
+
+Show a payment row with:
+
+referred / owed state
+
+$4,000 owed
+
+That part is already the general idea.
+
+After payment
+
+Once payment goes through, I want the ledger/history on each side to make financial sense.
+
+On pjpell077 sender side
+
+The owed item should become:
+
+Paid
+
+$2,000
+
+On ppellegrino receiver side
+
+The main collected payment should become:
+
+Paid
+
+$4,000
+
+Then on ppellegrino receiver side
+
+A second payment/history row should appear that says something like:
+
+Subcontractor Fee
+
+-$2,000
+
+This is important.
+
+Goal
+
+I want the receiver/subcontractor company (ppellegrino) to be able to clearly see:
+
+they collected $4,000
+
+they owe/pay out $2,000 as the subcontractor fee/share
+
+their net is effectively the remaining amount
+
+So the Payments page for the receiver should show both:
+
+incoming collected money
+
+outgoing subcontractor fee deduction
+
+This makes the ledger understandable.
+
+What I want implemented
+Receiver-side post-payment ledger/history should show 2 rows
+
+After payment succeeds for a referred/subcontracted job, the receiver side should show:
+
+Row 1 — customer payment collected
+
+status: Paid
+
+amount: $4,000
+
+tied to the referred invoice/payment
+
+this represents money collected from the customer
+
+Row 2 — subcontractor fee
+
+label/title: Subcontractor Fee
+
+amount: -$2,000
+
+clearly negative / outgoing
+
+tied to the same subcontract/referral flow
+
+this represents the amount owed out as the subcontractor fee/share
+
+Sender-side behavior
+
+The sender side should continue to show the clean sender-side result:
+
+Paid
+
+$2,000
+
+Do not duplicate confusing extra rows on the sender side unless the existing accounting model requires it.
+Main requirement is that the receiver side gets the extra negative fee row.
+
+Important product meaning
+
+For the receiver side, the Payments page should function more like a ledger:
+
+collected from customer: +$4,000
+
+subcontractor fee: -$2,000
+
+This way the receiver can understand the actual cash flow.
+
+Naming / copy
+
+You can use the cleanest label, but it should be obvious.
+
+Good options:
+
+Subcontractor Fee
+
+Referral Payout
+
+Subcontractor Share
+
+Referral Fee Payout
+
+My preference is something simple and obvious like:
+
+Subcontractor Fee
+
+If there is a better label that fits the rest of the app, use that.
+
+Visual behavior
+
+The negative row should look clearly like an outgoing entry.
+
+Examples:
+
+amount shown as -$2,000.00
+
+maybe styled red, muted red, or another established negative-money style in the app
+
+it should not look like a normal customer payment collected row
+
+Source of truth
+
+Use the real stored referral financial fields:
+
+full job total
+
+contractor payout amount
+
+company share amount
+
+sender vs receiver role
+
+paid status
+
+any payout/referral audit records already created
+
+Do not hardcode this.
+
+If there is already a durable record for subcontract payout/audit, use that as the source of truth for the negative receiver-side row.
+
+What I need you to do
+1) Trace current post-payment Payments ledger logic
+
+Find the exact logic for what rows get created/rendered on the Payments page after a referred job is paid.
+
+I want you to identify:
+
+how sender-side paid rows are generated
+
+how receiver-side paid rows are generated
+
+whether a subcontract payout/audit record already exists but is not shown in the Payments page
+
+whether a new ledger row type needs to be surfaced for receiver-side history
+
+2) Add the receiver-side negative fee row
+
+After a referred payment is completed, ensure the receiver Payments page includes an additional row for the subcontractor fee / payout amount.
+
+3) Keep sender-side paid row correct
+
+Sender side should still simply show the paid company-share amount:
+
+$2,000
+
+4) Make sure the rows belong together logically
+
+If possible, both receiver-side rows should clearly tie back to the same job/invoice/referral so the history makes sense.
+
+Important constraints
+
+do not break payment processing
+
+do not break invoice history
+
+do not break sender-side row logic
+
+do not create duplicate fee rows every refresh
+
+do not invent fake entries
+
+do not break subcontract payout audit/history
+
+do not break receiver-side collected payment row
+
+make the new negative row idempotent and durable
+
+Verification scenario
+
+Please verify with this exact example:
+
+job total = $4,000
+
+referral rate = 50%
+
+sender share = $2,000
+
+receiver collects = $4,000
+
+Expected after payment
+pjpell077 sender side
+
+one Paid row for $2,000
+
+ppellegrino receiver side
+
+one Paid row for $4,000
+
+one Subcontractor Fee row for -$2,000
+
+Deliverables
+
+Add a receiver-side negative Payments/history row for the subcontractor fee after referred payment succeeds
+
+Keep receiver collected-payment row showing the full collected amount
+
+Keep sender paid row showing sender share only
+
+Make the new receiver fee row durable, idempotent, and tied to real referral payout data
+
+After implementation, tell me:
+
+what source-of-truth record powers the new negative row
+
+what component/query was updated
+
+what label you used for the negative row
+
+confirmation of the exact final row behavior for both pjpell077 and ppellegrino in the $4,000 / 50% example

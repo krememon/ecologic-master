@@ -31,6 +31,7 @@ type LedgerItem = {
   referralFeeCents?: number;
   isReferredOut?: boolean;
   isReferredIn?: boolean;
+  isSubcontractorFee?: boolean;
   computedStatus: string;
   dueDate: string | null;
   issueDate: string | null;
@@ -117,7 +118,7 @@ export default function PaymentsPage() {
       list = list.filter((item) => {
         const st = item.computedStatus;
         if (activeTab === "paid") {
-          return st === "paid" || st === "refunded" || st === "partially_refunded" || st === "referred_paid"
+          return st === "paid" || st === "refunded" || st === "partially_refunded" || st === "referred_paid" || st === "subcontractor_fee"
             || (st === "paid" && !!item.isReferredIn);
         }
         if (activeTab === "unpaid") {
@@ -149,6 +150,7 @@ export default function PaymentsPage() {
       referred: { color: "bg-blue-50 text-blue-500 border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40", label: "Referred" },
       refunded: { color: "bg-red-50 text-red-600 border-red-200/60 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/40", label: "Refunded" },
       partially_refunded: { color: "bg-amber-50 text-amber-600 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40", label: "Partial refund" },
+      subcontractor_fee: { color: "bg-red-50 text-red-700 border-red-200/60 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/40", label: "Subcontractor Fee" },
     };
     const config = configs[status] || configs.unpaid;
     return (
@@ -322,20 +324,26 @@ export default function PaymentsPage() {
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
             const status = item.computedStatus;
+            const isSubcontractorFee = status === "subcontractor_fee";
             const isReferredOut = status === "referred" || status === "referred_paid";
-            const isReferredIn = !!item.isReferredIn;
+            const isReferredIn = !!item.isReferredIn && !isSubcontractorFee;
             const isAnyReferred = isReferredOut || isReferredIn;
             const isReferredInPaid = isReferredIn && status === "paid";
             const isReferredOutPaid = status === "referred_paid";
             const isReferredPaid = isReferredInPaid || isReferredOutPaid;
-            const isOwed = !isReferredOut && !isReferredInPaid && (status === "unpaid" || status === "partial");
+            const isOwed = !isReferredOut && !isReferredInPaid && !isSubcontractorFee && (status === "unpaid" || status === "partial");
             const hasRefunds = (item.refundedCents || 0) > 0;
 
             let displayAmount: number;
             let amountSuffix = "";
+            let amountPrefix = "";
             let amountColor: string;
 
-            if (isReferredOut) {
+            if (isSubcontractorFee) {
+              displayAmount = item.referralFeeCents || item.totalCents || 0;
+              amountPrefix = "-";
+              amountColor = "text-red-600 dark:text-red-400";
+            } else if (isReferredOut) {
               displayAmount = item.referralFeeCents || 0;
               if (status === "referred") {
                 amountSuffix = " owed";
@@ -361,12 +369,14 @@ export default function PaymentsPage() {
             }
 
             const displayBadgeStatus =
+              isSubcontractorFee ? "subcontractor_fee" :
               isReferredPaid ? "paid" :
               isReferredIn ? "referred" :
               status;
 
             let subtitle: string;
-            if (isReferredPaid) subtitle = `Paid · ${dateStr}`;
+            if (isSubcontractorFee) subtitle = `Subcontractor Fee · ${dateStr}`;
+            else if (isReferredPaid) subtitle = `Paid · ${dateStr}`;
             else if (isAnyReferred) subtitle = `Referred · ${dateStr}`;
             else if (status === "paid") subtitle = `Paid · ${dateStr}`;
             else if (status === "partial") subtitle = `Partial · ${dateStr}`;
@@ -376,7 +386,7 @@ export default function PaymentsPage() {
 
             return (
               <div
-                key={item.invoiceId}
+                key={`${item.invoiceId}-${status}`}
                 onClick={() => navigate(`/payments/invoice/${item.invoiceId}`)}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
@@ -396,7 +406,7 @@ export default function PaymentsPage() {
 
                 <div className="text-right shrink-0 mr-0.5">
                   <p className={`text-[15px] font-bold tabular-nums ${amountColor}`}>
-                    {formatCents(displayAmount)}{amountSuffix}
+                    {amountPrefix}{formatCents(displayAmount)}{amountSuffix}
                   </p>
                 </div>
 

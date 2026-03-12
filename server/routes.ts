@@ -11657,6 +11657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const referralCompletedDateByJob: Record<number, Date> = {};
       const referredInJobIds = new Set<number>();
       const referredInShareByJob: Record<number, { contractorPayoutPct: number; referralType: string; referralValue: string }> = {};
+      let inReferrals: (typeof jobReferrals.$inferSelect)[] = [];
       try {
         const outReferrals = await db.select().from(jobReferrals).where(
           and(eq(jobReferrals.senderCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
@@ -11703,7 +11704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[ledger] referralCompletedDates=${JSON.stringify(Object.fromEntries(Object.entries(referralCompletedDateByJob).map(([k,v]) => [k, v.toISOString().split('T')[0]])))}`);
         }
 
-        const inReferrals = await db.select().from(jobReferrals).where(
+        inReferrals = await db.select().from(jobReferrals).where(
           and(eq(jobReferrals.receiverCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
         );
         for (const ref of inReferrals) {
@@ -11949,6 +11950,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           };
         });
+
+      // --- Subcontractor Fee rows for receiver side ---
+      // After a referred job is collected, the receiver sees two rows:
+      //   Row 1: Customer payment collected (existing paid row, full amount)
+      //   Row 2: Subcontractor Fee (negative row) — the sender's share owed out
+      // Source of truth: job_referrals.company_share_amount_cents (durable, idempotent)
+      for (const ref of inReferrals) {
+        if (ref.status !== 'completed' || !ref.jobId || !ref.companyShareAmountCents) continue;
+        const parentItem = (items as any[]).find((item: any) => item.jobId === ref.jobId && !!item.isReferredIn);
+        if (!parentItem || parentItem.computedStatus !== 'paid') continue;
+        const feeAmountCents = ref.companyShareAmountCents;
+        (items as any[]).push({
+          invoiceId: parentItem.invoiceId,
+          invoiceNumber: null,
+          customerId: parentItem.customerId,
+          customerName: parentItem.customerName,
+          jobId: ref.jobId,
+          jobTitle: parentItem.jobTitle,
+          totalCents: feeAmountCents,
+          paidCents: feeAmountCents,
+          balanceDueCents: 0,
+          refundedCents: 0,
+          referralFeeCents: feeAmountCents,
+          isReferredOut: false,
+          isReferredIn: true,
+          isSubcontractorFee: true,
+          computedStatus: 'subcontractor_fee',
+          dueDate: null,
+          issueDate: parentItem.issueDate,
+          createdAt: parentItem.createdAt,
+          lastActivityDate: parentItem.lastActivityDate,
+          lastPayment: null,
+          diagnostics: null,
+        });
+        console.log(`[ledger-fee] Receiver subcontractor fee row added: jobId=${ref.jobId} feeAmountCents=${feeAmountCents}`);
+      }
 
       items.sort((a: any, b: any) => {
         const da = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
