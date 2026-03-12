@@ -292,6 +292,119 @@ async function ensureSenderEarningsRecord(
 }
 
 /**
+ * Ensure the receiver has a PENDING collection invoice for this job at the
+ * full job amount. Called at referral acceptance time so the receiver can
+ * immediately navigate to the job and collect payment without first having
+ * to manually create an invoice. Fully idempotent.
+ */
+export async function ensureReceiverCollectionInvoice(
+  jobId: number,
+  receiverCompanyId: number,
+  fullTotalCents: number,
+): Promise<void> {
+  try {
+    const [existing] = await db.select({ id: invoices.id }).from(invoices)
+      .where(and(
+        eq(invoices.jobId, jobId),
+        eq(invoices.companyId, receiverCompanyId),
+        isNull(invoices.deletedAt),
+      ));
+
+    if (existing) {
+      console.log(`[receiver-invoice] Job ${jobId} receiver ${receiverCompanyId} already has invoice ${existing.id}, skipping`);
+      return;
+    }
+
+    if (fullTotalCents <= 0) {
+      console.log(`[receiver-invoice] Job ${jobId} fullTotalCents=${fullTotalCents} — skipping zero-value invoice`);
+      return;
+    }
+
+    const [job] = await db.select({
+      customerId: jobs.customerId,
+      clientId: jobs.clientId,
+      title: jobs.title,
+    }).from(jobs).where(eq(jobs.id, jobId));
+
+    const now = new Date();
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + 30);
+    const invoiceNumber = `INV-REF${jobId}-${Date.now()}`;
+
+    await db.insert(invoices).values({
+      companyId: receiverCompanyId,
+      jobId,
+      customerId: job?.customerId ?? null,
+      clientId: job?.clientId ?? null,
+      invoiceNumber,
+      amount: (fullTotalCents / 100).toFixed(2),
+      subtotalCents: fullTotalCents,
+      taxCents: 0,
+      totalCents: fullTotalCents,
+      paidAmountCents: 0,
+      balanceDueCents: fullTotalCents,
+      status: 'pending',
+      issueDate: now.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
+      notes: `Subcontracted job — collect payment from customer`,
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+
+    console.log(`[receiver-invoice] Created pending collection invoice for receiver company ${receiverCompanyId}, job ${jobId}, $${(fullTotalCents / 100).toFixed(2)}`);
+  } catch (err: any) {
+    console.error(`[receiver-invoice] Failed for job ${jobId}:`, err?.message);
+  }
+}
+
+/**
+ * Backfill: for any accepted/completed referrals where the receiver has no
+ * collection invoice, create one now. Safe to run on every startup.
+ */
+export async function backfillReceiverCollectionInvoices(): Promise<void> {
+  try {
+    const acceptedReferrals = await db.select().from(jobReferrals)
+      .where(sql`${jobReferrals.status} IN ('accepted', 'completed') AND ${jobReferrals.receiverCompanyId} IS NOT NULL`);
+
+    let created = 0;
+    for (const ref of acceptedReferrals) {
+      if (!ref.receiverCompanyId || !ref.jobId) continue;
+
+      const [existing] = await db.select({ id: invoices.id }).from(invoices)
+        .where(and(
+          eq(invoices.jobId, ref.jobId),
+          eq(invoices.companyId, ref.receiverCompanyId),
+          isNull(invoices.deletedAt),
+        ));
+
+      if (!existing) {
+        const fullTotal = ref.jobTotalAtAcceptanceCents && ref.jobTotalAtAcceptanceCents > 0
+          ? ref.jobTotalAtAcceptanceCents
+          : null;
+
+        if (!fullTotal) {
+          const lineItemRows = await db.select({ totalCents: sql<number>`total_cents` })
+            .from(sql`job_line_items`)
+            .where(sql`job_id = ${ref.jobId}`);
+          const computed = (lineItemRows as any[]).reduce((s: number, r: any) => s + (Number(r.totalCents) || 0), 0);
+          if (computed > 0) {
+            await ensureReceiverCollectionInvoice(ref.jobId, ref.receiverCompanyId, computed);
+            created++;
+          }
+        } else {
+          await ensureReceiverCollectionInvoice(ref.jobId, ref.receiverCompanyId, fullTotal);
+          created++;
+        }
+      }
+    }
+
+    console.log(`[backfill-receiver-invoices] Checked ${acceptedReferrals.length} accepted/completed referrals, created ${created} missing receiver collection invoices`);
+  } catch (err: any) {
+    console.error(`[backfill-receiver-invoices] Failed:`, err?.message);
+  }
+}
+
+/**
  * Backfill: for any completed referrals missing sender earnings invoices,
  * create them now. Safe to run on every startup — fully idempotent.
  */

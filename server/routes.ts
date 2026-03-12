@@ -10,7 +10,7 @@ import { sendPushToUser } from "./pushService";
 import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom, sendSupportEmail } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
-import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive, markReferralCompleted } from "./invoiceRecompute";
+import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive, markReferralCompleted, ensureReceiverCollectionInvoice } from "./invoiceRecompute";
 import { sendReceiptForPayment } from "./receiptService";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
@@ -11709,11 +11709,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (isReferredIn) {
             const shareInfo = referredInShareByJob[inv.jobId!];
             if (shareInfo && shareInfo.referralType === 'percent') {
+              // shareMultiplier is used only for earnings stats (net contractor share)
+              // displayTotalCents stays as the FULL collected invoice amount so
+              // the Payments list matches what the receiver sees in their Invoices tab
               shareMultiplier = shareInfo.contractorPayoutPct;
-              displayTotalCents = Math.round(totalCents * shareMultiplier);
             }
           } else if (isReferredOut) {
-            const refInfo = referredOutJobIds.has(inv.jobId!) ? referralFeeByJob[inv.jobId!] : 0;
             shareMultiplier = 0;
           }
 
@@ -11785,7 +11786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jobId: inv.jobId,
             jobTitle: inv.job?.title || null,
             totalCents: displayTotalCents,
-            paidCents: isReferredIn ? Math.min(paidCents, displayTotalCents) : paidCents,
+            paidCents,
             balanceDueCents,
             refundedCents,
             referralFeeCents,
@@ -16646,16 +16647,30 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(400).json({ error: `Referral is already ${referral.status}` });
       }
 
+      // Compute financial snapshot (same as token-based accept handler)
+      const jobLineItemsForTotal = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, referral.jobId));
+      const jobTotalCents = jobLineItemsForTotal.reduce((sum: number, li: any) => sum + (li.totalCents || li.lineTotalCents || 0), 0);
+      const jobForTotal = await storage.getJob(referral.jobId);
+      const fallbackTotalCents = jobTotalCents || Math.round((parseFloat(jobForTotal?.estimatedCost || '0') || parseFloat(jobForTotal?.actualCost || '0') || 0) * 100);
+      const split = stripeConnectService.computeSubcontractSplit(referral, fallbackTotalCents);
+
       await storage.updateJobReferral(referralId, {
         status: 'accepted',
         acceptedAt: new Date(),
-      });
+        jobTotalAtAcceptanceCents: fallbackTotalCents,
+        contractorPayoutAmountCents: split.contractorPayoutCents,
+        companyShareAmountCents: split.companyShareCents,
+      } as any);
 
       const updatedJob = await storage.updateJob(referral.jobId, {
         companyId: company.id,
       } as any);
 
-      console.log(`[referrals] job transferred to receiving contractor referralId=${referralId} jobId=${referral.jobId} newCompanyId=${company.id}`);
+      // Auto-create a pending collection invoice for the receiver so they can
+      // immediately collect payment without having to create an invoice manually
+      await ensureReceiverCollectionInvoice(referral.jobId, company.id, fallbackTotalCents);
+
+      console.log(`[referrals] job transferred to receiving contractor referralId=${referralId} jobId=${referral.jobId} newCompanyId=${company.id} jobTotal=${fallbackTotalCents}`);
       res.json({ success: true, job: updatedJob });
     } catch (error: any) {
       console.error('[referrals] Error accepting referral:', error);
@@ -16973,7 +16988,10 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         companyId: company.id,
       } as any);
 
-      console.log(`[referrals] invite accepted via token referralId=${referral.id} jobId=${referral.jobId} newCompanyId=${company.id}`);
+      // Auto-create a pending collection invoice for the receiver
+      await ensureReceiverCollectionInvoice(referral.jobId, company.id, fallbackTotalCents);
+
+      console.log(`[referrals] invite accepted via token referralId=${referral.id} jobId=${referral.jobId} newCompanyId=${company.id} jobTotal=${fallbackTotalCents}`);
       res.json({ success: true, job: updatedJob });
     } catch (error: any) {
       console.error('[referrals] Error accepting invite:', error);
