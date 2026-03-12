@@ -10,7 +10,7 @@ import { sendPushToUser } from "./pushService";
 import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom, sendSupportEmail } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
-import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive } from "./invoiceRecompute";
+import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive, markReferralCompleted } from "./invoiceRecompute";
 import { sendReceiptForPayment } from "./receiptService";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
@@ -101,6 +101,7 @@ async function tryArchiveCompletedPaidJob(jobId: number) {
         archivedReason: 'paid',
       } as any);
       console.log(`[JobArchive] Job ${jobId} auto-archived (paid)`);
+      await markReferralCompleted(jobId, now);
     } else {
       console.log(`[JobArchive] Job ${jobId} NOT archived - not yet paid`);
     }

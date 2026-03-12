@@ -1,0 +1,208 @@
+We need to fix the lifecycle behavior for subcontracted jobs after payment is completed.
+
+Goal
+
+When a subcontracted/referral job is fully paid and completed, the job should behave like a normal paid job in EcoLogic:
+
+it should auto-delete / disappear from active job lists
+
+but it should keep all invoice and payment history intact
+
+So basically, I want subcontracted jobs to follow the same backend cleanup/archive behavior that regular paid jobs already use.
+
+What is happening now
+
+Right now, subcontracted jobs can still remain visible after they are paid/done, which is not what I want.
+
+For normal jobs, once they are paid, the system already handles them correctly:
+
+the active job goes away
+
+invoice/payment records stay in history
+
+I want the same behavior applied to subcontracted jobs.
+
+What I need you to do
+1) Trace how normal paid jobs are handled
+
+First, find the existing source of truth for regular EcoLogic jobs after payment is completed.
+
+I want you to trace:
+
+what marks a normal job as fully paid
+
+what backend logic removes / archives / hides it from active jobs
+
+how invoice history is preserved
+
+how payment records are preserved
+
+Do not reinvent a new system if there is already an existing one for regular jobs.
+
+2) Apply the same lifecycle logic to subcontracted jobs
+
+Then update the subcontract/referral flow so that when a subcontracted job is:
+
+paid in full
+
+and considered completed/finalized according to the current business logic
+
+it should no longer remain as an active job.
+
+That means:
+
+hide/remove/archive the subcontracted active job record the same way regular jobs are handled
+
+preserve invoice records
+
+preserve payment records
+
+preserve any payout/referral audit history
+
+do not break financial reporting/history
+
+Important product behavior
+
+I do not want financial records deleted.
+
+Keep:
+
+invoices
+
+invoice line items
+
+payment records
+
+Stripe/payment references
+
+payout/referral audit history
+
+anything needed for history/reporting
+
+Remove or hide from active workflow:
+
+the active subcontracted job entry once it is fully paid/completed
+
+So this is job lifecycle cleanup, not destructive financial deletion.
+
+3) Match regular job backend behavior
+
+Please use the same behavior/pattern as regular jobs wherever possible.
+
+That means if normal jobs:
+
+get archived instead of hard-deleted → do that
+
+get filtered out of active job queries → do that
+
+get marked completed/closed and hidden from active lists → do that
+
+I want subcontracted jobs to be consistent with the rest of the app.
+
+4) Handle both sides correctly
+
+Please think through both company sides in a subcontract scenario:
+
+Sending company
+
+should keep invoice/payment/referral history
+
+should not keep an active job lingering once fully paid/completed
+
+Receiving company
+
+should also behave correctly based on how the subcontracted job is represented on their side
+
+preserve history, remove/hide active job as appropriate
+
+Do not break the sender/receiver recordkeeping.
+
+5) Trigger condition
+
+Use the real existing logic for “paid and done.”
+
+That might involve things like:
+
+invoice fully paid
+
+job marked complete
+
+referral payout finalized
+
+payment status succeeded
+
+no remaining balance
+
+Please trace the actual source of truth and use the same pattern regular jobs use.
+
+Do not guess.
+
+6) Verify affected queries/screens
+
+After implementing, verify that fully paid subcontracted jobs no longer appear in places like:
+
+active jobs lists
+
+subcontractor-related active job sections
+
+any contractor/referral active views where they should no longer show
+
+But confirm that the history still exists in:
+
+invoices
+
+payments
+
+any referral/payment audit records
+
+7) Important constraints
+
+do not delete invoice history
+
+do not delete payment history
+
+do not break Stripe/payment reconciliation
+
+do not break subcontract payout logic
+
+do not break referral activity history
+
+do not change unrelated job behavior
+
+do not introduce duplicate cleanup logic if regular jobs already have a pattern we can reuse
+
+Debug / verification
+
+Please add only targeted logs if needed and verify with a real subcontracted paid job.
+
+I want confirmation of:
+
+what exact condition triggered the cleanup/hide
+
+what job record changed
+
+what history records remained intact
+
+Deliverables
+
+Trace how regular paid jobs are currently handled
+
+Apply the same paid/completed lifecycle behavior to subcontracted jobs
+
+Remove/hide the active subcontracted job after it is paid/done
+
+Preserve invoices, payments, and referral financial history
+
+Verify it no longer shows in active job views but still exists in history
+
+After implementation, tell me:
+
+what existing regular-job logic you reused
+
+whether subcontracted jobs are archived, soft-deleted, or filtered from active queries
+
+what exact trigger marks them ready to be removed from active jobs
+
+what financial/history records remain preserved
+
+what screens/queries were verified after the fix
