@@ -11550,7 +11550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const referredInShareByJob: Record<number, { contractorPayoutPct: number; referralType: string; referralValue: string }> = {};
       try {
         const outReferrals = await db.select().from(jobReferrals).where(
-          and(eq(jobReferrals.senderCompanyId, company.id), eq(jobReferrals.status, 'accepted'))
+          and(eq(jobReferrals.senderCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
         );
         for (const ref of outReferrals) {
           if (ref.jobId) {
@@ -11560,7 +11560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const inReferrals = await db.select().from(jobReferrals).where(
-          and(eq(jobReferrals.receiverCompanyId, company.id), eq(jobReferrals.status, 'accepted'))
+          and(eq(jobReferrals.receiverCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
         );
         for (const ref of inReferrals) {
           if (ref.jobId) {

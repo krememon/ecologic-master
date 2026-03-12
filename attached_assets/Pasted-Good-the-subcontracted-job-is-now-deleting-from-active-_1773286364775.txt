@@ -1,0 +1,200 @@
+Good — the subcontracted job is now deleting from active jobs after payment, but there is still a critical bug:
+
+Current bug
+
+After the subcontracted job is paid and removed, it is not being preserved in Payment History for the subcontractor side.
+
+So right now:
+
+active job cleanup is working
+
+but subcontractor payment history is not being retained correctly
+
+That is wrong.
+
+Goal
+
+Make subcontracted jobs behave like normal paid jobs without losing payment history for the subcontractor.
+
+When a subcontracted job is fully paid and cleaned up from active jobs, the subcontractor should still be able to see the financial history in the proper history/payment area.
+
+What needs to be true
+
+After payment is completed for a subcontracted/referral job:
+
+Remove/hide from active jobs
+
+yes
+
+Preserve for subcontractor history
+
+yes
+
+Preserve for sender history
+
+yes
+
+Preserve invoice/payment records
+
+yes
+
+Preserve payout/referral audit trail
+
+yes
+
+Bug to fix
+
+Please trace why the subcontractor side is losing payment history after the active job gets removed.
+
+Likely causes could be something like:
+
+history queries depend on an active job record that is being deleted
+
+subcontractor payment history query is filtering incorrectly
+
+invoice/payment record is only associated to sender-side job and not receiver-side history
+
+cleanup logic is deleting or detaching a linking record needed by subcontractor history
+
+referral/subcontract payment history UI is reading from the wrong source
+
+Do not guess. Trace the real data path.
+
+What I need you to do
+1) Trace how subcontractor payment history is supposed to be loaded
+
+Find the exact source of truth for the subcontractor-side payment history screen/query.
+
+I want you to identify:
+
+frontend component/file showing subcontractor payment history
+
+backend endpoint/query powering it
+
+what table(s) it reads from
+
+how it links a subcontracted payment to the subcontractor company
+
+2) Find what record/link is being lost after cleanup
+
+Compare:
+
+before job cleanup
+
+after job cleanup
+
+Figure out exactly what relationship is breaking.
+
+Examples:
+
+jobId link removed
+
+referralId no longer joined
+
+invoice ownership mismatch
+
+payment record not copied/associated to receiver-side history
+
+active-job deletion causing history query to exclude the record
+
+3) Fix history preservation correctly
+
+When the subcontracted job is cleaned up from active jobs, make sure the subcontractor can still see the payment/history entry from a durable source.
+
+That means the subcontractor payment history should come from preserved financial records, not depend on the active job still existing.
+
+Use the real durable records such as:
+
+invoice records
+
+payment records
+
+referral payout records
+
+subcontract audit records
+
+preserved linked summary record if needed
+
+But:
+
+do not duplicate history entries
+
+do not break sender-side history
+
+do not break financial reconciliation
+
+4) Preserve both sides
+
+This needs to work for:
+
+sender company
+
+receiving subcontractor company
+
+Both sides should retain the correct historical payment visibility after the active job disappears.
+
+Important constraints
+
+do not undo the active job cleanup
+
+do not hard-delete financial records
+
+do not break invoice history
+
+do not break payment history
+
+do not break Stripe/payment reconciliation
+
+do not break referral payout logic
+
+do not invent fake history records
+
+Verification required
+
+Please test with a real subcontracted paid job and verify:
+
+For sender
+
+active job removed
+
+payment history still visible
+
+For subcontractor
+
+active job removed
+
+payment history still visible
+
+Also verify
+
+invoice history still exists
+
+payment amount is correct
+
+related referral/payout history still exists
+
+Use targeted logs only if needed.
+
+Deliverables
+
+Find why subcontractor payment history disappears after cleanup
+
+Fix the data linkage/query so subcontractor history remains visible
+
+Keep active job removal working
+
+Preserve both sender and receiver financial history
+
+Verify with a real paid subcontracted job
+
+After implementation, tell me:
+
+what exact record/link was being lost
+
+what backend/frontend query was depending on the wrong source
+
+what fix you made to preserve subcontractor payment history
+
+what durable records now power the history after active job cleanup
+
+confirmation that both sides still see correct payment history after the job is removed
