@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import StripePaymentForm from "@/components/StripePaymentForm";
@@ -19,6 +19,10 @@ import {
   RotateCcw,
   Plus,
   Loader2,
+  Building2,
+  TrendingDown,
+  CalendarDays,
+  Percent,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -71,8 +75,130 @@ const refundStatusConfig: Record<string, { color: string; label: string }> = {
   cancelled: { color: "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "Cancelled" },
 };
 
+// ---------- Subcontractor Fee Detail View ----------
+function SubcontractorFeeDetail({ invoiceId, jobId }: { invoiceId: string; jobId: string }) {
+  const [, navigate] = useLocation();
+
+  const { data, isLoading, error } = useQuery<any>({
+    queryKey: ["/api/payments/invoice", invoiceId, "fee-detail", jobId],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/invoice/${invoiceId}/fee-detail?jobId=${jobId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Not found");
+      return res.json();
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-5 max-w-2xl mx-auto space-y-4">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded-lg w-24" />
+          <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-2xl" />
+          <div className="h-[200px] bg-slate-200 dark:bg-slate-700 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="p-4 sm:p-5 max-w-2xl mx-auto">
+        <button onClick={() => navigate("/payments")} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6">
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+        <div className="text-center py-14">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Fee detail not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const feeAmountCents: number = data.feeAmountCents || 0;
+  const grossCollectedCents: number = data.grossCollectedCents || 0;
+  const yourNetCents: number = data.yourNetCents || 0;
+  const paidDate: string | null = data.paidDate || null;
+
+  const referralRateLabel = data.referralType === "percent"
+    ? `${data.referralValue}%`
+    : data.referralValue ? formatCents(Math.round(parseFloat(data.referralValue) * 100)) : "—";
+
+  const details: { icon: any; label: string; value: string; valueColor?: string }[] = [
+    ...(data.customerName ? [{ icon: User, label: "Customer", value: data.customerName }] : []),
+    ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
+    ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
+    ...(data.senderCompanyName ? [{ icon: Building2, label: "Referred By", value: data.senderCompanyName }] : []),
+    { icon: Percent, label: "Referral Rate", value: referralRateLabel },
+    { icon: DollarSign, label: "Gross Collected", value: formatCents(grossCollectedCents) },
+    { icon: TrendingDown, label: "Subcontractor Fee", value: `-${formatCents(feeAmountCents)}`, valueColor: "text-red-600 dark:text-red-400" },
+    { icon: DollarSign, label: "Your Net", value: formatCents(yourNetCents), valueColor: "text-green-600 dark:text-green-400" },
+    ...(paidDate ? [{ icon: CalendarDays, label: "Date Collected", value: safeFormat(paidDate, "MMM d, yyyy") }] : []),
+  ];
+
+  return (
+    <div className="p-4 sm:p-5 max-w-2xl mx-auto space-y-5">
+      <button onClick={() => navigate("/payments")} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+        <ArrowLeft className="w-4 h-4" />
+        Payments
+      </button>
+
+      <div className="text-center py-4">
+        <p className="text-4xl font-bold text-red-600 dark:text-red-400 tracking-tight tabular-nums mb-1">
+          -{formatCents(feeAmountCents)}
+        </p>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <span className="bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/40 text-xs font-semibold px-3 py-1 rounded-full">
+            Subcontractor Fee
+          </span>
+          <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">
+            Completed
+          </span>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+        {details.map((item, i) => {
+          const Icon = item.icon;
+          return (
+            <div key={i} className="flex items-start gap-3 px-4 py-3.5">
+              <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                <Icon className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">
+                  {item.label}
+                </p>
+                <p className={`text-sm font-medium break-words ${item.valueColor || "text-slate-900 dark:text-slate-100"}`}>
+                  {item.value}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 rounded-2xl px-4 py-3.5">
+        <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
+          This fee represents your subcontractor payout obligation on this referred job. The gross amount was collected from the customer and your net share after the fee is shown above.
+        </p>
+      </div>
+    </div>
+  );
+}
+// ---------------------------------------------------
+
 export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetailsProps) {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const isFeeView = searchParams.get("fee") === "1";
+  const feeJobId = searchParams.get("jobId") || "";
+
+  // Render fee detail view for subcontractor fee rows
+  if (isFeeView && feeJobId) {
+    return <SubcontractorFeeDetail invoiceId={invoiceId} jobId={feeJobId} />;
+  }
+
   const { toast } = useToast();
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);

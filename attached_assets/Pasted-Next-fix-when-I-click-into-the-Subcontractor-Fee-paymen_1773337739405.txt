@@ -1,0 +1,249 @@
+Next fix: when I click into the Subcontractor Fee payment row, the detail page is wrong. Right now it is still showing the normal referred payment detail structure, which does not match the meaning of a -$2,000 subcontractor fee entry.
+
+Goal
+
+For the Subcontractor Fee payment detail page, I want the screen to reflect the fact that this is an outgoing fee/payout/deduction tied to the subcontract flow.
+
+It should not look like a normal customer payment collected screen.
+
+Current problem
+
+When I tap the Subcontractor Fee -$2,000 row, the detail page shows things like:
+
+large $2,000.00
+
+Referred + Paid
+
+gross invoice
+
+your share
+
+payment history with + $2,000
+
+That does not correlate with the meaning of this ledger row.
+
+This row is supposed to represent an outgoing subcontractor fee on the receiver-side ledger, so the detail page needs to match that.
+
+What I want instead
+
+When opening a Subcontractor Fee row, the detail page should clearly show:
+
+this is a Subcontractor Fee
+
+it is an outgoing amount
+
+the amount should be shown as -$2,000.00
+
+the details should explain what the fee is tied to
+
+Desired detail-page behavior
+
+For a Subcontractor Fee entry, the page should feel like a fee/payout ledger detail, not a collected-payment detail.
+
+The page should clearly communicate:
+
+Type: Subcontractor Fee
+
+Amount: -$2,000.00
+
+Related job: Job for James Doherty
+
+Related invoice / referral if applicable
+
+Company/contractor context: who this fee is associated with
+
+Date
+
+Status if needed
+
+any useful linked financial context
+
+Good detail fields to show
+
+Use the real data model, but ideally show fields like:
+
+Subcontractor Fee / Fee Type
+
+Amount → -$2,000.00
+
+Related Job
+
+Related Customer
+
+Related Invoice
+
+Referral Rate
+
+Gross Collected Amount → $4,000.00
+
+Subcontractor Fee Amount → -$2,000.00
+
+Your Net / Remaining Share → $2,000.00 if helpful
+
+Date created
+
+Payment/ledger status
+
+Only show fields that actually exist and make sense.
+
+Important UI meaning
+
+This page should make it obvious that:
+
+the receiver collected $4,000
+
+this specific row is the outgoing subcontractor fee
+
+the fee amount is -$2,000
+
+this is tied to the same referred job/payment flow
+
+Top-of-page display
+
+The large amount at the top should reflect the fee correctly.
+
+I want:
+
+-$2,000.00
+
+Not:
+
+$2,000.00
+
+And the status badges/labels should match the fee row.
+
+Good examples:
+
+Subcontractor Fee
+
+Paid
+or
+
+Subcontractor Fee
+
+Completed
+
+Use whatever matches the ledger/business logic best, but the page should clearly identify this as the fee entry, not the collected payment entry.
+
+Payment history section
+
+This is important.
+
+If this page has a payment history section, it should not misleadingly show a normal positive incoming payment like:
+
++ $2,000
+
+unless that is truly the correct representation of the fee row’s underlying record.
+
+For the fee detail page, the financial history should align with the fact that this is an outgoing subcontractor fee / deduction.
+
+If the current payment-history block is actually just reusing the parent collected payment history and causing confusion, fix that.
+
+Main point:
+
+the detail page should correlate with the negative fee ledger row
+
+What I need you to do
+1) Detect when the clicked payment row is a Subcontractor Fee row
+
+Use the actual row type / ledger type / source-of-truth record to distinguish:
+
+normal collected payment row
+
+subcontractor fee row
+
+2) Render a dedicated fee-detail view or conditional fee-detail state
+
+If this is a Subcontractor Fee entry:
+
+render the fee-specific detail content
+
+show -$2,000.00
+
+show fee-specific labels/details
+
+do not reuse the misleading normal collected-payment detail layout as-is
+
+3) Use the real source-of-truth record
+
+The fee detail page should be powered by the actual durable record behind the negative row, such as:
+
+subcontract payout audit record
+
+referral payout record
+
+fee ledger entry
+
+or whatever real record is generating the negative receiver-side payment row
+
+Do not fake it.
+
+Scope
+
+Fix only the detail page for the Subcontractor Fee payment row.
+
+Do not change:
+
+normal payment detail pages
+
+the positive $4,000 collected payment detail page
+
+payment math
+
+row ordering
+
+sender-side payment detail pages
+
+Expected result for this case
+
+When I tap the Subcontractor Fee -$2,000 row, I should see a detail page that clearly reflects:
+
+Subcontractor Fee
+
+-$2,000.00
+
+tied to Job for James Doherty
+
+tied to the related referred/subcontract invoice/payment
+
+with details that make sense for a negative fee row
+
+Not the current generic referred-payment detail page.
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+clicked row type
+
+source record type used for fee detail page
+
+source record ID
+
+displayed top amount
+
+displayed labels/statuses
+
+any related invoice/job/referral IDs used
+
+Deliverables
+
+Make the Subcontractor Fee row open a detail page that matches the negative fee entry
+
+Show the top amount as -$2,000.00
+
+Show fee-specific labels/details instead of the misleading normal referred payment layout
+
+Keep normal payment detail pages unchanged
+
+After implementation, tell me:
+
+what source-of-truth record powers the subcontractor fee detail page
+
+what component/file was updated
+
+what fields are now shown on the fee detail page
+
+confirmation that tapping the - $2,000 Subcontractor Fee row now shows a detail page that actually matches that fee entry

@@ -12076,6 +12076,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Subcontractor fee detail — powers the fee-specific detail view on the receiver side
+  app.get('/api/payments/invoice/:invoiceId/fee-detail', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const invoiceId = parseInt(req.params.invoiceId, 10);
+      const jobId = parseInt(req.query.jobId as string, 10);
+      if (isNaN(invoiceId) || isNaN(jobId)) return res.status(400).json({ message: "Invalid params" });
+
+      // Find the job_referral where this company is the RECEIVER and the job matches
+      const [referral] = await db.select().from(jobReferrals).where(
+        and(
+          eq(jobReferrals.receiverCompanyId, company.id),
+          eq(jobReferrals.jobId, jobId),
+          inArray(jobReferrals.status, ['accepted', 'completed'])
+        )
+      ).limit(1);
+      if (!referral) return res.status(404).json({ message: "Referral not found" });
+
+      // Receiver's invoice for this job
+      const [inv] = await db.select().from(invoices).where(
+        and(eq(invoices.id, invoiceId), eq(invoices.companyId, company.id))
+      ).limit(1);
+      if (!inv) return res.status(404).json({ message: "Invoice not found" });
+
+      // Receiver's payments for this invoice (for date)
+      const invPayments = await db.select().from(payments).where(
+        and(
+          eq(payments.invoiceId, invoiceId),
+          inArray(payments.status, ['succeeded', 'paid', 'completed'])
+        )
+      ).orderBy(desc(payments.paidDate));
+      const latestPayment = invPayments[0] || null;
+
+      // Sender company name
+      let senderCompanyName: string | null = null;
+      if (referral.senderCompanyId) {
+        const [senderComp] = await db.select({ name: companies.name }).from(companies)
+          .where(eq(companies.id, referral.senderCompanyId)).limit(1);
+        senderCompanyName = senderComp?.name || null;
+      }
+
+      // Customer name from the invoice
+      let customerName: string | null = null;
+      let jobTitle: string | null = null;
+      if (inv.customerId) {
+        const [cust] = await db.select({ name: customers.name }).from(customers)
+          .where(eq(customers.id, inv.customerId)).limit(1);
+        customerName = cust?.name || null;
+      }
+      if (inv.jobId) {
+        const [jobRow] = await db.select({ title: jobs.title }).from(jobs)
+          .where(eq(jobs.id, inv.jobId)).limit(1);
+        jobTitle = jobRow?.title || null;
+      }
+
+      const grossCollectedCents = inv.totalCents || 0;
+      const feeAmountCents = referral.companyShareAmountCents || 0;
+      const yourNetCents = (referral.contractorPayoutAmountCents || 0);
+
+      console.log(`[fee-detail] invoiceId=${invoiceId} jobId=${jobId} company=${company.id} fee=${feeAmountCents} gross=${grossCollectedCents} net=${yourNetCents}`);
+
+      res.json({
+        feeAmountCents,
+        grossCollectedCents,
+        yourNetCents,
+        referralType: referral.referralType,
+        referralValue: referral.referralValue,
+        referralStatus: referral.status,
+        senderCompanyName,
+        customerName,
+        jobTitle,
+        invoiceNumber: inv.invoiceNumber,
+        jobId,
+        invoiceId,
+        paidDate: latestPayment?.paidDate || latestPayment?.createdAt || null,
+      });
+    } catch (error) {
+      console.error("Error fetching fee detail:", error);
+      res.status(500).json({ message: "Failed to fetch fee detail" });
+    }
+  });
+
   app.get('/api/payments/invoice/:invoiceId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

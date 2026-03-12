@@ -387,7 +387,11 @@ export default function PaymentsPage() {
             return (
               <div
                 key={`${item.invoiceId}-${status}`}
-                onClick={() => navigate(`/payments/invoice/${item.invoiceId}`)}
+                onClick={() => navigate(
+                  isSubcontractorFee
+                    ? `/payments/invoice/${item.invoiceId}?fee=1&jobId=${item.jobId}`
+                    : `/payments/invoice/${item.invoiceId}`
+                )}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">
