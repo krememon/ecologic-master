@@ -50,7 +50,7 @@ import {
   type DocumentVisibility
 } from "../shared/documentPermissions";
 import { db } from "./db";
-import { eq, and, lt, gt, sql, desc, ilike } from "drizzle-orm";
+import { eq, and, or, lt, gt, sql, desc, ilike, inArray } from "drizzle-orm";
 import Stripe from "stripe";
 import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
@@ -4546,7 +4546,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!sub || sub.companyId !== company.id) return res.status(404).json({ message: "Contractor not found" });
 
       const subEmail = sub.email?.trim().toLowerCase() || null;
+      console.log(`[sub-referrals] sub#${subId} companyId=${company.id} subEmail=${subEmail}`);
 
+      // ─── Find the other company (if they have an EcoLogic account) ───────────
+      let otherCompanyId: number | null = null;
+      if (subEmail) {
+        const otherUser = await storage.getUserByEmail(subEmail);
+        if (otherUser) {
+          const otherCo = await storage.getUserCompany(otherUser.id);
+          if (otherCo) otherCompanyId = otherCo.id;
+        }
+      }
+      console.log(`[sub-referrals] otherCompanyId=${otherCompanyId}`);
+
+      // ─── Collect MY company members' emails (for received pending matching) ───
+      const myMembers = await storage.getCompanyMembers(company.id);
+      const myMemberEmails: string[] = [];
+      for (const m of myMembers) {
+        const u = await storage.getUser(m.userId);
+        if (u?.email) myMemberEmails.push(u.email.trim().toLowerCase());
+      }
+      console.log(`[sub-referrals] myMemberEmails=${myMemberEmails.join(',')}`);
+
+      // ─── Enrich a referral row with job + customer data ───────────────────────
       async function enrichReferral(ref: any) {
         const job = ref.jobId ? await storage.getJob(ref.jobId) : null;
         let customerName: string | null = null;
@@ -4579,39 +4601,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }
 
-      // SENT: referrals where we are the sender, matched to this contractor by email
-      const sentRefs = await db
-        .select()
-        .from(jobReferrals)
-        .where(
-          and(
-            eq(jobReferrals.senderCompanyId, company.id),
-            subEmail
-              ? ilike(jobReferrals.inviteSentTo, subEmail)
-              : sql`false`
-          )
-        )
-        .orderBy(desc(jobReferrals.createdAt));
+      // ─── SENT: we are sender ──────────────────────────────────────────────────
+      // Pending:  inviteSentTo matches sub's email
+      // Accepted: receiverCompanyId matches their company
+      const sentConditions: any[] = [eq(jobReferrals.senderCompanyId, company.id)];
+      const sentReceiverConditions: any[] = [];
+      if (subEmail) sentReceiverConditions.push(ilike(jobReferrals.inviteSentTo, subEmail));
+      if (otherCompanyId) sentReceiverConditions.push(eq(jobReferrals.receiverCompanyId, otherCompanyId));
 
-      // RECEIVED: find the other company via the sub's email, then get referrals they sent us
+      const sentRefs = sentReceiverConditions.length > 0
+        ? await db.select().from(jobReferrals)
+            .where(and(eq(jobReferrals.senderCompanyId, company.id), or(...sentReceiverConditions)))
+            .orderBy(desc(jobReferrals.createdAt))
+        : [];
+
+      // ─── RECEIVED: they are sender, we are receiver ───────────────────────────
+      // Accepted: receiverCompanyId = myCompanyId
+      // Pending:  inviteSentTo is one of my company's member emails
       let receivedRefs: any[] = [];
-      if (subEmail) {
-        const otherUser = await storage.getUserByEmail(subEmail);
-        if (otherUser) {
-          const otherCompany = await storage.getUserCompany(otherUser.id);
-          if (otherCompany) {
-            receivedRefs = await db
-              .select()
-              .from(jobReferrals)
-              .where(
-                and(
-                  eq(jobReferrals.senderCompanyId, otherCompany.id),
-                  eq(jobReferrals.receiverCompanyId, company.id)
-                )
-              )
-              .orderBy(desc(jobReferrals.createdAt));
+      if (otherCompanyId) {
+        const receivedConditions: any[] = [eq(jobReferrals.receiverCompanyId, company.id)];
+        if (myMemberEmails.length > 0) {
+          // also include pending invites sent to any of our member emails
+          for (const email of myMemberEmails) {
+            receivedConditions.push(ilike(jobReferrals.inviteSentTo, email));
           }
         }
+        receivedRefs = await db.select().from(jobReferrals)
+          .where(and(eq(jobReferrals.senderCompanyId, otherCompanyId), or(...receivedConditions)))
+          .orderBy(desc(jobReferrals.createdAt));
       }
 
       const [sent, received] = await Promise.all([
@@ -4619,8 +4637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Promise.all(receivedRefs.map(enrichReferral)),
       ]);
 
-      console.log(`[subcontractor-referrals] sub#${subId} email=${subEmail} sent=${sent.length} received=${received.length}`);
-      res.json({ sent, received });
+      // Deduplicate by ID in case a referral matches multiple conditions
+      const dedup = (arr: any[]) => Array.from(new Map(arr.map(r => [r.id, r])).values());
+
+      console.log(`[sub-referrals] RESULT sub#${subId} sent=${sent.length} received=${received.length}`);
+      res.json({ sent: dedup(sent), received: dedup(received) });
     } catch (error) {
       console.error("Error fetching subcontractor referrals:", error);
       res.status(500).json({ message: "Failed to fetch referrals" });

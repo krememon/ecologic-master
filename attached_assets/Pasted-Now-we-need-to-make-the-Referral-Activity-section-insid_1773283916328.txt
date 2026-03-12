@@ -1,0 +1,207 @@
+Now we need to make the Referral Activity section inside the contractor detail page actually populate with the real jobs that were sent and received between the two companies.
+
+Goal
+
+Inside a specific contractor’s detail page, the Referral Activity section should show real referral/job records in 2 tabs:
+
+Sent = jobs my company sent to this contractor
+
+Received = jobs this contractor sent to my company
+
+Right now the tabs exist, but now we need the real data to appear.
+
+Scope
+
+Only work on the Referral Activity section inside the contractor detail page.
+
+Do not change:
+
+the top-level subcontractor page tabs
+
+unrelated jobs pages
+
+referral accept/decline flow
+
+unrelated contractor cards
+
+Core requirement
+
+When viewing a contractor detail page, the activity must be scoped to the relationship between:
+
+current logged-in company
+
+that specific contractor/company
+
+It should not show all referrals in the system.
+
+What Sent should show
+
+In the Sent tab, load and render all referrals where:
+
+current company = sender
+
+selected contractor/company = receiver
+
+What Received should show
+
+In the Received tab, load and render all referrals where:
+
+selected contractor/company = sender
+
+current company = receiver
+
+Important data-model requirement
+
+Please trace the real source of truth for how a contractor record maps to an actual company/referral relationship.
+
+That means:
+
+identify how the selected contractor on the detail page is linked to the referred company
+
+identify which referral table/model stores senderCompanyId / receiverCompanyId
+
+use the actual linkage, not a fake placeholder assumption
+
+If the contractor detail page currently does not have enough data to identify the linked company, fix that properly.
+
+What each activity item should show
+
+For each referral/job record in either tab, show a clean summary card using real fields that already exist.
+
+Use as many of these as are available:
+
+job title / job name
+
+customer name
+
+referral status
+
+accepted / pending / declined
+
+created/sent date
+
+scheduled date
+
+address or location
+
+referral percentage
+
+payout/job amount
+
+any other useful summary field already available
+
+Rules:
+
+only show real fields
+
+hide missing fields cleanly
+
+keep layout polished on mobile
+
+do not invent values
+
+Empty states
+
+If no records exist in a tab:
+
+Sent
+
+show: No jobs sent to this contractor yet.
+
+Received
+
+show: No jobs received from this contractor yet.
+
+Keep the empty state clean and not oversized.
+
+Backend work
+
+Please trace and wire the real data path.
+
+I want you to find:
+
+the frontend component rendering contractor detail page referral activity
+
+the backend endpoint/query powering the contractor detail page
+
+the referral/subcontract table(s) storing the relationship
+
+how the selected contractor record maps to the linked company involved in referrals
+
+If needed
+
+Update the backend response for the contractor detail page so it returns something like:
+
+sentReferralActivity
+
+receivedReferralActivity
+
+Each should contain the fields needed for rendering.
+
+Frontend behavior
+
+Inside the Referral Activity section:
+
+Sent tab renders sent activity list
+
+Received tab renders received activity list
+
+keep the new tab styling already implemented
+
+render cards cleanly
+
+maintain mobile-first spacing
+
+Debug requirement
+
+Do not guess.
+
+Please verify with targeted logs:
+
+selected contractor id
+
+linked company id used for matching
+
+sent referral count
+
+received referral count
+
+Only add targeted logs related to this feature.
+
+Important constraints
+
+do not break contractor detail routing
+
+do not break subcontract send flow
+
+do not break accept/decline flow
+
+do not change unrelated pages
+
+do not use fake mock data
+
+use real DB-backed referral records only
+
+Deliverables
+
+Populate Sent tab with real jobs my company sent to this contractor
+
+Populate Received tab with real jobs this contractor sent to my company
+
+Scope results only to the relationship between current company and selected contractor
+
+Show clean job/referral summary cards
+
+Preserve polished mobile UI and empty states
+
+After implementation, tell me:
+
+exact frontend file updated
+
+exact backend endpoint/query used
+
+how the contractor record maps to the related company for referral matching
+
+what fields are shown in each activity card
+
+the sent and received counts from your verification logs
