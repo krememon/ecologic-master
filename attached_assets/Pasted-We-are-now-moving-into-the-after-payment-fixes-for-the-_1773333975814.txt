@@ -1,0 +1,162 @@
+We are now moving into the after-payment fixes for the sender side.
+
+Scope for this task only
+
+Focus only on the sender-side Payments page after payment for this referred/subcontracted job.
+
+Do not try to fix everything at once.
+For this task, fix only this first post-payment issue:
+
+Current problem
+
+After I hit Pay on the subcontracted/referred job, the Payments page row is now in the Paid state, but the displayed money amount is wrong.
+
+What it should show
+
+On the sender side, after payment, the row should display:
+
+$2,000.00
+
+because that is the sender/company share.
+
+Main point
+
+For the sender side:
+
+before payment, the row correctly reflected the sender share
+
+after payment, it should still reflect the sender share
+
+it should not switch to the full collected amount if this is the sender view
+
+So for this specific referred payment on pjpell077, the paid row should show the sender-side amount:
+
+$2,000.00
+
+Goal
+
+Fix the sender-side paid payment row amount so that after payment it continues to show the sender/company share, not the wrong amount.
+
+Important clarification
+
+This task is specifically about the sender-side Payments list row after payment.
+
+I am not asking you to change:
+
+receiver-side paid amount display
+
+invoice page
+
+payment detail page
+
+header totals
+
+job cleanup
+
+payment history creation
+
+client history
+
+anything else yet
+
+Keep this fix tightly scoped.
+
+What I need you to do
+1) Trace the amount logic for paid referred rows on sender side
+
+Find the exact logic currently deciding what amount to show for a paid referred/subcontracted payment row in the Payments list.
+
+Figure out why, after payment, it is no longer using the correct sender-side share amount.
+
+Likely causes could be:
+
+paid rows are switching to full collected amount logic
+
+sender/receiver role logic is being lost once status becomes paid
+
+the display code is using the invoice total after payment instead of company share
+
+referred_paid rows are being treated like receiver-side collection rows
+
+I want the actual source-of-truth fixed.
+
+2) Keep sender-side paid amount tied to sender share
+
+For the sender-side paid referred row, the displayed green amount should use the real sender-side share amount, such as:
+
+companyShareAmountCents
+or the correct equivalent source-of-truth field
+
+For this test case, that should display:
+
+$2,000.00
+
+3) Preserve proper receiver-side logic
+
+Do not break the receiver-side display logic if that side is intentionally supposed to show the full collected amount.
+
+This fix is specifically:
+
+sender-side paid referred row amount
+
+Source of truth
+
+Use the actual stored referral financial snapshot / payment fields, such as the real:
+
+full job total
+
+contractor payout amount
+
+company share amount
+
+sender vs receiver role
+
+paid state
+
+Do not hardcode this in the frontend.
+
+Expected result for this exact case
+
+After payment, on the sender-side Payments page for this referred job, the paid row should show:
+
+status: Paid
+
+amount: $2,000.00
+
+not the wrong larger amount.
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+company ID of current viewer
+
+invoice/payment ID
+
+whether this is sender or receiver view
+
+full invoice total
+
+contractor payout amount
+
+company share amount
+
+final displayed paid-row amount
+
+Deliverables
+
+Fix sender-side paid referred payment row amount
+
+Make it display the sender/company share after payment
+
+Keep the fix tightly scoped to this one post-payment issue
+
+After implementation, tell me:
+
+what field now powers the sender-side paid row amount
+
+what component/file was changed
+
+confirmation that the sender-side paid row now shows $2,000.00

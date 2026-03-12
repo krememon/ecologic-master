@@ -11654,6 +11654,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const referredOutJobIds = new Set<number>();
       const referralFeeByJob: Record<number, number> = {};
       const referralPayoutStatusByJob: Record<number, string> = {};
+      const referralCompletedDateByJob: Record<number, Date> = {};
       const referredInJobIds = new Set<number>();
       const referredInShareByJob: Record<number, { contractorPayoutPct: number; referralType: string; referralValue: string }> = {};
       try {
@@ -11672,6 +11673,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         console.log(`[ledger] company=${company.id} outReferrals=${outReferrals.length} referredOutJobIds=[${[...referredOutJobIds].join(',')}]`);
+
+        // For completed (referred_paid) referrals, get the receiver's payment date so we
+        // can credit the sender's share to the earnings stats with the correct date.
+        const completedOutReferrals = outReferrals.filter(r => r.status === 'completed' && r.jobId && r.receiverCompanyId);
+        if (completedOutReferrals.length > 0) {
+          const completedJobIdList = completedOutReferrals.map(r => r.jobId!);
+          const completedReceiverIds = completedOutReferrals.map(r => r.receiverCompanyId!);
+          const receiverPaymentRows = await db
+            .select({
+              jobId: invoices.jobId,
+              latestPaidDate: sql<string>`MAX(${payments.paidDate})`.as('latest_paid_date'),
+            })
+            .from(invoices)
+            .innerJoin(payments, and(
+              eq(payments.invoiceId, invoices.id),
+              inArray(payments.status, ['succeeded', 'paid', 'completed'])
+            ))
+            .where(and(
+              inArray(invoices.jobId, completedJobIdList),
+              inArray(invoices.companyId, completedReceiverIds)
+            ))
+            .groupBy(invoices.jobId);
+          for (const row of receiverPaymentRows) {
+            if (row.jobId && row.latestPaidDate) {
+              referralCompletedDateByJob[row.jobId] = new Date(row.latestPaidDate);
+            }
+          }
+          console.log(`[ledger] referralCompletedDates=${JSON.stringify(Object.fromEntries(Object.entries(referralCompletedDateByJob).map(([k,v]) => [k, v.toISOString().split('T')[0]])))}`);
+        }
 
         const inReferrals = await db.select().from(jobReferrals).where(
           and(eq(jobReferrals.receiverCompanyId, company.id), inArray(jobReferrals.status, ['accepted', 'completed']))
@@ -11859,6 +11889,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stillOwedCents += referralFeeCents;
             console.log(`[ledger-owed] invoiceId=${inv.id} jobId=${inv.jobId} added senderShare=${referralFeeCents} to stillOwedCents`);
           }
+          // For referred_paid jobs the sender earns their company share — credit it to
+          // the earnings stats using the date the receiver collected the payment.
+          if (computedStatus === 'referred_paid' && referralFeeCents > 0 && inv.jobId) {
+            const completionDate = referralCompletedDateByJob[inv.jobId];
+            if (completionDate) {
+              if (completionDate >= rangeStart) earningsRangeCents += referralFeeCents;
+              if (completionDate >= todayStart && completionDate <= todayEnd) paidTodayCents += referralFeeCents;
+              console.log(`[ledger-earnings] invoiceId=${inv.id} jobId=${inv.jobId} referred_paid added senderShare=${referralFeeCents} completionDate=${completionDate.toISOString().split('T')[0]} inRange=${completionDate >= rangeStart} today=${completionDate >= todayStart && completionDate <= todayEnd}`);
+            } else {
+              // Fallback: no payment date found, include in range only
+              earningsRangeCents += referralFeeCents;
+              console.log(`[ledger-earnings] invoiceId=${inv.id} jobId=${inv.jobId} referred_paid senderShare=${referralFeeCents} (no completion date, added to range only)`);
+            }
+          }
 
           let customerName = 'Unknown Customer';
           if (inv.customer?.firstName || inv.customer?.lastName) {
@@ -11986,7 +12030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const refs = await db.select().from(jobReferrals).where(
             and(
               eq(jobReferrals.jobId, invoice.jobId),
-              eq(jobReferrals.status, 'accepted')
+              inArray(jobReferrals.status, ['accepted', 'completed'])
             )
           );
           for (const ref of refs) {
@@ -12065,7 +12109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const refs = await db.select().from(jobReferrals).where(
           and(
             eq(jobReferrals.jobId, invoice.jobId),
-            eq(jobReferrals.status, 'accepted')
+            inArray(jobReferrals.status, ['accepted', 'completed'])
           )
         );
         if (refs.length > 0) {
