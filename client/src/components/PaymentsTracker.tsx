@@ -38,6 +38,9 @@ interface LedgerItem {
   paidCents: number;
   balanceDueCents: number;
   refundedCents: number;
+  referralFeeCents?: number;
+  isReferredOut?: boolean;
+  isReferredIn?: boolean;
   computedStatus: string;
   dueDate?: string;
   issueDate?: string;
@@ -156,11 +159,11 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
 
   const getFilterStatus = (item: LedgerItem): FilterTab => {
     const st = item.computedStatus;
-    if (st === 'paid') return 'paid';
+    if (st === 'paid' || st === 'referred_paid') return 'paid';
     if (st === 'partial') return 'partial';
     const today = new Date().toISOString().split('T')[0];
     if (item.dueDate && item.dueDate < today && item.balanceDueCents > 0) return 'overdue';
-    if (st === 'unpaid') return 'unpaid';
+    if (st === 'unpaid' || st === 'referred') return 'unpaid';
     return 'unpaid';
   };
 
@@ -343,6 +346,25 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
             
             const paymentMethodInfo = item.lastPayment ? getPaymentMethodDisplay(item.lastPayment.paymentMethod) : null;
 
+            // Referred-state logic
+            const isReferred = !!(item.isReferredOut || item.isReferredIn);
+            const isPaidState = displayStatus === 'paid';
+            const isReferredUnpaid = isReferred && !isPaidState;
+
+            // "Owed" amount: sender sees their net share; receiver sees their balance due
+            const owedCents = item.isReferredOut
+              ? (item.referralFeeCents ?? item.totalCents)
+              : (item.balanceDueCents ?? item.totalCents);
+
+            // Date for subtext on referred-unpaid rows: use issueDate or createdAt
+            const referredDateLabel = (() => {
+              const d = safeParseDate(item.issueDate || item.createdAt);
+              if (!d) return '';
+              if (isToday(d)) return 'Today';
+              if (isYesterday(d)) return 'Yesterday';
+              return format(d, 'MMM d, yyyy');
+            })();
+
             return (
               <Card 
                 key={item.invoiceId} 
@@ -352,43 +374,79 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="font-semibold text-gray-900 dark:text-white truncate">
-                          {item.customerName}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Invoice #{item.invoiceNumber}
-                        {item.jobTitle && ` \u2022 ${item.jobTitle}`}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        {getStatusBadge(displayStatus)}
-                        {paymentMethodInfo && (displayStatus === "paid" || displayStatus === "partial") && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                            <paymentMethodInfo.icon className="w-3 h-3" />
-                            {paymentMethodInfo.label}
-                          </span>
-                        )}
-                      </div>
+
+                      {isReferredUnpaid ? (
+                        <>
+                          {/* Referred-unpaid: customer name + "Referred" pill on same row */}
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              {item.customerName}
+                            </span>
+                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2.5 py-0.5 rounded-full font-medium border-0">
+                              Referred
+                            </Badge>
+                          </div>
+                          {/* Subtext: Referred · Date · #INV · Job */}
+                          <p className="text-sm text-gray-500 dark:text-gray-400 leading-snug">
+                            {'Referred'}
+                            {referredDateLabel && ` · ${referredDateLabel}`}
+                            {` · #${item.invoiceNumber}`}
+                            {item.jobTitle && ` · ${item.jobTitle}`}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          {/* Normal: user icon + customer name */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="font-semibold text-gray-900 dark:text-white truncate">
+                              {item.customerName}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Invoice #{item.invoiceNumber}
+                            {item.jobTitle && ` \u2022 ${item.jobTitle}`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            {getStatusBadge(displayStatus)}
+                            {paymentMethodInfo && (displayStatus === "paid" || displayStatus === "partial") && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <paymentMethodInfo.icon className="w-3 h-3" />
+                                {paymentMethodInfo.label}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
+
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className={`text-lg font-bold ${
-                        displayStatus === "paid" ? "text-green-600 dark:text-green-400" :
-                        displayStatus === "overdue" ? "text-red-600 dark:text-red-400" :
-                        displayStatus === "partial" ? "text-yellow-600 dark:text-yellow-400" :
-                        "text-gray-900 dark:text-white"
-                      }`}>
-                        {amountDisplay}
-                      </p>
-                      {displayStatus === "partial" && (
+                      {isReferredUnpaid ? (
+                        /* Referred-unpaid: orange "owed" amount */
+                        <p className="text-lg font-bold text-orange-500 dark:text-orange-400">
+                          {formatCents(owedCents)}{' '}
+                          <span className="text-sm font-semibold">owed</span>
+                        </p>
+                      ) : (
+                        <p className={`text-lg font-bold ${
+                          displayStatus === "paid" ? "text-green-600 dark:text-green-400" :
+                          displayStatus === "overdue" ? "text-red-600 dark:text-red-400" :
+                          displayStatus === "partial" ? "text-yellow-600 dark:text-yellow-400" :
+                          "text-gray-900 dark:text-white"
+                        }`}>
+                          {amountDisplay}
+                        </p>
+                      )}
+                      {displayStatus === "partial" && !isReferredUnpaid && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {formatCents(item.balanceDueCents)} remaining
                         </p>
                       )}
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        {dateDisplay}
-                      </p>
+                      {!isReferredUnpaid && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          {dateDisplay}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>

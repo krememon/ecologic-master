@@ -1,0 +1,194 @@
+We need to fix how subcontracted/referral payment rows display in the Payments page.
+
+Goal
+
+For subcontracted jobs that have been accepted but not yet paid, I want the row to display exactly like this pattern:
+
+top pill: Referred
+
+amount text on the right: $X,XXX.XX owed
+
+Example:
+
+Referred pill
+
+$2,375.00 owed
+
+So to be clear, I do not want the top pill changed to Owed.
+I want the payment row to communicate two different things at once:
+
+Referral type/state = Referred
+
+Money/payment state = amount owed
+
+That is the behavior I want on both sides of the subcontract relationship.
+
+Desired behavior
+Accepted but unpaid subcontracted job
+
+When a subcontracted/referral job has been:
+
+sent
+
+accepted
+
+and is still unpaid
+
+the row should show:
+
+Referred pill
+
+right-side amount text formatted like: $ amount owed
+
+Example:
+
+$2,375.00 owed
+
+After payment
+
+As soon as it is paid by:
+
+card
+
+cash
+
+check
+
+the row should update to the correct paid state everywhere relevant.
+
+Main idea:
+
+before payment = Referred pill + $ amount owed
+
+after payment = clearly Paid wherever it should display as paid
+
+Scope
+
+Apply this behavior to subcontract/referral payment rows on both:
+
+sender side
+
+receiver/subcontractor side
+
+Wherever that subcontracted payment item appears, it should follow the same display logic.
+
+What to change
+1) Keep the top pill as Referred for accepted unpaid subcontracted jobs
+
+Do not replace the top pill with Owed.
+
+Before payment, the top pill should remain:
+
+Referred
+
+2) Change the payment text / amount display
+
+For accepted unpaid subcontracted jobs, the amount area should show:
+
+$X,XXX.XX owed
+
+This amount should be the real amount owed based on the actual subcontract/referral financial data.
+
+3) Change to Paid after payment
+
+Once payment is actually recorded successfully, the row should stop showing owed and instead reflect the correct paid state.
+
+Please follow the app’s existing paid pattern wherever possible, but the important thing is:
+
+unpaid accepted subcontract = Referred + $ amount owed
+
+paid subcontract = clearly Paid
+
+Source of truth
+
+Do not hardcode this in the frontend.
+
+Use the real source-of-truth fields to determine:
+
+whether the subcontract/referral was accepted
+
+whether it is still unpaid
+
+what amount is owed
+
+whether it has been paid in full
+
+Likely this will involve real invoice/payment/referral fields such as:
+
+referral accepted status
+
+outstanding balance
+
+payment status
+
+invoice paid state
+
+Please trace the real existing logic and use that.
+
+Both sides must stay consistent
+
+This needs to behave correctly on:
+
+the company that sent the subcontracted job
+
+the company that received and accepted the subcontracted job
+
+No side should show the wrong state after acceptance or after payment.
+
+Important constraints
+
+do not break card payments
+
+do not break cash payments
+
+do not break check payments
+
+do not break invoice/payment history
+
+do not break subcontract lifecycle cleanup
+
+do not break sender/receiver recordkeeping
+
+do not fake the owed amount in UI only
+
+Verification
+
+Please test a real subcontract flow:
+
+sender sends subcontracted job
+
+receiver accepts
+
+check Payments page on both sides
+
+should show Referred pill
+
+should show $ amount owed
+
+record payment via card, cash, or check
+
+check both sides again
+
+should now reflect the proper Paid state
+
+Use targeted logs only if needed.
+
+Deliverables
+
+Keep Referred as the top pill for accepted unpaid subcontracted jobs
+
+Show the real amount as $ amount owed
+
+After payment, switch to the proper Paid state
+
+Apply the behavior consistently on both sender and receiver sides
+
+After implementation, tell me:
+
+what field drives the owed amount
+
+what field drives the paid state
+
+what component(s) were updated
+
+which screens were verified on both sides
