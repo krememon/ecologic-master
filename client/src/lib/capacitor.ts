@@ -93,14 +93,22 @@ export async function startGoogleAuthNative(): Promise<void> {
           });
 
           if (exchangeRes.ok) {
-            console.log("[capacitor] Auth exchange successful, navigating to app...");
-            await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-            // Navigate to the production base URL's root so the session cookie
-            // (bound to that domain) is sent with subsequent API requests.
-            window.location.href = baseUrl ? `${baseUrl}/` : "/";
+            const exchangeData = await exchangeRes.json().catch(() => ({}));
+            if (exchangeData.sessionId) {
+              // Store the sessionId so the native API client can attach it as a
+              // Bearer token. The preview dev server (WebView's domain) will then
+              // look up this session from the shared DB and authenticate the user
+              // without needing a same-domain cookie.
+              localStorage.setItem("nativeSessionId", exchangeData.sessionId);
+              console.log("[capacitor] Stored nativeSessionId in localStorage");
+            }
+            console.log("[capacitor] Auth exchange successful, returning to app...");
+            // Navigate relative — keeps the WebView on its current domain so
+            // Capacitor does NOT open Safari. Auth is handled via Bearer token.
+            window.location.href = "/";
           } else {
             console.error("[capacitor] Auth exchange failed:", exchangeRes.status);
-            window.location.href = baseUrl ? `${baseUrl}/login?error=exchange_failed` : "/login?error=exchange_failed";
+            window.location.href = "/login?error=exchange_failed";
           }
         }
       } catch (err) {

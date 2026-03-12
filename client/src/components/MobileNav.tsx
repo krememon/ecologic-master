@@ -437,6 +437,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                       const { resetPushRegistration } = await import("@/lib/capacitor");
                       resetPushRegistration();
                     } catch {}
+                    try {
+                      const { clearNativeSession } = await import("@/lib/queryClient");
+                      clearNativeSession();
+                    } catch {}
                     sessionStorage.removeItem("coldStartRedirectDone");
                     window.location.href = '/login';
                   }}

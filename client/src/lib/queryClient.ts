@@ -1,5 +1,34 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+/**
+ * Returns Authorization header if a native session token is stored in
+ * localStorage (set after a successful Google OAuth exchange on the
+ * production server). The token lets the dev / preview server authenticate
+ * the request against the shared PostgreSQL session store.
+ */
+function getNativeAuthHeaders(): Record<string, string> {
+  try {
+    const sessionId = typeof localStorage !== "undefined"
+      ? localStorage.getItem("nativeSessionId")
+      : null;
+    if (sessionId) {
+      return { Authorization: `Bearer ${sessionId}` };
+    }
+  } catch {
+    // localStorage not available (e.g. SSR context)
+  }
+  return {};
+}
+
+/** Call on logout to remove the native Bearer token from storage. */
+export function clearNativeSession(): void {
+  try {
+    localStorage.removeItem("nativeSessionId");
+  } catch {
+    // ignore
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -49,9 +78,13 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const nativeHeaders = getNativeAuthHeaders();
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...nativeHeaders,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
     cache: "no-store",
@@ -70,6 +103,7 @@ export const getQueryFn: <T>(options: {
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
       cache: "no-store",
+      headers: getNativeAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

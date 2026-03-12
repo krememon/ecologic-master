@@ -1,0 +1,195 @@
+We need to immediately fix the mobile Google sign-in regression.
+
+Current problem
+
+On mobile, Google sign-in now says it completed, but then it kicks me out to Safari at:
+
+https://eco-logic-pjpell077.replit.app/
+
+That is wrong.
+
+What it should do
+
+After Google sign-in completes on mobile, it should:
+
+authenticate the user
+
+return them back into the EcoLogic app
+
+not dump them into Safari
+
+Important context
+
+Before these recent OAuth/domain changes, this kind of issue was not happening. So something in the new mobile auth redirect/finalization flow broke the native return path.
+
+The current behavior sounds like:
+
+auth completes on the web domain
+
+session gets created
+
+but instead of handing back to the native app / WebView correctly, it just opens/stays in Safari on the published URL
+
+That is the bug.
+
+Goal
+
+Restore the proper native mobile auth completion flow so that after selecting a Google account:
+
+auth completes successfully
+
+user ends up inside the EcoLogic mobile app
+
+Safari does not become the final destination
+
+What I need you to do
+Step 1 — Trace the exact mobile post-auth redirect flow
+
+Find the exact code path after Google auth succeeds on mobile.
+
+I want you to identify:
+
+where the mobile flow decides the final redirect target
+
+whether it is using:
+
+window.location.href
+
+a deep link
+
+Capacitor Browser close + app callback
+
+a custom scheme
+
+universal link
+
+polling + redirect logic
+
+what final URL is being used after session creation
+
+Do not guess.
+
+Step 2 — Find why it is ending in Safari
+
+The likely issue is one of these:
+
+post-auth redirect is hardcoded to the published web URL
+
+native flow is being treated like normal web flow at the final step
+
+the in-app browser / Safari browser is never being closed
+
+there is no handoff back to the app after auth completes
+
+deep-link return logic was removed or bypassed
+
+window.location.href = ${baseUrl}/ is correct for web session, but wrong for native completion
+
+Capacitor Browser is opening externally and never signaling the app to resume authenticated state
+
+Find the actual cause.
+
+Step 3 — Restore the correct native handoff
+
+For mobile/native Google auth, after successful auth:
+
+do not leave the user in Safari
+
+do not treat the final step like web-only navigation
+
+Instead, use the proper native completion flow for the app.
+
+That likely means some combination of:
+
+close the auth browser
+
+return control to the app
+
+let the app reload authenticated state
+
+navigate to the app home screen internally
+
+use the correct deep-link or Capacitor-native callback behavior if already supported
+
+Main point:
+mobile auth must return to the app, not stay on the web URL in Safari
+
+Step 4 — Preserve web behavior
+
+Do not break the fixed web Google login flow.
+
+We need:
+
+web → stay on published domain and complete normally
+
+mobile → authenticate and return to app
+
+If the final redirect logic needs to differ for web vs mobile, do that explicitly.
+
+Step 5 — Verify the real mobile flow
+
+Test the actual mobile sequence:
+
+tap Google sign-in in mobile app
+
+Google account chooser appears
+
+choose account
+
+auth succeeds
+
+user returns to EcoLogic app
+
+user is logged in
+
+not left on Safari web page
+
+Important constraints
+
+do not break email/password login
+
+do not break working web Google auth
+
+do not leave the user authenticated only in Safari
+
+do not use a fake workaround that just loads the website
+
+restore true app-native sign-in completion
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+exact mobile auth start path
+
+whether auth browser opens externally or in-app
+
+exact callback success path
+
+exact final redirect target after auth success
+
+whether browser close/deep-link/native handoff is attempted
+
+whether /api/auth/user succeeds after returning to app
+
+Deliverables
+
+Find the exact reason mobile Google auth is ending in Safari
+
+Fix the native post-auth return flow
+
+Make mobile Google sign-in finish back inside the EcoLogic app
+
+Preserve working web Google login
+
+After implementation, tell me:
+
+what exact file/function was wrongly sending mobile users to Safari
+
+what the old final redirect behavior was
+
+what the new native return behavior is
+
+whether mobile now returns to the app authenticated instead of opening/staying on Safari

@@ -189,6 +189,10 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
               const { resetPushRegistration } = await import("@/lib/capacitor");
               resetPushRegistration();
             } catch {}
+            try {
+              const { clearNativeSession } = await import("@/lib/queryClient");
+              clearNativeSession();
+            } catch {}
             sessionStorage.removeItem("coldStartRedirectDone");
             window.location.href = '/login';
           }}
