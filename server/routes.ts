@@ -7706,39 +7706,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found" });
       }
 
-      // All referrals sent by this company
+      // Step 1: All referrals sent by this company
       const refs = await db.select().from(jobReferrals)
         .where(eq(jobReferrals.senderCompanyId, company.id))
         .orderBy(desc(jobReferrals.createdAt));
-      if (refs.length === 0) return res.json([]);
-
+      if (refs.length === 0) {
+        console.log(`[subcontracted-jobs] customerId=${customerId} companyId=${company.id} no outgoing referrals`);
+        return res.json([]);
+      }
       const referredJobIds = refs.map(r => r.jobId).filter(Boolean) as number[];
 
-      // Find which referred jobs belong to this customer (check both company-owned and transferred)
-      const customerReferredJobs = await db.select().from(jobs)
-        .where(and(inArray(jobs.id, referredJobIds), eq(jobs.customerId, customerId)));
-      if (customerReferredJobs.length === 0) return res.json([]);
+      // Step 2: Use the INVOICE as the durable customer linkage.
+      // After job transfer, jobs.customerId may point to the receiver's customer (or be null).
+      // But the sender's invoice still has the original customerId intact.
+      const customerInvoices = await db.select({
+        id: invoices.id, jobId: invoices.jobId, status: invoices.status, totalCents: invoices.totalCents,
+      }).from(invoices).where(and(
+        eq(invoices.companyId, company.id),
+        eq(invoices.customerId, customerId),
+        inArray(invoices.jobId, referredJobIds),
+      ));
+      const customerJobIdSet = new Set(customerInvoices.map(inv => inv.jobId).filter(Boolean) as number[]);
+      const invoiceByJobId = new Map(customerInvoices.map(inv => [inv.jobId, inv]));
 
-      const customerReferredJobIdSet = new Set(customerReferredJobs.map(j => j.id));
-      const matchingRefs = refs.filter(r => r.jobId && customerReferredJobIdSet.has(r.jobId));
+      // Step 3: Also check jobs directly owned by this company for this customer (pre-transfer / pending referrals)
+      const ownedCustomerJobs = referredJobIds.length > 0
+        ? await db.select({ id: jobs.id, title: jobs.title, jobType: jobs.jobType, location: jobs.location, createdAt: jobs.createdAt, customerId: jobs.customerId, companyId: jobs.companyId })
+            .from(jobs)
+            .where(and(inArray(jobs.id, referredJobIds), eq(jobs.customerId, customerId)))
+        : [];
+      ownedCustomerJobs.forEach(j => customerJobIdSet.add(j.id));
 
-      // Receiver company names
+      // Step 4: For all matched jobIds, load full job info (may be at receiver's company)
+      const allMatchedJobIds = [...customerJobIdSet];
+      console.log(`[subcontracted-jobs] customerId=${customerId} companyId=${company.id} refs=${refs.length} matchedJobIds=${JSON.stringify(allMatchedJobIds)}`);
+      if (allMatchedJobIds.length === 0) return res.json([]);
+
+      const jobRows = await db.select({
+        id: jobs.id, title: jobs.title, jobType: jobs.jobType, location: jobs.location, createdAt: jobs.createdAt,
+      }).from(jobs).where(inArray(jobs.id, allMatchedJobIds));
+      const jobMap = new Map(jobRows.map(j => [j.id, j]));
+
+      const matchingRefs = refs.filter(r => r.jobId && customerJobIdSet.has(r.jobId));
+
+      // Step 5: Receiver company names
       const receiverIds = [...new Set(matchingRefs.map(r => r.receiverCompanyId).filter(Boolean))] as number[];
       const receiverComps = receiverIds.length > 0
         ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, receiverIds))
         : [];
       const receiverNameMap = new Map(receiverComps.map(c => [c.id, c.name]));
 
-      // Invoices for these jobs (sender-side, same companyId)
-      const jobInvoiceRows = await db.select({
-        id: invoices.id, jobId: invoices.jobId, status: invoices.status, totalCents: invoices.totalCents,
-      }).from(invoices).where(and(
-        eq(invoices.companyId, company.id),
-        inArray(invoices.jobId, [...customerReferredJobIdSet] as number[]),
-      ));
-      const invoiceByJobId = new Map(jobInvoiceRows.map(inv => [inv.jobId, inv]));
-
-      const jobMap = new Map(customerReferredJobs.map(j => [j.id, j]));
       const result = matchingRefs.map(ref => {
         const job = ref.jobId ? jobMap.get(ref.jobId) : null;
         const invoice = ref.jobId ? invoiceByJobId.get(ref.jobId) : null;
@@ -7766,7 +7783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           invoiceStatus: invoice?.status || null,
         };
       });
-
+      console.log(`[subcontracted-jobs] returning ${result.length} records for customerId=${customerId}`);
       res.json(result);
     } catch (error) {
       console.error("Error fetching customer subcontracted jobs:", error);

@@ -1,0 +1,207 @@
+The new Subcontracted tab is there, but it is not loading the actual subcontracted jobs for this client. It is showing:
+
+Subcontracted (0)
+
+No subcontracted jobs
+
+That is wrong. The subcontracted jobs for this client should be displayed.
+
+Goal
+
+Fix the client detail page Subcontracted tab so it correctly loads and displays the subcontracted/referred jobs tied to that client.
+
+Right now the UI shell exists, but the data is not being classified or returned correctly.
+
+Current problem
+
+For this client, I know there are subcontracted jobs tied to him, but the Subcontracted tab is empty.
+
+So one of these is happening:
+
+the backend client-detail query is not including subcontracted jobs
+
+subcontracted jobs are being filtered out incorrectly
+
+the classification logic is wrong
+
+the client linkage is broken after the subcontract/referral flow
+
+the tab is reading the wrong array
+
+the subcontracted jobs exist but are tied through referral/invoice instead of the old job query and never make it into client history
+
+What I need you to do
+Step 1 — Trace the real data path for this client page
+
+Find the exact client detail page data flow.
+
+I want you to identify:
+
+frontend file/component rendering the client detail tabs
+
+backend endpoint/query powering the client detail page
+
+how Jobs / Subcontracted / Estimates are being populated
+
+what field/query is supposed to determine whether a client job is subcontracted
+
+Do not guess.
+
+Step 2 — Find why the subcontracted jobs are not being returned
+
+Inspect the actual records for this client and trace why they are not appearing in the Subcontracted tab.
+
+Check:
+
+whether the client has jobs that were referred/subcontracted
+
+whether those jobs still have a usable client link
+
+whether the referral/subcontract record points back to the original client/customer correctly
+
+whether archived/paid subcontracted jobs are being excluded from the history query when they should still appear in the client’s subcontracted history
+
+whether the current query only looks at active jobs instead of historical subcontracted records
+
+This is important:
+The Subcontracted tab is a history tab, so it must not depend only on active jobs.
+
+Main requirement
+
+The Subcontracted tab should show subcontracted jobs for this client even if the active job was archived/cleaned up after payment, as long as that subcontracted history still belongs to the client.
+
+So if the normal active job row is gone, the client’s subcontracted history should still be derived from the durable source of truth such as:
+
+referral records
+
+linked invoice records
+
+payment history
+
+archived job records
+
+other preserved subcontract history
+
+Do not rely only on active job queries.
+
+What should count as a subcontracted client-history item
+
+A record should appear in the Subcontracted tab if it is tied to this client and was:
+
+referred out
+
+subcontracted
+
+part of the subcontract/referral workflow
+
+That can include:
+
+unpaid referred jobs
+
+accepted referred jobs
+
+paid/completed referred jobs
+
+archived subcontracted jobs that still belong in history
+
+What to display
+
+For each subcontracted job card in the Subcontracted tab, show real data such as:
+
+job title
+
+client/customer name
+
+subcontract/referral status
+
+created/sent date
+
+scheduled date if available
+
+amount/share if available
+
+payment state if available
+
+receiving contractor/company if available
+
+Only show real fields that exist.
+
+Count must also be correct
+
+The Subcontracted (0) count is currently wrong.
+
+After the fix:
+
+the tab count should reflect the actual number of subcontracted jobs for this client
+
+the list should match that count
+
+Navigation
+
+Make sure tapping a subcontracted card routes somewhere valid.
+
+Do not send it to a broken active job route if that job has been archived and causes Job not found.
+
+Use the correct safe destination for subcontracted history, such as:
+
+referred job summary
+
+invoice/payment detail
+
+referral detail
+
+or another valid read-only history page
+
+Important constraints
+
+do not break the normal Jobs tab
+
+do not break Estimates
+
+do not break Notes
+
+do not remove subcontracted jobs from history just because they are no longer active
+
+do not use fake/mock data
+
+do not guess classification from UI only
+
+use the real durable data model
+
+Debug requirements
+
+Use targeted logs only.
+
+Log:
+
+client ID
+
+subcontracted job count found by backend
+
+source table/query used
+
+IDs of subcontracted records returned
+
+why any expected subcontracted records were excluded
+
+Deliverables
+
+Fix the Subcontracted tab so this client’s subcontracted jobs actually appear
+
+Make the tab count accurate
+
+Ensure subcontracted client history survives active-job cleanup/archive
+
+Make subcontracted cards open a valid destination
+
+After implementation, tell me:
+
+what frontend file/component was updated
+
+what backend endpoint/query was updated
+
+what source of truth now powers subcontracted client history
+
+why the jobs were previously missing
+
+what count now appears for this client’s Subcontracted tab
