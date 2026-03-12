@@ -12388,7 +12388,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
 
       let canRecordManualPayment = false;
-      if (isSplitPayment) {
+      if (isSenderViewing) {
+        // Sender side of a referral: receiver collects payment, not sender
         canRecordManualPayment = false;
       } else if (['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR'].includes(userRole)) {
         canRecordManualPayment = true;
@@ -12396,6 +12397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const assignments = await storage.getUserJobAssignments(userId);
         canRecordManualPayment = assignments.some(a => a.jobId === invoice.jobId);
       }
+      console.log(`[pay-perms] invoiceId=${invoiceId} isSplitPayment=${isSplitPayment} isReferredIn=${isReferredIn} isSenderViewing=${isSenderViewing} role=${userRole} canRecordManualPayment=${canRecordManualPayment}`);
 
       const shareEnrichedPayments = isSplitPayment
         ? enrichedPayments.map((p: any) => ({

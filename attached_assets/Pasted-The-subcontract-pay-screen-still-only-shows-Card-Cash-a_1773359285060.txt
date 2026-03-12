@@ -1,0 +1,95 @@
+The subcontract pay screen still only shows Card. Cash and Check are NOT appearing on the actual subcontract/referral checkout screen in native build.
+
+What you said was implemented is not showing up in the real UI, so we need to debug the actual render path and fix the real screen, not just a similar invoice screen.
+
+PROBLEM
+On the subcontract/referral invoice checkout screen, I still only see:
+- Card
+
+I do NOT see:
+- Cash
+- Check
+
+IMPORTANT
+Do not assume the correct component was edited.
+This likely means one of these happened:
+- the wrong screen/component was updated
+- the subcontract checkout uses a different render path than normal invoices
+- a condition is still filtering methods down to card only
+- native build is hitting a different component/branch than web
+- method options are being overridden later in the flow
+
+GOAL
+Find the ACTUAL subcontract/referral checkout render path and make Cash + Check visibly appear there.
+
+INVESTIGATION TASKS
+
+1) TRACE THE EXACT SCREEN USED BY THIS FLOW
+Find the exact component and route used for:
+- subcontract/referral invoice checkout
+- the screen shown in the screenshot with:
+  - Invoice #INV-REF...
+  - Checkout
+  - Partial Payment
+  - Discount
+  - Add Note
+  - Select payment method
+  - only Card tile visible
+
+Do not assume this is the same as the standard invoice detail/payment component.
+Trace from route entry to final payment method render.
+
+2) IDENTIFY WHY ONLY CARD IS SHOWING
+Inspect all filtering/conditions affecting payment method options, especially anything involving:
+- referral
+- subcontract
+- cross-company
+- INV-REF invoices
+- native/mobile
+- card-only
+- Stripe-only
+- manual payment restrictions
+- paymentMethods arrays / allowedMethods / visibleMethods
+
+Look for logic that overrides the UI after the 3-button array is created.
+
+3) FIX THE ACTUAL RENDER PATH
+Update the REAL subcontract/referral checkout component so it displays:
+- Cash
+- Check
+- Card
+
+Match the regular invoice style.
+
+4) VERIFY NATIVE BUILD PATH
+Since this is being tested in native build, confirm the native flow is using the updated component and not an old branch/component.
+If there are duplicated screens for:
+- web
+- native
+- modal vs full-screen
+fix the one actually used by native subcontract checkout.
+
+5) ADD TARGETED LOGS
+Add concise logs for:
+- component name rendering subcontract checkout
+- invoice type / referral flag / subcontract flag
+- payment methods resolved before render
+- any filter that removes cash/check
+- final visible method list
+
+DELIVERABLES
+Return:
+1. exact component/file that the subcontract checkout actually uses
+2. root cause of why only Card is still showing
+3. exact files changed
+4. confirmation that Cash/Check/Card now visibly appear on the real subcontract checkout screen
+5. brief note whether this issue was wrong component vs filtering logic vs native-specific branch
+
+SUCCESS CRITERIA
+- On the real subcontract/referral checkout screen, I visibly see:
+  - Cash
+  - Check
+  - Card
+- not just in code, but on the actual screen path being used
+- card flow still works
+- cash/check remain wired to manual payment logic

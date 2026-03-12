@@ -137,6 +137,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     enabled: !isNaN(numericInvoiceId),
   });
   const canRecordManual = paymentPermissions?.canRecordManualPayment ?? false;
+  console.log(`[PaymentReview] invoiceId=${numericInvoiceId} canRecordManual=${canRecordManual} permissionsLoaded=${paymentPermissions !== undefined}`);
 
   const { data: lineItems = [], isLoading: lineItemsLoading } = useQuery<LineItem[]>({
     queryKey: ['/api/jobs', numericJobId, 'line-items'],
