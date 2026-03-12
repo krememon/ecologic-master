@@ -1,0 +1,164 @@
+Small correction — the sender-side Payments page is now correct for this pre-payment referred job.
+
+What is already correct
+
+On the sender side (pjpell077) for this referred/subcontracted job:
+
+Payments page
+
+showing $2,000.00 owed is correct
+
+keep that as-is
+
+Do not change the sender-side Payments card/header logic from the current correct behavior for this task.
+
+What still needs to be fixed
+
+The remaining issue is on the sender-side Invoice page/card display.
+
+Current wrong behavior
+
+On the sender-side invoice card, it is showing:
+
+total amount: $2,000.00
+
+owed amount: $2,000.00 owed
+
+What it should show instead
+
+For the sender-side referred invoice, I want it to display:
+
+total amount line: $4,000.00
+
+owed amount line: $2,000.00 owed
+
+So to be crystal clear:
+
+Desired sender-side invoice display
+
+invoice total shown on the card = full job/invoice amount
+
+owed text shown on the card = sender/company share still owed
+
+Using this test case, the sender invoice card should read:
+
+$4,000.00 as the invoice amount
+
+$2,000.00 owed as the owed text
+
+Meaning
+
+I want the sender-side invoice card to communicate both:
+
+the full job/invoice value
+
+the sender’s actual owed/share amount
+
+So unlike the Payments page, where the sender row is correctly emphasizing only the sender-side owed amount, the Invoices page should show:
+
+the full invoice amount on the main amount line
+
+but still keep the sender-side owed/share text underneath
+
+Scope for this task only
+
+Fix only the sender-side Invoices page/card display for referred jobs before payment.
+
+Do not change:
+
+Payments page logic
+
+receiver-side logic
+
+post-payment logic
+
+job cleanup
+
+payment history
+
+paid status behavior
+
+unrelated invoice screens unless needed for this exact display fix
+
+What I need you to do
+1) Trace sender-side invoice card amount logic
+
+Find the exact field/logic currently used for the main amount line on the sender-side invoice card.
+
+Right now it is using the sender share amount ($2,000) as the main displayed invoice amount.
+
+For this invoice card, I want the main amount line to instead use the full invoice/job total ($4,000).
+
+2) Keep sender-side owed text logic correct
+
+The orange owed text should continue to show the sender-side owed/share amount:
+
+$2,000.00 owed
+
+So the card needs two separate values:
+
+main amount line = full total
+
+owed text = sender share owed
+
+3) Use real source-of-truth fields
+
+Do not hardcode this.
+
+Use the actual stored fields such as the real:
+
+full job total / invoice total
+
+company share amount
+
+outstanding owed/share amount
+
+The key is simply:
+
+main invoice amount display = full total
+
+owed text display = sender share owed
+
+Expected result for this exact test case
+
+On the sender-side invoice card for James Doherty, I should see:
+
+$4,000.00 on the main amount line
+
+$2,000.00 owed underneath
+
+Debug requirements
+
+Use only targeted logs if needed.
+
+Please log:
+
+sender company ID
+
+invoice ID
+
+full invoice/job total field value
+
+sender company share field value
+
+final displayed main amount
+
+final displayed owed amount
+
+Deliverables
+
+Keep sender-side Payments page unchanged
+
+Fix sender-side referred invoice card so the main amount shows the full total
+
+Keep sender-side owed text showing only the sender share owed
+
+After implementation, tell me:
+
+what field powers the main invoice amount display
+
+what field powers the owed text display
+
+what file/component was changed
+
+confirmation that the sender pre-payment invoice now shows $4,000 total and $2,000 owed

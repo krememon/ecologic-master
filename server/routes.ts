@@ -12254,14 +12254,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const senderShareCents = ref.companyShareAmountCents || 0;
           const isCompleted = ref.status === 'completed';
+          const fullTotalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
           inv.referralFeeCents = senderShareCents;
           inv.isReferredOut = true;
-          // Override display amounts: sender sees their share, not the full job total
-          inv.totalCents = senderShareCents;
+          // Keep totalCents as the full job/invoice amount so the main amount line shows $4,000.
+          // Only override balanceDueCents to reflect the sender's share owed ($2,000).
+          inv.totalCents = fullTotalCents;
           inv.balanceDueCents = isCompleted ? 0 : senderShareCents;
           inv.paidAmountCents = isCompleted ? senderShareCents : 0;
           inv.computedStatus = isCompleted ? 'referred_paid' : 'referred';
-          console.log(`[invoices-referral] invoiceId=${inv.id} jobId=${inv.jobId} senderShare=${senderShareCents} isCompleted=${isCompleted} → computedStatus=${inv.computedStatus} balanceDue=${inv.balanceDueCents}`);
+          console.log(`[invoices-referral] companyId=${company.id} invoiceId=${inv.id} fullTotal=${fullTotalCents} senderShare=${senderShareCents} isCompleted=${isCompleted} → displayTotal=${inv.totalCents} displayOwed=${inv.balanceDueCents}`);
         }
       } catch (refErr: any) {
         console.error('[invoices-referral] Failed to enrich with referral data:', refErr?.message);
