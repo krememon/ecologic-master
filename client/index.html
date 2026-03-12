@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background-color:#F8FAFC">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -13,9 +13,25 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
+    <style>
+      html, body, #root { background-color: #F8FAFC; min-height: 100vh; }
+      html.dark, html.dark body, html.dark #root { background-color: #0F172A; }
+    </style>
+    <script>
+      (function(){
+        try {
+          var t = localStorage.getItem('ui-theme');
+          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.backgroundColor = '#0F172A';
+            document.body && (document.body.style.backgroundColor = '#0F172A');
+          }
+        } catch(e){}
+      })();
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="background-color:#F8FAFC">
+    <div id="root" style="background-color:#F8FAFC;min-height:100vh"></div>
     <script type="module" src="/src/main.tsx"></script>
 
     <script>

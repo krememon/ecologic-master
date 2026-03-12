@@ -1,0 +1,176 @@
+FULL FIX — ELIMINATE ALL BLACK LOADING SCREENS / BLACK FLASHES IN ECOLOGIC
+
+Issue:
+EcoLogic is still showing black screens / black flashes during app launch, page load, route transitions, and when opening certain screens. I want this fully fixed so the app NEVER shows black at any point.
+
+Goal:
+Make EcoLogic always display one of the following instead of black:
+
+the app’s actual background color
+
+a branded loading state
+
+skeleton loaders
+
+the previous screen until the next screen is ready
+
+The app should feel polished, smooth, and native on iPhone. No black frames. No black blank screens. No black flashes.
+
+What I need you to do:
+
+Audit every possible source of black rendering
+Check all of these:
+
+html, body, #root
+
+top-level app shell / layout
+
+router containers
+
+all major pages/screens
+
+tab containers
+
+stacked navigation screens
+
+modals / drawers / sheets / full-screen overlays
+
+suspense / lazy-loaded routes
+
+auth loading screens
+
+dashboard/home initial loads
+
+job details modal/pages
+
+documents pages/previews
+
+messages/inbox/chat screens
+
+settings/profile/account pages
+
+any empty state that currently returns null
+
+native wrapper / webview background settings
+
+Set a single global background source of truth
+Create one shared app background token/color and apply it everywhere relevant so nothing ever falls through to black.
+
+Must explicitly style:
+
+html
+
+body
+
+#root
+
+main app wrapper
+
+page container
+
+modal container
+
+loading container
+
+router/suspense fallback container
+
+Remove transparent / unstyled render paths
+Find every place where a component:
+
+returns null
+
+returns an empty fragment during load
+
+renders before data/styles are ready
+
+uses transparent background and exposes black underneath
+
+Replace those with proper styled loading states or page shells.
+
+Fix all loading states
+For every major screen:
+
+do NOT show black while data is loading
+
+keep page chrome/background visible
+
+use skeletons/spinners inside the actual page layout
+
+if needed, keep previous content mounted until new content is ready
+
+Important:
+The user should never see a black blank screen just because data is still fetching.
+
+Fix Suspense / lazy route fallbacks
+Any React.lazy, Suspense, code-split route, or deferred component must use a fully styled fallback with the EcoLogic background. No empty fallback, no black frame, no generic blank container.
+
+Fix modal / sheet / overlay behavior
+Check all dialogs, bottom sheets, drawers, preview modals, and full-screen overlays.
+Requirements:
+
+explicit surface background
+
+correct backdrop color
+
+no black base layer unless intentionally dimmed
+
+no transition frame exposing black underneath
+
+Fix native wrapper / webview black background
+For the iOS/native wrapper, inspect config and container settings so the webview/safe-area/root view background matches EcoLogic’s app background and never black during load or transition.
+
+Fix app startup / hydration / auth restore
+At startup or session restore:
+
+never show a black screen before auth/user data finishes loading
+
+show branded splash/loading shell with correct background
+
+preserve safe-area styling
+
+avoid flicker between splash/auth/app states
+
+Make every screen background explicit
+Every main screen/page should have:
+
+full-height layout
+
+explicit background color
+
+no transparent base layer
+
+safe-area compatible styling
+
+Add targeted logging only where useful
+Add very minimal logs to identify any remaining screen/render path that still tries to render empty/unstyled during transition. Do not spam logs.
+
+Deliverables:
+
+Fix the issue completely across web + native wrapper
+
+List the exact files changed
+
+Explain the exact root causes found
+
+Confirm what was causing the black screens
+
+Confirm what fallbacks/loading states were added or changed
+
+Confirm any native/webview background fixes applied
+
+Important constraints:
+
+Do NOT change the EcoLogic visual design unnecessarily
+
+Do NOT break navigation, auth, RBAC, or business logic
+
+Do NOT create duplicate loaders everywhere unless needed
+
+Keep the app feeling fast and premium
+
+Prefer smooth skeleton/page-shell loading over full-screen blocking spinners
+
+No black at any point, ever
+
+Success condition:
+I can launch the app, log in, navigate around, open screens/modals, and load content without ever seeing a black screen or black flash.
