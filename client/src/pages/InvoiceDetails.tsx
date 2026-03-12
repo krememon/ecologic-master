@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check, Banknote } from "lucide-react";
 import StripePaymentForm from "@/components/StripePaymentForm";
 import { format } from "date-fns";
 
@@ -128,6 +128,9 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
   const [partialEnabled, setPartialEnabled] = useState(false);
   const [partialAmountStr, setPartialAmountStr] = useState("");
+  const [selectedMethod, setSelectedMethod] = useState<'cash' | 'check' | 'card'>('card');
+  const [checkNumber, setCheckNumber] = useState('');
+  const [isManualPaymentLoading, setIsManualPaymentLoading] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [sendMode, setSendMode] = useState<'email' | 'text'>('email');
   const [emailValue, setEmailValue] = useState('');
@@ -217,6 +220,48 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     setShowCardForm(false);
     setStripeClientSecret(null);
     setStripePublishableKey(null);
+  };
+
+  const handleManualPayment = async () => {
+    if (isManualPaymentLoading || (partialEnabled && !isPartialValid)) return;
+    setIsManualPaymentLoading(true);
+    try {
+      const body: any = {
+        invoiceId: parseInt(invoiceId),
+        method: selectedMethod,
+      };
+      if (selectedMethod === 'check' && checkNumber.trim()) {
+        body.checkNumber = checkNumber.trim();
+      }
+      if (partialEnabled && partialAmountCents > 0) {
+        body.amountCents = paymentAmountCents;
+      }
+      const res = await apiRequest('POST', '/api/payments/manual', body);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to record payment');
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      toast({ title: "Payment recorded!" });
+      setPartialEnabled(false);
+      setPartialAmountStr('');
+      setCheckNumber('');
+    } catch (err: any) {
+      toast({ title: err.message || 'Payment failed', variant: 'destructive' });
+    } finally {
+      setIsManualPaymentLoading(false);
+    }
+  };
+
+  const handlePay = async () => {
+    if (selectedMethod === 'card') {
+      await handlePayWithCard();
+    } else {
+      await handleManualPayment();
+    }
   };
 
   const formatPhoneNumber = (value: string): string => {
@@ -440,9 +485,45 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </div>
       )}
 
-      {/* Partial Payment Toggle + Pay Button */}
+      {/* Payment Method Selector + Pay Button */}
       {canPay && invoice.totalCents > 0 && !showCardForm && (
         <div className="space-y-3 mb-2">
+          {/* Method selector */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: 'cash' as const, label: 'Cash', icon: Banknote },
+              { key: 'check' as const, label: 'Check', icon: FileText },
+              { key: 'card' as const, label: 'Card', icon: CreditCard },
+            ]).map((m) => {
+              const Icon = m.icon;
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => { setSelectedMethod(m.key); setShowCardForm(false); }}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                    selectedMethod === m.key
+                      ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Check number input */}
+          {selectedMethod === 'check' && (
+            <Input
+              placeholder="Check # (optional)"
+              value={checkNumber}
+              onChange={(e) => setCheckNumber(e.target.value)}
+              className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+            />
+          )}
+
+          {/* Partial payment toggle */}
           {balanceRemainingCents > 0 && (
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Partial Payment</Label>
@@ -481,16 +562,22 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
             </div>
           )}
           <Button
-            onClick={handlePayWithCard}
-            disabled={isCheckoutLoading || (partialEnabled && !isPartialValid)}
+            onClick={handlePay}
+            disabled={isCheckoutLoading || isManualPaymentLoading || (partialEnabled && !isPartialValid)}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isCheckoutLoading ? (
+            {(isCheckoutLoading || isManualPaymentLoading) ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : selectedMethod === 'cash' ? (
+              <Banknote className="h-4 w-4 mr-2" />
+            ) : selectedMethod === 'check' ? (
+              <FileText className="h-4 w-4 mr-2" />
             ) : (
               <CreditCard className="h-4 w-4 mr-2" />
             )}
-            {isCheckoutLoading ? 'Processing...' : `Pay ${formatCurrency(paymentAmountCents)}`}
+            {(isCheckoutLoading || isManualPaymentLoading)
+              ? 'Processing...'
+              : `Pay ${formatCurrency(paymentAmountCents)}`}
           </Button>
         </div>
       )}

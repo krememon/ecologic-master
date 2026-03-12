@@ -1,0 +1,117 @@
+We need to fix subcontract invoice checkout so Cash and Check show up in the pay screen the same way they do on normal invoices.
+
+GOAL
+For subcontract/referral invoice checkout, the client should be able to choose:
+- Cash
+- Check
+- Card
+
+Right now only Card is showing on the subcontract pay screen. We need Cash and Check added back.
+
+EXPECTED BEHAVIOR
+Subcontract payment methods should function the same as normal invoice payments:
+
+1. CARD
+- keep current Stripe flow as is
+
+2. CASH
+- when selected and confirmed, payment is immediately marked successful
+- record payment in Payments / invoice tab
+- record payment in client payment history
+- update invoice paid state/balance exactly like normal cash payments
+- if subcontract payout/referral status logic depends on successful payment, it should treat successful cash payment the same way the system already does elsewhere
+
+3. CHECK
+- same behavior as cash unless there is already existing check-specific logic
+- when selected and confirmed, payment is immediately marked successful
+- record it in Payments / invoice tab
+- record it in client history
+- update invoice paid state/balance exactly like normal check payments
+- preserve any existing check number / note support if already built elsewhere
+
+IMPORTANT
+- Do NOT change how standard non-subcontract invoice payments already work
+- Do NOT break the current subcontract card flow
+- Reuse the same backend/service logic used by the regular invoice checkout for cash and check wherever possible
+- Keep UI consistent with the normal pay screen
+- Make sure this works on native mobile and web
+- If there is any payment-method filtering specific to subcontract invoices, update it so cash/check are included
+
+WHAT TO INVESTIGATE
+Find why subcontract/referral checkout only renders Card.
+Check:
+- payment method options builder
+- invoice/referral checkout modal/screen
+- any `isSubcontract`, `isReferral`, `cross-company`, or `subcontract` conditions
+- backend endpoints allowed methods
+- any front-end filtering that hides cash/check for subcontract invoices
+- any business logic that blocks manual payment types for subcontract invoices
+
+IMPLEMENTATION REQUIREMENTS
+
+FRONTEND
+- show 3 tiles/buttons for subcontract pay screen:
+  - Cash
+  - Check
+  - Card
+- match the regular invoice payment UI styling
+- preserve selected state behavior and submit flow
+- if the normal invoice screen uses reusable components, reuse them here instead of duplicating
+
+BACKEND
+- ensure subcontract invoices can be recorded as successful manual payments for:
+  - cash
+  - check
+- payment records must store correct method/type
+- invoice totals/balances/statuses must update correctly
+- payment must appear in:
+  - Payments / invoice tab
+  - client history
+- any downstream successful-payment logic for subcontract jobs/referrals should execute the same as other successful manual payments where appropriate
+
+DATA / RECORDING
+For both cash and check:
+- record amount paid
+- record payment method
+- record timestamp
+- record invoice/job/client linkage exactly like normal payments
+- keep notes/memo/check number support if already present in existing flow
+
+VERIFY SUBCONTRACT LOGIC
+For a subcontract invoice paid by cash or check:
+- invoice should show paid correctly
+- payment should show under payments
+- client history should show payment
+- any referral/subcontract payment status that depends on “successful payment” should update correctly
+- no Stripe-only assumptions should block manual payment success
+
+ADD TARGETED LOGS
+Add concise logs only where useful:
+- payment methods resolved for subcontract checkout
+- selected method submitted
+- manual subcontract payment recorded
+- invoice/payment status updated
+- referral/subcontract success logic triggered or skipped
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of why cash/check were missing on subcontract pay screen
+3. what was changed in frontend
+4. what was changed in backend
+5. confirmation that cash/check now record successfully in:
+   - payments / invoice tab
+   - client history
+6. short test plan for:
+   - subcontract cash payment
+   - subcontract check payment
+   - subcontract card payment regression
+
+SUCCESS CRITERIA
+- subcontract checkout shows Cash, Check, and Card
+- cash/check payments can be completed immediately and are recorded as successful
+- payments appear in Payments / invoice tab and client history
+- invoice status/balance updates correctly
+- existing subcontract card flow still works

@@ -14614,6 +14614,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await recomputeJobPaymentAndMaybeArchive(invoice.jobId, 'manual-payment');
       }
 
+      // Subcontract payout for referral jobs (cash/check — no Stripe chargeId, draws from platform balance)
+      if (invoice.jobId) {
+        stripeConnectService.executeSubcontractPayout({
+          jobId: invoice.jobId,
+          invoiceId: invoice.id,
+          paymentId: payment.id,
+          paymentIntentId: null,
+          paymentAmountCents: amountCents,
+          ownerCompanyId: company.id,
+          source: `manual-${paymentMethodValue.toLowerCase()}`,
+          chargeId: null,
+        }).then(result => {
+          if (result) {
+            console.log(`[manual-pay] subcontract payout status=${result.status} auditId=${result.auditId}`);
+          }
+        }).catch(err => console.error('[manual-pay] subcontract payout error:', err?.message));
+      }
+
       console.log(`[Payment] Manual ${paymentMethodValue} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
 
       // Sync payment to QuickBooks (non-blocking)
