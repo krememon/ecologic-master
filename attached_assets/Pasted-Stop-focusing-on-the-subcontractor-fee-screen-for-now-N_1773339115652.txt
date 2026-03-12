@@ -1,0 +1,192 @@
+Stop focusing on the subcontractor-fee screen for now.
+
+New priority: Google login is broken.
+
+Current problem
+
+When trying to use Google login, I get a 403 error page from Google that says:
+
+403. That’s an error.
+
+We’re sorry, but you do not have access to this page.
+
+So the Google OAuth flow is not configured correctly.
+
+Goal
+
+Fix the actual Google sign-in flow so users can log in with Google successfully in the real app.
+
+This is now the priority.
+
+What I need you to do
+Step 1 — Trace the exact Google auth flow
+
+Find the exact code path for Google login in this app.
+
+I want you to identify:
+
+frontend button/component that starts Google login
+
+the route/URL it opens
+
+backend OAuth handler/callback
+
+where the Google client ID / redirect URI is configured
+
+whether this is using Firebase, Passport, Supabase, custom OAuth, etc.
+
+Do not guess.
+
+Step 2 — Find the actual cause of the 403
+
+A Google 403 in OAuth usually means something is wrong with one of these:
+
+redirect URI mismatch
+
+wrong OAuth client ID
+
+app domain not authorized
+
+callback URL not whitelisted in Google Cloud Console
+
+using the wrong environment variables
+
+using preview URL / temporary URL that Google does not allow
+
+testing with a client that is not published/authorized
+
+origin mismatch between web/native/preview flow
+
+I need you to find the exact root cause in this app.
+
+Important clue
+
+This is happening inside the Replit/preview environment, so check whether:
+
+the current preview domain is different from the authorized redirect URI
+
+the app is trying to use a temporary or wrong domain
+
+Google OAuth is configured for one URL but the app is opening another
+
+Step 3 — Verify OAuth configuration
+
+Inspect all relevant Google auth config, including:
+
+Google client ID
+
+Google client secret if applicable
+
+authorized JavaScript origins
+
+authorized redirect URIs
+
+frontend redirect URL builder
+
+backend callback route
+
+environment variables used in development vs production
+
+any native/deep-link redirect handling if relevant
+
+I want the actual values/paths traced, not assumptions.
+
+Step 4 — Fix the login flow so it works
+
+Fix the real problem so Google login succeeds.
+
+Examples of acceptable fixes:
+
+correct redirect URI
+
+correct origin
+
+use the right environment variable
+
+route the flow through the proper stable domain
+
+update callback handling
+
+stop using an invalid preview URL for Google login
+
+properly distinguish dev vs prod OAuth config
+
+But do not guess. Find the real reason and fix it.
+
+Step 5 — Verify end-to-end
+
+After fixing, test the real login flow and verify:
+
+click Google sign in
+
+Google consent/account selection opens correctly
+
+callback returns to the app correctly
+
+session/login completes
+
+no 403 page
+
+Important constraints
+
+do not break existing email/password login
+
+do not break production auth config
+
+do not hardcode a temporary workaround unless absolutely necessary
+
+do not leave the app dependent on a random preview URL that changes
+
+if this needs a stable domain/callback strategy, set it up correctly
+
+If the issue is that Google OAuth cannot work on the current preview URL
+
+Then I want you to fix the architecture properly.
+
+For example:
+
+use the stable app domain / published Replit domain / correct callback domain
+
+ensure the login button points to the correct OAuth entrypoint
+
+make dev and prod callback URLs explicit and environment-aware
+
+Do not leave this as “Google just doesn’t work in preview.”
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+exact auth start URL
+
+exact callback URL expected
+
+exact redirect URI being sent to Google
+
+exact environment variable values used for auth URLs (redact secrets as needed)
+
+exact reason for the 403 once identified
+
+Deliverables
+
+Find the real root cause of the Google OAuth 403
+
+Fix the Google login flow so it works end-to-end
+
+Make the callback/origin configuration correct for the real app environment
+
+Verify successful Google login after the fix
+
+After implementation, tell me:
+
+what exact file/component starts the Google login flow
+
+what exact backend route handles the callback
+
+what the root cause of the 403 was
+
+what URLs/origins/redirect URIs were corrected
+
+confirmation that Google sign-in now works without the 403 page
