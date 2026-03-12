@@ -115,10 +115,15 @@ export default function PaymentsPage() {
     let list = ledgerItems;
     if (activeTab !== "all") {
       list = list.filter((item) => {
+        const st = item.computedStatus;
         if (activeTab === "paid") {
-          return item.computedStatus === "paid" || item.computedStatus === "refunded" || item.computedStatus === "partially_refunded" || item.computedStatus === "referred" || item.computedStatus === "referred_paid";
+          return st === "paid" || st === "refunded" || st === "partially_refunded" || st === "referred_paid"
+            || (st === "paid" && !!item.isReferredIn);
         }
-        return item.computedStatus === activeTab;
+        if (activeTab === "unpaid") {
+          return st === "unpaid" || st === "referred";
+        }
+        return st === activeTab;
       });
     }
     if (searchTerm.trim()) {
@@ -320,7 +325,10 @@ export default function PaymentsPage() {
             const isReferredOut = status === "referred" || status === "referred_paid";
             const isReferredIn = !!item.isReferredIn;
             const isAnyReferred = isReferredOut || isReferredIn;
-            const isOwed = !isReferredOut && (status === "unpaid" || status === "partial");
+            const isReferredInPaid = isReferredIn && status === "paid";
+            const isReferredOutPaid = status === "referred_paid";
+            const isReferredPaid = isReferredInPaid || isReferredOutPaid;
+            const isOwed = !isReferredOut && !isReferredInPaid && (status === "unpaid" || status === "partial");
             const hasRefunds = (item.refundedCents || 0) > 0;
 
             let displayAmount: number;
@@ -329,8 +337,17 @@ export default function PaymentsPage() {
 
             if (isReferredOut) {
               displayAmount = item.referralFeeCents || 0;
+              if (status === "referred") {
+                amountSuffix = " owed";
+                amountColor = "text-orange-500 dark:text-orange-400";
+              } else {
+                amountSuffix = "";
+                amountColor = "text-green-600 dark:text-green-400";
+              }
+            } else if (isReferredInPaid) {
+              displayAmount = item.totalCents;
               amountSuffix = "";
-              amountColor = "text-blue-600 dark:text-blue-400";
+              amountColor = "text-green-600 dark:text-green-400";
             } else if (isOwed) {
               displayAmount = item.balanceDueCents;
               amountSuffix = " owed";
@@ -340,13 +357,17 @@ export default function PaymentsPage() {
               amountColor = status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100";
             } else {
               displayAmount = item.totalCents;
-              amountColor = "text-slate-900 dark:text-slate-100";
+              amountColor = status === "paid" ? "text-green-600 dark:text-green-400" : "text-slate-900 dark:text-slate-100";
             }
 
-            const displayBadgeStatus = isReferredIn ? "referred" : status;
+            const displayBadgeStatus =
+              isReferredPaid ? "paid" :
+              isReferredIn ? "referred" :
+              status;
 
             let subtitle: string;
-            if (isAnyReferred) subtitle = `Referred · ${dateStr}`;
+            if (isReferredPaid) subtitle = `Paid · ${dateStr}`;
+            else if (isAnyReferred) subtitle = `Referred · ${dateStr}`;
             else if (status === "paid") subtitle = `Paid · ${dateStr}`;
             else if (status === "partial") subtitle = `Partial · ${dateStr}`;
             else if (status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;

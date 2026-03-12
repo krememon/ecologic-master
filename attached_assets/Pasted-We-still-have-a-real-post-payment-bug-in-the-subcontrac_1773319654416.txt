@@ -1,0 +1,265 @@
+We still have a real post-payment bug in the subcontract/referral flow, and I want you to debug this exact scenario instead of making broad assumptions.
+
+Real test scenario
+
+I tested again by sending a subcontracted job from:
+
+pjpell077
+to
+
+ppellegrino@ecologicc
+
+The flow itself worked fine:
+
+job was sent
+
+receiver accepted it
+
+payment was made
+
+invoice tab updated
+
+Current bug after payment
+
+After payment, I noticed:
+
+On the receiver/subcontractor side
+
+it is still not recording in Payments
+
+but it is recording in the Invoices tab
+
+So the invoice/history side is partially working, but the Payments page is still missing the paid subcontracted job.
+
+Also another bad issue happened
+
+A previous Krystal Mathers job randomly popped back up in Jobs on the ppellegrino@ecologicc side.
+
+That seems wrong and suggests there may be:
+
+bad filtering
+
+stale query logic
+
+old referred jobs being re-inserted/re-surfaced
+
+cleanup/history logic causing old job records to reappear incorrectly
+
+Main goals
+
+I need you to fix both issues:
+
+1. Paid subcontracted jobs must appear in Payments
+
+If the subcontracted/referral job was successfully paid, it should show in the Payments page, not just Invoices.
+
+2. Old unrelated jobs should not randomly reappear in Jobs
+
+A previously handled Krystal Mathers job should not suddenly pop back into active Jobs after a different payment flow.
+
+What I need you to do
+Step 1 — Trace the exact post-payment flow
+
+Debug the exact flow for a subcontracted job after payment succeeds.
+
+I want you to trace:
+
+payment success handler
+
+invoice creation/update
+
+payment record creation/update
+
+subcontract/referral history creation/update
+
+active job cleanup
+
+any receiver-side mirrored/synthetic records
+
+any job list refresh/reload queries
+
+Do not guess. Follow the real code path.
+
+Step 2 — Fix why it appears in Invoices but not Payments
+
+This is the clearest bug right now.
+
+If the paid subcontracted job shows in Invoices but not Payments, then one of these is probably happening:
+
+invoice record exists but no payment-history/payment-summary record is being created
+
+Payments query is filtering out subcontract/referral records
+
+Payments page only shows one company-owned payment type and ignores referred/subcontracted ones
+
+payment record exists but is not linked to the receiver company correctly
+
+invoice and payment tables are using different ownership/company mappings
+
+paid subcontract rows are excluded by status/type filters
+
+I need you to find the actual reason.
+
+Specifically inspect:
+
+frontend Payments page query/component
+
+backend endpoint powering Payments page
+
+filters for payment type/status/company ownership
+
+how referred/subcontracted paid items are supposed to show there
+
+whether the receiver-side record is missing or just excluded
+
+Step 3 — Fix the random Krystal Mathers job reappearing
+
+This is a second serious bug.
+
+A previously handled Krystal Mathers job randomly popped back up in Jobs on ppellegrino@ecologicc.
+
+I need you to trace why that happened.
+
+Possible causes:
+
+cleanup logic restoring old job records
+
+incorrect refetch after payment
+
+receiver jobs query pulling stale referred jobs
+
+archived/paid jobs not properly excluded
+
+duplicate job linkage or fallback query
+
+a bad join/filter on subcontracted jobs
+
+Find the actual source.
+
+What needs to be true
+
+paid/completed subcontracted jobs should not reappear in active Jobs
+
+old unrelated jobs should not reappear after a separate payment flow
+
+active Jobs query should only show truly active jobs
+
+Step 4 — Verify sender vs receiver record behavior
+
+After a subcontracted job is paid:
+
+Sender side should keep:
+
+invoice history
+
+payment history
+
+any correct client/referral history
+
+Receiver side should keep:
+
+invoice history
+
+payment history
+
+correct subcontract/referral financial history
+
+Neither side should:
+
+lose the payment record
+
+have old jobs randomly return to active jobs
+
+Step 5 — Use the real source of truth
+
+Please inspect the actual records involved in this specific test.
+
+Check the relationships among:
+
+sender company
+
+receiver company
+
+job
+
+referral
+
+invoice
+
+payment record
+
+any subcontract payout/audit/history records
+
+I want you to identify exactly:
+
+what record exists in Invoices
+
+what matching record is missing from Payments
+
+what query/filter prevented it from displaying
+
+what record caused the Krystal Mathers job to reappear
+
+Debug requirements
+
+Use targeted logs only.
+
+Log these checkpoints:
+
+payment success handler entered
+
+invoice record IDs created/updated
+
+payment record IDs created/updated
+
+sender company ID used
+
+receiver company ID used
+
+Payments query result count for receiver
+
+reason subcontracted paid record was excluded from Payments if applicable
+
+Jobs query result count for receiver
+
+why the Krystal Mathers record was returned to active Jobs
+
+Important constraints
+
+do not break the successful payment flow
+
+do not break invoice history
+
+do not break active job cleanup
+
+do not duplicate records
+
+do not invent fake payment history rows
+
+do not change unrelated payment logic unless needed
+
+do not leave subcontracted paid jobs visible in Invoices but invisible in Payments
+
+Deliverables
+
+Find why paid subcontracted jobs show in Invoices but not Payments
+
+Fix the Payments data path so paid subcontracted jobs appear correctly
+
+Find why the old Krystal Mathers job reappeared in active Jobs
+
+Fix the active Jobs filtering/lifecycle so old jobs do not randomly come back
+
+Verify the exact pjpell077 -> ppellegrino@ecologicc flow after the fix
+
+After implementation, tell me:
+
+why the paid subcontracted job was missing from Payments
+
+whether the issue was missing record creation or bad query filtering
+
+what caused the Krystal Mathers job to reappear
+
+what backend/frontend files were changed
+
+confirmation that after payment the job now shows in Payments, stays in Invoices, and does not reappear in active Jobs
