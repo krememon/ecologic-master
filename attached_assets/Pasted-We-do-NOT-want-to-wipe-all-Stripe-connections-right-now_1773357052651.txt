@@ -1,0 +1,100 @@
+We do NOT want to wipe all Stripe connections right now.
+
+New goal:
+Re-attach ONLY these 2 EcoLogic user/company accounts to Stripe Connect correctly:
+- pjpell077@gmail.com
+- ppellegrino@ecologicc.com
+
+CONTEXT
+After resetting payment history / clients, Stripe connections seem mismatched or broken. Payments are not wiring through correctly. We want the safest fix possible without damaging the rest of the payment system.
+
+IMPORTANT SAFETY RULES
+- Do NOT mass-delete connected accounts
+- Do NOT delete the Stripe platform account
+- Do NOT remove historical Stripe records unless absolutely necessary
+- Do NOT touch unrelated companies/users
+- Do NOT fabricate Stripe account IDs
+- First inspect and report current linkage for these 2 accounts before changing anything
+- Make the minimum safe changes required
+
+GOAL
+For ONLY these 2 accounts:
+1. inspect current Stripe-related linkage in EcoLogic DB
+2. determine whether each account already has:
+   - a connected Stripe account ID
+   - onboarding status
+   - payouts enabled / charges enabled status if available
+3. if the linkage is stale/bad/missing, repair it safely
+4. make sure EcoLogic points to the correct Stripe connected account for each one
+5. ensure future payments/subcontract payouts route correctly again
+
+STEP 1 — INSPECT CURRENT STATE
+Find the exact user/company records for:
+- pjpell077@gmail.com
+- ppellegrino@ecologicc.com
+
+For each one, inspect and report:
+- user id
+- company id
+- company name
+- stripeCustomerId
+- stripeConnectAccountId (or equivalent field)
+- stripe onboarding status fields
+- any payment account status fields
+- whether there are duplicate companies or duplicate users tied to the same email
+- whether there are old/stale Stripe account IDs still attached
+
+Also inspect whether payment routing logic uses:
+- company stripeConnectAccountId
+- owner user stripe fields
+- some other table/reference
+
+STEP 2 — TRACE THE REAL SOURCE OF TRUTH
+Identify exactly which DB field/table is the source of truth for:
+- receiving card payments
+- receiving subcontract payouts/transfers
+- sender/receiver payment routing
+
+Document which field must be correct for these 2 accounts to work.
+
+STEP 3 — SAFELY RE-ATTACH ONLY THESE 2 ACCOUNTS
+If either account is incorrectly linked, do the minimum safe fix:
+- clear only the bad Stripe Connect linkage fields for that specific account if needed
+- re-initiate or repair the correct Stripe Connect onboarding/linking path
+- ensure the correct connected account ID gets saved back to the proper record
+- avoid changing unrelated Stripe customer/payment history data
+
+If there is already a valid connected Stripe account for either one, do NOT replace it unless it is clearly mismatched.
+
+STEP 4 — VERIFY STATUS
+After repair, verify for both accounts:
+- connected Stripe account ID exists in the correct place
+- account status is active/usable if available
+- charges/payout routing code will use the repaired account
+- no duplicate or stale Stripe linkage remains for those 2 accounts
+
+STEP 5 — ADD TARGETED LOGS
+Add concise logs only where useful:
+- when connect onboarding starts
+- when a Stripe account ID is attached to a company/user
+- what company/user gets updated
+- when payment routing resolves a connected account for these users
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact DB fields/tables involved
+3. what was wrong for each of the 2 accounts
+4. what was fixed for each of the 2 accounts
+5. whether either account still needs manual Stripe onboarding completed
+6. a short safe test plan for:
+   - pjpell077@gmail.com
+   - ppellegrino@ecologicc.com
+
+SUCCESS CRITERIA
+- pjpell077@gmail.com is correctly linked to the right Stripe connected account
+- ppellegrino@ecologicc.com is correctly linked to the right Stripe connected account
+- unrelated accounts are untouched
+- EcoLogic payment routing uses the repaired linkage correctly
