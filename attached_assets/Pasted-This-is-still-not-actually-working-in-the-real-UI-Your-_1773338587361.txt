@@ -1,0 +1,157 @@
+This is still not actually working in the real UI.
+
+Your summary says the Subcontractor Fee detail page is fixed, but the actual test is still failing / not proving anything useful. The preview I’m seeing is not the real working in-app fee-detail screen, so we need to stop treating this as done.
+
+Current issue
+
+I need the actual Subcontractor Fee row inside EcoLogic to open a real populated detail page in the app.
+
+Right now, from my real testing flow, that is still not validated.
+
+Your summary says the page should show:
+
+-$2,000
+
+Subcontractor Fee
+
+Completed
+
+James Doherty
+
+related invoice/job/referral details
+
+But I need you to verify and fix the real in-app route and screen, not just describe the intended payload.
+
+What I need you to do
+Step 1 — Trace the actual row click in the real Payments UI
+
+Find the exact click handler for the Subcontractor Fee row in the Payments list.
+
+I want the exact:
+
+frontend component rendering that row
+
+onClick/navigation logic
+
+route/path it navigates to
+
+params/query values passed into the route
+
+Do not guess.
+
+Step 2 — Verify the exact in-app route being opened
+
+I want you to verify what route the app is actually trying to open when the negative fee row is tapped.
+
+Tell me:
+
+exact route pattern
+
+whether it is a normal payment-detail route or fee-specific route
+
+what ID/sourceType/sourceId it uses
+
+whether the route is supported inside the app router
+
+Step 3 — Verify the real loader/API for that route
+
+Find the actual data fetch path for that fee-detail screen:
+
+which endpoint is called
+
+which record lookup runs
+
+whether it is using the subcontract payout audit / fee ledger record correctly
+
+why it previously produced Fee detail not found
+
+Then verify the real response payload for the tapped fee row.
+
+Log:
+
+clicked fee row ID
+
+source record type
+
+source record ID
+
+backend lookup result
+
+final detail payload returned to the frontend
+
+Step 4 — Fix the real in-app screen until it renders properly
+
+I do not want a theoretical fix.
+
+I want the actual in-app fee detail screen to render correctly when tapping the row from the Payments list.
+
+The final screen must show meaningful data such as:
+
+top amount: -$2,000.00
+
+Subcontractor Fee
+
+Completed or the correct final state
+
+related customer
+
+related job
+
+related invoice
+
+referral rate
+
+gross collected amount
+
+subcontractor fee amount
+
+your net/share if applicable
+
+relevant dates
+
+Only use real fields that exist.
+
+Important
+
+Do not rely on opening some external page that is not the actual app route.
+Do not tell me it works unless you verify the real in-app tap flow from the Payments list opens a populated detail screen.
+
+If the current route is broken
+
+Then fix the route properly.
+
+Possible examples:
+
+wrong route target
+
+wrong param passed
+
+detail route not registered
+
+loader not handling fee rows
+
+fee row needs a dedicated internal route
+
+router mismatch between web/native preview and actual app
+
+But do not guess — trace the real issue.
+
+Verification I want back
+
+After fixing, tell me:
+
+the exact Payments row component handling the tap
+
+the exact route/path opened for fee detail
+
+the exact backend endpoint/lookup powering that screen
+
+what source-of-truth record is used for the fee detail
+
+why it was previously failing
+
+confirmation that tapping the - $2,000 Subcontractor Fee row inside the real Payments page now opens a populated in-app detail screen
+
+Also include
+
+The final route you used and the exact fields now displayed on the screen.

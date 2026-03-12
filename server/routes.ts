@@ -12087,95 +12087,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobId = parseInt(req.query.jobId as string, 10);
       if (isNaN(invoiceId) || isNaN(jobId)) return res.status(400).json({ message: "Invalid params" });
 
-      // Find the job_referral where this company is the RECEIVER and the job matches
-      const [referral] = await db.select().from(jobReferrals).where(
-        and(
-          eq(jobReferrals.receiverCompanyId, company.id),
-          eq(jobReferrals.jobId, jobId),
-          inArray(jobReferrals.status, ['accepted', 'completed'])
-        )
-      ).limit(1);
-      if (!referral) return res.status(404).json({ message: "Referral not found" });
+      // Use raw SQL to avoid Drizzle ORM field-ordering issues
+      const referralRes = await db.execute(sql`
+        SELECT id, job_id, sender_company_id, receiver_company_id,
+               referral_type, referral_value, status,
+               contractor_payout_amount_cents, company_share_amount_cents
+        FROM job_referrals
+        WHERE receiver_company_id = ${company.id}
+          AND job_id = ${jobId}
+          AND status IN ('accepted', 'completed')
+        LIMIT 1
+      `);
+      const referral = referralRes.rows[0] as any;
+      if (!referral) {
+        console.log(`[fee-detail] referral not found: company=${company.id} jobId=${jobId}`);
+        return res.status(404).json({ message: "Referral not found" });
+      }
 
-      // Receiver's invoice for this job
-      const [inv] = await db.select().from(invoices).where(
-        and(eq(invoices.id, invoiceId), eq(invoices.companyId, company.id))
-      ).limit(1);
-      if (!inv) return res.status(404).json({ message: "Invoice not found" });
+      const invRes = await db.execute(sql`
+        SELECT id, invoice_number, job_id, customer_id, total_cents
+        FROM invoices
+        WHERE id = ${invoiceId} AND company_id = ${company.id}
+        LIMIT 1
+      `);
+      const inv = invRes.rows[0] as any;
+      if (!inv) {
+        console.log(`[fee-detail] invoice not found: invoiceId=${invoiceId} company=${company.id}`);
+        return res.status(404).json({ message: "Invoice not found" });
+      }
 
-      // Receiver's payments for this invoice (for date)
-      const invPayments = await db.select().from(payments).where(
-        and(
-          eq(payments.invoiceId, invoiceId),
-          inArray(payments.status, ['succeeded', 'paid', 'completed'])
-        )
-      ).orderBy(desc(payments.paidDate));
-      const latestPayment = invPayments[0] || null;
+      // Latest successful payment date for this invoice
+      const payRes = await db.execute(sql`
+        SELECT paid_date, created_at
+        FROM payments
+        WHERE invoice_id = ${invoiceId}
+          AND status IN ('succeeded', 'paid', 'completed')
+        ORDER BY COALESCE(paid_date, created_at) DESC
+        LIMIT 1
+      `);
+      const latestPayment = payRes.rows[0] as any || null;
 
       // Sender company name
       let senderCompanyName: string | null = null;
-      if (referral.senderCompanyId) {
-        const [senderComp] = await db.select({ name: companies.name }).from(companies)
-          .where(eq(companies.id, referral.senderCompanyId)).limit(1);
-        senderCompanyName = senderComp?.name || null;
+      if (referral.sender_company_id) {
+        const scRes = await db.execute(sql`SELECT name FROM companies WHERE id = ${referral.sender_company_id} LIMIT 1`);
+        senderCompanyName = (scRes.rows[0] as any)?.name || null;
       }
 
-      // Customer name + job title
+      // Customer name + job title — try job first (most reliable), then invoice customerId
       let customerName: string | null = null;
       let jobTitle: string | null = null;
-      if (inv.customerId) {
-        const [cust] = await db
-          .select({ firstName: customers.firstName, lastName: customers.lastName })
-          .from(customers).where(eq(customers.id, inv.customerId)).limit(1);
-        if (cust) customerName = [cust.firstName, cust.lastName].filter(Boolean).join(' ') || null;
-      }
-      if (inv.jobId) {
-        const [jobRow] = await db
-          .select({ title: jobs.title, clientName: jobs.clientName })
-          .from(jobs).where(eq(jobs.id, inv.jobId)).limit(1);
+      const jobLookupId = inv.job_id || jobId;
+      if (jobLookupId) {
+        const jobRes = await db.execute(sql`
+          SELECT title, client_name, customer_id FROM jobs WHERE id = ${jobLookupId} LIMIT 1
+        `);
+        const jobRow = jobRes.rows[0] as any;
         if (jobRow) {
           jobTitle = jobRow.title || null;
-          // Fallback: use job's clientName if invoice has no customerId
-          if (!customerName) customerName = jobRow.clientName || null;
-        }
-      }
-      // Final fallback: look up customer via the referral's job (may be in sender's company)
-      if (!customerName && referral.jobId) {
-        const [senderJob] = await db
-          .select({ clientName: jobs.clientName, customerId: jobs.customerId })
-          .from(jobs).where(eq(jobs.id, referral.jobId)).limit(1);
-        if (senderJob) {
-          if (senderJob.clientName) {
-            customerName = senderJob.clientName;
-          } else if (senderJob.customerId) {
-            const [cust2] = await db
-              .select({ firstName: customers.firstName, lastName: customers.lastName })
-              .from(customers).where(eq(customers.id, senderJob.customerId)).limit(1);
-            if (cust2) customerName = [cust2.firstName, cust2.lastName].filter(Boolean).join(' ') || null;
+          if (jobRow.client_name) {
+            customerName = jobRow.client_name;
+          } else if (jobRow.customer_id) {
+            const custRes = await db.execute(sql`
+              SELECT first_name, last_name FROM customers WHERE id = ${jobRow.customer_id} LIMIT 1
+            `);
+            const c = custRes.rows[0] as any;
+            if (c) customerName = [c.first_name, c.last_name].filter(Boolean).join(' ') || null;
           }
         }
       }
+      if (!customerName && inv.customer_id) {
+        const custRes = await db.execute(sql`
+          SELECT first_name, last_name FROM customers WHERE id = ${inv.customer_id} LIMIT 1
+        `);
+        const c = custRes.rows[0] as any;
+        if (c) customerName = [c.first_name, c.last_name].filter(Boolean).join(' ') || null;
+      }
 
-      const grossCollectedCents = inv.totalCents || 0;
-      const feeAmountCents = referral.companyShareAmountCents || 0;
-      const yourNetCents = (referral.contractorPayoutAmountCents || 0);
+      const grossCollectedCents = Number(inv.total_cents) || 0;
+      const feeAmountCents = Number(referral.company_share_amount_cents) || 0;
+      const yourNetCents = Number(referral.contractor_payout_amount_cents) || 0;
 
-      console.log(`[fee-detail] invoiceId=${invoiceId} jobId=${jobId} company=${company.id} fee=${feeAmountCents} gross=${grossCollectedCents} net=${yourNetCents}`);
+      console.log(`[fee-detail] OK invoiceId=${invoiceId} jobId=${jobId} company=${company.id} fee=${feeAmountCents} gross=${grossCollectedCents} net=${yourNetCents} customer=${customerName} job=${jobTitle}`);
 
       res.json({
         feeAmountCents,
         grossCollectedCents,
         yourNetCents,
-        referralType: referral.referralType,
-        referralValue: referral.referralValue,
+        referralType: referral.referral_type,
+        referralValue: referral.referral_value,
         referralStatus: referral.status,
         senderCompanyName,
         customerName,
         jobTitle,
-        invoiceNumber: inv.invoiceNumber,
+        invoiceNumber: inv.invoice_number,
         jobId,
         invoiceId,
-        paidDate: latestPayment?.paidDate || latestPayment?.createdAt || null,
+        paidDate: latestPayment?.paid_date || latestPayment?.created_at || null,
       });
     } catch (error) {
       console.error("Error fetching fee detail:", error);
