@@ -35,9 +35,24 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
   console.log("[auth] fetching user from /api/auth/user", native ? "(native mobile)" : "(web)");
 
   const attempt = async (): Promise<Response> => {
+    // Include the native Bearer token when it is stored in localStorage.
+    // This is required because Capacitor WebViews always carry a stale
+    // connect.sid cookie, so we cannot rely on cookie-based session auth
+    // after a cross-domain Google OAuth exchange on the production server.
+    const headers: Record<string, string> = {};
+    try {
+      const sid = typeof localStorage !== "undefined"
+        ? localStorage.getItem("nativeSessionId")
+        : null;
+      if (sid) {
+        headers["Authorization"] = `Bearer ${sid}`;
+        console.log("[auth] attaching Bearer token to /api/auth/user");
+      }
+    } catch {}
     return fetch("/api/auth/user", {
       credentials: "include",
       cache: "no-store",
+      headers,
     });
   };
 

@@ -1,0 +1,258 @@
+We fixed the Safari issue, but mobile Google auth still does not actually sign the user in.
+
+Current problem
+
+On mobile:
+
+Google sign-in flow opens
+
+I select the Google account
+
+it no longer kicks me to Safari
+
+but the user is still not authenticated in the app
+
+Example:
+
+I select pjpell077@gmail.com
+
+after the flow completes, I am not signed into that account
+
+So the UI flow is better, but the actual auth/session finalization is still broken.
+
+Goal
+
+Make the mobile Google sign-in flow actually authenticate the selected user inside the EcoLogic app.
+
+The final result must be:
+
+tap Google sign-in
+
+choose Google account
+
+auth completes
+
+app returns in-app
+
+user is actually logged in as the selected Google account
+
+Important context
+
+We already changed the mobile flow so it:
+
+stays in the app instead of opening Safari
+
+uses nativeSessionId
+
+sends bearer auth headers
+
+navigates back with /
+
+So now I need you to debug why the user is still not becoming authenticated after all that.
+
+This means one of these is happening:
+
+Google auth is succeeding, but the wrong user/session is being created
+
+exchange-code is not returning the correct session/user
+
+nativeSessionId is not being saved correctly
+
+requests after auth are not actually sending the bearer token
+
+/api/auth/user is not accepting/reading the bearer token correctly
+
+the app is authenticated on one server context but querying another incorrectly
+
+mobile is landing home before auth state refresh completes
+
+the selected Google account is not being linked/resolved to the correct EcoLogic user
+
+there is an existing-session mismatch and the app is staying unauthenticated
+
+What I need you to do
+Step 1 — Trace the full mobile auth completion flow
+
+Trace this exact path end-to-end:
+
+start Google auth on mobile
+
+Google account selected
+
+callback fires
+
+code gets stored/found
+
+exchange-code runs
+
+session is created
+
+sessionId is returned
+
+nativeSessionId is stored
+
+app navigates home
+
+/api/auth/user runs
+
+final logged-in user is resolved
+
+I want the exact files/functions/endpoints involved.
+
+Do not guess.
+
+Step 2 — Log the real values at each stage
+
+Use targeted logs and verify the real data at each step.
+
+Log all of these:
+
+During exchange
+
+nonce used
+
+code found
+
+whether exchange-code succeeded
+
+user ID created/authenticated by Passport
+
+email of authenticated user
+
+returned sessionId
+
+In the app after exchange
+
+whether nativeSessionId was actually stored in localStorage
+
+exact value presence check (not full secret if unsafe, but confirm it exists)
+
+whether subsequent API requests include Authorization: Bearer <sessionId>
+
+On /api/auth/user
+
+whether bearer token is received
+
+whether server successfully looks up the session from DB
+
+which user ID/email it resolves to
+
+if it fails, exactly why it fails
+
+Step 3 — Identify the actual break
+
+I need you to determine exactly where it breaks.
+
+Examples:
+
+session is never actually created
+
+sessionId returned is null/invalid
+
+token is stored but not attached to requests
+
+/api/auth/user ignores bearer header
+
+session store lookup fails on the dev/preview server
+
+auth state cache/query never refreshes after login
+
+selected Google account maps to a different account than expected
+
+app UI doesn’t update even though backend auth actually succeeded
+
+Find the real break.
+
+Step 4 — Fix it properly
+
+Once you find the exact failure point, fix it.
+
+Possible categories of fix:
+
+bearer token/session lookup bug
+
+/api/auth/user bearer-auth support bug
+
+query invalidation/auth refresh bug
+
+wrong redirect timing
+
+wrong account linking/lookup logic
+
+exchange response missing data
+
+session persistence bug
+
+But do not guess. Use the logs and trace the real issue.
+
+Step 5 — Verify with the exact account
+
+Test again with:
+
+pjpell077@gmail.com
+
+I want confirmation that after selecting that Google account on mobile:
+
+the app returns in-app
+
+/api/auth/user resolves to pjpell077@gmail.com
+
+the app UI reflects that authenticated user
+
+Important constraints
+
+do not break working web Google auth
+
+do not break email/password auth
+
+do not reintroduce Safari redirect
+
+do not leave the user pseudo-authenticated without the app recognizing it
+
+do not rely on “probably signed in” — verify the real authenticated user object
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+exact mobile auth start function/file
+
+callback hit yes/no
+
+exchange-code success yes/no
+
+authenticated user email at exchange
+
+sessionId returned yes/no
+
+nativeSessionId stored yes/no
+
+Authorization header present on /api/auth/user yes/no
+
+/api/auth/user resolved email or failure reason
+
+final app auth state after navigation
+
+Deliverables
+
+Find the exact reason mobile Google auth still does not sign the user in
+
+Fix the broken step in the mobile auth completion flow
+
+Verify the selected Google account (pjpell077@gmail.com
+) is actually the authenticated user after login
+
+Preserve the fix that keeps mobile inside the app instead of Safari
+
+After implementation, tell me:
+
+what exact step was failing
+
+what files/endpoints were changed
+
+whether the problem was session creation, token storage, bearer auth, or auth-state refresh
+
+confirmation that mobile Google sign-in now truly logs in pjpell077@gmail.com
+ inside the app

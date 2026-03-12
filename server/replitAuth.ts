@@ -225,7 +225,13 @@ export async function setupAuth(app: Express) {
 
   app.use(async (req: any, _res: any, next: any) => {
     const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ') && !req.cookies?.['connect.sid']) {
+    // Note: do NOT gate on !req.cookies?.['connect.sid'].
+    // Capacitor WebViews always carry a connect.sid cookie from the initial
+    // unauthenticated page load. If we skip Bearer auth whenever that cookie
+    // is present, native Google sign-in can never authenticate.
+    // The user-setting middleware below guards with !req.user, so a valid
+    // Passport cookie session still takes priority.
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       const sessionId = authHeader.slice(7);
       if (sessionId) {
         try {
@@ -243,7 +249,12 @@ export async function setupAuth(app: Express) {
                 : passportUser;
               (req as any)._mobileSessionUserId = resolvedUserId;
               (req as any)._mobileSessionId = sessionId;
+              console.log('[MobileAuth] Bearer resolved userId:', resolvedUserId);
+            } else {
+              console.warn('[MobileAuth] Bearer session found but no passport.user in sess');
             }
+          } else {
+            console.warn('[MobileAuth] Bearer sessionId not found or expired in DB');
           }
         } catch (err: any) {
           console.error('[MobileAuth] Bearer lookup error:', err?.message);
@@ -1521,10 +1532,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   
   if (!isAuthed || !req.user) {
     if (process.env.AUTH_DEBUG === 'true' || req.path === '/api/auth/user') {
+      const authHdr = req.headers['authorization'] || '';
       console.log("[auth] 401:", {
         path: req.path,
         hasCookie: !!req.headers.cookie,
+        hasBearer: authHdr.startsWith('Bearer '),
+        bearerPrefix: authHdr ? authHdr.substring(0, 16) : '(none)',
         hasSessionID: !!req.sessionID,
+        mobileUserId: (req as any)._mobileSessionUserId || null,
         secure: req.secure,
         proto: req.headers['x-forwarded-proto'],
         origin: req.headers.origin || '-',
