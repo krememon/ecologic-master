@@ -1,0 +1,92 @@
+We need to fix the Payments list sorting so the newest payments always appear at the TOP.
+
+BUG
+When I create a normal job and pay it normally (no subcontractor), the payment is getting placed near the bottom of the Payments list instead of at the top.
+
+GOAL
+Payments page should sort strictly:
+- newest at the top
+- oldest at the bottom
+
+This should apply to all payment types consistently:
+- normal invoice payments
+- subcontract/referral payments
+- card
+- cash
+- check
+- partial payments
+- paid invoices shown in payments list
+
+EXPECTED BEHAVIOR
+As soon as a new payment is recorded, it should appear at the very top of the Payments list without me having to hunt for it lower in the page.
+
+INVESTIGATION TASKS
+
+1) FIND THE PAYMENTS PAGE DATA SOURCE
+Trace the actual Payments page list source:
+- frontend page/component
+- API endpoint feeding it
+- backend query / sorting logic
+- any client-side sort happening after fetch
+
+2) IDENTIFY THE WRONG SORT FIELD
+Check whether the list is currently sorting by the wrong field, such as:
+- invoice id
+- createdAt from the wrong table
+- updatedAt
+- invoice date
+- job date
+- client name
+- inserted order from merged arrays
+- referral/manual payment records merged unsafely
+
+We want sorting based on the REAL payment recency field.
+
+3) USE THE CORRECT SORT ORDER
+Sort payments by actual payment recency descending:
+- newest first
+- oldest last
+
+Use the best source-of-truth field for “payment happened at”, such as:
+- payment date / paidAt / createdAt on the payment record
+- if multiple sources are merged, normalize them first and then sort descending after merge
+
+Do NOT sort by invoice number or job number.
+
+4) MAKE IT CONSISTENT ACROSS ALL PAYMENT TYPES
+Ensure the sort is correct for:
+- normal payments
+- subcontract payments
+- manual cash/check payments
+- Stripe card payments
+- payments shown after successful invoice payment
+- any merged receiver/sender payment records if applicable
+
+5) FRONTEND REFRESH / REORDER
+Make sure newly recorded payments show at the top after refresh/refetch.
+If optimistic updates are used, ensure the inserted record is added to the top in the same sort order.
+
+6) ADD TARGETED LOGS
+Add concise logs only where useful:
+- raw payment count returned
+- sort field being used
+- top 5 payment ids/dates after sort
+- whether any client-side re-sort is happening
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of why new normal payments were landing lower in the list
+3. exact field now used for sorting
+4. confirmation that Payments page now shows newest-to-oldest from the top
+5. short regression test plan covering:
+   - normal card payment
+   - normal cash/check payment
+   - subcontract payment
+
+SUCCESS CRITERIA
+- newest payment always appears at the top of Payments
+- ordering is consistent across all payment types
+- no older payment appears above a newer one

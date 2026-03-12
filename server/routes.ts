@@ -11953,7 +11953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             dueDate: inv.dueDate,
             issueDate: inv.issueDate,
             createdAt: inv.createdAt,
-            lastActivityDate: inv.paidDate || inv.updatedAt || inv.createdAt,
+            lastActivityDate: lastPayment?.paidDate || lastPayment?.createdAt || inv.paidAt || inv.updatedAt || inv.createdAt,
             lastPayment: lastPayment ? {
               amountCents: lastPayment.amountCents,
               status: lastPayment.status,
@@ -12039,8 +12039,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         finalItems = items as any[];
       }
-      console.log(`[ledger-order] company=${company.id} finalItems:`,
-        finalItems.map((r: any) => `${r.computedStatus}:inv${r.invoiceId}:job${r.jobId}`).join(' → '));
+      console.log(`[ledger-order] company=${company.id} sortField=lastPayment.paidDate||createdAt||paidAt||updatedAt total=${finalItems.length} top5:`,
+        finalItems.slice(0, 5).map((r: any) => `${r.computedStatus}:inv${r.invoiceId}:${r.lastActivityDate ? new Date(r.lastActivityDate).toISOString() : 'null'}`).join(' | '));
 
       res.json({
         items: finalItems,
