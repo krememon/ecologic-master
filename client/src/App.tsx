@@ -306,11 +306,9 @@ function AuthenticatedRouter() {
     if (!webAuthCode) return;
 
     console.log("[auth] Found webAuthCode in URL — exchanging for session...");
-    // Remove the code from the URL immediately so it can't be replayed
     const cleanUrl = window.location.pathname;
     window.history.replaceState({}, document.title, cleanUrl);
 
-    // Use the stable production URL so the code is found in the right memory store.
     const prodBase = (import.meta.env.VITE_APP_BASE_URL as string | undefined) || "";
     const exchangeUrl = prodBase
       ? `${prodBase}/api/auth/exchange-code`
@@ -333,12 +331,34 @@ function AuthenticatedRouter() {
           localStorage.setItem("nativeSessionId", data.sessionId);
           console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId");
         }
-        // Reload so queries re-run with the new Bearer token
+        // If this page loaded in a popup (opened by the preview iframe for
+        // Google OAuth), close the popup. The opener iframe will detect the
+        // localStorage change via the 'storage' event and reload itself.
+        if (window.opener) {
+          console.log("[auth] Running in popup — closing window");
+          window.close();
+          return;
+        }
+        // Otherwise (direct navigation), reload so queries re-run with Bearer token.
         window.location.reload();
       })
       .catch((err) => {
         console.error("[auth] webAuthCode exchange error:", err);
       });
+  }, []);
+
+  // Listen for localStorage changes from other windows (e.g. a Google auth popup).
+  // When the popup stores nativeSessionId, this event fires in the iframe, and we
+  // invalidate the auth query so the app picks up the new session immediately.
+  React.useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "nativeSessionId" && e.newValue) {
+        console.log("[auth] Detected nativeSessionId set by popup — refreshing auth");
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useWebSocket();

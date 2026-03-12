@@ -1,0 +1,194 @@
+Good — mobile is working now.
+
+Next priority: fix the Google 403 on Replit preview.
+
+Current problem
+
+On Replit preview, Google sign-in is still failing with the Google 403 page.
+
+Logs show:
+
+/api/auth/user returns 401 before login, which is normal
+
+/api/auth/google is hit and returns 302
+
+then Google shows 403
+
+callback never completes
+
+current host is the preview domain:
+8ba406dd-3601-4e6d-b203-72607ec69813-00-23v869p3ury5l.picard.replit.dev
+
+So the preview Google flow is still broken.
+
+Goal
+
+Make Google sign-in from Replit preview work end-to-end.
+
+I do not care whether preview logs in directly on the preview domain or whether it routes through the stable published domain first.
+
+I just need the actual preview Google sign-in button to work without the Google 403 and end with the user authenticated back in preview.
+
+What I need you to do
+Step 1 — Trace the exact preview Google auth flow
+
+I want the full actual flow for preview, specifically:
+
+preview page click
+
+/api/auth/google hit on preview host
+
+where the server redirects next
+
+exact Google authorize URL being generated
+
+exact redirect_uri
+
+exact state
+
+whether returnTo is being embedded for preview
+
+whether Google is seeing the production domain or preview domain
+
+Do not guess.
+
+Step 2 — Capture the exact authorize URL Google is receiving
+
+Add targeted logging so that when /api/auth/google is hit from preview, you log:
+
+host
+
+computed base URL
+
+computed callback URL
+
+preview origin
+
+returnTo value
+
+client ID
+
+final Google authorize URL
+
+exact redirect_uri
+
+exact state
+
+Secrets can be redacted, but I need the real URL structure.
+
+Most likely issue to inspect
+
+One of these is probably still wrong for preview:
+
+preview requests are still sending Google a redirect_uri Google does not allow
+
+preview redirect is not correctly bouncing through the stable published domain
+
+state / returnTo logic is malformed
+
+wrong OAuth client is being used for preview flow
+
+preview-origin handling is not actually taking effect before redirecting to Google
+
+Google authorize request is still using the preview domain somewhere instead of the published domain
+
+Find the exact cause.
+
+Step 3 — Fix preview architecture properly
+
+If preview cannot directly use Google OAuth on the random Replit preview URL, then make the preview flow intentionally do this:
+
+user clicks Google on preview
+
+preview server redirects immediately to the published auth start URL
+
+published domain performs Google OAuth
+
+callback happens on published domain
+
+published domain returns a one-time auth code or session handoff back to preview
+
+preview exchanges that successfully
+
+preview becomes authenticated
+
+If that is already the intended design, then fix whatever part of that chain is still broken.
+
+Main point:
+preview Google sign-in must work without showing Google 403
+
+Step 4 — Verify end-to-end on preview
+
+After the fix, test this exact preview flow:
+
+open Replit preview
+
+click Google sign-in
+
+Google chooser opens normally
+
+no Google 403 page
+
+callback/handoff completes
+
+preview app becomes authenticated
+
+Important constraints
+
+do not break working mobile Google auth
+
+do not break working published-domain Google auth
+
+do not break email/password auth
+
+do not rely on the random preview domain being whitelisted in Google if the real architecture should go through the stable published domain
+
+do not stop at “302 is happening” — I need the full Google authorize request debugged
+
+Debug requirements
+
+Use targeted logs only.
+
+Please log:
+
+preview host
+
+auth start URL
+
+final Google authorize URL
+
+redirect_uri
+
+state
+
+returnTo
+
+whether callback fires
+
+whether handoff back to preview succeeds
+
+final /api/auth/user result on preview after login
+
+Deliverables
+
+Find the exact reason Google 403 still happens on Replit preview
+
+Fix the preview Google auth flow properly
+
+Preserve working mobile auth
+
+Preserve working published-domain auth
+
+Verify that preview Google sign-in now works end-to-end
+
+After implementation, tell me:
+
+what exact authorize URL / redirect URI was causing the preview 403
+
+what exact part of the preview flow was broken
+
+what files/routes were changed
+
+what the final preview auth flow now is
+
+confirmation that Replit preview Google sign-in now works without the Google 403 page
