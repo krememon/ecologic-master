@@ -1100,6 +1100,8 @@ export function setupAuth(app: Express) {
       state = `ios:${nonce}`;
     } else if (platform === "ios") {
       state = "ios";
+    } else if (platform === "popup") {
+      state = "popup";
     } else if (returnTo) {
       state = `web:${Buffer.from(returnTo).toString("base64url")}`;
     } else {
@@ -1189,11 +1191,36 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 <body><div class="card"><div class="check">&#10003;</div><p><strong>Sign in complete!</strong></p><p>Return to the EcoLogic app.</p></div></body></html>`);
   });
 
+  // Helper: build the tiny HTML page that posts a message back to the popup opener
+  function buildPopupResponseHtml(success: boolean, errorCode?: string): string {
+    const payload = success
+      ? JSON.stringify({ type: "google-auth-success" })
+      : JSON.stringify({ type: "google-auth-error", error: errorCode || "unknown" });
+    return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Signing in…</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;color:#166534}.card{text-align:center;padding:2rem}.icon{font-size:2.5rem;margin-bottom:.75rem}p{margin:.25rem 0;font-size:1rem}</style>
+</head><body><div class="card">
+<div class="icon">${success ? "✓" : "✕"}</div>
+<p>${success ? "<strong>Signed in!</strong>" : "<strong>Sign-in failed.</strong>"}</p>
+<p style="color:#64748b;font-size:.875rem">${success ? "Returning to app…" : "You can close this window."}</p>
+</div>
+<script>
+(function(){
+  var msg=${payload};
+  var origin=window.location.origin;
+  try{ if(window.opener){ window.opener.postMessage(msg,origin); } }catch(e){}
+  setTimeout(function(){ try{ window.close(); }catch(e){} },400);
+})();
+</script>
+</body></html>`;
+  }
+
   app.get("/api/auth/google/callback", (req, res, next) => {
     const rawState = (req.query.state as string) || "web";
     console.log("[auth/google/callback] hit, rawState:", rawState.substring(0, 20));
     passport.authenticate("google", async (err: any, user: any, info: any) => {
       const isIos = rawState === "ios" || rawState.startsWith("ios:");
+      const isPopup = rawState === "popup";
       const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
 
       // Decode optional returnTo (set when request came from a preview domain)
@@ -1209,11 +1236,15 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
         }
       }
 
-      console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} err=${!!err} user=${!!user} info=${JSON.stringify(info || null)}`);
+      console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} isPopup=${isPopup} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} err=${!!err} user=${!!user} info=${JSON.stringify(info || null)}`);
 
       if (err) {
         console.error("[google-auth] Error:", err);
         if (isIos) return res.redirect("/api/auth/google-complete");
+        if (isPopup) {
+          console.log("[google-auth] Popup: error, sending postMessage error");
+          return res.send(buildPopupResponseHtml(false, "oauth_error"));
+        }
         if (returnTo) return res.redirect(`${returnTo}/?error=oauth_failed`);
         if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
           return res.redirect("/?error=token_expired&message=Please try signing in again");
@@ -1227,13 +1258,16 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       if (info) {
         if (info.error === 'account_inactive') {
           if (isIos) return res.redirect("/api/auth/google-complete");
+          if (isPopup) return res.send(buildPopupResponseHtml(false, "account_inactive"));
           if (returnTo) return res.redirect(`${returnTo}/?error=account_inactive`);
           return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
         }
         if (info.error === 'email_mismatch') {
+          if (isPopup) return res.send(buildPopupResponseHtml(false, "email_mismatch"));
           return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
         }
         if (info.success === 'google_linked') {
+          if (isPopup) return res.send(buildPopupResponseHtml(true));
           return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
         }
       }
@@ -1241,6 +1275,10 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       if (!user) {
         console.error("[google-auth] No user returned, info:", info);
         if (isIos) return res.redirect("/api/auth/google-complete");
+        if (isPopup) {
+          console.log("[google-auth] Popup: no user, sending postMessage error");
+          return res.send(buildPopupResponseHtml(false, "oauth_cancelled"));
+        }
         if (returnTo) return res.redirect(`${returnTo}/?error=oauth_cancelled`);
         return res.redirect("/auth?error=oauth_cancelled");
       }
@@ -1259,6 +1297,27 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
           console.log("[google-auth] iOS: no nonce, stored auth code:", code.substring(0, 8) + "...");
         }
         return res.redirect("/api/auth/google-complete");
+      }
+
+      // Popup flow: log user in, save session, then return postMessage HTML
+      if (isPopup) {
+        const fullUser = await storage.getUser(user.id);
+        if (fullUser?.twoFactorEnabled) {
+          // 2FA required — popup can't handle 2FA flow; send error back
+          console.log("[google-auth] Popup: 2FA required, sending error to opener");
+          return res.send(buildPopupResponseHtml(false, "2fa_required"));
+        }
+        return req.login(user, (loginErr) => {
+          if (loginErr) {
+            console.error("[google-auth] Popup: login error:", loginErr);
+            return res.send(buildPopupResponseHtml(false, "login_failed"));
+          }
+          req.session.save((saveErr) => {
+            if (saveErr) console.error("[google-auth] Popup: session save warning:", saveErr);
+            console.log(`[google-auth] Popup: login success, posting message to opener, user=${user?.email || user?.id}`);
+            return res.send(buildPopupResponseHtml(true));
+          });
+        });
       }
 
       // Preview cross-domain flow: redirect back to the originating preview domain

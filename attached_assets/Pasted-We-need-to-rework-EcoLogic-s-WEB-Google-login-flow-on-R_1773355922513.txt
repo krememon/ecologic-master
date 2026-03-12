@@ -1,0 +1,119 @@
+We need to rework EcoLogic’s WEB Google login flow on Replit to use a POPUP flow from the deployed web app instead of the current full-page redirect behavior.
+
+GOAL
+When the user clicks “Continue with Google” on the web version:
+- Open Google auth in a centered popup window
+- Complete OAuth in the popup
+- On success, set the session normally
+- Send a success message back to the opener window
+- Close the popup automatically
+- Refresh signed-in state in the main app without a full-page redirect if possible
+
+IMPORTANT CONTEXT
+- Native mobile Google auth is currently working fine
+- This task is ONLY for the Replit web/deployed app flow
+- We do NOT want embedded Replit preview/webview auth behavior
+- We DO want popup flow from the deployed web app
+- Keep existing auth/session logic intact unless needed for popup compatibility
+- Do not break mobile/native auth
+
+TASKS
+
+1) FIND CURRENT GOOGLE AUTH IMPLEMENTATION
+Locate:
+- frontend Google login button component and click handler
+- backend `/api/auth/google`
+- backend `/api/auth/google/callback`
+- any Google OAuth/passport strategy setup
+- session middleware and cookie config
+
+2) FRONTEND: CHANGE GOOGLE BUTTON TO POPUP FLOW
+Replace the current web Google login behavior if it is using `window.location`, full-page redirect, or equivalent.
+
+Implement popup behavior similar to:
+- centered popup
+- popup url should hit `/api/auth/google?state=popup`
+- popup window name: `googleSignIn`
+- reasonable size like width 500 / height 700
+
+Main window requirements:
+- add a `message` event listener
+- only trust messages from the same origin
+- when popup sends auth success, refetch `/api/auth/user`
+- update signed-in user state normally
+- close/cleanup listeners properly
+- handle popup blocked / popup closed cases gracefully
+- avoid duplicate listeners
+
+3) BACKEND: SUPPORT `state=popup`
+Update `/api/auth/google` and `/api/auth/google/callback` so popup mode is supported cleanly.
+
+Requirements:
+- preserve existing standard web flow if needed for non-popup callers
+- when request starts with `state=popup`, carry that through callback safely
+- after successful Google auth + session creation, callback should NOT do the normal app redirect in popup mode
+- instead, return a tiny HTML page that:
+  - posts a success message to `window.opener`
+  - message payload should be something like `{ type: 'google-auth-success' }`
+  - target origin should be the app’s actual origin, not `*`
+  - then closes itself
+- on failure in popup mode:
+  - post `{ type: 'google-auth-error' }`
+  - close popup or render minimal error fallback
+
+4) SESSION / COOKIE COMPATIBILITY
+Inspect the current session config and make only the minimum required changes so the signed-in session persists correctly after popup auth.
+
+Check:
+- `app.set('trust proxy', 1)` if needed
+- `cookie.secure`
+- `sameSite`
+- domain settings
+- any callback/session save timing issues
+
+Make sure this works correctly on the deployed HTTPS Replit app domain.
+
+5) GOOGLE OAUTH CONFIG VALIDATION
+Verify the app is using the correct deployed web URL for Google OAuth.
+Check and document what the correct values should be for:
+- Authorized JavaScript origins
+- Authorized redirect URIs
+
+At minimum, confirm the deployed domain callback is correct, for example:
+- `https://<deployed-domain>/api/auth/google/callback`
+
+Do not use preview/webview-only URLs if those are causing issues.
+
+6) DO NOT BREAK MOBILE
+If there is platform branching for native/mobile auth, leave that intact.
+Popup flow should be for normal web login only.
+
+7) ADD TARGETED LOGS
+Add concise logs only where helpful:
+- when popup flow starts
+- when callback detects popup mode
+- when callback posts success/error response page
+- when main window receives success/error message
+- when `/api/auth/user` refresh completes
+
+Avoid noisy or repetitive logging.
+
+DELIVERABLES
+After changes, provide:
+1. exact files changed
+2. short summary of what was changed
+3. any Google Console values that must be verified manually
+4. a super short web test plan:
+   - click Continue with Google
+   - popup opens
+   - choose account
+   - popup closes
+   - main app shows signed-in user
+5. note any remaining issue if popup auth succeeds but session does not persist
+
+SUCCESS CRITERIA
+- Clicking Continue with Google on deployed web opens popup, not full-page redirect
+- Google login completes in popup
+- Popup closes automatically
+- Main window becomes authenticated immediately after success
+- Mobile/native auth still works

@@ -64,6 +64,60 @@ function isInsideIframe(): boolean {
   }
 }
 
+async function openGoogleAuthPopup(): Promise<void> {
+  const width = 500;
+  const height = 700;
+  const left = Math.max(0, Math.round((screen.width - width) / 2));
+  const top = Math.max(0, Math.round((screen.height - height) / 2));
+  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes`;
+
+  console.log("[google-auth] Opening popup");
+  const popup = window.open("/api/auth/google?platform=popup", "googleSignIn", features);
+
+  if (!popup || popup.closed) {
+    console.log("[google-auth] Popup blocked — falling back to redirect");
+    window.location.href = "/api/auth/google";
+    return;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("message", onMessage);
+      clearInterval(closedPoll);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "google-auth-success") {
+        console.log("[google-auth] Received auth success from popup — refreshing user");
+        settle();
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        resolve();
+      } else if (event.data?.type === "google-auth-error") {
+        console.log("[google-auth] Received auth error from popup:", event.data.error);
+        settle();
+        resolve();
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+
+    const closedPoll = setInterval(() => {
+      try {
+        if (popup.closed) {
+          console.log("[google-auth] Popup closed by user");
+          settle();
+          resolve();
+        }
+      } catch {}
+    }, 800);
+  });
+}
+
 export async function startGoogleAuthNative(): Promise<void> {
   if (!isNativePlatform()) {
     if (isInsideIframe()) {
@@ -88,7 +142,8 @@ export async function startGoogleAuthNative(): Promise<void> {
       window.location.href = "/api/auth/google";
       return;
     }
-    window.location.href = "/api/auth/google";
+    // Web (non-iframe): use centered popup with postMessage handshake
+    await openGoogleAuthPopup();
     return;
   }
 
