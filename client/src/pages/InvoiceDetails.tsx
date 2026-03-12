@@ -389,8 +389,10 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   console.log("[Invoice UI] Display name resolved as:", customerName);
 
   const lineItems = invoice.lineItems || [];
-  const canPay = invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';
-  const canSend = invoice.status !== 'void' && invoice.status !== 'cancelled';
+  // Sender-side referred invoices: viewer subcontracted the job out — receiver collects payment, not sender
+  const isSenderSideReferral = !!(invoice as any).referralBreakdown?.isSenderSide;
+  const canPay = !isSenderSideReferral && invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';
+  const canSend = !isSenderSideReferral && invoice.status !== 'void' && invoice.status !== 'cancelled';
   const canVoid = invoice.status !== 'void' && invoice.status !== 'cancelled';
 
   return (

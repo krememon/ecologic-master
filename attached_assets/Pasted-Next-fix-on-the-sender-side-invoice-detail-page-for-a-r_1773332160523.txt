@@ -1,0 +1,210 @@
+Next fix: on the sender-side invoice detail page for a referred/subcontracted job, the sender should not have the ability to Pay or Send Invoice.
+
+What I mean
+
+Using this current test case:
+
+pjpell077 = sender
+
+ppellegrino = subcontractor / receiver
+
+the job was subcontracted out to ppellegrino
+
+So once that happens, the sender-side invoice detail page should still show the financial information/history, but it should not show action buttons that imply the sender is the one collecting payment from the customer.
+
+Right now on the sender-side invoice detail page, I still see:
+
+Pay $2,000.00
+
+Send Invoice
+
+That is wrong for this referred job on the sender side.
+
+Goal
+
+For a referred/subcontracted invoice, the action buttons should respect which side is actually responsible for collecting payment.
+
+Receiver / subcontractor side
+
+The company that accepted the subcontracted job and is actually collecting payment should be the side that can:
+
+Pay
+
+Send Invoice
+
+Sender side
+
+The company that subcontracted the job out should not see those payment-collection buttons on that referred invoice detail page.
+
+They should still be able to:
+
+view the invoice
+
+view the referred payment breakdown
+
+view status/history
+
+understand their share
+
+But they should not be able to collect payment from that page.
+
+Desired behavior
+Sender-side referred invoice detail
+
+Hide/remove:
+
+Pay
+
+Send Invoice
+
+any other customer-collection action that only belongs to the receiver side
+
+Receiver-side referred invoice detail
+
+Keep:
+
+the proper payment collection actions
+
+the ability to collect/send invoice if that is the correct current workflow
+
+Important clarification
+
+This is specifically for referred/subcontracted invoices where the current viewer is the sender/originating company, not the company actually collecting the money.
+
+I am not saying to remove Pay/Send Invoice from:
+
+normal non-referred invoices
+
+receiver-side referred invoices where payment collection is correct
+
+What I need you to do
+1) Detect sender-side vs receiver-side on referred invoices
+
+Use the real source-of-truth relationship for the referred invoice:
+
+who sent the referral
+
+who received/accepted the referral
+
+which company owns the collection side
+
+which company is viewing the invoice page
+
+Then determine whether the current viewer is:
+
+sender
+or
+
+receiver
+
+2) Hide actions for sender-side referred invoices
+
+If the invoice is tied to a referred job and the current viewer is the sender:
+
+do not render the Pay button
+
+do not render the Send Invoice button
+
+3) Preserve receiver-side behavior
+
+If the current viewer is the receiver/collection side:
+
+keep the relevant invoice/payment action buttons working normally
+
+UI expectation
+
+On the sender-side referred invoice page, the page should feel more like:
+
+a financial/detail/history view
+
+Not:
+
+a payment collection screen
+
+So it is fine if the sender still sees:
+
+invoice number
+
+amount
+
+referred breakdown
+
+status
+
+linked job
+
+customer info if appropriate
+
+dates/history
+
+But no payment collection actions.
+
+Important constraints
+
+do not break normal invoice detail pages
+
+do not break receiver-side payment collection
+
+do not break referred invoice history/detail rendering
+
+do not change payment math
+
+do not change invoice ownership rules unless needed for proper gating
+
+do not remove actions globally; this should be conditional based on referred invoice role
+
+What to inspect
+
+Please trace:
+
+the invoice detail page component rendering the action buttons
+
+how it determines which actions to show
+
+whether the invoice response already knows sender vs receiver role
+
+if not, add the necessary role/context field from the backend for referred invoices
+
+Examples of helpful fields if needed:
+
+isReferred
+
+isReferralSenderView
+
+isReferralReceiverView
+
+canCollectPayment
+
+canSendInvoice
+
+Use whatever fits the current architecture best, but the render logic should be role-aware.
+
+Expected result for this test case
+
+For pjpell077 viewing the referred invoice detail page:
+
+Pay $2,000.00 should be gone
+
+Send Invoice should be gone
+
+For ppellegrino on the receiver-side version:
+
+payment collection actions should still exist if that is the intended workflow
+
+Deliverables
+
+Hide Pay and Send Invoice on sender-side referred invoice detail pages
+
+Keep those actions available on the proper receiver-side referred invoice view
+
+Leave normal non-referred invoice pages unchanged
+
+After implementation, tell me:
+
+what component/file was updated
+
+what field/logic determines sender vs receiver side
+
+what exact condition now hides the action buttons
+
+confirmation that pjpell077 no longer sees Pay/Send Invoice on this referred invoice
