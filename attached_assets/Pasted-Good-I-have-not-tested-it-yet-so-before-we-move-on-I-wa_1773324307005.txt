@@ -1,0 +1,228 @@
+Good. I have not tested it yet, so before we move on I want this locked down carefully.
+
+Based on your summary, the main fix was:
+
+receiver-side invoice gets auto-created on acceptance
+
+in-app acceptance now saves the same financial snapshot fields as token accept
+
+Payments page now shows full collected amount for subcontracted jobs
+
+startup backfill created missing receiver invoices for older accepted/completed referrals
+
+What I need now
+
+I want you to do a final verification pass on this exact subcontract flow and make sure there are no remaining gaps between:
+
+Jobs
+
+Invoices
+
+Payments
+
+sender-side history
+
+receiver-side history
+
+Exact scenario to verify
+
+Please verify this end-to-end lifecycle for a subcontracted job:
+
+sender creates a job
+
+sender refers/subcontracts it to another EcoLogic company
+
+receiver accepts it
+
+receiver gets their own pending collection invoice automatically
+
+receiver collects payment
+
+active job is cleaned up correctly
+
+invoice history remains
+
+payment history remains
+
+old jobs do not randomly reappear
+
+both sides reflect the correct state
+
+Specific things I want verified
+1) Receiver acceptance behavior
+
+When the receiver accepts a referred job, confirm all of these are true:
+
+receiver-side invoice is created automatically
+
+invoice amount is the full job amount
+
+financial snapshot fields are saved:
+
+jobTotalAtAcceptanceCents
+
+contractorPayoutAmountCents
+
+companyShareAmountCents
+
+this works in both:
+
+in-app accept flow
+
+token/public accept flow
+
+2) Payments page behavior
+
+For subcontracted jobs, verify the Payments page now behaves correctly on both sides.
+
+I want confirmed:
+
+Receiver side
+
+the paid subcontracted job appears in Payments
+
+the row shows the correct amount/state
+
+it matches the invoice flow correctly
+
+Sender side
+
+the job/payment still appears correctly in sender history/views
+
+no sender-side regression was introduced
+
+Also confirm the exact intended amount logic:
+
+Payments row shows full collected invoice amount
+
+earnings/stat math still uses net share
+
+there is no mismatch between displayed payment amount and financial calculations
+
+3) Invoices page behavior
+
+Verify:
+
+Receiver side
+
+invoice exists immediately after acceptance
+
+invoice remains after payment
+
+invoice status updates correctly
+
+Sender side
+
+original invoice/history behavior still works
+
+no duplicate/conflicting invoice state was introduced
+
+4) Job cleanup behavior
+
+After payment succeeds, confirm:
+
+active subcontracted job is removed/hidden properly
+
+it does not remain in active Jobs
+
+it does not randomly reappear later
+
+older paid/completed referred jobs do not re-surface incorrectly
+
+This is especially important because we previously saw the Krystal Mathers job come back unexpectedly.
+
+5) Backfill safety
+
+You said the startup backfill created missing receiver invoices for accepted/completed referrals.
+
+I want you to confirm this backfill is safe and does not:
+
+create duplicates
+
+create invoices for the wrong company
+
+create invoices for referrals that should not have them
+
+interfere with already-paid history
+
+cause old jobs to reappear in active job lists
+
+Please verify the backfill is:
+
+idempotent
+
+scoped correctly
+
+only filling truly missing receiver invoices
+
+Important clarification
+
+Since I have not tested yet, do not assume everything is done just because logs looked good.
+
+I want you to verify the actual rendered behavior and data relationships for:
+
+sender company
+
+receiver company
+
+job
+
+referral
+
+receiver invoice
+
+payment record
+
+active job cleanup
+
+payments page query
+
+jobs page query
+
+If you find anything still inconsistent
+
+Fix it now before I retest.
+
+Examples of inconsistencies to look for:
+
+invoice exists but payment row still missing
+
+payment exists but wrong company owns the row
+
+cleanup removes something history still depends on
+
+old referred jobs show back up in active Jobs
+
+sender and receiver show different truth
+
+paid job still shows as active/unpaid anywhere
+
+Output I want back
+
+After this verification pass, tell me clearly:
+
+whether receiver-side accepted referrals always get an invoice now
+
+whether paid subcontracted jobs now appear in Payments on the receiver side
+
+whether sender-side history still works correctly
+
+whether active subcontracted jobs are removed cleanly after payment
+
+whether old jobs can still reappear in Jobs
+
+whether the startup backfill is idempotent and safe
+
+exact files/endpoints changed for:
+
+accept flow
+
+invoice creation
+
+payments page logic
+
+backfill logic
+
+Important
+
+Do a real verification pass now so when I test, we are not just hoping it works.
