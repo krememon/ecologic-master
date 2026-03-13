@@ -1,0 +1,65 @@
+Remove the “Taxable” field from the EcoLogic Add Item / Price Book item form.
+
+GOAL
+Get rid of the Taxable section entirely from this Add Item flow.
+We already handle tax at the invoice level, so this item-level taxable toggle serves no purpose.
+
+WHAT TO REMOVE
+From the Add Item modal/form:
+- remove the “Taxable” label
+- remove the “Apply tax to this item” helper text
+- remove the toggle/switch
+- remove the spacing/divider/layout tied to that section
+
+DESIRED RESULT
+The Add Item modal should flow directly from:
+- Category / Task Code
+to
+- bottom action/footer buttons
+
+No taxable section at all.
+
+IMPORTANT
+- Do not break item creation
+- Do not leave dead form state, validation, defaults, or payload fields causing errors
+- If the form currently sends `taxable` or similar, remove or safely ignore it for this flow
+- Keep the modal layout polished after removal
+
+PLEASE CHECK
+1. FRONTEND FORM
+- remove taxable UI
+- remove taxable state/defaults
+- remove taxable validation if any
+- remove taxable from submit payload if no longer needed
+
+2. BACKEND / SAVE FLOW
+- if backend accepts taxable but it is optional, fine
+- if frontend currently must send it, update safely
+- do not break existing item creation or editing
+
+3. SHARED ITEM FORM SURFACES
+Check whether this same item form is reused in:
+- Price Book Add Item
+- Estimate item add/edit
+- Invoice item add/edit
+- any shared service/item modal
+
+If this is a shared component, remove the taxable field carefully from the relevant shared form or from all item-form surfaces if that is now the intended product direction.
+
+4. LAYOUT POLISH
+After removing it:
+- spacing should still look clean
+- footer/buttons should sit naturally
+- no awkward gap before Cancel / Add Item
+
+DELIVERABLES
+1. Remove Taxable section from Add Item modal
+2. Keep item creation working
+3. Remove dead taxable state/payload handling if no longer needed
+4. Keep modal visually polished
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether this was a shared form/component or only the Price Book Add Item modal
+- whether taxable was removed from payload/state too
+- any other item creation/edit surfaces that were affected

@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, Search, Settings2, X } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import type { ServiceCatalogItem } from "@shared/schema";
@@ -40,7 +39,6 @@ export default function PriceBook() {
     unit: "each",
     category: "",
     taskCode: "",
-    taxable: false,
   });
 
   const { data: catalogItems = [], isLoading } = useQuery<ServiceCatalogItem[]>({
@@ -102,7 +100,6 @@ export default function PriceBook() {
       unit: "each",
       category: "",
       taskCode: "",
-      taxable: false,
     });
     setPriceDisplay("");
   };
@@ -122,7 +119,6 @@ export default function PriceBook() {
       unit: item.unit,
       category: item.category || "",
       taskCode: (item as any).taskCode || "",
-      taxable: (item as any).taxable ?? false,
     });
     setPriceDisplay((item.defaultPriceCents / 100).toFixed(2));
     setIsDialogOpen(true);
@@ -445,19 +441,6 @@ export default function PriceBook() {
                   className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 />
               </div>
-            </div>
-
-            {/* Taxable toggle */}
-            <div className="flex items-center justify-between py-1">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Taxable</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Apply tax to this item</p>
-              </div>
-              <Switch
-                id="taxable"
-                checked={formData.taxable}
-                onCheckedChange={(checked) => setFormData({ ...formData, taxable: checked })}
-              />
             </div>
           </div>
 
