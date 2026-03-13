@@ -1,0 +1,106 @@
+We need one important behavior change for the new EcoLogic Documents file-cabinet system:
+
+ISSUE
+Right now if I delete a main folder, the files inside it are not being fully deleted the way I want.
+
+DESIRED BEHAVIOR
+When a folder is deleted, EVERYTHING inside that folder should also be deleted recursively:
+- all files in that folder
+- all subfolders inside that folder
+- all files inside those subfolders
+- all deeper nested children too
+
+In other words:
+folder deletion should be a true cascade delete for the full folder tree.
+
+EXAMPLE
+If I delete:
+Customers / James Doherty
+
+Then it should also delete:
+- every file directly inside James Doherty
+- any subfolders like Contracts, Photos, Permits
+- every file inside Contracts, Photos, Permits
+- any deeper nested folders/files too
+
+Nothing inside that deleted folder tree should remain behind.
+
+GOAL
+Make folder deletion recursive and complete.
+
+WHAT TO CHANGE
+
+1. CASCADE DELETE FOLDER CONTENTS
+Audit the folder delete flow and change it so deleting a folder recursively deletes:
+- descendant folders
+- descendant files/documents
+- any related DB records for those files/folders
+- any physical stored files if applicable
+
+Do NOT just reparent or move files up to the parent.
+I want them actually deleted.
+
+2. HANDLE FULL TREE RECURSIVELY
+This must work for:
+- folder with direct files only
+- folder with subfolders only
+- folder with both files and subfolders
+- multiple levels deep
+- large nested trees
+
+3. DELETE STORAGE FILES TOO
+If document files are stored in uploads/storage, make sure deleting the folder tree also cleans up the actual file objects where appropriate.
+Do not leave orphaned files on disk/storage if the DB records are removed.
+
+4. KEEP SAFETY / CONFIRMATION
+If there is already a delete confirmation UI, keep it.
+But make sure the wording makes it clear if needed, such as:
+- deleting this folder will also delete everything inside it
+
+If there is no confirmation yet and it’s easy, add a warning/confirmation because this is destructive.
+
+5. DO NOT BREAK SINGLE FILE DELETE
+Keep normal file delete behavior working too.
+
+6. DO NOT BREAK OTHER FOLDER ACTIONS
+Preserve:
+- create folder
+- rename folder
+- open/navigate folder
+- upload into folder
+- breadcrumbs
+- downloads/viewing for remaining items
+
+7. BACKEND MUST ENFORCE IT
+Do not do this as just a frontend removal from UI.
+The backend delete logic for folders must actually recursively delete the whole folder tree and associated files.
+
+8. EDGE CASES
+Handle:
+- deleting root-level folder
+- deleting folder with many nested levels
+- deleting empty folder
+- deleting folder containing pre-existing migrated docs
+- partial failure protection if one storage file delete fails
+- ensure UI refreshes correctly afterward
+
+9. UI REFRESH
+After deletion:
+- deleted folder disappears from current list
+- no child files/folders remain visible anywhere
+- breadcrumb/nav remains valid
+- if user was inside deleted folder flow, route/state should recover safely
+
+DELIVERABLES
+1. Deleting a folder recursively deletes all descendant folders/files
+2. Associated stored files are deleted too where applicable
+3. No reparenting/moving children to parent
+4. UI updates correctly after delete
+5. Existing file-cabinet features remain intact
+
+WHEN DONE REPORT BACK WITH
+- exact root cause of current behavior
+- files changed
+- whether cascade delete is enforced in backend, frontend, or both
+- whether storage file cleanup is included
+- what I should manually test with nested folders

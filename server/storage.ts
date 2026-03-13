@@ -140,6 +140,7 @@ import {
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
 import crypto from "crypto";
+import fs from "fs";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations
 function generatePairKey(companyId: number, userId1: string, userId2: string): string {
@@ -2225,22 +2226,72 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteFolder(id: number, companyId: number): Promise<boolean> {
-    // Null out folderId for docs in this folder so they move to root
-    await db
-      .update(documents)
-      .set({ folderId: null })
-      .where(and(eq(documents.folderId, id), eq(documents.companyId, companyId)));
-    // Recursively reparent child folders to this folder's parent
-    const [thisFolder] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
-    if (thisFolder) {
-      await db
-        .update(documentFolders)
-        .set({ parentFolderId: thisFolder.parentFolderId })
-        .where(and(eq(documentFolders.parentFolderId, id), eq(documentFolders.companyId, companyId)));
+    // ── Step 1: Collect all descendant folder IDs using iterative BFS ──
+    const allFolderIds: number[] = [id];
+    const queue: number[] = [id];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const children = await db
+        .select({ id: documentFolders.id })
+        .from(documentFolders)
+        .where(
+          and(
+            eq(documentFolders.parentFolderId, currentId),
+            eq(documentFolders.companyId, companyId)
+          )
+        );
+      for (const child of children) {
+        allFolderIds.push(child.id);
+        queue.push(child.id);
+      }
     }
-    const result = await db
-      .delete(documentFolders)
-      .where(and(eq(documentFolders.id, id), eq(documentFolders.companyId, companyId)));
+
+    // ── Step 2: Get all documents in those folders (for physical file cleanup) ──
+    const docsToDelete = await db
+      .select({ id: documents.id, fileUrl: documents.fileUrl })
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.folderId, allFolderIds),
+          eq(documents.companyId, companyId)
+        )
+      );
+
+    // ── Step 3: Delete physical files from disk (best-effort, never blocks DB cleanup) ──
+    for (const doc of docsToDelete) {
+      try {
+        if (doc.fileUrl) {
+          const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      } catch {
+        // Non-fatal — continue deleting DB records regardless
+      }
+    }
+
+    // ── Step 4: Delete document DB records in the entire folder tree ──
+    if (docsToDelete.length > 0) {
+      await db
+        .delete(documents)
+        .where(
+          and(
+            inArray(documents.folderId, allFolderIds),
+            eq(documents.companyId, companyId)
+          )
+        );
+    }
+
+    // ── Step 5: Delete all folder records in the tree (deepest first via reverse order) ──
+    // Delete in reverse BFS order so children are deleted before parents
+    const reversedFolderIds = [...allFolderIds].reverse();
+    for (const folderId of reversedFolderIds) {
+      await db
+        .delete(documentFolders)
+        .where(and(eq(documentFolders.id, folderId), eq(documentFolders.companyId, companyId)));
+    }
+
     return true;
   }
 

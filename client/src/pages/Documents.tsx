@@ -593,7 +593,7 @@ export default function Documents() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {deleteConfirm?.type === "folder"
-              ? `"${deleteConfirm.name}" will be deleted. Files inside will be moved to the parent folder.`
+              ? `"${deleteConfirm.name}" and everything inside it — all sub-folders and all files — will be permanently deleted. This cannot be undone.`
               : `"${deleteConfirm?.name}" will be permanently deleted and cannot be undone.`}
           </p>
           <div className="flex gap-2 justify-end mt-2">
