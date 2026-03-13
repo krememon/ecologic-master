@@ -235,8 +235,14 @@ export default function Settings() {
     return () => clearTimeout(timeoutId);
   }, [profileData.email, user?.email]);
 
+  // Note: isPending check is added below after the mutation is defined.
+  // We use a ref here so the effect doesn't need the mutation in its deps array.
+  const uploadPendingRef = useRef(false);
+
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // Never redirect during an active upload — the cache patch (setQueryData)
+    // prevents the isAuthenticated flash, but this ref is a belt-and-suspenders guard.
+    if (!isLoading && !isAuthenticated && !uploadPendingRef.current) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",
@@ -252,6 +258,7 @@ export default function Settings() {
   // Profile picture upload mutation
   const updateProfilePictureMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      uploadPendingRef.current = true;
       console.log('[profile-image] sending upload request');
       const res = await fetch("/api/auth/user/profile-image", {
         method: "POST",
@@ -266,8 +273,15 @@ export default function Settings() {
       console.log('[profile-image] upload succeeded, url:', data.profileImageUrl);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    onSuccess: (data) => {
+      uploadPendingRef.current = false;
+      // Patch the cached user object immediately — avoids a refetch that could
+      // briefly set isAuthenticated=false and fire the "Unauthorized" toast.
+      queryClient.setQueryData(["/api/auth/user"], (old: any) => {
+        if (!old) return old;
+        return { ...old, profileImageUrl: data.profileImageUrl };
+      });
+      // Org users list (Timesheets avatars etc) — safe to invalidate in background.
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setProfileImagePreview(null);
       toast({
@@ -276,6 +290,7 @@ export default function Settings() {
       });
     },
     onError: (error: Error) => {
+      uploadPendingRef.current = false;
       toast({
         title: "Upload failed",
         description: error.message || "Failed to update profile picture",

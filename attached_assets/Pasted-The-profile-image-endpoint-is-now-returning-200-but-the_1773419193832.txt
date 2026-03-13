@@ -1,0 +1,130 @@
+The profile image endpoint is now returning 200, but the app is STILL showing the error toast and the image save behavior is still wrong.
+
+IMPORTANT OBSERVATION
+Logs show:
+- POST /api/auth/user/profile-image 200 in 71ms
+
+So this is no longer a simple backend failure.
+This now looks like a frontend state/response-handling/source-of-truth bug, or a mismatch between:
+- what the upload endpoint returns
+- what the frontend expects
+- what field the UI reads afterward
+- when the toast is fired
+- how the saved avatar is persisted/refetched
+
+GOAL
+Fix the profile picture flow completely so:
+- no false error toast appears on successful upload
+- the correct profile image is saved
+- the UI updates immediately
+- refresh still shows the correct avatar
+- the same avatar source is used across the app
+
+WHAT TO DO
+
+1. DEBUG THE FRONTEND SUCCESS/ERROR FLOW
+Audit the exact frontend code path after avatar upload:
+- what promise/mutation is being called
+- what response is considered “success”
+- why the error toast is still firing even though the endpoint returns 200
+- whether the frontend is throwing after a successful request
+- whether a second failing request happens after the successful upload
+- whether the UI is reading stale user data and interpreting that as failure
+
+Likely problem areas:
+- response.ok check vs parsed JSON shape mismatch
+- mutation onSuccess/onError both firing due to thrown error in success handler
+- image upload succeeds but subsequent profile refresh fails
+- upload endpoint returns one field name, UI expects another
+- saved preview state differs from persisted user state
+- toast is triggered by a fallback catch even after success
+- React Query invalidation/refetch issue
+- native/web file response parsing issue
+
+2. FIND THE REAL SOURCE OF TRUTH FOR AVATAR
+Figure out exactly which field the app should use everywhere:
+- avatar
+- avatarUrl
+- profileImage
+- image
+- photoURL
+- uploaded path
+- etc.
+
+Then standardize it.
+
+Requirements:
+- upload endpoint should write the canonical avatar field
+- auth/user/profile query should return that same canonical field
+- profile page should read that same field
+- Timesheets and other employee avatar UIs should read that same field too
+- preserve backward compatibility if old records use another field
+
+3. VERIFY WHAT IS “IMPROPERLY SAVING”
+The user says it is “improperly saving.”
+Audit whether:
+- wrong image URL/path is being saved
+- image preview changes but DB doesn’t
+- DB changes but auth/user response doesn’t
+- it saves to one table/field but UI reads another
+- cache/stale state shows old image
+- local preview remains even when persisted image is different
+
+4. FIX THE FALSE ERROR TOAST
+The error toast must only show on actual failure.
+If upload succeeds, no error toast.
+If upload succeeds and profile refetch succeeds, optionally show success or stay quiet.
+Do not show generic failure on a 200 response unless a real follow-up failure occurred.
+
+5. REFRESH STATE PROPERLY
+After successful upload:
+- update the visible avatar immediately
+- invalidate/refetch whatever user/profile queries are needed
+- ensure profile card and any shared user header/avatar state updates
+- ensure refresh/relogin still shows the uploaded image
+
+6. ADD TARGETED LOGS
+Add temporary targeted logs around:
+- upload request response body
+- parsed frontend response
+- selected canonical avatar field after upload
+- profile/auth refetch response
+- exact code path that triggers error toast
+
+Do NOT add noisy logs everywhere.
+
+7. CHECK FOR MULTI-ENDPOINT CONFLICT
+Compare:
+- POST /api/auth/user/profile-image
+- GET /api/auth/user
+- any profile/settings endpoint
+- any company member/user listing endpoint
+
+Confirm they all agree on avatar field shape.
+If not, normalize the response.
+
+8. KEEP UX THE SAME
+Do not redesign settings.
+Just make the avatar upload behave correctly.
+
+SUCCESS CRITERIA
+- selecting image uploads successfully
+- no false red error toast
+- saved image displays immediately
+- refreshing page keeps same image
+- GET /api/auth/user returns the same avatar the UI shows
+- other places in app can use same avatar source
+
+DELIVERABLES
+1. Fix false error toast after successful avatar upload
+2. Fix incorrect/improper avatar save behavior
+3. Standardize avatar source-of-truth field
+4. Ensure profile page + shared user data refresh correctly
+5. Keep backward compatibility if older avatar fields exist
+
+REPORT BACK WITH
+- exact root cause
+- why the toast was still firing despite 200
+- which field is now the canonical avatar source
+- files changed
+- what I should test manually
