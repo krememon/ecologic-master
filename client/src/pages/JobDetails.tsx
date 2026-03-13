@@ -222,20 +222,18 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const { data: estimateSignatures = [], isLoading: estSigsLoading } = useQuery<EstimateApprovalSignature[]>({
     queryKey: ['/api/jobs', jobId, 'estimate-signatures'],
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${jobId}/estimates`, { credentials: 'include' });
+      const res = await fetch(`/api/jobs/${jobId}/estimate-signatures`, { credentials: 'include' });
       if (!res.ok) return [];
       const all: any[] = await res.json();
-      return all
-        .filter((e: any) => e.status === 'approved' && e.signatureDataUrl)
-        .map((e: any) => ({
-          id: e.id,
-          estimateNumber: e.estimateNumber || `#${e.id}`,
-          title: e.title || 'Estimate',
-          signatureDataUrl: e.signatureDataUrl,
-          approvedAt: e.approvedAt,
-          approvedByName: null,
-          totalCents: e.totalCents || 0,
-        }));
+      return all.map((e: any) => ({
+        id: e.id,
+        estimateNumber: e.estimateNumber || `#${e.id}`,
+        title: e.title || 'Estimate',
+        signatureDataUrl: e.signatureDataUrl,
+        approvedAt: e.approvedAt,
+        approvedByName: null,
+        totalCents: e.totalCents || 0,
+      }));
     },
     enabled: !!jobId && isAuthenticated && activeTab === 'approvals',
   });

@@ -1,0 +1,139 @@
+The previous fix did NOT fully solve the E-signature Approvals issue. I just tested by approving an estimate, and the approved estimate signature still is not showing in the Job → E-signature Approvals tab.
+
+IMPORTANT
+Do not assume the previous explanation is correct just because it sounded right.
+We need to debug the REAL data flow end-to-end and prove where it is breaking.
+
+GOAL
+Make approved estimate signatures reliably appear in the Job’s E-signature Approvals tab after an estimate is approved and signed.
+
+CURRENT SYMPTOM
+- I approved an estimate
+- signature should have been captured/saved
+- Job → E-signature Approvals still shows no estimate approval signature
+
+We need to verify whether the issue is:
+1. the signature never actually gets saved
+2. it is saved, but to the wrong field
+3. it is saved correctly, but the Job Details approvals tab is reading the wrong endpoint/field/filter
+4. estimate ↔ job linkage is wrong
+5. there is a stale query/cache/refetch issue
+6. approved status/signature format mismatch is filtering it out
+
+DEBUG THIS PROPERLY
+
+1. TRACE THE ESTIMATE APPROVAL SIGNATURE FLOW END TO END
+Audit the full flow for estimate approval:
+- public sign page / sign endpoint / approval action
+- request payload
+- backend route that handles estimate approval signature
+- DB write
+- exact table + exact field where signature is stored
+- exact status written on estimate after approval
+- exact jobId / estimateId linkage
+- response returned to frontend
+- Job Details E-signature Approvals query and UI mapping
+
+I want the exact truth, not assumptions.
+
+2. VERIFY THE DATABASE WRITE
+After signing an estimate, confirm in code/logs exactly what gets written:
+- estimate id
+- job id
+- status
+- signature field name
+- signature value present or not
+- approved timestamp present or not
+
+Check if it is actually writing:
+- estimates.signatureDataUrl
+- estimates.customerSignature
+- approvalSignature
+- signedEstimateUrl
+- some other field
+- or nowhere at all
+
+Do not guess which field is canonical — verify it.
+
+3. VERIFY JOB DETAILS TAB QUERY
+Audit what the Job Details → E-signature Approvals tab is actually requesting and filtering.
+
+Check for bad assumptions like:
+- querying the wrong endpoint
+- filtering only status === 'approved' when actual status is 'accepted' or 'signed'
+- expecting signatureDataUrl when actual field is signature_data_url or another field
+- only loading invoices/payment signatures and not estimate signatures
+- stale cache preventing newly-approved estimate from appearing
+- wrong jobId route param or job-estimate association
+
+4. CHECK THE ACTUAL APPROVAL STATUS VALUES
+Prove the exact estimate status after signing.
+Do not assume it becomes 'approved' unless logs/data confirm it.
+If the system uses:
+- approved
+- accepted
+- signed
+- completed
+- customer_approved
+etc.
+then the approvals tab filter must match reality.
+
+5. CHECK ESTIMATE/JOB LINKAGE
+Confirm the approved estimate is actually linked to the current job being viewed.
+Make sure the approvals tab is not missing it because:
+- estimate has null jobId
+- estimate uses a different relation path
+- estimate belongs to a parent/referral flow
+- wrong company/job scoping excludes it
+
+6. CHECK FOR REFRESH / CACHE ISSUES
+It may be saving correctly but not refreshing.
+Verify:
+- whether the approvals tab query invalidates/refetches after approval
+- whether navigation back to the job reuses stale cached data
+- whether the tab only loads once and never re-runs
+- whether mobile/native behaves differently than web
+
+If needed, explicitly invalidate/refetch the job approvals data after estimate approval succeeds.
+
+7. ADD TARGETED LOGS
+Add temporary logs around:
+- estimate approval submission payload
+- backend write result
+- saved estimate record fields
+- job details approvals fetch response
+- frontend filter result counts
+
+No spam logs — just enough to prove the failure point.
+
+8. FIX THE ROOT CAUSE
+Once proven, fix it fully:
+- if signature not saved → fix save path
+- if wrong field → normalize to canonical field or map correctly
+- if wrong status filter → fix filter
+- if wrong linkage → fix relation/query
+- if stale cache → invalidate/refetch correctly
+
+9. KEEP PAYMENT SIGNATURES WORKING
+Do not break the payment signature fixes while addressing estimate signatures.
+
+10. UI REQUIREMENT
+Once fixed, Job → E-signature Approvals should show:
+- Estimate approval signature card when an estimate was signed/approved
+- Payment completion signatures card when payment signatures exist
+- No Signatures Yet only when neither exists
+
+SUCCESS CRITERIA
+After approving/signing an estimate:
+- signature is truly saved in DB
+- correct estimate/job linkage exists
+- Job Details E-signature Approvals tab shows the estimate approval signature
+- refresh/reopen still shows it
+- payment signatures still work
+
+PLEASE REPORT BACK WITH
+- exact proven root cause
+- whether the bug was save-path, query/filter, linkage, cache, or multiple issues
+- exact files changed
+- exact DB field/status now used for estimate approval signature source of truth
+- what I should manually test after the fix

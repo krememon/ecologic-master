@@ -135,7 +135,7 @@ import {
   type InsertJobReferral,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
 import crypto from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations
@@ -333,6 +333,7 @@ export interface IStorage {
   
   // Estimate operations
   getEstimatesByJob(jobId: number): Promise<Estimate[]>;
+  getEstimateApprovalSignaturesByJobId(jobId: number): Promise<Pick<Estimate, 'id' | 'estimateNumber' | 'title' | 'signatureDataUrl' | 'approvedAt' | 'totalCents' | 'status'>[]>;
   getEstimatesByCompany(companyId: number): Promise<Estimate[]>;
   getEstimate(id: number): Promise<EstimateWithItems | undefined>;
   getEstimateSecure(id: number, companyId: number): Promise<EstimateWithItems | undefined>;
@@ -2841,6 +2842,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Estimate operations
+  async getEstimateApprovalSignaturesByJobId(jobId: number) {
+    // Find estimates linked to this job via jobId OR convertedJobId (from approval conversion)
+    const results = await db
+      .select({
+        id: estimates.id,
+        estimateNumber: estimates.estimateNumber,
+        title: estimates.title,
+        signatureDataUrl: estimates.signatureDataUrl,
+        approvedAt: estimates.approvedAt,
+        totalCents: estimates.totalCents,
+        status: estimates.status,
+      })
+      .from(estimates)
+      .where(
+        and(
+          or(eq(estimates.jobId, jobId), eq(estimates.convertedJobId, jobId)),
+          eq(estimates.status, 'approved'),
+          isNotNull(estimates.signatureDataUrl)
+        )
+      )
+      .orderBy(desc(estimates.approvedAt));
+    return results;
+  }
+
   async getEstimatesByJob(jobId: number): Promise<Estimate[]> {
     // Return estimates with their own schedule only (no fallback to job schedule)
     const results = await db

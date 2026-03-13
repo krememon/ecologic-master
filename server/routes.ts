@@ -16911,6 +16911,31 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  // GET /api/jobs/:jobId/estimate-signatures - Get approved estimate signatures for a job
+  // Finds estimates linked via job_id OR converted_job_id (standalone estimates approved → job created)
+  app.get('/api/jobs/:jobId/estimate-signatures', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+
+      const jobId = parseInt(req.params.jobId, 10);
+      if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+
+      const sigs = await storage.getEstimateApprovalSignaturesByJobId(jobId);
+      console.log(`[estimate-signatures] jobId=${jobId} found=${sigs.length}`);
+      res.json(sigs);
+    } catch (error: any) {
+      console.error('Error fetching job estimate signatures:', error);
+      res.status(500).json({ error: 'Failed to fetch estimate signatures' });
+    }
+  });
+
   const TRADE_PLACE_TYPES = new Set([
     'electrician', 'plumber', 'roofing_contractor', 'painter', 'general_contractor',
     'carpenter', 'locksmith', 'moving_company', 'storage',
