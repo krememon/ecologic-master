@@ -1,0 +1,94 @@
+The typing dots still are NOT appearing when someone starts typing in Messages. The feature is not working in the real app.
+
+PROBLEM
+I still do not see typing indicator dots when the other user starts texting.
+
+GOAL
+Make the typing indicator actually work end to end in the real messaging flow.
+
+IMPORTANT
+Do not assume the socket event is firing just because code exists.
+We need to trace the REAL messaging path and verify the full chain:
+- composer input event
+- typing_start emit
+- backend/socket receive
+- thread recipient broadcast
+- frontend recipient listener
+- active thread UI render
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE ACTUAL MESSAGE THREAD FLOW
+Find the exact components and socket handlers used by the real DM/thread screen.
+Confirm:
+- exact composer component
+- exact thread component
+- exact websocket event names
+- exact room/conversation id used
+
+2) VERIFY TYPING EVENTS ARE EMITTED
+When user types in the composer, confirm:
+- typing_start actually emits
+- typing_stop actually emits after idle/send/clear
+- events are not blocked by debounce logic
+- events include the correct conversation/thread id
+- events include sender id
+
+3) VERIFY BACKEND / SOCKET BROADCAST
+Confirm server actually receives typing events and broadcasts them to the OTHER participant in the correct thread.
+Check:
+- authorization
+- room membership
+- conversation id matching
+- event name consistency
+- sender excluded from recipient indicator
+
+4) VERIFY RECEIVER LISTENER
+On the receiving user’s side, confirm:
+- the client is subscribed to the correct typing event
+- the event is scoped to the active conversation
+- incoming typing state is stored in component state/store
+- stale state gets cleared correctly
+
+5) VERIFY UI RENDER
+Confirm the typing indicator component is actually rendered in the active thread when typing state is true.
+Check:
+- not hidden by a condition
+- not rendered off-screen
+- not same color as background
+- not immediately cleared by a bad timer
+- not behind a "must have messages" condition
+
+6) ADD REAL DEBUG LOGS
+Add concise temporary logs for the full chain:
+- composer emitted typing_start/stop with thread id
+- server received typing_start/stop
+- server broadcasted typing event to recipient
+- recipient client received typing event
+- active thread typing state changed to true/false
+- typing indicator component rendered
+
+Do NOT guess. Follow the chain until the exact broken link is found.
+
+7) TEST WITH TWO REAL USERS
+Verify with two actual accounts in the same DM thread:
+- User A starts typing
+- User B sees dots
+- User A stops typing
+- dots disappear
+- User A sends message
+- dots clear immediately
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact broken link in the chain
+3. whether the issue was emit, broadcast, listener, state, or render
+4. confirmation that typing dots now appear in the real app
+5. short test steps using 2 users
+
+SUCCESS CRITERIA
+- when one user types, the other user visibly sees typing dots in the active conversation
+- dots disappear after stop/send
+- no stale indicator remains
+- feature works in the real app, not just in code

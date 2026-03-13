@@ -681,7 +681,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 && !peerIsTyping ? (
+          /* Only show empty state when no messages AND nobody is typing */
           <div className="flex items-center justify-center h-full text-center text-muted-foreground">
             <div>
               <p className="text-sm" data-testid="text-no-messages">
@@ -691,7 +692,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            {(() => {
+            {messages.length > 0 && (() => {
               // Filter out empty messages and group by day
               const renderableMessages = messages.filter(isRenderableMessage);
               const days = groupByDay(renderableMessages);
@@ -724,6 +725,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                 </div>
               ));
             })()}
+            {/* Typing indicator — inside the messages branch so it always renders when active */}
             {peerIsTyping && (
               <div className="flex gap-2 max-w-[80%] mr-auto" data-testid="typing-indicator">
                 <div className="bg-muted rounded-2xl px-4 py-3 flex items-center gap-1">
@@ -733,9 +735,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Composer - pinned at bottom */}
