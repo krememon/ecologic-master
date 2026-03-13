@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
 import { JobInvoiceModal } from "@/components/JobInvoiceModal";
@@ -1624,9 +1625,15 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                         }`}
                         onClick={() => toggleEmployee(employee.id)}
                       >
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-300">
-                          {(employee.firstName?.charAt(0) || '').toUpperCase()}{(employee.lastName?.charAt(0) || '').toUpperCase() || '?'}
-                        </div>
+                        <Avatar className="w-10 h-10 flex-shrink-0">
+                          <AvatarImage
+                            src={employee.profileImageUrl || undefined}
+                            alt={`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}
+                          />
+                          <AvatarFallback className="bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                            {(employee.firstName?.charAt(0) || '').toUpperCase()}{(employee.lastName?.charAt(0) || '').toUpperCase() || '?'}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                             {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}

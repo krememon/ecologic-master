@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { 
   User, Calendar, Users, MapPin, ChevronRight, 
   Plus, Search, X, StickyNote, Wrench, Check, List, Trash2, DollarSign, Percent, Loader2
@@ -1102,6 +1103,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                           onCheckedChange={() => {}}
                           className="pointer-events-none"
                         />
+                        <Avatar className="w-9 h-9 flex-shrink-0">
+                          <AvatarImage
+                            src={employee.profileImageUrl || undefined}
+                            alt={`${employee.firstName || ''} ${employee.lastName || ''}`.trim()}
+                          />
+                          <AvatarFallback className="text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            {(employee.firstName?.[0] || '').toUpperCase()}{(employee.lastName?.[0] || '').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
                             {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}

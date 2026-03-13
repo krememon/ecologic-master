@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
@@ -1134,6 +1135,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
                           onCheckedChange={() => {}}
                           className="pointer-events-none"
                         />
+                        <Avatar className="w-9 h-9 flex-shrink-0">
+                          <AvatarImage
+                            src={employee.profileImageUrl || undefined}
+                            alt={formatEmployeeName(employee)}
+                          />
+                          <AvatarFallback className="text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            {(employee.firstName?.[0] || '').toUpperCase()}{(employee.lastName?.[0] || '').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
                             {formatEmployeeName(employee)}

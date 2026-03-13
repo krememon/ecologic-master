@@ -1,0 +1,96 @@
+Polish pass for EcoLogic employee assignment modals:
+
+GOAL
+Update the Jobs / Estimates “Assign Employees” and “Assign Technicians” selectors so they show real employee profile pictures instead of plain initials circles.
+
+CURRENT ISSUE
+In the assignment modals/lists, employees are still showing generic initials avatars (JP / RL / JS).
+I want those assignment pickers to use the employees’ actual saved profile pictures wherever available, just like we want across the rest of the app.
+
+AREAS TO UPDATE
+Please audit every employee assignment UI that is used for:
+- Jobs → Assign Employees / Assign Technicians
+- Estimates → Assign Employees
+- any closely related assignment modal/sheet/popover using the same employee picker component
+
+The screenshots show at least two different assignment UIs/components:
+1. an iOS-style “Assign Technicians” sheet
+2. a modal-style “Assign Employees” selector
+
+If these are separate components, update both.
+If they share a common employee row/avatar component, update the shared component cleanly.
+
+REQUIREMENTS
+
+1. USE REAL PROFILE PICTURES
+For each employee row in the assignment UI:
+- show their real profile picture/avatar if one exists
+- use the same canonical avatar/profile image field/source of truth already used by the Profile page and Timesheets
+- keep avatars circular
+- size them appropriately for mobile
+- keep alignment clean with name/role/email text
+
+2. FALLBACK BEHAVIOR
+If an employee does not have a profile picture:
+- fall back to initials avatar
+- keep fallback styling polished and consistent with EcoLogic
+
+3. KEEP EXISTING FUNCTIONALITY
+Do NOT break:
+- search
+- select / deselect
+- save / done
+- employee filtering
+- RBAC / visibility
+- modal/sheet behavior
+- role badges
+- selected count
+- assignment persistence
+
+This is mainly a UI data-source / avatar rendering improvement.
+
+4. CONSISTENT AVATAR SOURCE
+Make sure these assignment modals are reading from the same avatar source of truth used elsewhere in the app.
+No separate avatar logic for this screen unless absolutely necessary.
+If older employee records use legacy avatar fields, keep backward-compatible fallback mapping.
+
+5. STYLING
+Keep the current clean Apple-style modal look.
+Just replace the initials-only visual with:
+- profile image when available
+- graceful fallback initials when not available
+
+Make sure spacing still looks polished in:
+- mobile native build
+- desktop/web modal
+- longer names
+- rows with role badges
+- rows with email text
+
+6. CHECK ALL EMPLOYEE PICKER SURFACES
+Please search for any other reusable employee picker / assignee picker / technician picker row component and update it too if it is the same pattern.
+I do not want one assign modal showing profile pictures and another still showing initials.
+
+EDGE CASES
+Handle:
+- missing avatar
+- broken avatar URL
+- employee with long name
+- employee with only email
+- mixed old/new avatar records
+- fast modal open/close
+- search results updating correctly with avatars
+
+DELIVERABLES
+1. Jobs assign employees/technicians modal shows real profile pictures
+2. Estimates assign employees modal shows real profile pictures
+3. Fallback to initials if no avatar exists
+4. Keep all selection/search/save behavior intact
+5. Use the canonical avatar source already established in the app
+6. Update any shared employee picker component so all matching assignment UIs stay consistent
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- which shared component(s) were updated
+- what avatar field/source is being used in assignment lists
+- any remaining places in the app still using initials-only employee rows that I should review

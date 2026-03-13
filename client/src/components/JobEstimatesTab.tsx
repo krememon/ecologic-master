@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
@@ -348,7 +349,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   };
 
   // Fetch company employees for assignment
-  const { data: employeesData } = useQuery<{ users: { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }[]; total: number }>({
+  const { data: employeesData } = useQuery<{ users: { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string; profileImageUrl?: string | null }[]; total: number }>({
     queryKey: ['/api/org/users'],
   });
   const companyEmployees = employeesData?.users || [];
@@ -1102,6 +1103,15 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                           onCheckedChange={() => {}}
                           className="pointer-events-none"
                         />
+                        <Avatar className="w-9 h-9 flex-shrink-0">
+                          <AvatarImage
+                            src={employee.profileImageUrl || undefined}
+                            alt={employeeName}
+                          />
+                          <AvatarFallback className="text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            {(employee.firstName?.[0] || '').toUpperCase()}{(employee.lastName?.[0] || '').toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{employeeName}</p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">{employee.email || ''}</p>
