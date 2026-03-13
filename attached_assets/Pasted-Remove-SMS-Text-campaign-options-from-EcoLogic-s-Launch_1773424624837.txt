@@ -1,0 +1,73 @@
+Remove SMS/Text campaign options from EcoLogic’s Launch Campaign flow.
+
+GOAL
+Campaigns should be EMAIL ONLY.
+Remove all SMS/text campaign options from the UI and any related mode-selection logic for this flow.
+
+WHAT TO REMOVE
+From the Launch Campaign modal/page:
+- remove “Text”
+- remove “Both”
+- if “Email” is currently part of a segmented toggle, remove the toggle entirely if Email becomes the only option
+- do not leave dead spacing or an awkward one-option segmented control
+
+DESIRED RESULT
+The Launch Campaign flow should now simply behave as an email campaign composer.
+
+UI CHANGES
+- remove the Email / Text / Both selector logic
+- if Email is the only remaining option, just show the email fields naturally without a channel selector
+- keep the layout polished and clean
+- update the subtitle/description if needed so it no longer says “Send an email, text, or both to your clients”
+- change it to something email-only, for example:
+  - “Send an email campaign to your clients”
+  - or equivalent polished wording
+
+ALSO REMOVE / CLEAN UP
+Any text-specific UI tied to this campaign composer, including if present:
+- SMS message textarea
+- SMS character count
+- SMS segment count
+- “Reply STOP to opt out” messaging
+- SMS preview logic
+- text-only validation
+- both-channel branching
+- any conditional rendering based on channel === 'text' or 'both'
+
+IMPORTANT
+Do NOT break the working email campaign flow.
+Preserve:
+- recipient preview
+- email subject/content flow
+- send campaign button
+- validation for email campaigns
+- existing styling and modal behavior
+
+BACKEND / LOGIC CHECK
+Please also audit the send flow:
+- if this launch campaign endpoint currently supports email/text/both branching, remove or safely bypass the SMS branch for this specific feature
+- make sure submitting the campaign only sends email
+- remove dead frontend payload fields related to SMS if they are no longer needed here
+- do not break anything else in unrelated messaging features
+
+CHECK ALL SURFACES
+Search for any related Launch Campaign component/view that still exposes:
+- Text
+- Both
+- SMS body
+- SMS helper text
+and make them consistent
+
+DELIVERABLES
+1. Remove Text and Both campaign options
+2. Make Launch Campaign email-only
+3. Remove SMS-specific fields/helper text/validation from this flow
+4. Keep email campaign flow working cleanly
+5. Update header/subtitle copy to email-only wording
+6. Clean up any dead mode-toggle UI
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether SMS branching was removed from frontend only or frontend + backend
+- updated campaign wording
+- anything I should manually test in the email campaign flow

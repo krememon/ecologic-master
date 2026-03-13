@@ -8,10 +8,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, MessageSquare, Send, Users, Loader2, X, ChevronRight, AlertTriangle } from "lucide-react";
+import { Mail, Send, Users, Loader2, X, ChevronRight, AlertTriangle } from "lucide-react";
 import RecipientPreviewModal from "./RecipientPreviewModal";
 
-type Channel = "email" | "sms" | "both";
 type AudienceMode = "selected" | "all";
 
 interface Recipient {
@@ -46,7 +45,6 @@ export default function CampaignModal({
 }: CampaignModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [channel, setChannel] = useState<Channel>("email");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [recipientModalOpen, setRecipientModalOpen] = useState(false);
@@ -66,17 +64,11 @@ export default function CampaignModal({
     }
   }, [open]);
 
-  useEffect(() => {
-    if (open && channel) {
-      setRecipientsLoaded(false);
-    }
-  }, [channel]);
-
   const fetchRecipientsMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/campaigns/recipients", {
         customerIds: audienceMode === "all" ? [] : selectedCustomerIds,
-        channel,
+        channel: "email",
         audienceMode,
       });
       return res.json();
@@ -84,11 +76,7 @@ export default function CampaignModal({
     onSuccess: (data) => {
       setRecipients(data.recipients);
       const eligibleIds = data.recipients
-        .filter((r: Recipient) => {
-          if (channel === "email") return r.emailEligible;
-          if (channel === "sms") return r.smsEligible;
-          return r.emailEligible || r.smsEligible;
-        })
+        .filter((r: Recipient) => r.emailEligible)
         .map((r: Recipient) => r.id);
       
       if (!recipientsLoaded) {
@@ -110,34 +98,33 @@ export default function CampaignModal({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/campaigns/send", {
         customerIds: campaignRecipientIds.length > 0 ? campaignRecipientIds : (audienceMode === "all" ? [] : selectedCustomerIds),
-        channel,
-        subject: channel === "email" || channel === "both" ? subject : undefined,
-        emailBody: channel === "email" || channel === "both" ? body : undefined,
-        smsBody: channel === "sms" || channel === "both" ? body : undefined,
+        channel: "email",
+        subject,
+        emailBody: body,
         audienceMode: campaignRecipientIds.length > 0 ? "selected" : audienceMode,
         includeUnsubscribed: hasUnsubscribedRecipients,
       });
       return res.json();
     },
     onSuccess: (data) => {
-      const totalSent = (data.emailSent || 0) + (data.smsSent || 0);
-      const totalFailed = (data.emailFailed || 0) + (data.smsFailed || 0);
+      const totalSent = data.emailSent || 0;
+      const totalFailed = data.emailFailed || 0;
       if (totalSent === 0 && totalFailed > 0) {
         toast({
           title: "Campaign Failed",
-          description: `All ${totalFailed} message${totalFailed !== 1 ? 's' : ''} failed to send.`,
+          description: `All ${totalFailed} email${totalFailed !== 1 ? 's' : ''} failed to send.`,
           variant: "destructive",
         });
       } else if (totalFailed > 0) {
         toast({
           title: "Campaign Partially Sent",
-          description: `Sent ${totalSent}, failed ${totalFailed} message${totalFailed !== 1 ? 's' : ''}.`,
+          description: `Sent ${totalSent}, failed ${totalFailed} email${totalFailed !== 1 ? 's' : ''}.`,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Campaign Sent",
-          description: `Successfully sent ${totalSent} message${totalSent !== 1 ? 's' : ''}.`,
+          description: `Successfully sent ${totalSent} email${totalSent !== 1 ? 's' : ''}.`,
         });
       }
       onOpenChange(false);
@@ -156,11 +143,7 @@ export default function CampaignModal({
           const parsed = JSON.parse(jsonMatch[1]);
           if (parsed.error === "NO_ELIGIBLE_RECIPIENTS") {
             title = "No Eligible Recipients";
-            const reasons: string[] = [];
-            if (parsed.skippedNoPhone > 0) reasons.push(`${parsed.skippedNoPhone} missing phone numbers`);
-            if (parsed.skippedInvalidPhone > 0) reasons.push(`${parsed.skippedInvalidPhone} invalid phone numbers`);
-            if (parsed.skippedOptedOut > 0) reasons.push(`${parsed.skippedOptedOut} opted out of SMS`);
-            description = parsed.message + (reasons.length > 0 ? " (" + reasons.join(", ") + ")" : "");
+            description = parsed.message || description;
           } else {
             description = parsed.message || description;
           }
@@ -172,7 +155,6 @@ export default function CampaignModal({
   });
 
   const resetForm = () => {
-    setChannel("email");
     setSubject("");
     setBody("");
     setRecipients([]);
@@ -181,9 +163,7 @@ export default function CampaignModal({
   };
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      resetForm();
-    }
+    if (!open) resetForm();
     onOpenChange(open);
   };
 
@@ -205,7 +185,7 @@ export default function CampaignModal({
   };
 
   const handleSend = () => {
-    if ((channel === "email" || channel === "both") && !subject.trim()) {
+    if (!subject.trim()) {
       toast({
         title: "Subject Required",
         description: "Please enter an email subject.",
@@ -231,35 +211,20 @@ export default function CampaignModal({
     return "Preview recipients";
   };
 
-  const getMessageLabel = () => {
-    if (channel === "email") return "Email Message";
-    if (channel === "sms") return "Text Message";
-    return "Message";
-  };
-
-  const canSend = () => {
-    if ((channel === "email" || channel === "both") && !subject.trim()) return false;
-    if (!body.trim()) return false;
-    if (recipientsLoaded && campaignRecipientIds.length === 0) return false;
-    return true;
-  };
-
   const getRecipientSummary = () => {
     if (!recipientsLoaded) return null;
-    
     const emailCount = campaignRecipientIds.filter((id) => {
       const r = recipients.find((rec) => rec.id === id);
       return r?.emailEligible;
     }).length;
-    
-    const smsCount = campaignRecipientIds.filter((id) => {
-      const r = recipients.find((rec) => rec.id === id);
-      return r?.smsEligible;
-    }).length;
+    return `${emailCount} email`;
+  };
 
-    if (channel === "email") return `${emailCount} email`;
-    if (channel === "sms") return `${smsCount} text`;
-    return `${emailCount} email • ${smsCount} text`;
+  const canSend = () => {
+    if (!subject.trim()) return false;
+    if (!body.trim()) return false;
+    if (recipientsLoaded && campaignRecipientIds.length === 0) return false;
+    return true;
   };
 
   return (
@@ -281,88 +246,33 @@ export default function CampaignModal({
                   <Send className="h-4 w-4" />
                   Launch Campaign
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Send an email, text, or both to your clients</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Send an email campaign to your clients</p>
               </div>
             </div>
 
             {/* Scrollable Body */}
             <div className="px-5 py-4 flex-1 overflow-auto">
               <div className="space-y-4">
-                {/* Channel Segmented Control */}
+                {/* Subject */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Channel</label>
-                  <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/50">
-                    <button
-                      type="button"
-                      onClick={() => setChannel("email")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                        channel === "email"
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <Mail className="h-4 w-4" />
-                      Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChannel("sms")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                        channel === "sms"
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      Text
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChannel("both")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                        channel === "both"
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      Both
-                    </button>
-                  </div>
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Subject</label>
+                  <Input
+                    placeholder="Enter email subject..."
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="h-10 text-sm"
+                  />
                 </div>
 
-                {/* Subject Field (Email or Both) */}
-                {(channel === "email" || channel === "both") && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Subject</label>
-                    <Input
-                      placeholder="Enter email subject..."
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      className="h-10 text-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Message Field */}
+                {/* Email Message */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">{getMessageLabel()}</label>
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Email Message</label>
                   <Textarea
-                    placeholder={channel === "sms" ? "Enter your text message..." : "Enter your message..."}
+                    placeholder="Enter your message..."
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     className="text-sm min-h-[100px] resize-none"
                   />
-                  {(channel === "sms" || channel === "both") && (
-                    <div className="space-y-1">
-                      <p className={`text-xs ${body.length > 160 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {body.length} characters • {Math.ceil(body.length / 160) || 1} SMS segment{Math.ceil(body.length / 160) !== 1 ? 's' : ''}
-                        {body.length > 160 && ' (extra charges may apply)'}
-                      </p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
-                        "Reply STOP to opt out" will be appended automatically.
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Preview Recipients Row */}
@@ -391,19 +301,7 @@ export default function CampaignModal({
                 {recipientsLoaded && campaignRecipientIds.length === 0 && (
                   <div className="text-sm text-amber-600 dark:text-amber-400 px-1 space-y-1">
                     <p className="font-medium">No eligible recipients found.</p>
-                    {channel !== "email" && (() => {
-                      const noPhone = recipients.filter(r => r.smsDisabledReason === "No phone").length;
-                      const invalidPhone = recipients.filter(r => r.smsDisabledReason === "Invalid phone").length;
-                      const optedOut = recipients.filter(r => r.smsDisabledReason === "Not opted in" || r.smsDisabledReason === "Unsubscribed").length;
-                      return (noPhone > 0 || invalidPhone > 0 || optedOut > 0) ? (
-                        <ul className="text-xs list-disc list-inside">
-                          {noPhone > 0 && <li>{noPhone} client{noPhone !== 1 ? 's' : ''} missing phone numbers</li>}
-                          {invalidPhone > 0 && <li>{invalidPhone} client{invalidPhone !== 1 ? 's' : ''} with invalid phone numbers</li>}
-                          {optedOut > 0 && <li>{optedOut} client{optedOut !== 1 ? 's' : ''} opted out of SMS</li>}
-                        </ul>
-                      ) : null;
-                    })()}
-                    {channel !== "sms" && (() => {
+                    {(() => {
                       const noEmail = recipients.filter(r => r.emailDisabledReason === "No email").length;
                       const emailOptedOut = recipients.filter(r => r.emailDisabledReason === "Not opted in" || r.emailDisabledReason === "Unsubscribed").length;
                       return (noEmail > 0 || emailOptedOut > 0) ? (
@@ -455,7 +353,7 @@ export default function CampaignModal({
       <RecipientPreviewModal
         open={recipientModalOpen}
         onOpenChange={setRecipientModalOpen}
-        channel={channel}
+        channel="email"
         recipients={recipients}
         selectedIds={campaignRecipientIds}
         onConfirm={handleRecipientConfirm}
