@@ -1,0 +1,143 @@
+Refresh the EcoLogic modal that currently says “Select Job.”
+
+NEW DIRECTION
+This modal should no longer be job-first.
+Instead of selecting by job, it should go by CUSTOMER first.
+
+Also, I want the modal’s visual design to match the same clean aesthetic as the “Add Line Items” modal.
+
+GOAL
+Turn the current “Select Job” modal into a cleaner customer-first picker that looks and feels like the “Add Line Items” modal.
+
+WHAT TO CHANGE
+
+1. CHANGE THE CONCEPT FROM JOB TO CUSTOMER
+The current modal title is:
+- “Select Job”
+
+Change this flow so it is customer-based instead.
+
+Expected direction:
+- title should become something like “Select Customer”
+- search should search customers, not jobs
+- list content should be customer-based, not job-based
+
+Remove the current job-first framing like:
+- “All jobs”
+- “Company-wide”
+- “No matching jobs”
+
+Replace with customer-based wording and behavior.
+
+2. MATCH THE “ADD LINE ITEMS” MODAL AESTHETIC
+Use the Add Line Items modal as the design reference.
+
+I want the refreshed customer selector to match that same style:
+- cleaner modal shell
+- centered title
+- same close X style
+- same search bar styling
+- same row/list styling
+- same spacing/padding
+- same bottom action area feel
+- same overall polished Apple-style modal look
+
+The current Select Job modal feels older/clunkier than Add Line Items.
+Bring it up to the same design quality.
+
+3. UPDATE COPY / TEXT
+Replace all job-based text with customer-based text.
+
+Examples:
+- Title:
+  from “Select Job”
+  to “Select Customer”
+
+- Search placeholder:
+  from “Search jobs...”
+  to “Search customers...”
+
+- Empty state:
+  from “No matching jobs”
+  to “No matching customers”
+
+- Any rows/options like “All jobs” should be removed or converted appropriately
+
+Do not leave any job wording behind if this flow is becoming customer-first.
+
+4. CUSTOMER LIST BEHAVIOR
+The modal should display customers in a clean list similar to Add Line Items.
+
+Each row should feel clean and tappable.
+Good row content could be:
+- customer name
+- optional secondary info like email / phone / address if already available and helpful
+- clean selected state if needed
+
+Keep it simple and polished.
+No clutter.
+
+5. REMOVE OLD JOB-SPECIFIC OPTIONS
+The screenshot shows old items like:
+- All jobs
+- Company-wide
+
+Those need to be rethought/removed for this new customer-first flow unless there is a very intentional customer equivalent.
+
+Do not just rename them lazily.
+Make the flow make sense as a customer picker.
+
+6. KEEP EXISTING FUNCTIONALITY INTACT
+Do not break the actual downstream behavior this selector drives.
+
+Meaning:
+- once a customer is selected, whatever the next flow is should still work
+- if the system later derives jobs/line items/context from that selected customer, preserve that correctly
+- keep search working
+- keep close/dismiss behavior working
+- keep selection behavior working
+
+If this modal currently feeds another step, update the data flow cleanly so customer selection becomes the correct first step.
+
+7. CHECK WHETHER A SECOND STEP IS NEEDED
+If the existing logic truly needs a job after customer selection, then make it a cleaner 2-step flow:
+- step 1: select customer
+- step 2: select related job if needed
+
+But the first modal should absolutely be customer-first.
+
+Do not keep exposing the current job-first picker if the product direction is customer-first.
+
+8. MOBILE-FIRST POLISH
+This must feel great on mobile:
+- smooth search
+- easy-to-tap list rows
+- consistent height/spacing
+- same visual language as Add Line Items modal
+
+Also make sure web/desktop still looks polished.
+
+9. CHECK ALL SURFACES
+Please audit where this “Select Job” modal is used.
+If this is a shared modal/component, update it carefully.
+I do not want one place still showing the old job-first version while another is refreshed.
+
+10. EMPTY / NO-DATA STATES
+If there are no customers:
+- show a clean empty state
+- customer-based wording only
+- same polished style as the newer modals
+
+DELIVERABLES
+1. Replace “Select Job” with customer-first flow
+2. Search customers instead of jobs
+3. Remove old job-first wording/options
+4. Match the visual aesthetic of the Add Line Items modal
+5. Preserve downstream selection behavior
+6. Keep mobile and web polished
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether this became a customer-only picker or a multi-step customer → job flow
+- what old job-specific UI was removed
+- any other surfaces still using the old Select Job modal

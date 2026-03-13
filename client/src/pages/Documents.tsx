@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File, Search, ChevronDown, Building2, Briefcase, CheckSquare, Square, Check } from "lucide-react";
+import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File, Search, ChevronDown, Building2, CheckSquare, Square, Check } from "lucide-react";
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
@@ -54,10 +54,10 @@ interface JobType {
   status?: string;
 }
 
-type JobFilterMode = 
+type CustomerFilterMode = 
   | { mode: 'all' }
   | { mode: 'company' }
-  | { mode: 'job'; jobId: number; label: string };
+  | { mode: 'customer'; customerId: number; label: string };
 
 function isWorkflowCategory(category: string): boolean {
   return (WORKFLOW_CATEGORIES as readonly string[]).includes(category);
@@ -108,9 +108,9 @@ export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [jobFilter, setJobFilter] = useState<JobFilterMode>({ mode: 'all' });
-  const [jobPickerOpen, setJobPickerOpen] = useState(false);
-  const [jobSearchQuery, setJobSearchQuery] = useState('');
+  const [customerFilter, setCustomerFilter] = useState<CustomerFilterMode>({ mode: 'all' });
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [customerPickerSearchQuery, setCustomerPickerSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("Other");
@@ -396,20 +396,20 @@ export default function Documents() {
     setVisibilityModalOpen(true);
   };
 
-  // Filter jobs for search (uses availableJobs which is pre-filtered for non-admins)
-  const filteredJobs = useMemo(() => {
-    const query = jobSearchQuery.trim().toLowerCase();
-    if (!query) return availableJobs.slice(0, 100);
-    return availableJobs.filter(job => {
+  // Filter customers for the customer picker
+  const filteredPickerCustomers = useMemo(() => {
+    const query = customerPickerSearchQuery.trim().toLowerCase();
+    if (!query) return customersList.slice(0, 100);
+    return customersList.filter(c => {
       const searchFields = [
-        job.title,
-        job.clientName,
-        job.location,
-        job.city
+        `${c.firstName} ${c.lastName}`,
+        c.email,
+        c.phone,
+        c.companyName,
       ].filter(Boolean).map(f => f!.toLowerCase());
       return searchFields.some(field => field.includes(query));
     }).slice(0, 100);
-  }, [availableJobs, jobSearchQuery]);
+  }, [customersList, customerPickerSearchQuery]);
 
   const uploadFilteredCustomers = useMemo(() => {
     const query = uploadCustomerSearchQuery.trim().toLowerCase();
@@ -428,11 +428,11 @@ export default function Documents() {
   const filteredDocuments = useMemo(() => {
     let result = documents;
     
-    // Filter by job
-    if (jobFilter.mode === 'company') {
-      result = result.filter(doc => doc.jobId === null);
-    } else if (jobFilter.mode === 'job') {
-      result = result.filter(doc => doc.jobId === jobFilter.jobId);
+    // Filter by customer
+    if (customerFilter.mode === 'company') {
+      result = result.filter(doc => doc.customerId === null);
+    } else if (customerFilter.mode === 'customer') {
+      result = result.filter(doc => doc.customerId === customerFilter.customerId);
     }
     
     // Filter by category
@@ -441,7 +441,7 @@ export default function Documents() {
     }
     
     return result;
-  }, [documents, activeCategory, jobFilter]);
+  }, [documents, activeCategory, customerFilter]);
 
   // Auto-deselect items that are no longer visible due to filter changes
   const visibleIds = useMemo(() => new Set(filteredDocuments.map(d => d.id)), [filteredDocuments]);
@@ -515,15 +515,15 @@ export default function Documents() {
               <Button 
                 variant="outline" 
                 className="flex-1 justify-between"
-                onClick={() => setJobPickerOpen(true)}
-                data-testid="button-job-picker"
+                onClick={() => setCustomerPickerOpen(true)}
+                data-testid="button-customer-picker"
               >
                 <span className="truncate">
-                  {jobFilter.mode === 'all' 
-                    ? (userIsAdmin ? 'All jobs' : 'Your assigned jobs') 
-                    : jobFilter.mode === 'company' 
-                      ? 'Company-wide' 
-                      : jobFilter.label}
+                  {customerFilter.mode === 'all' 
+                    ? 'All customers' 
+                    : customerFilter.mode === 'company' 
+                      ? 'No customer' 
+                      : customerFilter.label}
                 </span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
@@ -562,20 +562,20 @@ export default function Documents() {
               )}
             </div>
 
-            {/* Selected Job Chip - show when a specific job is selected */}
-            {jobFilter.mode === 'job' && (
+            {/* Selected Customer Chip - show when a specific customer is selected */}
+            {customerFilter.mode === 'customer' && (
               <div className="flex items-center gap-2">
                 <Badge 
                   variant="secondary" 
                   className="flex items-center gap-1 px-3 py-1.5 text-sm"
-                  data-testid="chip-selected-job"
+                  data-testid="chip-selected-customer"
                 >
-                  <Briefcase className="h-3 w-3" />
-                  <span className="truncate max-w-[200px]">Job: {jobFilter.label}</span>
+                  <FolderOpen className="h-3 w-3" />
+                  <span className="truncate max-w-[200px]">{customerFilter.label}</span>
                   <button 
-                    onClick={() => setJobFilter({ mode: 'all' })}
+                    onClick={() => setCustomerFilter({ mode: 'all' })}
                     className="ml-1 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full p-0.5"
-                    data-testid="button-clear-job-filter"
+                    data-testid="button-clear-customer-filter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -984,96 +984,121 @@ export default function Documents() {
         </TabsContent>
       </Tabs>
 
-      {/* Job Picker Modal */}
-      <Dialog open={jobPickerOpen} onOpenChange={(open) => {
-        setJobPickerOpen(open);
-        if (!open) setJobSearchQuery('');
+      {/* Customer Picker Modal */}
+      <Dialog open={customerPickerOpen} onOpenChange={(open) => {
+        setCustomerPickerOpen(open);
+        if (!open) setCustomerPickerSearchQuery('');
       }}>
-        <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Select Job</DialogTitle>
-          </DialogHeader>
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search jobs..."
-              value={jobSearchQuery}
-              onChange={(e) => setJobSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-job-search"
-            />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden max-h-[80vh] flex flex-col" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Select Customer
+            </DialogTitle>
+            <button
+              onClick={() => setCustomerPickerOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <div className="flex-1 overflow-auto space-y-1">
-            {/* Quick Options */}
-            <div className="pb-2 mb-2 border-b">
-              {/* All jobs / Your assigned jobs option */}
-              <button
-                onClick={() => {
-                  setJobFilter({ mode: 'all' });
-                  setJobPickerOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  jobFilter.mode === 'all' 
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-                data-testid="option-all-jobs"
-              >
-                <FolderOpen className="h-4 w-4 text-slate-500" />
-                <span>{userIsAdmin ? 'All jobs' : 'Your assigned jobs'}</span>
-              </button>
-              {/* Company-wide option - only for admins */}
-              {userIsAdmin && (
-                <button
-                  onClick={() => {
-                    setJobFilter({ mode: 'company' });
-                    setJobPickerOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    jobFilter.mode === 'company' 
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                  data-testid="option-company-wide"
-                >
-                  <Building2 className="h-4 w-4 text-slate-500" />
-                  <span>Company-wide</span>
-                </button>
-              )}
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search customers..."
+                value={customerPickerSearchQuery}
+                onChange={(e) => setCustomerPickerSearchQuery(e.target.value)}
+                className="pl-10 h-10 rounded-xl"
+                data-testid="input-customer-picker-search"
+              />
             </div>
-            {/* Job List */}
-            {filteredJobs.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                No matching jobs
+          </div>
+          <div className="flex-1 overflow-auto py-1 bg-white dark:bg-slate-900">
+            {/* All customers option */}
+            <button
+              onClick={() => {
+                setCustomerFilter({ mode: 'all' });
+                setCustomerPickerOpen(false);
+                setCustomerPickerSearchQuery('');
+              }}
+              className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                customerFilter.mode === 'all'
+                  ? 'bg-blue-50 dark:bg-blue-900/20'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+              }`}
+              data-testid="option-all-customers"
+            >
+              <div className="flex items-center gap-3">
+                <FolderOpen className="h-4 w-4 text-slate-500" />
+                <span className="font-medium text-slate-900 dark:text-slate-100">All customers</span>
+              </div>
+              {customerFilter.mode === 'all' && (
+                <Check className="h-5 w-5 text-blue-600" />
+              )}
+            </button>
+            {/* No customer / company-wide option */}
+            <button
+              onClick={() => {
+                setCustomerFilter({ mode: 'company' });
+                setCustomerPickerOpen(false);
+                setCustomerPickerSearchQuery('');
+              }}
+              className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                customerFilter.mode === 'company'
+                  ? 'bg-blue-50 dark:bg-blue-900/20'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+              }`}
+              data-testid="option-no-customer"
+            >
+              <div className="flex items-center gap-3">
+                <Building2 className="h-4 w-4 text-slate-500" />
+                <span className="font-medium text-slate-900 dark:text-slate-100">No customer</span>
+              </div>
+              {customerFilter.mode === 'company' && (
+                <Check className="h-5 w-5 text-blue-600" />
+              )}
+            </button>
+            <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4 my-1" />
+            {/* Customer list */}
+            {filteredPickerCustomers.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                No matching customers
               </div>
             ) : (
-              filteredJobs.map((job) => {
-                const label = job.title + (job.clientName ? ` - ${job.clientName}` : '');
-                const isSelected = jobFilter.mode === 'job' && jobFilter.jobId === job.id;
+              filteredPickerCustomers.map((customer, index) => {
+                const label = `${customer.firstName} ${customer.lastName}`;
+                const isSelected = customerFilter.mode === 'customer' && customerFilter.customerId === customer.id;
+                const secondary = customer.companyName || customer.email || customer.phone;
                 return (
-                  <button
-                    key={job.id}
-                    onClick={() => {
-                      setJobFilter({ mode: 'job', jobId: job.id, label });
-                      setJobPickerOpen(false);
-                    }}
-                    className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                      isSelected 
-                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                    data-testid={`option-job-${job.id}`}
-                  >
-                    <Briefcase className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-500" />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{job.title}</div>
-                      {(job.clientName || job.city) && (
-                        <div className="text-xs text-slate-500 truncate">
-                          {[job.clientName, job.city].filter(Boolean).join(' • ')}
-                        </div>
+                  <div key={customer.id}>
+                    <button
+                      onClick={() => {
+                        setCustomerFilter({ mode: 'customer', customerId: customer.id, label });
+                        setCustomerPickerOpen(false);
+                        setCustomerPickerSearchQuery('');
+                      }}
+                      className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50 dark:bg-blue-900/20'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                      }`}
+                      data-testid={`option-customer-${customer.id}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{label}</div>
+                        {secondary && (
+                          <div className="text-xs text-slate-500 truncate mt-0.5">{secondary}</div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="h-5 w-5 text-blue-600 shrink-0 ml-3" />
                       )}
-                    </div>
-                  </button>
+                    </button>
+                    {index < filteredPickerCustomers.length - 1 && (
+                      <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+                    )}
+                  </div>
                 );
               })
             )}
