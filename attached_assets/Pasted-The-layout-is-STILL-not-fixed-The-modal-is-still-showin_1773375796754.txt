@@ -1,0 +1,119 @@
+The layout is STILL not fixed. The modal is still showing a giant empty/blank preview area and the overall Generate Invoice PDF experience is still bad on mobile/webview. We need to stop theorizing and fix the ACTUAL UI being rendered.
+
+PROBLEM
+Current state from the screenshot:
+- giant empty gray/blank preview block still takes up most of the modal
+- preview content is not actually useful or visible
+- the layout still feels broken and awkward
+- there is too much dead space
+- actions are pushed down by a useless preview area
+- this is still not a polished mobile PDF flow
+
+The previous explanation may describe partial fixes, but the real user-facing layout is still bad.
+
+GOAL
+Make the Generate Invoice PDF flow look clean and intentional on mobile/native/webview, even when inline PDF preview is not viable.
+
+IMPORTANT
+Stop trying to preserve a broken giant preview area just because a preview container exists.
+If inline preview is unreliable or unavailable in this flow, redesign the modal so it looks GOOD without depending on a huge blank preview.
+
+We need a REAL product-quality mobile layout.
+
+WHAT TO DO
+
+1) TRACE THE EXACT COMPONENT/STATE BEING RENDERED
+Find the exact component and branch active in the screenshot.
+Log/render-inspect:
+- component name
+- is native?
+- is webview?
+- previewImageUrl present?
+- iframe branch active?
+- image branch active?
+- fallback branch active?
+- computed preview container height
+
+Do not assume the correct branch is being used.
+
+2) STOP SHOWING A GIANT EMPTY PREVIEW AREA
+If there is no real visible preview, do NOT reserve a massive gray box.
+
+Instead, for native/webview/mobile when preview is unavailable or low quality:
+- show a compact, polished PDF summary card
+- include file icon
+- filename
+- generated status
+- actions like:
+  - Open PDF
+  - Regenerate
+  - Continue / Next
+  - Pay Invoice
+  - Cancel
+
+If previewImageUrl exists and actually renders well, show a SMALLER, properly sized preview card.
+If not, switch to a deliberate “document ready” layout with no giant empty box.
+
+3) REDESIGN THE MODAL FOR MOBILE
+Make the mobile layout feel intentional:
+- tighter, cleaner header
+- nice file row
+- compact preview/document card
+- no oversized dead space
+- buttons visible without awkward scrolling
+- balanced spacing top to bottom
+
+Suggested structure:
+- title
+- filename/document row
+- compact preview or “PDF ready” card
+- primary actions
+- secondary actions
+
+4) PREVIEW RULES
+Implement smart behavior:
+- If preview image exists and displays properly → show it in a contained card with realistic max height
+- If preview is blank/unavailable → do NOT show giant placeholder space
+- Show a polished fallback state instead:
+  - “Invoice PDF is ready”
+  - button to open/view full PDF
+  - optional regenerate action
+
+5) FIX THE HEIGHT LOGIC
+The current preview area is too tall and dominates the modal.
+Reduce/remove the giant reserved height.
+Use mobile-friendly sizing, for example:
+- compact max height
+- fit-content behavior when no preview
+- no permanent 55vh-style blank block unless actual preview content is visible
+
+6) CLEAN UP ACTIONS
+Bottom actions should feel polished and tight:
+- Next
+- Pay Invoice
+- Cancel
+
+No weird giant gap above them.
+No awkward scroll just to reach them.
+
+7) VERIFY ON THE REAL FLOW
+Test the ACTUAL flow shown in the screenshot:
+- subcontract/native/webview path
+- modal on small mobile width
+- confirm result visually
+
+DELIVERABLES
+Return:
+1. exact component/file and actual branch used in this screenshot
+2. whether previewImageUrl is actually present in this flow
+3. whether iframe/image/fallback branch was really rendering
+4. exact files changed
+5. what was changed to remove the giant blank area
+6. confirmation that the modal now looks polished on the actual mobile flow
+
+SUCCESS CRITERIA
+- no giant useless blank preview area
+- modal looks intentional and clean on mobile
+- filename/actions are laid out properly
+- user can continue/open/pay without ugly dead space
+- actual screenshot-worthy result on the real flow

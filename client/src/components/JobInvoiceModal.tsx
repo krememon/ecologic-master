@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, X } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, CreditCard, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isNativePlatform } from "@/lib/capacitor";
 
@@ -312,7 +312,7 @@ export function JobInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={pdfUrl && step === 1 ? "w-[95vw] max-w-lg p-0 gap-0 overflow-hidden rounded-2xl flex flex-col max-h-[92vh]" : "w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl"} hideCloseButton>
+      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
         <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
           <div className="min-w-[44px]" />
           <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -394,151 +394,104 @@ export function JobInvoiceModal({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col flex-1 overflow-hidden">
-                {/* File info row */}
-                <div className="px-4 pt-3 pb-2 flex-shrink-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <FileText className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
-                        {pdfFileName}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.open(pdfUrl, "_blank")}
-                        className="h-8 px-2"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        asChild
-                        className="h-8 px-2"
-                      >
-                        <a href={pdfUrl} download={pdfFileName}>
-                          <Download className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleRegenerate}
-                    disabled={generatePdfMutation.isPending}
-                    className="mt-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline flex items-center gap-1"
-                  >
-                    {generatePdfMutation.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                    Regenerate
-                  </button>
-                </div>
-
-                {/* PDF Preview */}
-                {isNative ? (
-                  previewImageUrl ? (
-                    /* Native + has preview image: show it full-width, tap to open */
+              <div className="p-4 space-y-3">
+                {/* Document card */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 overflow-hidden">
+                  {/* Preview thumbnail — only shown when server actually produced one */}
+                  {previewImageUrl && (
                     <div
-                      className="flex-1 relative bg-slate-100 dark:bg-slate-800 mx-4 mb-3 rounded-xl overflow-hidden cursor-pointer"
-                      style={{ minHeight: 0 }}
+                      className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer max-h-48 overflow-hidden flex items-center justify-center"
                       onClick={() => window.open(pdfUrl!, "_blank")}
                     >
                       <img
                         src={previewImageUrl}
-                        alt="Invoice Preview"
-                        className="w-full h-full object-contain"
+                        alt="Invoice preview"
+                        className="w-full object-contain max-h-48"
                       />
-                      <div className="absolute bottom-2 right-2 bg-white/90 dark:bg-slate-800/90 rounded-full px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 shadow-sm">
-                        <Maximize2 className="h-3 w-3" />
-                        Tap to enlarge
+                    </div>
+                  )}
+
+                  {/* File info */}
+                  <div className="p-3.5 flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                        {pdfFileName}
+                      </p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">PDF Ready</span>
                       </div>
                     </div>
-                  ) : (
-                    /* Native + no preview image: clean tap-to-open card */
-                    <div className="flex-1 flex flex-col items-center justify-center mx-4 mb-3">
-                      <div
-                        className="w-full rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-8 flex flex-col items-center gap-3 cursor-pointer"
-                        onClick={() => window.open(pdfUrl!, "_blank")}
-                      >
-                        <FileText className="h-14 w-14 text-slate-300 dark:text-slate-600" />
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 text-center">
-                          PDF ready
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl"
-                          onClick={(e) => { e.stopPropagation(); window.open(pdfUrl!, "_blank"); }}
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Open PDF
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  /* Web: image if available, iframe as fallback */
-                  <div
-                    className="relative flex-1 bg-slate-100 dark:bg-slate-800 px-4 pb-3 cursor-pointer group"
-                    style={{ minHeight: 0 }}
-                    onClick={() => window.open(`${pdfUrl}#view=Fit`, "_blank")}
-                  >
-                    <div className="w-full h-full bg-white dark:bg-slate-900 rounded-xl shadow-sm overflow-hidden">
-                      {previewImageUrl ? (
-                        <img
-                          src={previewImageUrl}
-                          alt="Invoice Preview"
-                          className="w-full h-full object-contain"
-                          onLoad={() => setPreviewLoading(false)}
-                          onError={() => { setPreviewLoading(false); setPreviewError(true); }}
-                        />
-                      ) : (
-                        <iframe
-                          key={pdfUrl}
-                          src={`${pdfUrl}#view=Fit`}
-                          title="Invoice PDF Preview"
-                          className="w-full h-full"
-                          style={{ border: 0 }}
-                          onLoad={() => setPreviewLoading(false)}
-                          onError={() => { setPreviewLoading(false); setPreviewError(true); }}
-                        />
-                      )}
-                      {previewLoading && (
-                        <div className="absolute inset-4 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 rounded-xl">
-                          <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-                            <span className="text-sm text-slate-500">Loading preview...</span>
-                          </div>
-                        </div>
-                      )}
-                      {previewError && !previewLoading && (
-                        <div className="absolute inset-4 flex items-center justify-center bg-white dark:bg-slate-900 rounded-xl">
-                          <div className="flex flex-col items-center gap-3 text-center p-4">
-                            <FileText className="h-12 w-12 text-slate-300" />
-                            <p className="text-sm text-slate-500">Preview not available</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); window.open(pdfUrl!, "_blank"); }}
-                            >
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              Open PDF
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="absolute bottom-5 right-6 bg-white/90 dark:bg-slate-800/90 rounded-full px-2.5 py-1 text-xs text-slate-500 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm pointer-events-none">
-                      <Maximize2 className="h-3 w-3" />
-                      Tap to enlarge
-                    </div>
+                    <a href={pdfUrl!} download={pdfFileName ?? undefined} className="flex-shrink-0">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </a>
                   </div>
+
+                  {/* Card actions */}
+                  <div className="flex border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={() => window.open(pdfUrl!, "_blank")}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View PDF
+                    </button>
+                    <div className="w-px bg-slate-200 dark:bg-slate-700" />
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={generatePdfMutation.isPending}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors disabled:opacity-50"
+                    >
+                      {generatePdfMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary actions */}
+                <Button
+                  onClick={() => setStep(2)}
+                  className="w-full h-11 rounded-xl font-medium"
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+                {invoiceId && canShowPayButton && (
+                  <Button
+                    variant="outline"
+                    onClick={handleGetPaymentLink}
+                    disabled={paymentLinkLoading}
+                    className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
+                  >
+                    {paymentLinkLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Pay Invoice
+                      </>
+                    )}
+                  </Button>
                 )}
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="w-full h-11 rounded-xl font-medium"
+                >
+                  Cancel
+                </Button>
               </div>
             )}
           </div>
@@ -637,44 +590,6 @@ export function JobInvoiceModal({
           </div>
         )}
 
-        {step === 1 && pdfUrl && (
-          <div className="flex-shrink-0 p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
-            <Button
-              onClick={() => setStep(2)}
-              className="w-full h-11 rounded-xl font-medium"
-            >
-              Next
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-            {invoiceId && canShowPayButton && (
-              <Button
-                variant="outline"
-                onClick={handleGetPaymentLink}
-                disabled={paymentLinkLoading}
-                className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
-              >
-                {paymentLinkLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Pay Invoice
-                  </>
-                )}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              className="w-full h-11 rounded-xl font-medium"
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
