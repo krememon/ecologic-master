@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, CreditCard, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 
 interface ConnectStatus {
   hasAccount: boolean;
@@ -40,9 +42,17 @@ function StatusIcon({ status }: { status: string }) {
 export default function StripeConnectSettings() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isTechnician = user?.role === 'TECHNICIAN';
+
+  // Redirect technicians away — effect fires after render, guard below stops them rendering content
+  useEffect(() => {
+    if (isTechnician) setLocation('/');
+  }, [isTechnician, setLocation]);
 
   const { data: statusData, isLoading } = useQuery<ConnectStatus>({
     queryKey: ["/api/stripe-connect/status"],
+    enabled: !isTechnician,
   });
 
   const createAccountMutation = useMutation({
@@ -100,6 +110,9 @@ export default function StripeConnectSettings() {
   function startOnboarding() {
     onboardingLinkMutation.mutate();
   }
+
+  // Render nothing while redirect is in-flight for technicians
+  if (isTechnician) return null;
 
   if (isLoading) {
     return (

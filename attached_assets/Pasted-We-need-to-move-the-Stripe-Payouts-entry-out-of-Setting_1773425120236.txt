@@ -1,0 +1,89 @@
+We need to move the Stripe Payouts entry out of Settings and into Customize, and make sure technicians cannot see it.
+
+GOAL
+- Remove “Stripe Payouts” from the Settings page
+- Add it to the Customize area instead
+- Hide it from Technicians
+- Keep access only for the appropriate higher-permission roles
+
+CURRENT ISSUE
+Right now Stripe Payouts is showing in Settings.
+I want it moved into Customize, and Technicians should not see it at all.
+
+WHAT TO CHANGE
+
+1. REMOVE STRIPE PAYOUTS FROM SETTINGS
+On the Settings page:
+- remove the “Stripe Payouts” card/row completely
+- keep the rest of Settings intact
+- make sure spacing/layout still looks polished after removal
+
+2. ADD STRIPE PAYOUTS TO CUSTOMIZE
+Add a new entry/card/row for Stripe Payouts inside the Customize section/page.
+
+It should:
+- fit the design style of the Customize page
+- feel like a normal EcoLogic settings/customization item
+- preserve the current Stripe Payouts click behavior / destination / flow
+- keep the same icon if it still looks good, or use a better-fitting payments/payout icon if needed
+
+3. ROLE VISIBILITY / RBAC
+Technicians should NOT see Stripe Payouts anywhere.
+
+Expected behavior:
+- Owner: can see Stripe Payouts in Customize
+- Admin / authorized manager roles: only if current business rules intend they should have access
+- Technician: must not see it in Settings or Customize
+- Do not expose the route/action in UI to technicians
+
+Please follow the app’s current RBAC philosophy:
+- hidden, not disabled
+- if a role should not access it, do not show it
+
+4. CHECK ROUTE ACCESS TOO
+Do not just hide the card visually.
+Also verify the underlying Stripe Payouts screen/route is protected so technicians cannot navigate to it manually if they type the URL or hit a stale link.
+
+If needed:
+- add/verify role guard on the route/page
+- redirect unauthorized users safely
+
+5. KEEP EXISTING STRIPE PAYOUTS FUNCTIONALITY
+Do NOT break:
+- Stripe Connect onboarding/access
+- payout setup flow
+- any existing link or page for managing payouts
+- any owner/admin payout settings logic
+
+This is mostly an information architecture + permissions cleanup.
+
+6. CHECK ALL SURFACES
+Please audit:
+- Settings page
+- Customize page
+- mobile/native nav
+- desktop/web nav
+- any quick links or duplicate cards referencing Stripe Payouts
+
+I do not want it showing in both places.
+
+7. POLISH
+After moving it:
+- Customize layout should still look clean
+- Settings should not have an awkward gap
+- Stripe Payouts should feel naturally placed in Customize
+
+DELIVERABLES
+1. Stripe Payouts removed from Settings
+2. Stripe Payouts added to Customize
+3. Technicians cannot see Stripe Payouts
+4. Underlying route/page is protected from technician access
+5. Existing payout flow still works for authorized roles
+6. No duplicate Stripe Payouts entry remains elsewhere unintentionally
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether the move was page-level or shared menu/config-level
+- which roles can now see Stripe Payouts
+- how unauthorized technician access is blocked
+- anything I should manually test

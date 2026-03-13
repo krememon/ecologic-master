@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send, Scale, Info, Headphones, ChevronRight, CreditCard } from "lucide-react";
+import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send, Scale, Info, Headphones, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
 import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
@@ -599,26 +599,6 @@ export default function Settings() {
             <BillingSection />
           </div>
         )}
-
-        {/* Stripe Payouts */}
-        <Card className="lg:col-span-2">
-          <CardContent className="p-0">
-            <Link href="/settings/stripe-connect">
-              <div className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors rounded-xl">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <CreditCard className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-slate-900 dark:text-slate-100">Stripe Payouts</div>
-                    <div className="text-sm text-slate-500 dark:text-slate-400">Connect Stripe to receive subcontractor payouts</div>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
-            </Link>
-          </CardContent>
-        </Card>
 
         {/* Legal */}
         <Card className="lg:col-span-2">
