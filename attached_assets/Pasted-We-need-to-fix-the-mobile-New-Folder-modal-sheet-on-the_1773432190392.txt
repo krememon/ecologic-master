@@ -1,0 +1,114 @@
+We need to fix the mobile New Folder modal/sheet on the EcoLogic Documents file-cabinet page.
+
+ISSUE
+On mobile, when I tap into the Folder Name input and the keyboard opens, the whole layout shifts awkwardly and looks broken.
+The modal is not handling keyboard/safe-area/input focus properly.
+
+GOAL
+Make the New Folder creation UI feel properly formatted on mobile when the keyboard opens:
+- no weird shifting
+- no broken spacing
+- no title/input jumping around
+- no awkward resize behavior
+- clean iPhone-native feel
+
+WHAT TO FIX
+
+1. FIX MOBILE KEYBOARD BEHAVIOR
+Audit the New Folder modal/sheet on mobile and fix how it responds when the keyboard appears.
+
+Desired behavior:
+- modal stays visually stable
+- content remains readable
+- Folder Name field stays accessible
+- Create / Cancel controls remain properly positioned
+- no giant layout jump
+- no weird compressed top area
+- no broken safe-area spacing around Dynamic Island / top inset / bottom inset
+
+2. FORMAT IT LIKE A PROPER MOBILE SHEET/MODAL
+Make the New Folder UI feel like a clean native-style input sheet.
+
+Expected structure:
+- stable header with:
+  - Cancel on left
+  - title centered
+  - Create on right
+- Folder Name label
+- input field below
+- clean padding
+- proper safe-area spacing
+- keyboard should not destroy the layout
+
+3. DO NOT LET THE WHOLE SCREEN SHIFT BADLY
+The keyboard should not cause the entire overlay/page to jump in an ugly way.
+
+Please check for issues like:
+- body scroll locking problems
+- viewport height issues on iPhone/webview
+- incorrect fixed/absolute positioning
+- missing keyboard avoidance container
+- bottom safe-area / visual viewport handling
+- modal anchored incorrectly to page instead of viewport
+
+4. MOBILE-FIRST SOLUTION
+This needs to work especially well on:
+- iPhone native build
+- mobile Safari/webview style behavior
+- narrow screens
+
+Desktop/web should still remain clean too.
+
+5. INPUT / ACTION VISIBILITY
+When typing folder name:
+- input should stay visible
+- Create button should still be accessible or sensibly placed
+- header should remain readable
+- nothing should overlap the Dynamic Island / status area
+- no clipped modal corners / broken geometry
+
+6. CLEAN UP THE PLACEHOLDER TEXT TOO
+While touching this modal, clean up the placeholder text.
+Replace:
+- “e.g. Contracts, Permits, Photos...”
+with:
+- “Folder Name”
+
+No example-style placeholder copy.
+
+7. KEEP FUNCTIONALITY INTACT
+Do NOT break:
+- create folder action
+- cancel action
+- subfolder creation
+- root folder creation
+- keyboard submit behavior if supported
+- modal open/close
+- folder creation success flow
+
+8. CHECK ALL FOLDER-CREATION SURFACES
+If the same New Folder modal/sheet is reused for:
+- root folder creation
+- subfolder creation
+make sure both benefit from the mobile keyboard/layout fix.
+
+9. POLISH
+After the fix, it should feel:
+- stable
+- native
+- minimal
+- not janky
+- visually aligned with the rest of EcoLogic’s cleaner modals
+
+DELIVERABLES
+1. Fix mobile keyboard/layout shifting in New Folder modal
+2. Keep header/input/actions properly formatted on iPhone
+3. Replace placeholder with “Folder Name”
+4. Preserve create/cancel behavior
+5. Apply fix to both root and subfolder creation if shared
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- what caused the mobile shifting
+- whether the fix was CSS/layout only or component logic too
+- whether both root-folder and subfolder creation use the same fixed modal

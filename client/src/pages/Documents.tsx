@@ -1,9 +1,10 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -117,6 +118,23 @@ export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const createFolderInputRef = useRef<HTMLInputElement>(null);
+  const renameFolderInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus folder name inputs after sheet slides in (delay avoids keyboard fighting animation)
+  useEffect(() => {
+    if (createFolderOpen) {
+      const t = setTimeout(() => createFolderInputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }
+  }, [createFolderOpen]);
+
+  useEffect(() => {
+    if (renameFolder) {
+      const t = setTimeout(() => renameFolderInputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }
+  }, [renameFolder]);
 
   // ── Navigation state ──
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbEntry[]>([{ id: null, name: "Documents" }]);
@@ -434,81 +452,87 @@ export default function Documents() {
         )}
       </div>
 
-      {/* ── Create Folder Modal ──────────────────────────────────────── */}
-      <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
-        <DialogContent className="rounded-2xl max-w-sm mx-auto" hideCloseButton>
-          <DialogHeader>
-            <div className="flex items-center justify-between mb-1">
-              <button
-                onClick={() => setCreateFolderOpen(false)}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <DialogTitle className="text-base font-semibold">New Folder</DialogTitle>
-              <button
-                type="submit"
-                form="create-folder-form"
-                className="text-sm font-semibold text-primary disabled:opacity-40"
-                disabled={!newFolderName.trim() || createFolderMutation.isPending}
-              >
-                {createFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
-              </button>
-            </div>
-          </DialogHeader>
-          <form id="create-folder-form" onSubmit={handleCreateFolder} className="space-y-4 pt-2">
-            <div>
-              <Label htmlFor="folder-name" className="text-sm font-medium">Folder Name</Label>
-              <Input
-                id="folder-name"
-                autoFocus
-                value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
-                placeholder="e.g. Contracts, Permits, Photos…"
-                className="mt-1"
-              />
-            </div>
+      {/* ── Create Folder Sheet (bottom — keyboard-safe on mobile) ──── */}
+      <Sheet open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          className="rounded-t-2xl px-4 pt-4 pb-[env(safe-area-inset-bottom,16px)]"
+        >
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => { setCreateFolderOpen(false); setNewFolderName(""); }}
+              className="text-sm text-muted-foreground hover:text-foreground min-w-[56px]"
+            >
+              Cancel
+            </button>
+            <SheetTitle className="text-base font-semibold">New Folder</SheetTitle>
+            <button
+              type="submit"
+              form="create-folder-form"
+              className="text-sm font-semibold text-primary disabled:opacity-40 min-w-[56px] text-right"
+              disabled={!newFolderName.trim() || createFolderMutation.isPending}
+            >
+              {createFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Create"}
+            </button>
+          </div>
+          {/* Form */}
+          <form id="create-folder-form" onSubmit={handleCreateFolder}>
+            <Label htmlFor="folder-name" className="text-sm font-medium">Folder Name</Label>
+            <Input
+              id="folder-name"
+              ref={createFolderInputRef}
+              value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              placeholder="Folder Name"
+              className="mt-1.5"
+              onKeyDown={e => e.key === "Enter" && handleCreateFolder(e as any)}
+            />
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
-      {/* ── Rename Folder Modal ──────────────────────────────────────── */}
-      <Dialog open={!!renameFolder} onOpenChange={open => !open && setRenameFolder(null)}>
-        <DialogContent className="rounded-2xl max-w-sm mx-auto" hideCloseButton>
-          <DialogHeader>
-            <div className="flex items-center justify-between mb-1">
-              <button
-                onClick={() => setRenameFolder(null)}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <DialogTitle className="text-base font-semibold">Rename Folder</DialogTitle>
-              <button
-                type="submit"
-                form="rename-folder-form"
-                className="text-sm font-semibold text-primary disabled:opacity-40"
-                disabled={!renameName.trim() || renameFolderMutation.isPending}
-              >
-                {renameFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-              </button>
-            </div>
-          </DialogHeader>
-          <form id="rename-folder-form" onSubmit={handleRenameFolder} className="space-y-4 pt-2">
-            <div>
-              <Label htmlFor="rename-name" className="text-sm font-medium">Folder Name</Label>
-              <Input
-                id="rename-name"
-                autoFocus
-                value={renameName}
-                onChange={e => setRenameName(e.target.value)}
-                placeholder="Folder name"
-                className="mt-1"
-              />
-            </div>
+      {/* ── Rename Folder Sheet (bottom — keyboard-safe on mobile) ──── */}
+      <Sheet open={!!renameFolder} onOpenChange={open => !open && setRenameFolder(null)}>
+        <SheetContent
+          side="bottom"
+          hideCloseButton
+          className="rounded-t-2xl px-4 pt-4 pb-[env(safe-area-inset-bottom,16px)]"
+        >
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setRenameFolder(null)}
+              className="text-sm text-muted-foreground hover:text-foreground min-w-[56px]"
+            >
+              Cancel
+            </button>
+            <SheetTitle className="text-base font-semibold">Rename Folder</SheetTitle>
+            <button
+              type="submit"
+              form="rename-folder-form"
+              className="text-sm font-semibold text-primary disabled:opacity-40 min-w-[56px] text-right"
+              disabled={!renameName.trim() || renameFolderMutation.isPending}
+            >
+              {renameFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Save"}
+            </button>
+          </div>
+          {/* Form */}
+          <form id="rename-folder-form" onSubmit={handleRenameFolder}>
+            <Label htmlFor="rename-name" className="text-sm font-medium">Folder Name</Label>
+            <Input
+              id="rename-name"
+              ref={renameFolderInputRef}
+              value={renameName}
+              onChange={e => setRenameName(e.target.value)}
+              placeholder="Folder Name"
+              className="mt-1.5"
+              onKeyDown={e => e.key === "Enter" && handleRenameFolder(e as any)}
+            />
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* ── Upload Modal ─────────────────────────────────────────────── */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
