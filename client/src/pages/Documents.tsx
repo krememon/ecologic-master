@@ -112,8 +112,8 @@ function isPdfFile(type: string | null, name: string): boolean {
 }
 
 // ─── FolderNameModal ─────────────────────────────────────────────────────────
-// Custom bottom-anchored sheet that tracks window.visualViewport so it stays
-// pinned just above the keyboard without any layout shift on iOS/WKWebView.
+// Stable centered modal — no keyboard-avoidance movement, no bottom-sheet
+// translation. The overlay stays fixed in place regardless of keyboard state.
 
 function FolderNameModal({
   open,
@@ -134,7 +134,6 @@ function FolderNameModal({
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Lock body scroll while open
@@ -145,52 +144,17 @@ function FolderNameModal({
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  // Track visual viewport to stay above keyboard — works on iOS WKWebView/Capacitor
-  useEffect(() => {
-    if (!open) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    function update() {
-      // Amount the keyboard has pushed up from the bottom of the screen
-      const pushed = window.innerHeight - (vv!.height + vv!.offsetTop);
-      if (panelRef.current) {
-        panelRef.current.style.transform = `translateY(-${Math.max(0, pushed)}px)`;
-      }
-    }
-
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    update();
-
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, [open]);
-
-  // Focus input shortly after the panel appears (let slide-in finish first)
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 120);
-    return () => clearTimeout(t);
-  }, [open]);
-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60]" aria-modal="true">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" aria-modal="true">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
 
-      {/* Panel — anchored bottom-0, translateY tracks keyboard via visualViewport */}
-      <div
-        ref={panelRef}
-        className="absolute bottom-0 inset-x-0 bg-background rounded-t-2xl shadow-xl"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
-      >
+      {/* Centered card — never moves, keyboard overlaps below it */}
+      <div className="relative w-full max-w-sm bg-background rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
           <button
             type="button"
             onClick={onCancel}
@@ -209,7 +173,7 @@ function FolderNameModal({
           </button>
         </div>
         {/* Input */}
-        <div className="px-4 pb-4">
+        <div className="px-4 py-4">
           <Label className="text-sm font-medium">Folder Name</Label>
           <Input
             ref={inputRef}

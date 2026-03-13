@@ -1,0 +1,127 @@
+We need to change direction on the EcoLogic New Folder mobile UI.
+
+THE PREVIOUS FIX IS NOT WHAT I WANT
+The screen is still shifting, and I do NOT want keyboard-avoidance style movement.
+
+NEW DESIRED BEHAVIOR
+I want the New Folder input experience to stay visually centered/stable on screen.
+Basically:
+- open New Folder
+- the modal/sheet stays in a clean centered position
+- tap the input
+- start typing
+- do NOT have the whole layout shift around
+
+I do not want the current moving/jumping behavior at all.
+
+GOAL
+Make the New Folder modal stay fixed and visually stable, with the Folder Name input in the middle area of the modal so the user can just tap it and type.
+
+IMPORTANT
+Stop trying to make it behave like a bottom sheet that moves with the keyboard.
+That is what looks bad.
+
+NEW UX DIRECTION
+Treat this more like a stable centered modal on mobile:
+- clean overlay
+- centered modal card
+- title/header stays fixed
+- input stays fixed in place
+- tapping into the input should not make the whole modal jump upward/downward
+- it should feel calm and stable
+
+WHAT TO CHANGE
+
+1. MAKE THE NEW FOLDER MODAL A FIXED CENTERED MODAL ON MOBILE
+Instead of a shifting bottom-sheet behavior:
+- render it as a centered modal/card on mobile
+- keep it visually stable in the viewport
+- do not reposition the entire container when the keyboard opens
+- no dynamic sheet movement
+
+2. INPUT SHOULD JUST BE TAPPABLE AND TYPEABLE
+All I want is:
+- modal opens
+- input is visible in the modal
+- user taps input
+- types folder name
+
+Do not add fancy keyboard avoidance that causes the whole sheet to slide around.
+
+3. REMOVE THE JANKY MOBILE KEYBOARD REPOSITIONING
+Please audit and remove/disable the logic/CSS causing the movement, such as:
+- keyboard avoidance transforms
+- viewport-height recalculations
+- visual viewport listeners
+- bottom-sheet translate behavior
+- auto-repositioning on focus
+- safe-area compensation that moves the modal
+
+The modal should stay put.
+
+4. KEEP THE MODAL CLEAN AND SIMPLE
+Use a centered modal layout with:
+- title “New Folder”
+- Cancel
+- Create
+- Folder Name label
+- Folder Name input
+
+That’s it.
+Keep it minimal and stable.
+
+5. KEYBOARD BEHAVIOR
+When keyboard opens:
+- modal should remain visually centered/fixed
+- no huge jump
+- no weird upward drift
+- no ugly intermediate animation
+
+If the keyboard overlaps part of the lower screen, that is better than the whole modal moving around badly.
+The priority is visual stability.
+
+6. KEEP FUNCTIONALITY INTACT
+Do NOT break:
+- create folder
+- cancel
+- subfolder creation
+- root folder creation
+- typing into the input
+- create button enable/disable logic
+- desktop behavior
+
+7. PLACEHOLDER
+Keep placeholder as:
+- Folder Name
+
+No example text.
+
+8. CHECK BOTH MOBILE FLOWS
+Make sure this applies to:
+- creating a root folder
+- creating a subfolder
+if they use the same modal
+
+9. USE THE NEW SCREEN RECORDING TOO
+I uploaded another recording.
+Use it to understand exactly how the screen is still shifting and remove that behavior.
+
+SUCCESS CRITERIA
+- New Folder modal appears centered/stable on mobile
+- tapping input does not make the whole screen/modal shift in an ugly way
+- user can just tap and type
+- create/cancel still work
+- same modal works for root + subfolder creation
+
+DELIVERABLES
+1. Stop the shifting/jumping behavior completely
+2. Make New Folder a stable centered modal on mobile
+3. Keep input easy to tap/type
+4. Preserve create/cancel functionality
+5. Keep placeholder as “Folder Name”
+
+WHEN DONE REPORT BACK WITH
+- exact files changed
+- what keyboard/sheet logic was removed or changed
+- whether mobile now uses a centered modal instead of a moving bottom sheet
+- what you tested manually on iPhone/native
