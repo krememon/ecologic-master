@@ -1,0 +1,79 @@
+Clean up the EcoLogic Documents page so it is documents-only.
+
+GOAL
+Remove all E-signature Approvals references from this page and make the page clearly just “Documents.”
+
+WHAT TO CHANGE
+
+1. REMOVE THE E-SIGNATURE APPROVALS TAB
+On the Documents page:
+- remove the “E-signature Approvals” tab/button entirely
+- remove any segmented control / tab layout that includes it
+- if “Documents” becomes the only remaining tab, remove the tab switcher completely instead of leaving a one-tab control
+
+2. UPDATE THE PAGE HEADER
+Change the page header from:
+- “Documents & Approvals”
+to:
+- “Documents”
+
+Also update the subtitle/description so it is documents-only.
+Right now it says:
+- “Manage project documents and e-signature approval workflows”
+
+Replace it with documents-only wording, for example:
+- “Manage project documents”
+or another short clean documents-only line
+
+3. MAKE SURE THIS PAGE IS DOCUMENTS-ONLY
+After removing E-signature Approvals from this page:
+- keep document filters
+- keep upload document
+- keep document cards/list
+- keep download/view actions
+- do not leave any approvals wording or approvals logic in the visible UI on this page
+
+4. CLEAN UP ANY LEFTOVER APPROVALS UI
+Audit the page for any lingering approvals-related references, such as:
+- approvals tab state
+- approvals query hooks
+- approvals empty states
+- approvals labels/copy
+- approvals-specific conditionals
+- approvals routing tied to this page
+
+Remove or clean up anything that only existed for the E-signature Approvals portion of this page.
+
+5. DO NOT BREAK DOCUMENTS
+Preserve the working Documents page behavior:
+- upload flow
+- customer/category filters
+- document listing
+- download/view behavior
+- mobile and web layout
+
+6. CHECK ROUTING / NAV
+If E-signature Approvals had its own state inside this page:
+- remove that state cleanly
+- make sure the page loads directly into documents view with no broken tab logic
+- no dead query params or tab keys causing weird behavior
+
+7. POLISH
+After removal:
+- header should read cleanly as “Documents”
+- subtitle should match
+- page should feel simpler and cleaner
+- no awkward gap where the old tab switcher used to be
+
+DELIVERABLES
+1. Remove E-signature Approvals tab from Documents page
+2. Change header to “Documents”
+3. Update subtitle to documents-only wording
+4. Remove leftover approvals-specific UI/state from this page
+5. Keep all document functionality working
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- what the new subtitle text is
+- whether approvals logic was removed from this page entirely or just hidden
+- anything I should manually test on mobile and web

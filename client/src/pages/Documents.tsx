@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -495,23 +494,11 @@ export default function Documents() {
   return (
     <div className="w-full pb-24">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Documents & Approvals</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage project documents and e-signature approval workflows</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Documents</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage project documents</p>
       </div>
 
-      <Tabs defaultValue="documents" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="documents" className="flex items-center gap-2" data-testid="tab-documents">
-            <FolderOpen className="h-4 w-4" />
-            Documents
-          </TabsTrigger>
-          <TabsTrigger value="approvals" className="flex items-center gap-2" data-testid="tab-approvals">
-            <PenTool className="h-4 w-4" />
-            E-signature Approvals
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="documents" className="mt-6">
+      <div className="w-full">
           {/* Filter Row: Job Picker + Category Dropdown + Select Toggle */}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-2">
@@ -954,12 +941,7 @@ export default function Documents() {
               </div>
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="approvals" className="mt-6">
-          <ApprovalWorkflow />
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Customer Picker Modal */}
       <Dialog open={customerPickerOpen} onOpenChange={(open) => {
