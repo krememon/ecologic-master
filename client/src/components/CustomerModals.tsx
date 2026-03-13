@@ -312,7 +312,7 @@ function AddCustomerModal({
                   id="firstName"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="John"
+                  placeholder="First Name"
                   data-testid="input-customer-first-name"
                 />
               </div>
@@ -322,7 +322,7 @@ function AddCustomerModal({
                   id="lastName"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Doe"
+                  placeholder="Last Name"
                   data-testid="input-customer-last-name"
                 />
               </div>
@@ -335,7 +335,7 @@ function AddCustomerModal({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="john@example.com"
+                placeholder="Email"
                 data-testid="input-customer-email"
               />
             </div>
@@ -346,7 +346,7 @@ function AddCustomerModal({
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
-                placeholder="555-123-4567"
+                placeholder="Phone Number"
                 inputMode="numeric"
                 autoComplete="tel"
                 data-testid="input-customer-phone"
@@ -359,7 +359,7 @@ function AddCustomerModal({
                 id="address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="123 Main St, City, State 12345"
+                placeholder="Address"
                 rows={2}
                 data-testid="input-customer-address"
               />
