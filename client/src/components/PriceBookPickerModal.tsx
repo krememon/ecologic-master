@@ -202,22 +202,44 @@ export function PriceBookPickerModal({
   };
 
   const handlePriceChange = (value: string) => {
-    const cleanValue = value.replace(/[^0-9.]/g, '');
+    // Strip commas so pasted values like "1,000" work correctly
+    const stripped = value.replace(/,/g, '');
+    // Allow only digits and a single decimal point
+    const cleanValue = stripped.replace(/[^0-9.]/g, '');
     const parts = cleanValue.split('.');
     const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
-    setPriceDisplay(sanitized);
+
     const dollars = parseFloat(sanitized) || 0;
     setNewItem({ ...newItem, defaultPriceCents: Math.round(dollars * 100) });
+
+    // Format the integer portion with commas while keeping the decimal as-is
+    if (sanitized === '' || sanitized === '.') {
+      setPriceDisplay(sanitized);
+      return;
+    }
+    const decParts = sanitized.split('.');
+    const intFormatted = decParts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    setPriceDisplay(decParts.length > 1 ? `${intFormatted}.${decParts[1]}` : intFormatted);
   };
 
   const handlePriceBlur = () => {
     const dollars = newItem.defaultPriceCents / 100;
-    setPriceDisplay(dollars.toFixed(2));
+    if (dollars === 0) {
+      setPriceDisplay('');
+      return;
+    }
+    setPriceDisplay(dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
   const handlePriceFocus = () => {
     const dollars = newItem.defaultPriceCents / 100;
-    setPriceDisplay(dollars === 0 ? "" : String(dollars));
+    if (dollars === 0) {
+      setPriceDisplay('');
+      return;
+    }
+    // Show with commas, strip trailing .00 so editing feels natural
+    const formatted = dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setPriceDisplay(formatted.endsWith('.00') ? formatted.slice(0, -3) : formatted);
   };
 
   const formatCurrency = (cents: number) => {

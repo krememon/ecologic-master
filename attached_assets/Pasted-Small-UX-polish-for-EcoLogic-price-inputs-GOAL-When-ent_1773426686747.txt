@@ -1,0 +1,80 @@
+Small UX polish for EcoLogic price inputs:
+
+GOAL
+When entering a price, the number should automatically format with commas while typing.
+
+EXAMPLE
+If I type:
+- 1000 → show 1,000
+- 10000 → show 10,000
+- 100000 → show 100,000
+
+CURRENT ISSUE
+Right now the price field just shows raw digits like:
+- 100000
+I want it formatted in a cleaner money-entry style.
+
+WHAT TO CHANGE
+Find the price input used in the Add Item / Price Book flow and update it so:
+- commas are inserted automatically as the user types
+- the currency symbol styling still looks clean
+- the field remains easy to edit on mobile and desktop
+
+IMPORTANT
+Do NOT break the actual saved numeric value.
+The formatting should be display/input UX, but the app should still correctly store and submit the true numeric amount.
+
+REQUIREMENTS
+1. LIVE FORMATTING
+- format the whole-number portion with thousands separators while typing
+- preserve smooth typing behavior
+- cursor/caret should not jump around badly
+- backspace/delete should still feel natural
+
+2. SUPPORT DECIMALS IF THE FIELD ALREADY SUPPORTS THEM
+If this field is meant to allow cents:
+- 1000.5 → display as 1,000.5 or 1,000.50 depending on the app’s existing pattern
+- 1000.50 → display cleanly
+If cents are not supported in this form, keep whole-dollar behavior consistent.
+
+3. KEEP SUBMISSION CLEAN
+Under the hood, make sure submit logic still sends/parses the correct numeric value:
+- no commas breaking validation
+- no string formatting bugs
+- no NaN issues
+- no duplicate currency symbols in saved data
+
+4. CHECK ALL RELEVANT PRICE INPUTS
+Please see whether this price input is shared.
+If the same reusable money/price input is used in:
+- Price Book Add Item
+- Estimate item pricing
+- Invoice item pricing
+- any service/item editor
+then update it cleanly so all matching price-entry fields benefit, as long as it does not create regressions.
+
+5. VALIDATION / EDGE CASES
+Handle:
+- empty input
+- deleting back to blank
+- leading zeros
+- pasted values like 100000
+- pasted values with commas already included
+- decimal entry if supported
+- mobile keyboard behavior
+
+6. KEEP DESIGN INTACT
+Do not redesign the modal.
+Just improve the price input formatting behavior.
+
+DELIVERABLES
+1. Price input auto-formats with commas while typing
+2. Stored/submitted numeric value still works correctly
+3. Editing/backspacing still feels natural
+4. Shared price inputs updated too if they use the same component safely
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether this was a shared input/component update or a local form fix
+- whether decimals are supported and how they behave
+- which other price fields inherited the formatting
