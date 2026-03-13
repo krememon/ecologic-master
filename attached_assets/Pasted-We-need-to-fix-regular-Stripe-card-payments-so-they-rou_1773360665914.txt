@@ -1,0 +1,123 @@
+We need to fix regular Stripe card payments so they route to the correct CONNECTED ACCOUNT instead of landing on the Stripe PLATFORM account.
+
+BUG
+For normal non-subcontract payments, the card payment is currently going to the platform Stripe account instead of the company’s connected Stripe account.
+
+Example:
+- ppellegrino@ecologicc.com company receives a normal $1,000 card payment
+- payment succeeds in EcoLogic
+- but the money lands on the PLATFORM Stripe account
+- it should land on that company’s CONNECTED Stripe account instead
+
+IMPORTANT DISTINCTION
+This task is ONLY for regular / standard invoice card payments.
+Do NOT break or change:
+- subcontract/referral payout architecture unless required for shared logic
+- manual cash/check flows
+- existing subscription Stripe logic
+- existing connected account onboarding flow
+
+GOAL
+For normal card payments on a company’s invoice, the payment should be created in the correct Stripe Connect architecture so funds route to that company’s connected account, not the platform balance.
+
+INVESTIGATION TASKS
+
+1) TRACE THE EXACT REGULAR CARD PAYMENT FLOW
+Find the exact code path for standard invoice card payments:
+- frontend payment submit path
+- backend endpoint that creates PaymentIntent
+- any confirm/finalize endpoints
+- Stripe account context used during PaymentIntent creation
+- whether destination charges / direct charges / separate charges and transfers are being used
+
+Trace the path for a NON-subcontract invoice only.
+
+2) IDENTIFY CURRENT STRIPE ARCHITECTURE
+Determine exactly how the current regular payment is being created:
+- platform charge?
+- destination charge?
+- direct charge on connected account?
+- separate charges and transfers?
+
+Report the exact current behavior, not assumptions.
+
+3) FIND THE SOURCE OF TRUTH FOR WHO SHOULD RECEIVE FUNDS
+Determine which DB field is the source of truth for the invoice owner’s Stripe connected account, likely something like:
+- company.stripeConnectAccountId
+- payment account field
+- owner company Stripe settings
+
+Confirm for the invoice/company belonging to ppellegrino@ecologicc.com which connected account ID should be used.
+
+4) FIX REGULAR PAYMENT ROUTING
+Update the regular invoice card payment creation flow so normal payments go to the correct company connected account.
+
+Requirements:
+- a normal company invoice paid by card should route funds to that company’s connected account
+- the platform should not retain the full gross payment unless platform fees are intentionally configured
+- keep the payment usable with the existing EcoLogic payments/invoice history UI
+- keep refunds workable
+- preserve metadata / invoice / job / client linkage
+- do not break connected accounts that already work properly
+
+If application fees are part of the design, keep them explicit and correct.
+If no platform fee is intended on normal payments, route the funds fully to the connected account.
+
+5) HANDLE STRIPE CONNECT SAFELY
+Implement using the correct Stripe Connect pattern for normal invoice collection.
+Be careful because this impacts real money flow.
+
+Verify:
+- correct connected account chosen from the invoice’s company
+- PaymentIntent/charge created with the correct account/destination setup
+- webhook/confirm handlers still reconcile payment records correctly
+- refunds still target the correct charge/payment
+
+6) DO NOT BREAK SUBCONTRACT LOGIC
+Subcontract/referral payments may have separate logic because they can involve payout splitting/transfers.
+Do NOT blindly apply the same routing to subcontract invoices unless the code path is shared and still correct.
+If shared logic is changed, explicitly verify subcontract behavior remains valid.
+
+7) CHECK EXISTING SUCCESSFUL PAYMENTS / UI RECORDING
+Make sure after the fix:
+- normal card payments still show in Payments
+- invoice shows paid correctly
+- client history still records the payment
+- payment detail screen still works
+- Stripe payment IDs / charge IDs remain stored correctly
+
+8) ADD TARGETED LOGS
+Add concise logs only where useful:
+- invoice id / company id / company connected account id
+- payment type = regular vs subcontract
+- Stripe architecture chosen
+- PaymentIntent creation account context
+- whether funds are being routed to connected account
+- confirm/webhook reconciliation result
+
+Avoid noisy logs.
+
+9) VERIFY WITH A SAFE TEST
+Run a real or controlled test for a NORMAL non-subcontract invoice under ppellegrino@ecologicc.com:
+- create a standard invoice
+- pay by card
+- verify payment lands on that company’s connected Stripe account
+- verify it does NOT land as a plain platform-only payment
+- verify EcoLogic still marks invoice paid
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of why regular card payments were landing on the platform
+3. exact Stripe Connect architecture now used for regular payments
+4. which DB field determines the recipient connected account
+5. confirmation that a normal ppellegrino@ecologicc.com payment now routes correctly
+6. confirmation that subcontract flow was not broken
+7. short regression test plan
+
+SUCCESS CRITERIA
+- regular non-subcontract card payments route to the invoice owner’s connected Stripe account
+- payment no longer lands incorrectly on the platform account
+- invoice/payment/client history still work correctly
+- refunds remain possible
+- subcontract logic remains intact
