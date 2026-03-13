@@ -3262,10 +3262,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const role = member.role as UserRole;
 
-      if (role === 'TECHNICIAN') {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
       // Get date range from query params
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;

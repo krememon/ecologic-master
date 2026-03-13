@@ -1,0 +1,123 @@
+We need to fix the EcoLogic Timesheets page for the Technician role.
+
+CURRENT PROBLEM
+Right now technicians hit an “Access Restricted / Timesheet data is only visible to managers” state.
+That is not the desired behavior.
+
+DESIRED BEHAVIOR
+Technicians SHOULD be able to access the Timesheets page, but they should ONLY see their own timesheet data.
+They should NOT see:
+- other employees
+- company-wide totals
+- employee lists
+- any other worker’s clock-in/out entries
+
+They should only see their own daily clock-in / clock-out information.
+
+GOAL
+Keep the manager/owner day-first company timesheet dashboard as-is for privileged roles, but create the correct technician-scoped view so technicians only see their own information.
+
+REQUIRED ROLE BEHAVIOR
+
+1. OWNER / ADMIN / APPROVED MANAGER ROLES
+Keep current manager-style view:
+- day selector
+- company/day totals
+- employee list
+- employee detail expansion
+- all currently allowed behavior
+
+2. TECHNICIAN ROLE
+Technicians should see a personal timesheet view only:
+- same week/day selector can stay if it fits cleanly
+- but content must only show THEIR entries
+- no employee cards for other people
+- no company totals
+- no employees count
+- no entries count for the whole team
+- no other names, avatars, or records
+
+TECHNICIAN VIEW SHOULD SHOW
+For the selected day:
+- their total hours for that day
+- their own clock-in / clock-out sessions
+- daily total
+- active/currently clocked-in state if applicable
+- compact empty state if they have no entries that day
+
+Good example:
+- selected day at top
+- summary card: “Your Hours” or “Total Hours”
+- list of that technician’s own entries:
+  - Work
+  - 7:58 AM – 12:03 PM = 4h 05m
+  - 12:41 PM – 4:56 PM = 4h 15m
+- no employee switching/filtering/list
+
+IMPORTANT
+Do NOT expose any other employee data to technicians in the API response OR the UI.
+This needs to be correct both:
+- frontend rendering
+- backend/API data scope
+
+WHAT TO CHECK
+
+1. BACKEND RBAC / DATA SCOPE
+Audit the timesheet endpoint(s) currently used by the Timesheets page.
+For Technician role:
+- return only the authenticated user’s time entries
+- do not include other employees in payload
+- do not include company aggregates derived from other workers
+- if the current endpoint is shared, either safely scope it by role or create a technician-safe shape
+
+2. FRONTEND ROLE BRANCHING
+Update Timesheets page UI logic:
+- managers keep current company day-first dashboard
+- technicians get personal day-first timesheet view
+- do not show “Access Restricted” to technicians anymore
+- only show restricted state to roles that truly should not access timesheets at all, if any
+
+3. PRESERVE CLOCK-IN / CLOCK-OUT LOGIC
+Do NOT rewrite the working time tracking engine.
+Only change visibility/data shaping/UI for technician access.
+
+4. PRESERVE WEEK/DAY UX
+Ideally keep the same polished day selector and overall visual style so technician view feels like part of the same product.
+Just simplify the content underneath for technician-only access.
+
+5. EDGE CASES
+Handle:
+- technician has no entries that day
+- technician has multiple sessions in one day
+- technician is currently clocked in
+- switching week/day updates correctly
+- refresh/reopen still shows only their data
+- native and web both work
+- technicians cannot access another employee’s data through query params, filters, or hidden UI
+
+6. EMPTY STATE
+If technician has no time entries on selected day:
+- show a clean personal empty state like:
+  - “No time entries for this day”
+  - “Your clock-ins and clock-outs will appear here.”
+Do not show company/manager restricted messaging.
+
+7. SECURITY / SOURCE OF TRUTH
+This is not just a cosmetic hide.
+Make sure the backend response for technicians is truly self-only.
+No leaking other employees in API payloads.
+
+DELIVERABLES
+1. Technicians can open Timesheets page
+2. Technicians only see their own timesheet data
+3. Managers/owners keep current company timesheet dashboard
+4. No employee/company-wide data is exposed to technicians
+5. Day/week selector still works cleanly
+6. Empty state is personal, not access restricted
+7. Existing clock-in/out logic remains intact
+
+WHEN DONE REPORT BACK WITH
+- exact files changed
+- whether the fix was backend, frontend, or both
+- which endpoint now enforces technician self-only scope
+- what I should manually test as owner vs technician

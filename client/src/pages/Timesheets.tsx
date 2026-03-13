@@ -398,6 +398,54 @@ function EmployeeCard({ emp, isManager, isSelected, onSelect, onEdit }: Employee
   );
 }
 
+// ─── Technician Day View ──────────────────────────────────────────────────────
+
+function TechnicianDayView({ emp }: { emp: EmployeeDaySummary }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm bg-white dark:bg-slate-900">
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        {emp.entries
+          .sort((a, b) => new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime())
+          .map((entry) => {
+            const { title, subtitle } = getJobOrCategory(entry);
+            const mins = calculateMinutes(entry.clockInAt, entry.clockOutAt);
+            const active = entry.clockOutAt && isFuture(parseISO(entry.clockOutAt));
+            return (
+              <div key={entry.id} className="px-4 py-3.5 flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{title}</p>
+                    <EntryTags entry={entry} />
+                    {active && (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {formatTime(entry.clockInAt)}{active ? " → now" : ` → ${formatTime(entry.clockOutAt)}`}
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums flex-shrink-0 pt-0.5">
+                  {active ? "—" : formatDuration(mins)}
+                </span>
+              </div>
+            );
+          })}
+      </div>
+      <div className="px-4 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800">
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Day Total</span>
+        <span className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{formatDuration(emp.totalMinutes)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Timesheets() {
@@ -456,6 +504,7 @@ export default function Timesheets() {
   }, [orgUsersData]);
 
   const isManager = data?.role === "manager";
+  const isTechnician = data?.role === "technician";
   const selectedDate = format(weekDays[selectedDayIdx], "yyyy-MM-dd");
 
   // Entries for the selected day
@@ -535,7 +584,7 @@ export default function Timesheets() {
             Timesheets
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Review daily employee hours
+            {isTechnician ? "Your personal clock-in history" : "Review daily employee hours"}
           </p>
         </div>
 
@@ -632,39 +681,65 @@ export default function Timesheets() {
                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
                   {format(selectedDayDate, "EEEE, MMMM d")}
                 </p>
-                {employeesForDay.length === 0 ? (
-                  <p className="text-sm text-slate-400 dark:text-slate-500">No entries</p>
+                {isTechnician ? (
+                  /* Technician: show only their own total */
+                  employeesForDay.length === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No entries</p>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                          {formatDuration(dayTotalMinutes)}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Your hours</p>
+                      </div>
+                      {employeesForDay[0]?.isActive && (
+                        <span className="ml-3 inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
+                          Currently clocked in
+                        </span>
+                      )}
+                    </div>
+                  )
                 ) : (
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                        {formatDuration(dayTotalMinutes)}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Total hours</p>
+                  /* Manager: show company totals */
+                  employeesForDay.length === 0 ? (
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No entries</p>
+                  ) : (
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                          {formatDuration(dayTotalMinutes)}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Total hours</p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                          {allEmployeesForDay.length}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {allEmployeesForDay.length === 1 ? "Employee" : "Employees"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                          {dayEntries.length}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {dayEntries.length === 1 ? "Entry" : "Entries"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                        {allEmployeesForDay.length}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {allEmployeesForDay.length === 1 ? "Employee" : "Employees"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                        {dayEntries.length}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {dayEntries.length === 1 ? "Entry" : "Entries"}
-                      </p>
-                    </div>
-                  </div>
+                  )
                 )}
               </CardContent>
             </Card>
 
-            {/* Employee filter — only show if more than 1 employee has entries */}
-            {allEmployeesForDay.length > 1 && (
+            {/* Employee filter — only show if more than 1 employee has entries AND user is manager */}
+            {!isTechnician && allEmployeesForDay.length > 1 && (
               <div className="flex items-center gap-2 mb-3">
                 <Filter className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                 <Select value={filterEmployeeId} onValueChange={(v) => { setFilterEmployeeId(v); setSelectedEmployeeId(null); }}>
@@ -698,13 +773,21 @@ export default function Timesheets() {
                   <div className="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
                     <Clock className="h-6 w-6 text-slate-400 dark:text-slate-500" />
                   </div>
-                  <p className="font-medium text-slate-700 dark:text-slate-300">No time entries</p>
+                  <p className="font-medium text-slate-700 dark:text-slate-300">
+                    {isTechnician ? "No time entries for this day" : "No time entries"}
+                  </p>
                   <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                    No one logged hours on {format(selectedDayDate, "EEEE")}
+                    {isTechnician
+                      ? "Your clock-ins and clock-outs will appear here."
+                      : `No one logged hours on ${format(selectedDayDate, "EEEE")}`}
                   </p>
                 </CardContent>
               </Card>
+            ) : isTechnician ? (
+              /* Technician: flat entry list, no collapse toggle */
+              <TechnicianDayView emp={employeesForDay[0]} />
             ) : (
+              /* Manager: expandable employee cards */
               <div className="space-y-2.5">
                 {employeesForDay.map((emp) => (
                   <EmployeeCard
