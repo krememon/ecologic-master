@@ -1,0 +1,93 @@
+We need to stop invoices from appearing inside the EcoLogic Documents tab.
+
+GOAL
+The Documents tab should only show actual documents/files.
+Invoices should NOT appear there.
+
+CURRENT ISSUE
+Right now invoice records/files are showing up inside:
+- Documents & Approvals
+- Documents tab
+
+That is not what I want.
+Invoices should live in the invoice flow, not be mixed into the Documents tab listing.
+
+WHAT TO CHANGE
+
+1. REMOVE INVOICES FROM DOCUMENTS TAB
+Audit the data source/query/filter used for the Documents tab and exclude invoices from that listing.
+
+If documents are currently being pulled by category/type/status and invoices are slipping in, fix the filter so invoice items no longer render in the Documents list.
+
+Examples of things that should NOT appear in Documents tab:
+- invoice PDFs
+- invoice-generated records
+- invoice attachments masquerading as documents
+- invoice category/type items labeled “Invoices”
+
+2. KEEP REAL DOCUMENTS SHOWING
+Do NOT break normal document listing for actual files such as:
+- permits
+- contracts
+- photos
+- project files
+- approvals-related documents if they truly belong here
+- any legitimate uploaded docs
+
+Only remove invoices from the Documents tab.
+
+3. CHECK WHY THEY ARE APPEARING
+Please find the real reason invoices are showing:
+- shared pipeline mixing invoices into documents
+- category filter too broad
+- invoice files saved into same document table without proper exclusion
+- frontend not filtering documentType correctly
+- backend endpoint returning invoice items alongside documents
+
+Fix the root cause, not just hide one badge in the card.
+
+4. KEEP E-SIGNATURE APPROVALS SAFE
+Do not break the E-signature Approvals tab while removing invoices from Documents.
+If invoice-related approvals/signatures belong in E-signature Approvals, handle that intentionally there.
+But the plain Documents tab should not show invoice entries.
+
+5. CHECK ALL DOCUMENT LIST SURFACES
+Audit:
+- Documents & Approvals → Documents tab
+- mobile/native
+- web/desktop
+- any related document list component reused elsewhere
+
+I do not want invoices hidden in one view but still showing in another version of the same Documents tab.
+
+6. EMPTY / FILTER STATES
+If removing invoices changes what appears for a given filter:
+- keep the empty state clean
+- do not leave broken category counts
+- do not leave “Invoices” category pills or results in the Documents tab if they no longer belong there
+
+7. CLEAN UP RELATED UI IF NEEDED
+If the Documents tab currently shows invoice-specific pills/labels like:
+- Invoices
+- Approved invoice records
+remove those from the Documents listing path.
+
+IMPORTANT
+- Do not break invoice generation/download elsewhere in the app
+- Do not break actual document upload/download
+- Do not break approvals if they rely on separate data
+- This is specifically about invoices not showing in the Documents tab
+
+DELIVERABLES
+1. Invoices no longer appear in Documents tab
+2. Actual uploaded/project documents still appear normally
+3. Root cause fixed in query/filter/data shaping
+4. E-signature Approvals remains intact
+5. Mobile and web Documents tab both behave correctly
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- files changed
+- whether the fix was backend, frontend, or both
+- what invoice items were excluded and how
+- anything I should manually test in Documents vs Invoices vs E-signature Approvals

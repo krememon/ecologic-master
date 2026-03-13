@@ -442,7 +442,7 @@ export const invoices = pgTable("invoices", {
 });
 
 // Document categories
-export const DOCUMENT_CATEGORIES = ['Contracts', 'Estimates', 'Invoices', 'Permits', 'Photos', 'Manuals', 'Other'] as const;
+export const DOCUMENT_CATEGORIES = ['Contracts', 'Estimates', 'Permits', 'Photos', 'Manuals', 'Other'] as const;
 export type DocumentCategory = typeof DOCUMENT_CATEGORIES[number];
 
 // Workflow categories (require status tracking)

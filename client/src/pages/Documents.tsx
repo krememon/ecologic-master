@@ -426,7 +426,8 @@ export default function Documents() {
   }, [customersList, uploadCustomerSearchQuery]);
 
   const filteredDocuments = useMemo(() => {
-    let result = documents;
+    // Exclude invoice documents — they live in the Invoices section, not here
+    let result = documents.filter(doc => doc.category !== 'Invoices' && doc.type !== 'invoice');
     
     // Filter by customer
     if (customerFilter.mode === 'has_customer') {
