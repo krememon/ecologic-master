@@ -6452,6 +6452,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document routes
+  // ── Folder routes ─────────────────────────────────────────────────────────
+  // GET /api/folders?parentId=<id|null>  — list folders at a level
+  app.get('/api/folders', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (userRole === 'TECHNICIAN') return res.status(403).json({ message: "Access denied" });
+      const parentId = req.query.parentId === 'null' || req.query.parentId === undefined
+        ? null
+        : parseInt(req.query.parentId as string);
+      const folders = await storage.getFolders(company.id, parentId);
+      res.json(folders);
+    } catch (error) {
+      console.error("Error fetching folders:", error);
+      res.status(500).json({ message: "Failed to fetch folders" });
+    }
+  });
+
+  // GET /api/folders/contents?folderId=<id|null>  — folders + docs at a level
+  app.get('/api/folders/contents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (userRole === 'TECHNICIAN') return res.status(403).json({ message: "Access denied" });
+      const folderId = req.query.folderId === 'null' || req.query.folderId === undefined
+        ? null
+        : parseInt(req.query.folderId as string);
+      const [folders, docs] = await Promise.all([
+        storage.getFolders(company.id, folderId),
+        storage.getDocumentsByFolder(company.id, folderId),
+      ]);
+      res.json({ folders, documents: docs });
+    } catch (error) {
+      console.error("Error fetching folder contents:", error);
+      res.status(500).json({ message: "Failed to fetch folder contents" });
+    }
+  });
+
+  // POST /api/folders — create folder
+  app.post('/api/folders', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!['OWNER', 'ADMIN', 'SUPERVISOR', 'DISPATCHER'].includes(userRole)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const { name, parentFolderId } = req.body;
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ message: "Folder name is required" });
+      }
+      const folder = await storage.createFolder({
+        companyId: company.id,
+        name: name.trim(),
+        parentFolderId: parentFolderId ? parseInt(parentFolderId) : null,
+        createdBy: userId,
+      });
+      res.status(201).json(folder);
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      res.status(500).json({ message: "Failed to create folder" });
+    }
+  });
+
+  // PATCH /api/folders/:id — rename folder
+  app.patch('/api/folders/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!['OWNER', 'ADMIN', 'SUPERVISOR', 'DISPATCHER'].includes(userRole)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const { name } = req.body;
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ message: "Folder name is required" });
+      }
+      const folder = await storage.updateFolder(parseInt(req.params.id), company.id, name.trim());
+      if (!folder) return res.status(404).json({ message: "Folder not found" });
+      res.json(folder);
+    } catch (error) {
+      console.error("Error renaming folder:", error);
+      res.status(500).json({ message: "Failed to rename folder" });
+    }
+  });
+
+  // DELETE /api/folders/:id — delete folder (docs move to root, child folders reparented)
+  app.delete('/api/folders/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!['OWNER', 'ADMIN'].includes(userRole)) {
+        return res.status(403).json({ message: "Only owners and admins can delete folders" });
+      }
+      await storage.deleteFolder(parseInt(req.params.id), company.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      res.status(500).json({ message: "Failed to delete folder" });
+    }
+  });
+
+  // PATCH /api/documents/:documentId/folder — move document to folder
+  app.patch('/api/documents/:documentId/folder', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!['OWNER', 'ADMIN', 'SUPERVISOR', 'DISPATCHER'].includes(userRole)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const { folderId } = req.body;
+      const doc = await storage.updateDocumentSecure(
+        parseInt(req.params.documentId),
+        company.id,
+        { folderId: folderId ? parseInt(folderId) : null }
+      );
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+      res.json(doc);
+    } catch (error) {
+      console.error("Error moving document:", error);
+      res.status(500).json({ message: "Failed to move document" });
+    }
+  });
+
   app.get('/api/documents', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
@@ -6545,7 +6685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
-      const { name, category, jobId, customerId, visibility } = req.body;
+      const { name, category, jobId, customerId, visibility, folderId } = req.body;
       
       // Get user role for permission check
       const member = await storage.getCompanyMember(company.id, userId);
@@ -6589,6 +6729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: company.id,
         jobId: jobId ? parseInt(jobId) : null,
         customerId: customerId ? parseInt(customerId) : null,
+        folderId: folderId ? parseInt(folderId) : null,
         name: name || req.file.originalname,
         type: req.file.mimetype,
         category: category || 'Other',

@@ -453,12 +453,24 @@ export type WorkflowCategory = typeof WORKFLOW_CATEGORIES[number];
 export const DOCUMENT_STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Rejected'] as const;
 export type DocumentStatus = typeof DOCUMENT_STATUSES[number];
 
+// Document Folders table — hierarchical folder structure for file cabinet UX
+export const documentFolders = pgTable("document_folders", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  parentFolderId: integer("parent_folder_id"),
+  name: varchar("name", { length: 255 }).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Documents table
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  folderId: integer("folder_id").references(() => documentFolders.id, { onDelete: "set null" }),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type"), // contract, permit, blueprint, receipt, photo
   category: varchar("category", { length: 50 }).notNull().default("Other"), // Contracts, Estimates, Invoices, Permits, Photos, Manuals, Other
@@ -1254,6 +1266,12 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   updatedAt: true,
 });
 
+export const insertDocumentFolderSchema = createInsertSchema(documentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertDocumentSchema = createInsertSchema(documents).omit({
   id: true,
   createdAt: true,
@@ -1424,6 +1442,8 @@ export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type DocumentFolder = typeof documentFolders.$inferSelect;
+export type InsertDocumentFolder = z.infer<typeof insertDocumentFolderSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Conversation = typeof conversations.$inferSelect;

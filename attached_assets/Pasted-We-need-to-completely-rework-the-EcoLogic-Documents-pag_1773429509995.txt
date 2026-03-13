@@ -1,0 +1,240 @@
+We need to completely rework the EcoLogic Documents page into a true file-cabinet / folder-based system.
+
+NEW PRODUCT DIRECTION
+I do NOT want the current flat documents list page anymore.
+
+I want this page to feel more like a desktop-style file system / file cabinet where users can:
+- create folders
+- open folders
+- place documents inside folders
+- place folders inside folders
+- navigate deeper into nested folders
+- move back up through the folder structure
+- organize files like a real file explorer
+
+Think:
+- desktop folders
+- Finder / file cabinet style
+- simple, clean, modern, mobile-friendly version of that concept
+
+GOAL
+Turn the Documents page into a folder-first document management experience.
+
+CORE UX REQUIREMENTS
+
+1. FOLDER-FIRST DOCUMENTS PAGE
+The Documents page should no longer primarily be a flat list of uploaded files.
+Instead, the default experience should show folders and files in a structured way.
+
+At minimum, users should be able to:
+- create a new folder
+- open a folder
+- upload documents into the current folder
+- create a subfolder inside the current folder
+- see both folders and files in the current level
+- navigate back to parent folders
+
+2. HIERARCHY / NESTING
+Support nested folders:
+- root
+- folder
+- subfolder
+- sub-subfolder
+etc.
+
+Users should be able to organize like:
+Documents
+└── Customers
+    └── James Doherty
+        ├── Contracts
+        ├── Invoices
+        ├── Photos
+        └── Permits
+
+or
+
+Documents
+└── Internal
+    ├── SOPs
+    ├── Templates
+    └── HR
+
+This should work like a real folder tree, not fake categories.
+
+3. PAGE DESIGN
+I want the whole page to feel like a modern file cabinet / file explorer.
+
+DESIGN DIRECTION
+- clean file/folder cards or rows
+- clear folder icons
+- clear document/file icons
+- breadcrumb navigation at top
+- “New Folder” action
+- “Upload Document” action
+- current folder title/path visible
+- clean empty states
+- mobile-first but polished on desktop too
+
+It should feel much more like managing files on a desktop than a typical flat SaaS list.
+
+4. BREADCRUMB / NAVIGATION
+Need a clean way to navigate folder structure.
+
+Preferred behavior:
+- breadcrumb at top like:
+  Documents / Customers / James Doherty / Contracts
+- each breadcrumb level tappable
+- back button or breadcrumb navigation works smoothly
+- on mobile, keep this elegant and not cluttered
+
+5. ROOT VIEW
+At the main Documents page root:
+- show top-level folders/files
+- allow creating folders at root
+- allow uploading directly to root if desired
+- allow opening folders
+
+6. FOLDER CONTENT VIEW
+Inside a folder:
+- show child folders
+- show files/documents
+- allow creating a subfolder
+- allow uploading a file into that folder
+- show current location clearly
+
+7. ACTIONS
+At minimum support:
+- Create Folder
+- Upload Document
+- Open Folder
+- Download/View File
+- Rename folder/file if easy
+- Delete folder/file if easy and safe
+- Move folder/file later if not easy now, but structure should be future-friendly
+
+If move is too much for this pass, that’s okay — prioritize the core file-cabinet structure first.
+
+8. DATA MODEL / BACKEND
+We will likely need a real folder/document hierarchy model.
+
+Please audit current document storage/data model and implement the minimum proper structure needed.
+
+Likely direction:
+- documents table can reference a folderId
+- folders table with:
+  - id
+  - companyId
+  - parentFolderId nullable
+  - name
+  - timestamps
+  - createdBy
+- documents belong to folderId nullable
+- root-level items have null parent/folder as appropriate
+
+Do this cleanly and production-ready.
+
+9. KEEP RBAC
+Preserve current RBAC around who can access the Documents page.
+Only the roles that already should see Documents should see it.
+
+Do not break permissions while reworking the system.
+
+10. MIGRATION / EXISTING DOCUMENTS
+Important:
+We already may have existing uploaded documents.
+
+Need a safe plan for existing documents:
+- either place current uncategorized/root documents in the root level
+- or migrate them to a default root structure cleanly
+- do not lose old documents
+- do not break downloads for existing files
+
+11. REMOVE OLD FLAT-LIST MENTAL MODEL
+We are moving away from:
+- old flat customer/category-based doc filtering as the main experience
+- old document list as the primary UI
+
+You can keep some filtering/search if useful, but the main experience should be folder-based navigation.
+
+12. SEARCH
+If easy, add a simple search that works within current folder or globally.
+But this is secondary.
+Primary goal is the file cabinet / folders system.
+
+13. MOBILE UX
+This has to work really well on mobile.
+Think:
+- easy taps
+- clean rows/cards
+- obvious folder icons
+- simple top actions
+- easy breadcrumb/back navigation
+- not cluttered
+
+14. DESKTOP UX
+Should also look polished on desktop:
+- cleaner file explorer feel
+- maybe slightly denser view
+- still consistent with EcoLogic
+
+15. EMPTY STATES
+Need good empty states like:
+- “No files or folders here yet”
+- “Create a folder or upload a document to get started”
+
+16. DOCUMENT TYPES
+Within folders, files should still show useful metadata where appropriate:
+- name
+- type/icon
+- maybe modified/upload date
+- maybe size
+But don’t let metadata overpower the folder/file experience.
+
+17. DO NOT MIX IN APPROVALS
+This page is documents-only.
+Do not bring back E-signature Approvals here.
+
+18. THINK FUTURE-FRIENDLY
+Build this in a way that can later support:
+- drag/drop
+- move to folder
+- multi-select
+- share/export
+- previews
+But do not overbuild now.
+Get the foundational file-cabinet system right first.
+
+IMPLEMENTATION APPROACH
+Please:
+1. audit current Documents page/component and document upload flow
+2. design the new information architecture
+3. create/adjust backend structure for folders + nested hierarchy
+4. wire folder-aware upload/listing behavior
+5. build clean breadcrumb/navigation UI
+6. preserve existing documents and downloads
+
+SUCCESS CRITERIA
+- Documents page now behaves like a folder/file cabinet
+- users can create folders
+- users can create nested folders
+- users can upload docs into current folder
+- users can open folders and navigate back out
+- existing docs still work
+- page feels clean, modern, and production-ready
+
+DELIVERABLES
+1. Rework Documents page into folder-based file cabinet UX
+2. Add real folder hierarchy support
+3. Add create folder flow
+4. Add folder-aware document upload flow
+5. Add breadcrumb/back navigation
+6. Preserve RBAC
+7. Preserve existing documents/downloads
+8. Keep page mobile-first and polished on desktop
+
+WHEN DONE REPORT BACK WITH
+- exact files changed
+- new backend/data model changes
+- how existing documents were handled/migrated
+- what folder actions are supported now
+- what I should manually test

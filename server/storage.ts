@@ -133,6 +133,9 @@ import {
   jobReferrals,
   type JobReferral,
   type InsertJobReferral,
+  documentFolders,
+  type DocumentFolder,
+  type InsertDocumentFolder,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -264,6 +267,13 @@ export interface IStorage {
   deleteDocument(id: number): Promise<void>;
   deleteDocumentSecure(id: number, companyId: number): Promise<boolean>;
   deleteDocumentsBulk(ids: number[], companyId: number): Promise<number>;
+  // Folder operations
+  getFolders(companyId: number, parentFolderId: number | null): Promise<DocumentFolder[]>;
+  getFolder(id: number, companyId: number): Promise<DocumentFolder | null>;
+  createFolder(data: InsertDocumentFolder): Promise<DocumentFolder>;
+  updateFolder(id: number, companyId: number, name: string): Promise<DocumentFolder | null>;
+  deleteFolder(id: number, companyId: number): Promise<boolean>;
+  getDocumentsByFolder(companyId: number, folderId: number | null): Promise<Document[]>;
   
   // Messaging operations
   // Conversations
@@ -2163,6 +2173,94 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return ids.length; // Return count of requested deletions
+  }
+
+  // Folder operations
+  async getFolders(companyId: number, parentFolderId: number | null): Promise<DocumentFolder[]> {
+    if (parentFolderId === null) {
+      return db
+        .select()
+        .from(documentFolders)
+        .where(
+          and(
+            eq(documentFolders.companyId, companyId),
+            isNull(documentFolders.parentFolderId)
+          )
+        )
+        .orderBy(documentFolders.name);
+    } else {
+      return db
+        .select()
+        .from(documentFolders)
+        .where(
+          and(
+            eq(documentFolders.companyId, companyId),
+            eq(documentFolders.parentFolderId, parentFolderId)
+          )
+        )
+        .orderBy(documentFolders.name);
+    }
+  }
+
+  async getFolder(id: number, companyId: number): Promise<DocumentFolder | null> {
+    const [folder] = await db
+      .select()
+      .from(documentFolders)
+      .where(and(eq(documentFolders.id, id), eq(documentFolders.companyId, companyId)));
+    return folder || null;
+  }
+
+  async createFolder(data: InsertDocumentFolder): Promise<DocumentFolder> {
+    const [folder] = await db.insert(documentFolders).values(data).returning();
+    return folder;
+  }
+
+  async updateFolder(id: number, companyId: number, name: string): Promise<DocumentFolder | null> {
+    const [folder] = await db
+      .update(documentFolders)
+      .set({ name, updatedAt: new Date() })
+      .where(and(eq(documentFolders.id, id), eq(documentFolders.companyId, companyId)))
+      .returning();
+    return folder || null;
+  }
+
+  async deleteFolder(id: number, companyId: number): Promise<boolean> {
+    // Null out folderId for docs in this folder so they move to root
+    await db
+      .update(documents)
+      .set({ folderId: null })
+      .where(and(eq(documents.folderId, id), eq(documents.companyId, companyId)));
+    // Recursively reparent child folders to this folder's parent
+    const [thisFolder] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
+    if (thisFolder) {
+      await db
+        .update(documentFolders)
+        .set({ parentFolderId: thisFolder.parentFolderId })
+        .where(and(eq(documentFolders.parentFolderId, id), eq(documentFolders.companyId, companyId)));
+    }
+    const result = await db
+      .delete(documentFolders)
+      .where(and(eq(documentFolders.id, id), eq(documentFolders.companyId, companyId)));
+    return true;
+  }
+
+  async getDocumentsByFolder(companyId: number, folderId: number | null): Promise<Document[]> {
+    const conditions = [
+      eq(documents.companyId, companyId),
+      // Exclude invoice documents from the file cabinet view
+      sql`${documents.type} IS DISTINCT FROM 'invoice'`,
+      sql`${documents.category} IS DISTINCT FROM 'Invoices'`,
+    ];
+    if (folderId === null) {
+      conditions.push(isNull(documents.folderId));
+    } else {
+      conditions.push(eq(documents.folderId, folderId));
+    }
+    return db
+      .select()
+      .from(documents)
+      .where(and(...conditions))
+      .orderBy(desc(documents.createdAt));
   }
 
   // Messaging operations
