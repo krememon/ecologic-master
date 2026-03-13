@@ -38,7 +38,7 @@ import {
   MoreHorizontal,
   ArrowRightLeft
 } from "lucide-react";
-import { format, isToday, isTomorrow, startOfDay, subDays, isAfter } from "date-fns";
+import { format, isToday, isTomorrow, startOfDay, subDays, isAfter, parseISO } from "date-fns";
 import { parseDateOnly } from "@/lib/dateUtils";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
 

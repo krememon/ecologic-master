@@ -1,0 +1,90 @@
+We need to fix the Home dashboard on mobile because 2 business snapshot cards are missing:
+
+- Lead Acceptance Rate
+- Estimates This Week
+
+These used to show, but now they are gone/missing on the mobile Home screen.
+
+GOAL
+Restore both dashboard cards so they appear correctly again on mobile:
+- Lead Acceptance Rate
+- Estimates This Week
+
+IMPORTANT
+Do NOT just hardcode them visually.
+We need to find the real reason they disappeared and restore them properly.
+
+DO NOT BREAK
+- existing Home dashboard cards that still show
+- business snapshot data calculations
+- desktop/tablet dashboard layout
+- role-based dashboard visibility if any exists
+- mobile spacing and scroll behavior
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE HOME DASHBOARD RENDER PATH
+Find the exact Home screen components responsible for:
+- Business Snapshot section
+- card list/order
+- mobile-specific rendering
+- any conditional hiding logic
+
+2) IDENTIFY WHY THESE 2 CARDS DISAPPEARED
+Check for:
+- cards removed from the render array
+- feature flags / role guards / permissions
+- mobile-only filtering
+- conditional render based on zero values
+- broken data mapping
+- layout overflow causing them not to render
+- dashboard section truncation / slice limit
+- API response missing required fields
+- wrong breakpoint logic
+
+3) VERIFY DATA EXISTS
+Confirm whether the backend/API is still returning data for:
+- lead acceptance rate
+- estimates this week
+
+If data exists, fix the frontend render.
+If data is missing, fix the backend response and the frontend mapping.
+
+4) RESTORE BOTH CARDS
+Make sure the mobile Home dashboard shows:
+- Lead Acceptance Rate
+- Estimates This Week
+
+They should match the same general style as before:
+- title
+- created/won or acceptance metrics
+- percentage ring/visual if that is still part of the design
+
+5) CHECK MOBILE ORDER / SPACING
+Ensure the cards appear in the intended order and that:
+- nothing is clipped
+- nothing is hidden below blank placeholders
+- section scroll works correctly
+- no empty ghost cards remain where data cards should be
+
+6) ADD TARGETED LOGS
+Add concise logs only if needed:
+- dashboard cards resolved for mobile
+- metrics payload values
+- cards filtered out and why
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of why Lead Acceptance Rate and Estimates This Week disappeared
+3. whether this was frontend render logic, mobile filtering, or missing backend data
+4. confirmation that both cards now show again on mobile Home
+5. confirmation that existing dashboard cards were not broken
+
+SUCCESS CRITERIA
+- Lead Acceptance Rate appears again on mobile Home
+- Estimates This Week appears again on mobile Home
+- cards show correct data
+- dashboard layout remains clean
