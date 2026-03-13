@@ -56,6 +56,7 @@ interface JobType {
 
 type CustomerFilterMode = 
   | { mode: 'all' }
+  | { mode: 'has_customer' }
   | { mode: 'company' }
   | { mode: 'customer'; customerId: number; label: string };
 
@@ -428,7 +429,9 @@ export default function Documents() {
     let result = documents;
     
     // Filter by customer
-    if (customerFilter.mode === 'company') {
+    if (customerFilter.mode === 'has_customer') {
+      result = result.filter(doc => doc.customerId !== null);
+    } else if (customerFilter.mode === 'company') {
       result = result.filter(doc => doc.customerId === null);
     } else if (customerFilter.mode === 'customer') {
       result = result.filter(doc => doc.customerId === customerFilter.customerId);
@@ -519,10 +522,12 @@ export default function Documents() {
               >
                 <span className="truncate">
                   {customerFilter.mode === 'all' 
-                    ? 'All customers' 
-                    : customerFilter.mode === 'company' 
-                      ? 'No customer' 
-                      : customerFilter.label}
+                    ? 'All Documents' 
+                    : customerFilter.mode === 'has_customer'
+                      ? 'All Customers'
+                      : customerFilter.mode === 'company' 
+                        ? 'No customer' 
+                        : customerFilter.label}
                 </span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
@@ -986,7 +991,7 @@ export default function Documents() {
             </div>
           </div>
           <div className="flex-1 overflow-auto py-1 bg-white dark:bg-slate-900">
-            {/* All customers option */}
+            {/* All Documents option */}
             <button
               onClick={() => {
                 setCustomerFilter({ mode: 'all' });
@@ -998,13 +1003,35 @@ export default function Documents() {
                   ? 'bg-blue-50 dark:bg-blue-900/20'
                   : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
               }`}
+              data-testid="option-all-documents"
+            >
+              <div className="flex items-center gap-3">
+                <FolderOpen className="h-4 w-4 text-slate-500" />
+                <span className="font-medium text-slate-900 dark:text-slate-100">All Documents</span>
+              </div>
+              {customerFilter.mode === 'all' && (
+                <Check className="h-5 w-5 text-blue-600" />
+              )}
+            </button>
+            {/* All Customers option */}
+            <button
+              onClick={() => {
+                setCustomerFilter({ mode: 'has_customer' });
+                setCustomerPickerOpen(false);
+                setCustomerPickerSearchQuery('');
+              }}
+              className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                customerFilter.mode === 'has_customer'
+                  ? 'bg-blue-50 dark:bg-blue-900/20'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+              }`}
               data-testid="option-all-customers"
             >
               <div className="flex items-center gap-3">
                 <FolderOpen className="h-4 w-4 text-slate-500" />
-                <span className="font-medium text-slate-900 dark:text-slate-100">All customers</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100">All Customers</span>
               </div>
-              {customerFilter.mode === 'all' && (
+              {customerFilter.mode === 'has_customer' && (
                 <Check className="h-5 w-5 text-blue-600" />
               )}
             </button>
