@@ -1,0 +1,96 @@
+Small polish pass for the EcoLogic in-app file viewer:
+
+GOAL
+Add a smoother, more premium animation when opening a file from Documents.
+
+CURRENT STATE
+The in-app file viewer works now, which is great.
+I just want the open transition to feel smoother and more polished.
+
+DESIRED FEEL
+When a user taps a file:
+- the viewer should open with a cleaner animation
+- feel more fluid / native / premium
+- not abrupt or clunky
+- especially on mobile, it should feel closer to a polished iOS-style transition
+
+I also uploaded a screen recording — use it as reference for the current feel and improve it.
+
+WHAT TO CHANGE
+
+1. SMOOTH THE OPEN TRANSITION
+Improve the animation when opening a file viewer from the Documents list.
+
+Possible good directions:
+- soft fade + slight slide-up
+- smooth scale/fade transition
+- subtle sheet expansion feel
+- iOS-like page/sheet presentation feel
+
+Pick the cleanest option that matches EcoLogic’s UI and does NOT feel gimmicky.
+
+2. KEEP IT FAST
+The animation should be smooth, not slow.
+It should feel responsive and premium:
+- quick
+- fluid
+- polished
+- no laggy heavy animation
+
+3. OPEN + CLOSE SHOULD MATCH
+If you improve the open animation, make sure the close/back animation also feels consistent and smooth.
+The viewer should feel cohesive both entering and leaving.
+
+4. DO NOT BREAK THE VIEWER
+Keep all current functionality intact:
+- PDFs preview in-app
+- images preview in-app
+- supported files still open correctly
+- close returns to same folder/location
+- no Safari jump
+- loading states still work
+
+5. MOBILE-FIRST
+Prioritize the mobile/native feel.
+That’s where the transition matters most.
+Web should still feel polished too.
+
+6. NO JANK
+Make sure the animation does NOT:
+- flash white
+- flicker content
+- jump layout
+- briefly show wrong state
+- feel delayed before content renders
+
+7. IF NEEDED, ANIMATE THE OVERLAY TOO
+If the viewer uses a modal/sheet/full-screen overlay:
+- animate the backdrop/overlay smoothly too
+- keep it subtle and clean
+
+8. KEEP DESIGN LANGUAGE CONSISTENT
+The animation should match EcoLogic:
+- modern
+- minimal
+- premium
+- Apple-like smoothness
+- not overdone
+
+SUCCESS CRITERIA
+- tapping a file opens the viewer with a visibly smoother transition
+- closing the viewer feels smooth too
+- no regressions in preview functionality
+- still returns to same folder/location
+- mobile/native experience feels more polished
+
+DELIVERABLES
+1. Improve file viewer open animation
+2. Improve close animation to match
+3. Keep all preview behavior intact
+4. Make mobile/native feel smoother and more premium
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- what animation approach you used
+- whether it was CSS transition, Framer Motion, route transition, or modal animation
+- what I should test manually

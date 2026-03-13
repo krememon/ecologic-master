@@ -126,58 +126,93 @@ function FileViewer({
   doc: DocumentItem | null;
   onClose: () => void;
 }) {
+  // displayDoc keeps the content mounted during the exit animation
+  const [displayDoc, setDisplayDoc] = useState<DocumentItem | null>(null);
+  // visible drives the CSS transition (opacity + translateY)
+  const [visible, setVisible] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const isImage = doc ? isImageFile(doc.type, doc.name) : false;
-  const isPdf   = doc ? isPdfFile(doc.type, doc.name)   : false;
+  // Enter: new doc arrives → mount content → next frame trigger transition
+  useEffect(() => {
+    if (doc) {
+      setDisplayDoc(doc);
+      setLoaded(false);
+      setLoadError(false);
+      // Double rAF: first lets the DOM paint the initial state, second starts the transition
+      requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
+    }
+  }, [doc?.id]);
+
+  // Exit: doc removed externally (shouldn't normally happen, but guard anyway)
+  useEffect(() => {
+    if (!doc && displayDoc) {
+      setVisible(false);
+      const t = setTimeout(() => setDisplayDoc(null), 280);
+      return () => clearTimeout(t);
+    }
+  }, [doc]);
+
+  // Internal close — animate out, then call parent onClose
+  function handleClose() {
+    setVisible(false);
+    setTimeout(() => {
+      setDisplayDoc(null);
+      onClose();
+    }, 280);
+  }
+
+  // Non-previewable: mark loaded immediately so fallback renders
+  const isImage = displayDoc ? isImageFile(displayDoc.type, displayDoc.name) : false;
+  const isPdf   = displayDoc ? isPdfFile(displayDoc.type, displayDoc.name)   : false;
   const isPreviewable = isImage || isPdf;
 
-  // Reset per-doc state when doc changes
   useEffect(() => {
-    if (!doc) return;
-    setLoadError(false);
-    // Non-previewable types: mark as "loaded" immediately so fallback shows
-    setLoaded(!isPreviewable);
-  }, [doc?.id]);
+    if (displayDoc && !isPreviewable) setLoaded(true);
+  }, [displayDoc?.id, isPreviewable]);
 
   // Lock body scroll while open
   useEffect(() => {
-    if (!doc) return;
+    if (!displayDoc) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [!!doc]);
+  }, [!!displayDoc]);
 
-  if (!doc) return null;
+  if (!displayDoc) return null;
 
   function handleDownload() {
     const a = document.createElement("a");
-    a.href = doc!.fileUrl;
-    a.download = doc!.name;
+    a.href = displayDoc!.fileUrl;
+    a.download = displayDoc!.name;
     a.click();
   }
 
   function handleOpenExternal() {
-    window.open(doc!.fileUrl, "_blank");
+    window.open(displayDoc!.fileUrl, "_blank");
   }
 
   return (
     <div
       className="fixed inset-0 z-[70] bg-black flex flex-col"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      style={{
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(28px)",
+        transition: "opacity 260ms cubic-bezier(0.4,0,0.2,1), transform 260ms cubic-bezier(0.4,0,0.2,1)",
+      }}
     >
       {/* ── Header ── */}
       <div className="flex items-center gap-3 px-3 py-2 bg-black/80 backdrop-blur-sm flex-shrink-0">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="text-white p-2 -ml-1 rounded-xl active:bg-white/10"
           aria-label="Close"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <span className="flex-1 text-white font-medium text-sm truncate leading-tight">
-          {doc.name}
+          {displayDoc.name}
         </span>
         <button
           onClick={handleDownload}
@@ -200,9 +235,9 @@ function FileViewer({
         {/* ── PDF viewer ── */}
         {isPdf && !loadError && (
           <iframe
-            key={doc.id}
-            src={doc.fileUrl}
-            title={doc.name}
+            key={displayDoc.id}
+            src={displayDoc.fileUrl}
+            title={displayDoc.name}
             className="absolute inset-0 w-full h-full border-0"
             onLoad={() => setLoaded(true)}
             onError={() => { setLoaded(true); setLoadError(true); }}
@@ -213,9 +248,9 @@ function FileViewer({
         {isImage && !loadError && (
           <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-black">
             <img
-              key={doc.id}
-              src={doc.fileUrl}
-              alt={doc.name}
+              key={displayDoc.id}
+              src={displayDoc.fileUrl}
+              alt={displayDoc.name}
               className="max-w-full max-h-full object-contain select-none"
               style={{ touchAction: "pinch-zoom" }}
               onLoad={() => setLoaded(true)}
@@ -229,15 +264,15 @@ function FileViewer({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-8 text-center">
             <div className="w-24 h-24 rounded-3xl bg-white/10 flex items-center justify-center">
               <div className="scale-150">
-                {getFileIcon(doc.type, doc.name)}
+                {getFileIcon(displayDoc.type, displayDoc.name)}
               </div>
             </div>
             <div className="space-y-1">
               <p className="text-white font-semibold text-lg leading-snug break-words max-w-xs">
-                {doc.name}
+                {displayDoc.name}
               </p>
-              {doc.fileSize ? (
-                <p className="text-white/40 text-sm">{formatFileSize(doc.fileSize)}</p>
+              {displayDoc.fileSize ? (
+                <p className="text-white/40 text-sm">{formatFileSize(displayDoc.fileSize)}</p>
               ) : null}
               {loadError && (
                 <p className="text-red-400 text-sm mt-2">Failed to load preview.</p>
