@@ -1,0 +1,90 @@
+We need to fix the DESKTOP Messages layout because the EcoLogic left sidebar is cutting into the chat UI.
+
+BUG
+On desktop, the Messages screen is being overlapped/cut off by the main EcoLogic sidebar.
+The chat area is not positioned/sized correctly relative to the app shell.
+
+GOAL
+Make the desktop Messages layout fit correctly beside the existing EcoLogic sidebar, with no overlap and no cut-off content.
+
+IMPORTANT
+This is specifically a DESKTOP layout issue.
+Do NOT break:
+- mobile messages layout
+- tablet layout
+- message sending
+- typing area
+- thread list / thread view behavior
+- app shell/sidebar behavior elsewhere
+
+WHAT TO CHECK
+
+1) TRACE THE REAL LAYOUT STRUCTURE
+Find the exact components involved in desktop Messages layout:
+- app shell / main layout wrapper
+- left EcoLogic sidebar
+- messages page container
+- thread list panel
+- active thread panel
+- composer/footer input area
+
+Determine whether Messages is:
+- using full viewport width incorrectly
+- not accounting for sidebar width
+- absolutely/fixed positioned incorrectly
+- using wrong desktop breakpoint layout
+- overflowing under the sidebar container
+
+2) IDENTIFY ROOT CAUSE
+Inspect for issues like:
+- `w-screen` / `100vw` used inside a layout that already has a sidebar
+- fixed/absolute positioning ignoring left nav width
+- missing left margin/padding/content offset
+- flex child not shrinking correctly
+- min-width overflow
+- chat panel width calculated from viewport instead of content area
+- composer/footer using full page width instead of main content width
+
+3) FIX DESKTOP LAYOUT
+Requirements:
+- Messages content should start to the RIGHT of the EcoLogic sidebar
+- no overlap with the sidebar
+- thread content fully visible
+- composer/input aligned to the message content area, not under the sidebar
+- desktop should feel like a proper two-panel/one-panel messaging layout within the app shell
+
+4) KEEP RESPONSIVE BEHAVIOR CLEAN
+Ensure:
+- desktop layout is corrected
+- mobile layout stays unchanged
+- tablet behavior remains sensible
+- no weird horizontal scrolling
+
+5) CHECK THE COMPOSER / FOOTER SPECIFICALLY
+The bottom message input/send row must:
+- line up with the visible message panel
+- not begin under the sidebar
+- not stretch behind or underneath the left nav
+- remain fully clickable
+
+6) ADD TARGETED LOGS ONLY IF NEEDED
+Only if necessary during debugging:
+- resolved container widths
+- sidebar width
+- messages content width
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of the desktop overlap
+3. what layout changes were made
+4. confirmation that Messages now sits correctly beside the EcoLogic sidebar on desktop
+5. confirmation that mobile layout was not broken
+
+SUCCESS CRITERIA
+- desktop Messages no longer gets cut off by the EcoLogic sidebar
+- chat area is fully visible
+- bottom composer aligns correctly
+- no horizontal overlap with the left nav
+- mobile still works

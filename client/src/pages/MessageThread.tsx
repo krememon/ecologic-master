@@ -647,7 +647,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Show header and composer immediately, even while loading
   return (
     <div 
-      className="fixed inset-0 flex flex-col bg-background overflow-hidden z-40"
+      className="flex flex-col bg-background overflow-hidden h-full"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Header - fixed height, with iOS safe area top padding */}
