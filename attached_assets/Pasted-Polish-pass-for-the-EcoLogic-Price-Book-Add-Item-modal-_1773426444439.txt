@@ -1,0 +1,156 @@
+Polish pass for the EcoLogic Price Book “Add Item” modal:
+
+GOAL
+Redesign the “Add Item” modal/sheet so it matches the same aesthetic as the “Assign Employees” modal. Also replace all example-style placeholder text with cleaner field-label style placeholders.
+
+CURRENT PROBLEMS
+1. The Add Item screen looks visually different from the cleaner Assign Employees modal
+2. Placeholder text currently uses ugly example copy like:
+- “e.g., Standard Inspection”
+- “e.g., Inspections, Re…”
+- “e.g., SVC-001”
+I want that cleaned up.
+
+DESIRED DESIGN DIRECTION
+Make the Add Item modal feel like it belongs to the same design system as the Assign Employees modal:
+- same cleaner Apple-style modal/sheet feel
+- same spacing rhythm
+- same soft background / border treatment
+- same cleaner header row
+- same polished input styling
+- same overall modern EcoLogic mobile-first aesthetic
+
+REFERENCE
+Use the Assign Employees modal as the UI reference for:
+- modal container styling
+- header layout
+- close button feel
+- input/search-field styling language
+- spacing
+- bottom action area feel
+
+WHAT TO CHANGE
+
+1. MATCH THE ASSIGN EMPLOYEES AESTHETIC
+Update the Add Item modal so it visually aligns with the Assign Employees modal:
+- cleaner modal shell
+- improved header
+- consistent padding
+- more polished spacing between fields
+- cleaner bottom action section
+- consistent corner radius and subtle borders/shadows
+- remove the current clunky feel
+
+Keep it professional and simple, not overdesigned.
+
+2. CLEAN HEADER
+Current title can stay:
+- “Add Item”
+
+But make the header styling consistent with Assign Employees:
+- centered title
+- clean close X on right
+- balanced top spacing
+
+3. REPLACE ALL PLACEHOLDER TEXT
+Replace all example-style placeholders with simple field-name placeholders.
+
+Use this pattern:
+- Name → “Name”
+- Description → “Description”
+- Price → “Price”
+- Category → “Category”
+- Task Code → “Task Code”
+
+For the unit dropdown:
+- keep current selected/default value behavior if it already works
+- do not use example-style placeholder copy there either
+
+IMPORTANT:
+Remove “e.g.” language everywhere in this modal.
+
+4. FIELD-BY-FIELD EXPECTED PLACEHOLDERS
+Please update placeholders like this:
+
+- Name input:
+  from: “e.g., Standard Inspection”
+  to: “Name”
+
+- Description textarea:
+  from: “Describe this item...”
+  to: “Description”
+
+- Price input:
+  keep a clean price placeholder/value style
+  ideally just “0.00” or existing currency input behavior if already standard in app
+  do not use example wording
+
+- Category input:
+  from example text
+  to: “Category”
+
+- Task Code input:
+  from: “e.g., SVC-001”
+  to: “Task Code”
+
+If any other placeholder/example text exists in this modal, clean that too.
+
+5. KEEP EXISTING FUNCTIONALITY
+Do NOT break:
+- add item submission
+- validation
+- unit dropdown
+- taxable toggle
+- save/add item action
+- cancel action
+- keyboard behavior
+- mobile responsiveness
+
+This is primarily a UI polish + copy cleanup task.
+
+6. BUTTON / FOOTER POLISH
+Make the bottom action area feel more like the Assign Employees modal:
+- cleaner spacing
+- cleaner visual hierarchy
+- polished sticky/footer area if appropriate
+- primary action remains obvious
+- cancel action remains clean
+
+Do not make it bulky.
+
+7. FORM LAYOUT IMPROVEMENTS
+Without changing the form fields themselves, improve layout consistency:
+- align labels cleanly
+- keep two-column rows where they make sense if already working well
+- make sure spacing between rows feels intentional
+- make sure textarea height feels balanced
+- make sure toggle row feels aligned and not awkward
+
+8. KEEP BRAND CONSISTENCY
+This should still feel like EcoLogic:
+- modern
+- minimal
+- iPhone-friendly
+- clean production SaaS UI
+
+9. CHECK ALL SURFACES
+Please verify this Add Item UI anywhere it is reused:
+- Price Book add item modal
+- any estimate/invoice item creation modal if it uses the same component
+- any shared item-form modal that could inherit the same changes
+
+If it is a shared component, update it cleanly without breaking other flows.
+
+DELIVERABLES
+1. Add Item modal visually matches the Assign Employees modal aesthetic more closely
+2. All example-style placeholder text removed
+3. Task Code placeholder becomes “Task Code”
+4. Other placeholders become simple clean field-name placeholders
+5. Existing add-item behavior remains intact
+6. Modal looks polished on mobile and web
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether this was a shared modal/form component or page-specific
+- exact placeholder text updates made
+- any other screens that inherited the improved Add Item styling

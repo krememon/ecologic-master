@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, Search, Settings2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, Search, Settings2, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
@@ -312,39 +312,64 @@ export default function PriceBook() {
           setEditingItem(null);
         }
       }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingItem ? "Edit Item" : "Add Item"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {editingItem ? "Edit Item" : "Add Item"}
+            </DialogTitle>
+            <button
+              onClick={() => setIsDialogOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Form body */}
+          <div className="px-4 py-5 space-y-4 bg-white dark:bg-slate-900 overflow-y-auto max-h-[70vh]">
+            {/* Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Standard Inspection"
+                placeholder="Name"
+                className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Description
+              </Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Describe this item..."
+                placeholder="Description"
                 rows={3}
+                className="rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 resize-none"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Price *</Label>
+
+            {/* Price + Unit */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="price" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Price <span className="text-red-500">*</span>
+                </Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     id="price"
                     type="text"
-                    className="pl-9"
+                    className="pl-9 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                     value={priceDisplay}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     onBlur={handlePriceBlur}
@@ -353,13 +378,15 @@ export default function PriceBook() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unit</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="unit" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Unit
+                </Label>
                 <Select
                   value={formData.unit}
                   onValueChange={(value) => setFormData({ ...formData, unit: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -372,30 +399,40 @@ export default function PriceBook() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+
+            {/* Category + Task Code */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Category
+                </Label>
                 <Input
                   id="category"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="e.g., Inspections, Repairs"
+                  placeholder="Category"
+                  className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="taskCode">Task Code</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="taskCode" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Task Code
+                </Label>
                 <Input
                   id="taskCode"
                   value={formData.taskCode}
                   onChange={(e) => setFormData({ ...formData, taskCode: e.target.value })}
-                  placeholder="e.g., SVC-001"
+                  placeholder="Task Code"
+                  className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between py-2">
+
+            {/* Taxable toggle */}
+            <div className="flex items-center justify-between py-1">
               <div>
-                <Label htmlFor="taxable" className="font-medium">Taxable</Label>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Apply tax to this item</p>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Taxable</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Apply tax to this item</p>
               </div>
               <Switch
                 id="taxable"
@@ -404,21 +441,26 @@ export default function PriceBook() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <button
+              onClick={() => setIsDialogOpen(false)}
+              className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors px-2 py-2"
+            >
+              Cancel
+            </button>
             <Button
               onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-teal-600 hover:bg-teal-700"
+              className="h-10 rounded-xl bg-teal-600 hover:bg-teal-700 px-6"
             >
               {(createMutation.isPending || updateMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               {editingItem ? "Save Changes" : "Add Item"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
