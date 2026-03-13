@@ -82,3 +82,21 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI, Framer Motion
 - **Payments**: Stripe
 - **Bank Integration**: Plaid
+
+## Date/Time Handling Rules
+
+**Shared utility**: `client/src/lib/dateUtils.ts` — single source of truth for all date parsing and formatting.
+
+**Schema field classification** (from `shared/schema.ts`):
+- **Date-only fields** (Drizzle `date()`, API returns `"YYYY-MM-DD"`): `invoices.issueDate`, `invoices.dueDate`, `invoices.paidDate`, `jobs.startDate`, `jobs.endDate`
+- **Timestamp fields** (Drizzle `timestamp()`, API returns full ISO string): `createdAt`, `updatedAt`, `paidAt`, `scheduledAt`, `sentAt`, `payments.paidDate`, `clockInAt`, `clockOutAt`, `signedAt`, message timestamps
+
+**Root cause of off-by-one-day bug**: `new Date("2026-03-13")` (date-only string) is parsed as UTC midnight. In any US timezone (UTC-4 … UTC-8), this renders as March 12 — the previous day. Fix: parse date-only strings as local noon: `new Date("2026-03-13T12:00:00")`.
+
+**Correct usage**:
+- Date-only fields: use `fmtDate(str)`, `parseDateOnly(str)`, or `fmtRelativeDateOnly(str)` from `dateUtils.ts`
+- Timestamp fields: use `new Date(str)`, `fmtDateTime(str)`, or `fmtRelativeTimestamp(str)` from `dateUtils.ts`
+- Auto-detect (smart parse): `parseAnyDate(str)` detects YYYY-MM-DD vs full ISO and applies the right parsing
+- Do NOT use `new Date(dateOnlyString)` or `parseISO(dateOnlyString)` on date-only fields — both produce UTC midnight
+
+**Files already using safe helpers**: `Invoicing.tsx`, `InvoiceDetails.tsx`, `Jobs.tsx`, `JobDetails.tsx`, `PaymentsTracker.tsx`, `PublicInvoicePay.tsx`, `Home.tsx`, `Dashboard.tsx`, `ProjectTimeline.tsx`, `scheduleDate.ts` (uses `parseYmdLocal` — equivalent to `parseDateOnly`).

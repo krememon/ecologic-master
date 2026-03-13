@@ -38,7 +38,8 @@ import {
   MoreHorizontal,
   ArrowRightLeft
 } from "lucide-react";
-import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
+import { format, isToday, isTomorrow, startOfDay, subDays, isAfter } from "date-fns";
+import { parseDateOnly } from "@/lib/dateUtils";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
 
 interface JobWithClient extends Job {
@@ -282,7 +283,7 @@ export default function Home() {
   
   const getJobDate = (job: JobWithClient): Date | null => {
     if (job.startDate) {
-      return parseISO(job.startDate as unknown as string);
+      return parseDateOnly(job.startDate as unknown as string);
     }
     return null;
   };

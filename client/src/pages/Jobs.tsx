@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { parseDateOnly } from "@/lib/dateUtils";
 import { type Job, type Client, type Estimate, type Customer } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { NewJobSheet } from "@/components/NewJobSheet";
@@ -1237,11 +1238,11 @@ export default function Jobs() {
                   <CardContent>
                     <div className="space-y-1">
                       {selectedJob.startDate && (
-                        <p>{format(new Date(selectedJob.startDate), 'EEEE, MMMM d, yyyy')}</p>
+                        <p>{format(parseDateOnly(selectedJob.startDate) ?? new Date(), 'EEEE, MMMM d, yyyy')}</p>
                       )}
                       {selectedJob.endDate && selectedJob.startDate !== selectedJob.endDate && (
                         <p className="text-sm text-muted-foreground">
-                          to {format(new Date(selectedJob.endDate), 'MMMM d, yyyy')}
+                          to {format(parseDateOnly(selectedJob.endDate) ?? new Date(), 'MMMM d, yyyy')}
                         </p>
                       )}
                     </div>

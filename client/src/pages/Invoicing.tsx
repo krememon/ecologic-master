@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import type { Invoice } from "@shared/schema";
 import { NewInvoiceSheet } from "@/components/NewInvoiceSheet";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { fmtDate } from "@/lib/dateUtils";
 
 export default function Invoicing() {
   const { toast } = useToast();
@@ -455,7 +456,7 @@ export default function Invoicing() {
                 {invoice.dueDate && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <Calendar className="h-4 w-4" />
-                    Due: {new Date(invoice.dueDate).toLocaleDateString()}
+                    Due: {fmtDate(invoice.dueDate)}
                   </div>
                 )}
                 {invoice.scheduledAt && (

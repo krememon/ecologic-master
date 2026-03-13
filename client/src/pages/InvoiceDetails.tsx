@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
 import { format } from "date-fns";
+import { fmtDate, fmtDateTime } from "@/lib/dateUtils";
 
 interface InvoiceDetailsProps {
   invoiceId: string;
@@ -426,13 +427,13 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
             <Separator />
             <div className="flex justify-between">
               <span className="text-muted-foreground">Issue Date</span>
-              <span>{format(new Date(invoice.issueDate), 'MMM d, yyyy')}</span>
+              <span>{fmtDate(invoice.issueDate)}</span>
             </div>
             <Separator />
             <div className="flex justify-between">
               <span className="text-muted-foreground">Due Date</span>
               <span className={invoice.status === 'overdue' ? 'text-red-600 font-medium' : ''}>
-                {format(new Date(invoice.dueDate), 'MMM d, yyyy')}
+                {fmtDate(invoice.dueDate)}
               </span>
             </div>
             {invoice.scheduledAt && (
@@ -723,7 +724,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
             </DialogTitle>
             <DialogDescription>
               Send {invoice.invoiceNumber} for {formatCurrency(invoice.totalCents)} to your customer.
-              {invoice.dueDate && ` Due: ${format(new Date(invoice.dueDate), 'MMM d, yyyy')}`}
+              {invoice.dueDate && ` Due: ${fmtDate(invoice.dueDate)}`}
             </DialogDescription>
           </DialogHeader>
           

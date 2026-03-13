@@ -31,6 +31,7 @@ import { AdvancedAnalytics } from "./AdvancedAnalytics";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { AIJobScoping } from "./AIJobScoping";
 import { format } from "date-fns";
+import { parseDateOnly } from "@/lib/dateUtils";
 
 // Recent Alerts Component
 function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) {
@@ -53,7 +54,7 @@ function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) 
     if (invoices) {
       invoices.forEach((invoice: any) => {
         if (invoice.status === 'pending' && invoice.dueDate) {
-          const dueDate = new Date(invoice.dueDate);
+          const dueDate = parseDateOnly(invoice.dueDate) ?? new Date(0);
           const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
           
           if (daysOverdue > 0) {
@@ -175,7 +176,7 @@ export default function Dashboard() {
   const today = new Date();
   const todaysJobs = jobs?.filter((job: any) => {
     if (!job.startDate) return false;
-    const jobDate = new Date(job.startDate);
+    const jobDate = parseDateOnly(job.startDate) ?? new Date(0);
     return (
       jobDate.getFullYear() === today.getFullYear() &&
       jobDate.getMonth() === today.getMonth() &&

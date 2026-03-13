@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Calendar, Clock, Users, AlertTriangle, CheckCircle, Play, Pause, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
+import { parseDateOnly } from "@/lib/dateUtils";
 
 interface ProjectTimelineProps {
   jobs: any[];
@@ -19,8 +20,8 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
   const generateTimelineData = () => {
     const today = new Date();
     const timelineJobs = jobs.map(job => {
-      const startDate = new Date(job.startDate || today);
-      const endDate = new Date(job.endDate || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000));
+      const startDate = parseDateOnly(job.startDate) ?? today;
+      const endDate = parseDateOnly(job.endDate) ?? new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
       const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       const daysPassed = Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       const progress = Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));

@@ -1,0 +1,176 @@
+We need to audit and fix DATE/TIME handling across the entire EcoLogic app so dates are shown correctly everywhere.
+
+PROBLEM
+Dates are incorrect in multiple places across the app. The screenshot is just one example, but this needs to be treated as a global date/time consistency issue, not a one-off UI bug.
+
+GOAL
+Ensure that throughout the app:
+- dates are correct
+- times are correct
+- displayed dates match the real event timestamp
+- no off-by-one-day issues
+- no UTC/local timezone confusion
+- no inconsistent formatting between screens
+
+IMPORTANT
+This is a GLOBAL audit/fix.
+Do NOT just patch the one screen shown in the screenshot.
+
+We need to inspect and standardize date handling across:
+- web
+- native/mobile
+- list views
+- detail views
+- payment history
+- invoices
+- jobs
+- schedule/events
+- messages/notifications
+- created/updated timestamps
+- “today / yesterday” labels
+- any relative time formatting
+- any server-generated timestamps rendered on client
+
+LIKELY ROOT CAUSES TO CHECK
+Investigate all common date bugs:
+- UTC stored in DB but rendered as local incorrectly
+- local dates being converted twice
+- ISO strings parsed with `new Date(...)` inconsistently
+- date-only values being treated as midnight UTC and shifting day
+- server sending one format, client assuming another
+- native and web using different format helpers
+- mixing `Date`, string, and timestamp number types
+- formatting based on browser timezone vs app/user timezone
+- “createdAt” being used where “paidAt/collectedAt/scheduledFor” should be used
+- wrong source field shown in UI
+- manual formatting code duplicated across screens
+
+TASKS
+
+1) IDENTIFY THE APP’S DATE SOURCES
+Map the main timestamp/date fields used across the app, including where applicable:
+- createdAt
+- updatedAt
+- paidAt
+- collectedAt
+- dueDate
+- invoiceDate
+- scheduledStart / scheduledEnd
+- completedAt
+- sentAt
+- message timestamps
+- notification timestamps
+- referral/payment audit timestamps
+
+Determine which fields are:
+- true timestamps
+- date-only fields
+- derived display values
+
+2) FIND GLOBAL DATE HELPERS / FORMATTERS
+Locate all date formatting utilities/helpers/components in the codebase.
+Check for:
+- custom formatter helpers
+- direct `new Date(...)` usage in components
+- `toLocaleDateString`
+- `toLocaleString`
+- `Intl.DateTimeFormat`
+- `date-fns`, `dayjs`, `luxon`, or any other library
+- duplicated formatting logic across screens
+
+We want to centralize this if it is scattered.
+
+3) STANDARDIZE DATE/TIME RULES
+Create and apply clear rules:
+
+- Timestamp fields:
+  store as canonical timestamp and render in the user’s local timezone consistently
+
+- Date-only fields:
+  render as date-only without timezone shifting
+
+- Relative labels:
+  “Today”, “Yesterday”, etc. should be calculated consistently in local time
+
+- Display format:
+  use consistent formatting patterns across the app
+
+Examples:
+- date only: `Mar 13, 2026`
+- date + time: `Mar 13, 2026 at 7:59 PM`
+
+4) AUDIT HIGH-IMPACT SCREENS
+Explicitly inspect and fix date rendering on:
+- Payments list
+- Payment detail
+- Invoice list
+- Invoice detail
+- Jobs list
+- Job detail
+- Schedule/calendar views
+- Notifications
+- Messages/chat timestamps
+- Client history
+- Referral/subcontract payment screens
+- Audit/history cards
+- dashboard widgets using “today” or recent activity
+
+5) VERIFY THE CORRECT FIELD IS SHOWN
+For each major screen, confirm the UI is displaying the correct event date:
+- payment rows should use payment/paid timestamp, not invoice creation date
+- invoice rows should use invoice date or due date as intended
+- schedule items should use scheduled datetime
+- history events should use the actual event timestamp
+
+6) FIX SERVER/CLIENT CONTRACT IF NEEDED
+If the server is sending ambiguous or inconsistent date values:
+- normalize API responses
+- keep ISO timestamps explicit where needed
+- avoid mixing date-only strings with full timestamps unless intentional
+- document which fields are date-only vs datetime
+
+7) CREATE/USE SHARED DATE UTILS
+If formatting is currently duplicated, introduce shared helpers and migrate screens to use them.
+
+Suggested helper categories:
+- formatDateOnly(...)
+- formatDateTime(...)
+- formatRelativeDay(...)
+- safeParseDate(...)
+- normalizeDateOnly(...)
+
+8) NATIVE + WEB CONSISTENCY
+Make sure native/mobile and web render the same date correctly.
+Do not leave one platform using a different parsing rule.
+
+9) ADD TARGETED LOGS / DEBUG ONLY WHERE USEFUL
+Add concise logs while debugging only if necessary:
+- raw API date value
+- parsed value
+- rendered value
+- timezone assumption
+
+Do not leave noisy logs everywhere after the fix.
+
+10) REGRESSION CHECKS
+Specifically verify:
+- no off-by-one day bugs
+- no “tomorrow/yesterday” mistakes for same-day events
+- no wrong collection/payment date in subcontract screens
+- payment history dates match actual payment times
+- list ordering still works after date fixes
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause summary of the date issues found
+3. whether the issue was parsing, timezone, wrong field selection, or multiple causes
+4. shared date/time rules implemented
+5. key screens fixed
+6. any remaining risky areas that should be monitored
+
+SUCCESS CRITERIA
+- dates throughout the app are correct and consistent
+- no obvious timezone/off-by-one issues remain
+- payment/invoice/job/history dates reflect the correct real event
+- native and web show the same correct values

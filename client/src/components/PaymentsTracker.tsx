@@ -25,7 +25,8 @@ import {
   User,
   Calendar
 } from "lucide-react";
-import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
+import { parseAnyDate } from "@/lib/dateUtils";
 
 interface LedgerItem {
   invoiceId: number;
@@ -193,13 +194,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
   };
 
   const safeParseDate = (dateStr: string | undefined | null): Date | null => {
-    if (!dateStr) return null;
-    try {
-      const date = parseISO(dateStr);
-      return isNaN(date.getTime()) ? null : date;
-    } catch {
-      return null;
-    }
+    return parseAnyDate(dateStr);
   };
 
   const getDateDisplay = (item: LedgerItem): string => {

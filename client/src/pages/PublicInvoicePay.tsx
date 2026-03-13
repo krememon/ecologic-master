@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
+import { fmtDate } from "@/lib/dateUtils";
 import SignatureCanvas from "react-signature-canvas";
 import { useToast } from "@/hooks/use-toast";
 import StripePaymentForm from "@/components/StripePaymentForm";
@@ -454,10 +455,10 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                     <span className="font-medium text-gray-700">{invoice.invoiceNumber}</span>
                   </p>
                   <p className="text-gray-500">
-                    Issued: {format(new Date(invoice.issueDate), 'MMM d, yyyy')}
+                    Issued: {fmtDate(invoice.issueDate)}
                   </p>
                   <p className="text-gray-500">
-                    Due: {format(new Date(invoice.dueDate), 'MMM d, yyyy')}
+                    Due: {fmtDate(invoice.dueDate)}
                   </p>
                 </div>
                 <div className="mt-3">
