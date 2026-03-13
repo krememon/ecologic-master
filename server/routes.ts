@@ -10591,9 +10591,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const company = await storage.getCompany(invoice.companyId);
 
-      console.log('[create-intent public]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: invoice.companyId, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents });
+      // Subcontract jobs must NOT use destination charges — their payout uses Separate Charges
+      // and Transfers (source_transaction). Regular payments route to the company's connected account.
+      const isSubcontractJobPublic = invoice.jobId
+        ? !!(await stripeConnectService.getAcceptedReferralForJob(invoice.jobId))
+        : false;
 
-      const paymentIntent = await stripe.paymentIntents.create({
+      const publicConnectedAccountId = !isSubcontractJobPublic && company?.stripeConnectAccountId && company?.stripeConnectChargesEnabled
+        ? company.stripeConnectAccountId
+        : null;
+
+      console.log('[create-intent public]', {
+        invoiceIdParam: invoiceId,
+        invoiceIdDb: invoice.id,
+        companyId: invoice.companyId,
+        totalCents: invoiceTotalCents,
+        balanceDue: currentBalanceDueCents,
+        paidSoFar: computed.paidCents,
+        amountCents: amountInCents,
+        isSubcontractJob: isSubcontractJobPublic,
+        paymentRouting: publicConnectedAccountId ? `destination:${publicConnectedAccountId}` : 'platform',
+      });
+
+      const publicPiParams: any = {
         amount: amountInCents,
         currency: 'usd',
         automatic_payment_methods: { enabled: true },
@@ -10604,9 +10624,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId: invoice.jobId ? String(invoice.jobId) : '',
           isPartialPayment: amountInCents < currentBalanceDueCents ? 'true' : 'false',
         },
-      });
+      };
+      if (publicConnectedAccountId) {
+        publicPiParams.transfer_data = { destination: publicConnectedAccountId };
+      }
 
-      console.log(`[PublicIntent] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
+      const paymentIntent = await stripe.paymentIntents.create(publicPiParams);
+
+      console.log(`[PublicIntent] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id} routing=${publicConnectedAccountId ? `destination:${publicConnectedAccountId}` : 'platform'}`);
 
       const [existingPiPayment] = await db.select({ id: payments.id }).from(payments).where(eq(payments.stripePaymentIntentId, paymentIntent.id));
       if (!existingPiPayment) {
@@ -15050,9 +15075,33 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         }
       }
 
-      console.log('[create-intent]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: company.id, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents, hasDiscount: !!stripeMeta.discount });
+      // Determine if this is a subcontract job — subcontract payments must NOT use destination
+      // charges because executeSubcontractPayout uses Separate Charges and Transfers (source_transaction).
+      const isSubcontractJob = invoice.jobId
+        ? !!(await stripeConnectService.getAcceptedReferralForJob(invoice.jobId))
+        : false;
 
-      const paymentIntent = await stripe.paymentIntents.create({
+      // For regular (non-subcontract) payments, route funds to the company's connected account
+      // via a Destination Charge (transfer_data). The charge still lives on the platform so
+      // the confirm handler, refunds via payment_intent, and webhook reconciliation are unchanged.
+      const connectedAccountId = !isSubcontractJob && company.stripeConnectAccountId && company.stripeConnectChargesEnabled
+        ? company.stripeConnectAccountId
+        : null;
+
+      console.log('[create-intent]', {
+        invoiceIdParam: invoiceId,
+        invoiceIdDb: invoice.id,
+        companyId: company.id,
+        totalCents: invoiceTotalCents,
+        balanceDue: currentBalanceDueCents,
+        paidSoFar: computed.paidCents,
+        amountCents: amountInCents,
+        hasDiscount: !!stripeMeta.discount,
+        isSubcontractJob,
+        paymentRouting: connectedAccountId ? `destination:${connectedAccountId}` : 'platform',
+      });
+
+      const piParams: any = {
         amount: amountInCents,
         currency: 'usd',
         automatic_payment_methods: { enabled: true },
@@ -15063,9 +15112,14 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
           isPartialPayment: amountInCents < currentBalanceDueCents ? 'true' : 'false',
           ...(stripeMeta.discount ? { discountType: stripeMeta.discount.type, discountValue: String(stripeMeta.discount.value), discountAmountCents: String(stripeMeta.discount.amountCents), discountReason: stripeMeta.discount.reason || '' } : {}),
         },
-      });
+      };
+      if (connectedAccountId) {
+        piParams.transfer_data = { destination: connectedAccountId };
+      }
 
-      console.log(`[Stripe] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
+      const paymentIntent = await stripe.paymentIntents.create(piParams);
+
+      console.log(`[Stripe] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id} routing=${connectedAccountId ? `destination:${connectedAccountId}` : 'platform'}`);
 
       const [existingPiPayment] = await db.select({ id: payments.id }).from(payments).where(eq(payments.stripePaymentIntentId, paymentIntent.id));
       if (!existingPiPayment) {
