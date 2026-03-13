@@ -272,13 +272,11 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     });
   }, [apiCustomers, customerSearch]);
 
-  // Filtered employees
+  // Filtered employees — no role restriction, matching Estimates/JobDetails behavior
   const filteredEmployees = useMemo(() => {
-    const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT'];
-    const assignable = allEmployees.filter(e => ASSIGNABLE_ROLES.includes(e.role?.toUpperCase()));
-    if (!employeeSearch.trim()) return assignable;
+    if (!employeeSearch.trim()) return allEmployees;
     const search = employeeSearch.toLowerCase();
-    return assignable.filter(e => {
+    return allEmployees.filter(e => {
       const name = `${e.firstName || ''} ${e.lastName || ''}`.toLowerCase();
       return name.includes(search) || (e.email || '').toLowerCase().includes(search);
     });

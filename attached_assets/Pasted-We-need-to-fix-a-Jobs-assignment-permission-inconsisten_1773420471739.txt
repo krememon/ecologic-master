@@ -1,0 +1,109 @@
+We need to fix a Jobs assignment permission inconsistency in EcoLogic.
+
+ISSUE
+The Owner can assign himself to an Estimate, but for some reason cannot assign himself to a Job.
+That behavior should be consistent.
+If the Owner is allowed to assign himself on Estimates, he should also be able to assign himself on Jobs.
+
+GOAL
+Allow the Owner to assign himself to a Job anywhere the normal job assignment flow is used, without breaking existing RBAC or assignment behavior for other roles.
+
+WHAT TO CHECK
+
+1. FIND THE INCONSISTENCY
+Audit the full assignment flow for:
+- Estimates assignment
+- Jobs assignment
+
+Compare:
+- frontend filtering of available employees
+- backend job assignment route validation
+- role-based visibility rules
+- owner inclusion/exclusion logic
+- any “technician only” or “assignable employees only” filters
+- any company member query used by the Jobs assignment modal
+
+Somewhere in the Jobs flow, the Owner is being excluded while the Estimates flow allows him.
+Find the exact reason instead of patching blindly.
+
+2. EXPECTED BEHAVIOR
+Owner should be able to:
+- see himself in the Job assignment picker
+- select himself
+- save assignment successfully
+- appear as assigned on the Job
+- continue to see job data normally
+
+This should work the same way the Owner self-assignment already works on Estimates.
+
+3. DO NOT BREAK OTHER ROLE RULES
+Keep existing RBAC intact for everyone else.
+Do not accidentally allow unauthorized assignments.
+
+Preserve current intended behavior for:
+- Supervisor
+- Dispatcher
+- Estimator
+- Technician
+
+Only fix the incorrect exclusion of the Owner from Job assignment.
+
+4. CHECK BOTH UI + BACKEND
+Likely places the bug could exist:
+- frontend employee list query excludes owner on Jobs
+- shared employee picker filtered differently for Jobs vs Estimates
+- backend route rejects Owner role for Job crew assignment
+- job assignment logic only allows technician/supervisor roles
+- owner is hidden because of “crew only” assumptions
+- owner is missing from company members endpoint or transformed data for Jobs only
+
+Fix both sides if necessary:
+- owner should be visible in picker
+- assignment save should succeed
+- UI should refresh correctly afterward
+
+5. CHECK ALL JOB ASSIGNMENT SURFACES
+Please verify all relevant Job assignment surfaces:
+- Job details assignment modal
+- crew assignment modal/sheet
+- any quick-assign action
+- any job edit screen that uses employee assignment
+
+I do not want one Job assignment flow fixed and another still excluding the Owner.
+
+6. KEEP ESTIMATES WORKING
+Do not break the existing estimate assignment flow.
+Use it as the reference for the correct behavior if helpful.
+
+7. EDGE CASES
+Handle:
+- owner assigning only himself
+- owner assigning himself plus technicians
+- owner removing himself afterward
+- job with no assigned crew
+- existing jobs created before fix
+- mobile native modal and web modal behavior
+- selected state and save state updating correctly
+
+8. LOGS
+Add targeted logs only if needed to confirm:
+- owner appears in candidate list
+- save request contains owner user/company member id
+- backend accepts and persists assignment
+- job read response returns owner as assigned
+
+Do not spam logs.
+
+DELIVERABLES
+1. Owner can assign himself to Jobs
+2. Jobs assignment behavior matches Estimates assignment behavior
+3. Existing RBAC for non-owner roles remains intact
+4. All Job assignment surfaces are consistent
+5. UI refreshes correctly after saving assignment
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- files changed
+- whether the bug was frontend, backend, or both
+- which Job assignment surfaces were fixed
+- anything I should manually test
