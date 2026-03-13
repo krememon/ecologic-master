@@ -392,7 +392,7 @@ export function JobInvoiceModal({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between px-4 pt-3">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-green-600" />
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">

@@ -35,6 +35,7 @@ interface Invoice {
   qboSyncStatus?: string | null;
   qboLastSyncError?: string | null;
   qboLastSyncedAt?: string | null;
+  isSubcontractJob?: boolean;
 }
 
 interface LineItem {
@@ -512,10 +513,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const balanceDollars = balanceRemainingCents / 100;
   const isPartialInvoice = currentPaidCents > 0;
   
+  const isSubcontractJob = invoice.isSubcontractJob ?? false;
   const maxVisible = 5;
   const hasMoreItems = lineItems.length > maxVisible;
   const visibleItems = showAllItems ? lineItems : lineItems.slice(0, maxVisible);
-  const paymentDisabled = isLoading || (partialEnabled && !isPartialValid) || (discountEnabled && !isDiscountValid);
+  const paymentDisabled = isLoading || (!isSubcontractJob && partialEnabled && !isPartialValid) || (!isSubcontractJob && discountEnabled && !isDiscountValid);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -687,6 +689,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           </CardContent>
         </Card>
 
+        {!isSubcontractJob && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -738,7 +741,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             </div>
           )}
         </div>
+        )}
 
+        {!isSubcontractJob && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -832,6 +837,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             </div>
           )}
         </div>
+        )}
 
         {!showNote ? (
           <button

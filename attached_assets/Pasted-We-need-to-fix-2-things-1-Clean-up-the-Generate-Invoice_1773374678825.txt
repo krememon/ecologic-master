@@ -1,0 +1,132 @@
+We need to fix 2 things:
+
+1. Clean up the Generate Invoice PDF modal/layout so it looks polished and centered
+2. For SUBCONTRACTED jobs ONLY, remove Partial Payment and Discount from checkout
+
+IMPORTANT
+These are two separate fixes in the same task.
+Do NOT affect normal/non-subcontract invoice flows unless explicitly required.
+
+-----------------------------------
+TASK 1 — FIX GENERATE INVOICE PDF LAYOUT
+-----------------------------------
+
+PROBLEM
+The “Generate Invoice PDF” screen/modal looks messy and poorly aligned.
+The PDF preview/layout needs to feel cleaner, more centered, and more polished.
+
+GOAL
+Make the Generate Invoice PDF screen look modern, balanced, and professional on native/mobile.
+
+WHAT TO FIX
+Inspect the full Generate Invoice PDF modal/screen, including:
+- modal width / height / spacing
+- title alignment
+- filename row
+- regenerate link/button placement
+- PDF preview container
+- preview scaling
+- centering of the document preview
+- expand button placement
+- “Tap to enlarge” label
+- bottom action buttons:
+  - Next
+  - Pay Invoice
+  - Cancel
+
+DESIGN REQUIREMENTS
+- clean vertical spacing
+- properly centered content
+- balanced margins/padding
+- preview should feel framed intentionally, not floating awkwardly
+- filename/header row should not feel cramped
+- action buttons should align nicely and feel consistent with EcoLogic mobile UI
+- no weird empty areas or awkward offset alignment
+- preview area should look polished even before enlarging
+- preserve all existing functionality
+
+IF THE PDF PREVIEW ITSELF IS OFF-CENTER
+Fix the preview container and scaling logic so:
+- the page preview is centered
+- sizing is visually appropriate for mobile
+- no awkward left/right bias
+- no broken clipping if avoidable
+
+DELIVERABLE FOR TASK 1
+- exact files changed
+- what was wrong with the layout
+- what was changed to improve spacing/centering/polish
+
+-----------------------------------
+TASK 2 — SUBCONTRACTED JOBS ONLY:
+REMOVE PARTIAL PAYMENT + DISCOUNT
+-----------------------------------
+
+PROBLEM
+For subcontracted job checkout, we do NOT want:
+- Partial Payment
+- Discount
+
+These options should not appear for subcontracted/referral invoice checkout.
+
+IMPORTANT RULE
+This removal is ONLY for subcontracted/referral jobs.
+For normal/non-subcontract invoices:
+- Partial Payment should remain
+- Discount should remain
+
+GOAL
+When checkout is for a subcontract/referral invoice:
+- hide/remove Partial Payment section
+- hide/remove Discount section
+- keep the rest of the subcontract checkout working
+
+DO NOT BREAK
+- normal invoice checkout
+- Cash / Check / Card visibility for subcontracted jobs
+- sender vs receiver display logic
+- manual payment flows
+- Stripe card flow
+- existing amount display rules
+
+WHAT TO CHECK
+Find the actual subcontract checkout component/render path and update the UI conditionally based on the invoice/job/referral context.
+
+Likely checks include:
+- isReferral
+- isSubcontract
+- isSplitPayment
+- isSenderViewing / isReceiverViewing
+- INV-REF invoices
+- payment review / checkout screen
+
+REQUIREMENTS
+For subcontract/referral checkout:
+- remove Partial Payment UI entirely
+- remove Discount UI entirely
+- do not leave blank gaps where those sections used to be
+- checkout should still look clean and intentional
+
+For normal checkout:
+- leave Partial Payment and Discount unchanged
+
+ADD TARGETED LOGS
+Add concise logs only if helpful:
+- whether current checkout is subcontract/referral
+- whether partial payment/discount are hidden
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact component used for Generate Invoice PDF layout
+3. exact component used for subcontract checkout
+4. confirmation that PDF layout is cleaned up and centered
+5. confirmation that Partial Payment + Discount are removed ONLY for subcontracted jobs
+6. confirmation that normal invoices still retain those options
+
+SUCCESS CRITERIA
+- Generate Invoice PDF screen looks centered, polished, and professional
+- Subcontracted checkout no longer shows Partial Payment or Discount
+- Normal invoice checkout still shows Partial Payment and Discount
+- No regressions in subcontract payment flow

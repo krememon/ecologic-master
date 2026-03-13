@@ -7066,12 +7066,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
+      const isSubcontractJob = invoice.jobId
+        ? !!(await stripeConnectService.getAcceptedReferralForJob(invoice.jobId))
+        : false;
       res.json({
         invoice: {
           ...invoice,
           paidAmountCents: computed.paidCents,
           balanceDueCents: computed.owedCents,
           computedStatus: computed.computedStatus,
+          isSubcontractJob,
         }
       });
     } catch (error) {
