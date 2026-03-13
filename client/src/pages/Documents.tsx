@@ -268,7 +268,6 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: contentsKey });
       setCreateFolderOpen(false);
       setNewFolderName("");
-      toast({ title: "Folder created" });
     },
     onError: () => toast({ title: "Failed to create folder", variant: "destructive" }),
   });
@@ -287,7 +286,6 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: contentsKey });
       setRenameFolder(null);
       setRenameName("");
-      toast({ title: "Folder renamed" });
     },
     onError: () => toast({ title: "Failed to rename folder", variant: "destructive" }),
   });
@@ -305,7 +303,6 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: contentsKey });
       setDeleteConfirm(null);
-      toast({ title: "Folder deleted" });
     },
     onError: () => toast({ title: "Failed to delete folder", variant: "destructive" }),
   });
@@ -337,7 +334,6 @@ export default function Documents() {
       setUploadOpen(false);
       setUploadName("");
       setSelectedFile(null);
-      toast({ title: "Document uploaded" });
     },
     onError: (err: any) =>
       toast({ title: err.message || "Upload failed", variant: "destructive" }),
@@ -357,7 +353,6 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: contentsKey });
       setDeleteConfirm(null);
-      toast({ title: "Document deleted" });
     },
     onError: () => toast({ title: "Failed to delete document", variant: "destructive" }),
   });

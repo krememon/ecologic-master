@@ -1,0 +1,71 @@
+Remove the success pop-up/toast notifications from the EcoLogic Documents file-cabinet flow.
+
+GOAL
+Get rid of these pop-ups entirely for document/folder actions.
+
+REMOVE THESE TOASTS / POP-UPS
+Please remove the visible success notifications for actions like:
+- Folder created
+- Folder deleted
+- Document uploaded
+- Document deleted
+
+I do NOT want those pop-up banners showing.
+
+DESIRED BEHAVIOR
+When these actions succeed:
+- just update the UI silently
+- folder/file list should refresh/update naturally
+- no big success pop-up should appear
+
+IMPORTANT
+- only remove the success popups for these document/folder actions
+- do NOT break the actual actions themselves
+- do NOT remove real error handling
+- if an action fails, error feedback can still exist
+- this is specifically about the success banners/popups being annoying and cluttered
+
+WHAT TO CHECK
+1. DOCUMENTS PAGE ACTIONS
+Audit all success toasts/popups related to:
+- create folder
+- delete folder
+- upload document
+- delete document
+
+2. KEEP ERROR FEEDBACK
+If something actually fails:
+- keep proper error handling
+- only suppress the success notifications
+
+3. UI MUST STILL UPDATE
+After success:
+- created folder appears
+- deleted folder disappears
+- uploaded doc appears
+- deleted doc disappears
+- breadcrumb/list state still updates correctly
+without needing a popup
+
+4. CHECK ALL SURFACES
+Make sure this applies to both:
+- root-level document actions
+- inside-folder actions
+- mobile/native
+- web/desktop
+
+5. CLEAN UP ANY SHARED TOAST CALLS CAREFULLY
+If these are using a shared toast helper:
+- remove/suppress only the success calls for the Documents flow
+- do not accidentally remove success feedback from unrelated parts of the app unless intentionally shared for this page only
+
+DELIVERABLES
+1. Remove success popups for folder/document actions in Documents
+2. Keep the actions themselves fully working
+3. Keep real error handling intact
+4. UI updates silently and cleanly
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- which success toasts were removed
+- whether error toasts/messages still remain for failures
