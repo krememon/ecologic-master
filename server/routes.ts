@@ -17973,6 +17973,42 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
             requestId: message.requestId
           }));
         }
+
+        // Handle typing:start - broadcast to other room members
+        else if (message.type === 'typing:start' && ws.userId) {
+          const { conversationId } = message;
+          if (conversationId) {
+            const roomKey = conversationRoom(conversationId);
+            const roomSockets = wsRooms.get(roomKey);
+            if (roomSockets) {
+              const payload = JSON.stringify({ type: 'typing:start', conversationId, userId: ws.userId });
+              roomSockets.forEach(sock => {
+                if (sock !== ws && (sock as ExtendedWebSocket).readyState === WebSocket.OPEN) {
+                  (sock as ExtendedWebSocket).send(payload);
+                }
+              });
+            }
+            console.log(`[WS:TYPING] start userId=${ws.userId} convId=${conversationId}`);
+          }
+        }
+
+        // Handle typing:stop - broadcast to other room members
+        else if (message.type === 'typing:stop' && ws.userId) {
+          const { conversationId } = message;
+          if (conversationId) {
+            const roomKey = conversationRoom(conversationId);
+            const roomSockets = wsRooms.get(roomKey);
+            if (roomSockets) {
+              const payload = JSON.stringify({ type: 'typing:stop', conversationId, userId: ws.userId });
+              roomSockets.forEach(sock => {
+                if (sock !== ws && (sock as ExtendedWebSocket).readyState === WebSocket.OPEN) {
+                  (sock as ExtendedWebSocket).send(payload);
+                }
+              });
+            }
+            console.log(`[WS:TYPING] stop userId=${ws.userId} convId=${conversationId}`);
+          }
+        }
         
         // Handle message:send - send message with ACK
         else if (message.type === 'message:send' && ws.userId) {

@@ -53,7 +53,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const [messageBody, setMessageBody] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [peerIsTyping, setPeerIsTyping] = useState(false);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -61,6 +61,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const ws = useRef<WebSocket | null>(null);
   const genRef = useRef(0);
   const didMountRef = useRef(false);
+  const isSelfTypingRef = useRef(false);
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const peerTypingGuardRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Swipe-to-reveal timestamps state
   const progress = useSpring(0, { stiffness: 260, damping: 30 });
@@ -426,13 +429,31 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         }]));
       }
       
-      // Handle typing indicator (if still using)
-      else if (data.type === "typing" && data.conversationId === currentConvId) {
-        setIsTyping(data.isTyping);
+      // Handle peer typing:start
+      else if (data.type === "typing:start" && data.conversationId === currentConvId) {
+        setPeerIsTyping(true);
+        if (peerTypingGuardRef.current) clearTimeout(peerTypingGuardRef.current);
+        peerTypingGuardRef.current = setTimeout(() => setPeerIsTyping(false), 5000);
+        console.log(`[WS:TYPING] recv start convId=${currentConvId}`);
+      }
+      // Handle peer typing:stop
+      else if (data.type === "typing:stop" && data.conversationId === currentConvId) {
+        setPeerIsTyping(false);
+        if (peerTypingGuardRef.current) { clearTimeout(peerTypingGuardRef.current); peerTypingGuardRef.current = null; }
+        console.log(`[WS:TYPING] recv stop convId=${currentConvId}`);
       }
     };
 
     return () => {
+      // Emit typing:stop if we were typing when leaving
+      if (isSelfTypingRef.current && ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({ type: 'typing:stop', conversationId: currentConvId }));
+        isSelfTypingRef.current = false;
+      }
+      if (typingStopTimerRef.current) { clearTimeout(typingStopTimerRef.current); typingStopTimerRef.current = null; }
+      if (peerTypingGuardRef.current) { clearTimeout(peerTypingGuardRef.current); peerTypingGuardRef.current = null; }
+      setPeerIsTyping(false);
+
       // Leave conversation room before closing
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         console.log(`[WS:LEAVE] Leaving conversation room ${currentConvId}`);
@@ -478,8 +499,26 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   const composerFocusedRef = useRef(false);
 
+  const emitTypingStart = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !currentConvId) return;
+    if (isSelfTypingRef.current) return;
+    isSelfTypingRef.current = true;
+    ws.current.send(JSON.stringify({ type: 'typing:start', conversationId: currentConvId }));
+    console.log(`[WS:TYPING] emit start convId=${currentConvId}`);
+  };
+
+  const emitTypingStop = () => {
+    if (typingStopTimerRef.current) { clearTimeout(typingStopTimerRef.current); typingStopTimerRef.current = null; }
+    if (!isSelfTypingRef.current) return;
+    isSelfTypingRef.current = false;
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !currentConvId) return;
+    ws.current.send(JSON.stringify({ type: 'typing:stop', conversationId: currentConvId }));
+    console.log(`[WS:TYPING] emit stop convId=${currentConvId}`);
+  };
+
   const handleSend = () => {
     if (!messageBody.trim() || !currentConvId) return;
+    emitTypingStop();
     sendMessage(messageBody.trim());
   };
 
@@ -685,14 +724,12 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                 </div>
               ));
             })()}
-            {isTyping && (
-              <div className="flex gap-2 max-w-[80%] mr-auto">
-                <div className="bg-muted rounded-2xl px-4 py-2">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
+            {peerIsTyping && (
+              <div className="flex gap-2 max-w-[80%] mr-auto" data-testid="typing-indicator">
+                <div className="bg-muted rounded-2xl px-4 py-3 flex items-center gap-1">
+                  <span className="w-2 h-2 bg-muted-foreground/60 rounded-full inline-block" style={{ animation: 'typingDot 1.2s ease-in-out infinite', animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-muted-foreground/60 rounded-full inline-block" style={{ animation: 'typingDot 1.2s ease-in-out infinite', animationDelay: '0.2s' }} />
+                  <span className="w-2 h-2 bg-muted-foreground/60 rounded-full inline-block" style={{ animation: 'typingDot 1.2s ease-in-out infinite', animationDelay: '0.4s' }} />
                 </div>
               </div>
             )}
@@ -709,7 +746,17 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             data-testid="textarea-message-input"
             placeholder="Type a message..."
             value={messageBody}
-            onChange={(e) => setMessageBody(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setMessageBody(val);
+              if (val.trim()) {
+                emitTypingStart();
+                if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+                typingStopTimerRef.current = setTimeout(emitTypingStop, 2000);
+              } else {
+                emitTypingStop();
+              }
+            }}
             onKeyDown={handleKeyDown}
             onFocus={() => { composerFocusedRef.current = true; }}
             onBlur={() => { composerFocusedRef.current = false; }}

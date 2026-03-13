@@ -1,0 +1,115 @@
+We need to implement real-time typing indicators in Messages so animated message dots appear when the other person is actively typing.
+
+GOAL
+When someone is typing in a DM/thread, the other user should see a subtle typing indicator (message bubble / three dots style) in real time.
+
+TARGET UX
+- If User A is typing to User B, User B sees animated typing dots in that conversation
+- Indicator should disappear shortly after typing stops
+- It should feel smooth, subtle, and modern
+- Only show it in the active relevant thread/conversation
+- Do NOT show typing indicator to the person who is typing themselves
+
+FEATURE REQUIREMENTS
+
+1) REAL-TIME TYPING EVENTS
+Use the existing messaging real-time channel / websocket infrastructure if available.
+
+Implement:
+- typing_start event
+- typing_stop event
+
+Behavior:
+- emit typing_start when user begins typing
+- debounce/throttle so we do NOT spam the socket on every keystroke
+- emit typing_stop after a short idle timeout (example 1.5–2.5s after last keystroke)
+- also emit typing_stop when message is actually sent
+- also clear typing state when input is cleared or user leaves the thread
+
+2) THREAD-SCOPED ONLY
+Typing state must be scoped correctly:
+- only the relevant conversation/thread should receive it
+- do not leak typing indicators into other threads
+- do not show global typing indicators across the app
+
+3) UI INDICATOR
+Add a clean typing indicator UI in the message thread:
+- subtle bubble or inline row near the bottom of the chat
+- 3 animated dots like iMessage
+- soft neutral styling that matches EcoLogic
+- should not look bulky or awkward
+- should not shift the whole layout badly
+
+The typing indicator should appear:
+- just above or near the message composer area
+- as part of the thread stream, but visually distinct from a normal message
+
+4) REMOVE CLEANLY
+Typing indicator should disappear when:
+- sender stops typing
+- sender sends message
+- conversation changes
+- thread reloads without active typing
+- socket disconnect/reconnect resets stale state
+
+Also guard against stale indicators staying visible forever.
+
+5) MULTI-USER SAFETY
+If group/multi-user threads exist, support typing state safely:
+- ideally show who is typing if needed
+- if DMs only, just show the indicator
+
+At minimum do not architect it in a way that breaks future multi-user support.
+
+6) BACKEND / SOCKET HANDLING
+Inspect the existing messaging websocket/event system and add only the minimum needed.
+
+Need:
+- event shape for typing start/stop
+- conversation/thread identifier
+- sender user id
+- authorization check so users can only emit typing events into threads they belong to
+
+7) FRONTEND INPUT HANDLING
+Hook typing behavior into the actual message composer:
+- when input becomes non-empty and user starts typing, send typing_start
+- debounce idle timeout for typing_stop
+- avoid duplicate start events if already marked typing
+- clear timer correctly on unmount / thread change
+
+8) KEEP PERFORMANCE CLEAN
+- debounce/throttle socket emissions
+- do not re-render the whole thread excessively
+- do not poll
+- use existing live infrastructure
+
+9) OPTIONAL POLISH
+If easy and safe:
+- animate the dots smoothly
+- give the bubble slightly rounded/iMessage-style look
+- keep spacing compact and polished
+
+10) ADD TARGETED LOGS
+Add concise logs only where useful during development:
+- typing_start emitted
+- typing_stop emitted
+- thread id
+- receiver thread receives typing state
+
+Do not leave noisy logs afterward.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. websocket/backend pieces updated
+3. frontend components updated
+4. how typing state is scoped and cleared
+5. confirmation that typing dots appear in real time only for the other user in the active thread
+
+SUCCESS CRITERIA
+- when one user types, the other sees animated typing dots in real time
+- indicator disappears shortly after typing stops
+- indicator clears immediately after send
+- no stale typing indicator remains
+- only appears in the correct conversation
+- messaging performance remains smooth
