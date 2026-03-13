@@ -4,12 +4,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown, ChevronRight, Briefcase, Trash2, X } from "lucide-react";
+import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, Trash2, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCan } from "@/hooks/useCan";
-import JobsHistory from "./JobsHistory.tsx";
 import { formatPhone } from "@shared/phoneUtils";
 
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
@@ -41,7 +40,6 @@ interface EmployeeCardProps {
 
 export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, onRemove, isUpdating, isRemoving }: EmployeeCardProps) {
   const { can } = useCan();
-  const [isJobsExpanded, setIsJobsExpanded] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>(employee.role);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -277,31 +275,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
             <span>—</span>
           </div>
         )}
-        
-        {/* Jobs History Section */}
-        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-          <button
-            onClick={() => setIsJobsExpanded(!isJobsExpanded)}
-            className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 w-full text-left"
-            aria-expanded={isJobsExpanded}
-            aria-controls={`jobs-history-${employee.id}`}
-            data-testid={`button-jobs-history-${employee.id}`}
-          >
-            {isJobsExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-            <Briefcase className="h-4 w-4" />
-            <span className="font-medium">Jobs History</span>
-          </button>
-          
-          {isJobsExpanded && (
-            <div id={`jobs-history-${employee.id}`}>
-              <JobsHistory userId={employee.id} />
-            </div>
-          )}
-        </div>
         
         <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
           <p className="text-xs text-slate-500">
