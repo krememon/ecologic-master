@@ -1,0 +1,108 @@
+We need to fix Messages on MOBILE so the send button actually sends the message. It works on web, but not on mobile/native.
+
+BUG
+On mobile, typing in the message box and pressing the send button does NOT send the message.
+On web, the same conversation/send flow works correctly.
+
+GOAL
+Make the mobile/native message composer send reliably when the user taps the send button.
+
+IMPORTANT
+This is specifically a mobile/native bug.
+Do NOT assume the backend is broken just because mobile send fails.
+Since web works, this is likely one of:
+- mobile button tap handler not firing
+- form submit not triggering on native
+- textarea/input overlay/focus issue
+- send button disabled state stuck on mobile
+- keyboard/safe-area/touch event issue
+- native wrapper event handling difference
+- mobile-specific branch in the message composer
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE EXACT MESSAGE SEND FLOW
+Find the exact component/path used by the real mobile DM/thread composer:
+- message input component
+- send button component
+- submit handler
+- mutation/api call
+- optimistic update path if any
+
+Confirm whether mobile and web are truly using the same component or different branches.
+
+2) VERIFY BUTTON TAP EVENT ON MOBILE
+Check whether tapping the send button on native actually fires:
+- onClick
+- onPointerUp / onTouchEnd if used
+- form submit handler
+- sendMessage mutation
+
+Possible issue:
+- button visually presses but submit never runs on mobile
+- tap blocked by overlay / keyboard / parent element
+- button type wrong inside form
+- preventDefault logic interfering only on mobile
+
+3) VERIFY DISABLED / GUARD CONDITIONS
+Check whether mobile is incorrectly blocking send because of:
+- trimmed input logic
+- `isSending`
+- `disabled`
+- stale composer state
+- attachment state
+- active thread id missing
+- auth/user id mismatch on native
+
+Log the computed disabled state and send guard conditions on tap.
+
+4) VERIFY THE ACTUAL API/MUTATION CALL
+When send is tapped on mobile, confirm whether:
+- no request is fired at all
+- request fires but fails silently
+- request succeeds but UI does not update
+- websocket/optimistic update differs on native
+
+5) CHECK MOBILE INPUT / KEYBOARD INTERACTIONS
+Inspect whether the keyboard/composer layout is interfering:
+- safe area overlap
+- touch target blocked by keyboard accessory layer
+- button press intercepted by container
+- textarea focus state preventing submit
+- enter/send behavior different on native
+
+6) ADD TARGETED DEBUG LOGS
+Add concise temporary logs for the full chain:
+- mobile send button tapped
+- current thread id
+- current input text length/content trimmed
+- disabled state at tap time
+- submit handler entered
+- mutation/request started
+- mutation success/failure
+- UI state cleared or not
+
+Do not guess. Find the exact broken link.
+
+7) VERIFY ON REAL MOBILE
+Test in the actual native/mobile flow:
+- open DM thread
+- type text
+- tap send
+- confirm message sends immediately
+- confirm composer clears
+- confirm message appears in thread
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. whether the issue was tap handler, submit handler, disabled state, request firing, or UI update
+3. exact root cause
+4. confirmation that mobile send now works while web still works
+5. short test steps for native mobile
+
+SUCCESS CRITERIA
+- on mobile/native, tapping the send button actually sends the message
+- message appears in the thread
+- composer clears after send
+- web send still works

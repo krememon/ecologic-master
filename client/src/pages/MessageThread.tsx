@@ -250,57 +250,84 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Composer enable rules
   const canSend = dataLoaded && !isRecipientInactive && !!currentConvId;
 
-  // Send message via WebSocket with optimistic update
+  // Send message via WebSocket with HTTP fallback (mobile / Bearer-token users cannot open WS)
   const sendMessage = (body: string) => {
-    if (!body.trim() || !currentConvId || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    if (!body.trim() || !currentConvId) return;
 
+    const trimmed = body.trim();
     const tempId = crypto.randomUUID();
     const optimisticMessage: MessageType = {
       id: tempId,
       tempId,
       senderId: user!.id,
-      body: body.trim(),
+      body: trimmed,
       createdAt: new Date(),
       isPending: true,
     };
 
-    // Add optimistic message using merge (never replace)
+    // Add optimistic message immediately and clear composer — same for both paths
     setMessages(prev => mergeMessages(prev, [optimisticMessage]));
     setMessageBody("");
 
-    console.log(`[WS:SEND] →`, { conversationId: currentConvId, recipientId: otherUser?.id, text: body.trim().slice(0, 50), tempId });
+    const wsOpen = ws.current && ws.current.readyState === WebSocket.OPEN;
 
-    // Set timeout for failed state (7 seconds)
-    const t0 = Date.now();
-    const timeoutId = setTimeout(() => {
-      const elapsed = Date.now() - t0;
-      console.warn(`[WS:SEND] Timeout after ${elapsed}ms for tempId ${tempId}`);
-      setMessages(prev =>
-        mergeMessages(prev, [{ ...optimisticMessage, isPending: false, isFailed: true }])
+    if (wsOpen) {
+      // ── WS path (web / session-cookie users) ──────────────────────────────
+      console.log(`[SEND] WS →`, { conversationId: currentConvId, tempId, len: trimmed.length });
+
+      const t0 = Date.now();
+      const timeoutId = setTimeout(() => {
+        console.warn(`[SEND] WS timeout after ${Date.now() - t0}ms for tempId ${tempId}`);
+        setMessages(prev =>
+          mergeMessages(prev, [{ ...optimisticMessage, isPending: false, isFailed: true }])
+        );
+        toast({
+          title: "Message failed",
+          description: "Message took too long to send. Please try again.",
+          variant: "destructive",
+        });
+      }, 7000);
+
+      ws.current!.send(
+        JSON.stringify({
+          type: 'message:send',
+          conversationId: currentConvId,
+          recipientId: otherUser?.id,
+          body: trimmed,
+          tempId,
+          requestId: `send-${Date.now()}`
+        })
       );
-      toast({
-        title: "Message failed",
-        description: "Message took too long to send. Please try again.",
-        variant: "destructive",
-      });
-    }, 7000);
 
-    // Send via WebSocket
-    ws.current.send(
-      JSON.stringify({
-        type: 'message:send',
-        conversationId: currentConvId,
-        recipientId: otherUser?.id,
-        body: body.trim(),
-        tempId,
-        requestId: `send-${Date.now()}`
-      })
-    );
+      (ws.current as any)[`timeout_${tempId}`] = timeoutId;
+    } else {
+      // ── HTTP fallback (mobile / Bearer-token — WS upgrade is rejected) ────
+      console.log(`[SEND] HTTP fallback → conversationId=${currentConvId}, tempId=${tempId}, len=${trimmed.length}`);
 
-    // Store timeout for cleanup
-    (ws.current as any)[`timeout_${tempId}`] = timeoutId;
+      apiRequest("POST", `/api/conversations/${currentConvId}/messages`, { body: trimmed })
+        .then(res => res.json())
+        .then((message: any) => {
+          console.log(`[SEND] HTTP ✓ id=${message.id}`);
+          setMessages(prev => mergeMessages(prev, [{
+            ...message,
+            createdAt: new Date(message.createdAt),
+            tempId,
+            isPending: false,
+          }]));
+          queryClient.invalidateQueries({ queryKey: ["peopleList"] });
+        })
+        .catch((err: any) => {
+          console.error(`[SEND] HTTP ✗`, err);
+          setMessages(prev =>
+            mergeMessages(prev, [{ ...optimisticMessage, isPending: false, isFailed: true }])
+          );
+          toast({
+            title: "Message failed",
+            description: "Could not send message. Please try again.",
+            variant: "destructive",
+          });
+        });
+    }
   };
 
   // Dummy mutation for compatibility (not used anymore)
