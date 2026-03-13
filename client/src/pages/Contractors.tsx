@@ -391,7 +391,6 @@ export default function Contractors() {
     setReferralType("percent");
     setReferralValue("");
     setReferralMessage("");
-    setAllowPriceChange(false);
     setJobSearchQuery("");
     setFeeError("");
     setIsSharing(false);
