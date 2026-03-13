@@ -8,7 +8,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
@@ -259,7 +258,6 @@ export default function Contractors() {
   const [referralType, setReferralType] = useState<string>("percent");
   const [referralValue, setReferralValue] = useState<string>("");
   const [referralMessage, setReferralMessage] = useState<string>("");
-  const [allowPriceChange, setAllowPriceChange] = useState(false);
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [feeError, setFeeError] = useState<string>("");
   const [isSharing, setIsSharing] = useState(false);
@@ -453,7 +451,7 @@ export default function Contractors() {
         referralType,
         referralValue: feeNum,
         message: referralMessage || null,
-        allowPriceChange,
+        allowPriceChange: true,
       });
 
       const inviteUrl = result.inviteUrl;
@@ -1030,15 +1028,6 @@ export default function Contractors() {
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Message</label>
                 <Textarea placeholder="Add a note for the contractor (optional)" value={referralMessage} onChange={(e) => setReferralMessage(e.target.value)} rows={2} className="resize-none text-sm" />
-              </div>
-
-              {/* Price change toggle */}
-              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Allow price changes</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Let the contractor modify the job price</p>
-                </div>
-                <Switch checked={allowPriceChange} onCheckedChange={setAllowPriceChange} />
               </div>
 
               <Button onClick={handleShareInvite} className="w-full h-11" disabled={!canSubmitSend}>
