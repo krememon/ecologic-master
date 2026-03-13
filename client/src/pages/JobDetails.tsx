@@ -132,6 +132,16 @@ interface PaymentSignatureItem {
   invoiceNumber: string | null;
 }
 
+interface EstimateApprovalSignature {
+  id: number;
+  estimateNumber: string;
+  title: string;
+  signatureDataUrl: string;
+  approvedAt: string;
+  approvedByName: string | null;
+  totalCents: number;
+}
+
 export default function JobDetails({ jobId }: JobDetailsProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -205,6 +215,27 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       const res = await fetch(`/api/jobs/${jobId}/payment-signatures`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load signatures');
       return res.json();
+    },
+    enabled: !!jobId && isAuthenticated && activeTab === 'approvals',
+  });
+
+  const { data: estimateSignatures = [], isLoading: estSigsLoading } = useQuery<EstimateApprovalSignature[]>({
+    queryKey: ['/api/jobs', jobId, 'estimate-signatures'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/estimates`, { credentials: 'include' });
+      if (!res.ok) return [];
+      const all: any[] = await res.json();
+      return all
+        .filter((e: any) => e.status === 'approved' && e.signatureDataUrl)
+        .map((e: any) => ({
+          id: e.id,
+          estimateNumber: e.estimateNumber || `#${e.id}`,
+          title: e.title || 'Estimate',
+          signatureDataUrl: e.signatureDataUrl,
+          approvedAt: e.approvedAt,
+          approvedByName: null,
+          totalCents: e.totalCents || 0,
+        }));
     },
     enabled: !!jobId && isAuthenticated && activeTab === 'approvals',
   });
@@ -1173,6 +1204,61 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       {/* E-signature Approvals Tab */}
       {activeTab === 'approvals' && (
         <div className="space-y-4">
+          {/* Estimate Approval Signatures */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Estimate Approval Signatures</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {estSigsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : estimateSignatures.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No estimate approval signatures yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {estimateSignatures.map((sig) => {
+                    const sigSrc = sig.signatureDataUrl.startsWith('data:')
+                      ? sig.signatureDataUrl
+                      : `data:image/png;base64,${sig.signatureDataUrl}`;
+                    const amountStr = sig.totalCents ? `$${(sig.totalCents / 100).toFixed(2)}` : '';
+                    return (
+                      <div key={sig.id} className="border rounded-lg bg-background overflow-hidden">
+                        <div className="flex items-center justify-between p-3 pb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            </div>
+                            <span className="text-sm font-medium truncate">Estimate {sig.estimateNumber}</span>
+                          </div>
+                          {amountStr && (
+                            <span className="text-sm font-semibold text-green-600 flex-shrink-0 ml-2">{amountStr}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground px-3 pb-2 truncate">
+                          Approved {sig.approvedAt ? format(new Date(sig.approvedAt), 'MMM d, h:mm a') : ''}
+                        </p>
+                        <div
+                          className="mx-3 mb-3 rounded-md border bg-white flex items-center justify-center"
+                          style={{ height: '120px', padding: '12px' }}
+                        >
+                          <img
+                            src={sigSrc}
+                            alt="Estimate approval signature"
+                            loading="lazy"
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Payment Completion Signatures */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Payment Completion Signatures</CardTitle>
@@ -1236,13 +1322,13 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </CardContent>
           </Card>
 
-          {paymentSignatures.length === 0 && (
+          {paymentSignatures.length === 0 && estimateSignatures.length === 0 && !signaturesLoading && !estSigsLoading && (
             <Card>
               <CardContent className="flex flex-col items-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">Signature Requests</p>
+                <p className="text-lg font-medium mb-2">No Signatures Yet</p>
                 <p className="text-sm text-muted-foreground text-center">
-                  Signature requests for this job will appear here.
+                  Estimate approval and payment signatures for this job will appear here.
                 </p>
               </CardContent>
             </Card>

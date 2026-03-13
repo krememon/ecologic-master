@@ -1,0 +1,151 @@
+We need to fix the Signature Approvals section on EcoLogic Jobs so collected signatures actually appear there.
+
+ISSUE
+Right now signatures are being collected through the flows, but they are not properly showing in the Job → E-signature Approvals tab / Signature Approvals area.
+
+Expected behavior:
+- when an estimate is approved and signed, that signature should appear in Signature Approvals
+- when a payment is collected and signed, that signature should also appear in Signature Approvals
+
+So both types of signatures need to surface in the same approvals/history area for that job.
+
+CURRENT SYMPTOMS
+- signature collection modal appears
+- user can draw/save signature
+- but the Signature Approvals section still looks empty / incomplete
+- “Payment Completion Signatures” and/or “Signature Requests” are not reflecting the real saved signatures
+
+GOAL
+Make all collected job-related signatures show correctly in the Signature Approvals tab for the job.
+
+WHAT TO CHECK
+
+1. TRACE BOTH SIGNATURE FLOWS END TO END
+Audit both flows separately:
+
+A. ESTIMATE APPROVAL SIGNATURE FLOW
+- estimate approval modal / sign-to-approve UI
+- frontend request payload
+- backend route handling
+- storage/persistence of signature image/data
+- DB record creation
+- relation to estimate
+- relation to job
+- response shape
+- job detail refetch / approvals query
+
+B. PAYMENT COMPLETION SIGNATURE FLOW
+- confirm payment / sign payment modal
+- frontend request payload
+- backend route handling
+- storage/persistence of signature image/data
+- DB record creation
+- relation to payment
+- relation to invoice/job
+- response shape
+- job detail refetch / approvals query
+
+Find where each signature gets saved and why the approvals UI is not reading/showing it.
+
+2. DEFINE EXPECTED DATA MODEL
+The Job → Signature Approvals view should show signatures tied to that job, including:
+- Estimate Approval signatures
+- Payment Completion signatures
+
+If the app currently stores these in different places/tables/shapes, unify them at the query/UI layer so the Job tab can render both cleanly.
+
+3. FIX THE JOB SIGNATURE APPROVALS QUERY / AGGREGATION
+Audit the data source for the Job → E-signature Approvals tab.
+
+It likely needs to aggregate from both:
+- estimate approval signature records
+- payment completion signature records
+
+Make sure the job-level signature approvals response includes both categories, normalized enough for the UI to render.
+
+For each signature item, include whatever already exists and is safe/useful:
+- signature type (Estimate Approval / Payment Completion)
+- signer name if available
+- signed date/time
+- linked estimate/invoice/payment reference if useful
+- signature image/data needed to render or open it
+- status if there is a concept of completed/pending
+
+4. FIX THE UI RENDERING
+Update the Signature Approvals UI so it actually displays completed signatures.
+
+Desired outcome:
+- “Payment Completion Signatures” card shows collected payment signatures
+- estimate approval signatures also appear in the approvals/history area
+- “Signature Requests” should reflect real signature items or pending requests appropriately
+- no false empty state when signatures actually exist
+
+If needed, separate the sections clearly:
+- Estimate Approval Signatures
+- Payment Completion Signatures
+or keep the existing layout but populate it correctly
+
+5. KEEP EXISTING SIGNATURE CAPTURE UX
+Do NOT redesign the signature capture modals unless absolutely necessary.
+The main goal is:
+- signatures save correctly
+- signatures appear correctly in Job approvals
+
+6. CHECK JOB LINKING
+A likely root cause is that one or both signature flows are saving records, but not linking them back to the job in a way the approvals tab can read.
+
+Please verify linkage for:
+- estimate → job
+- invoice/payment → job
+- signature record → related entity → job
+
+If job association is missing or inconsistent, fix it carefully.
+
+7. CHECK REFRESH / INVALIDATION
+After a signature is saved:
+- the relevant queries should invalidate/refetch
+- the Job → Signature Approvals tab should show the newly collected signature without needing weird manual refresh behavior
+- ensure native/web both update correctly
+
+8. EDGE CASES
+Handle:
+- job has estimate approval signature only
+- job has payment signature only
+- job has both
+- multiple payment signatures on same job
+- older jobs with legacy signatures
+- signature image stored but metadata incomplete
+- pending request with no completed signature yet
+- completed signature with no pending request record
+- native build and web behavior
+
+9. LOGS
+Add targeted logs only where needed to verify:
+- signature save request received
+- signature record persisted
+- related job id resolved correctly
+- approvals query returns both signature types
+- UI receives populated approvals data
+
+Do not spam logs.
+
+SUCCESS CRITERIA
+- approving/signing an estimate makes that signature appear in Job → Signature Approvals
+- collecting payment signature makes that signature appear in Job → Signature Approvals
+- both can coexist for the same job
+- empty states only appear when truly no signatures exist
+- no existing signature capture flows break
+
+DELIVERABLES
+1. Fix estimate approval signatures appearing in Signature Approvals
+2. Fix payment completion signatures appearing in Signature Approvals
+3. Ensure Job approvals query aggregates both signature types
+4. Ensure UI refreshes after signature save
+5. Preserve existing signature capture flows
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- whether the issue was frontend, backend, query aggregation, job-linking, or multiple
+- files changed
+- how estimate signatures and payment signatures are now linked into the job approvals view
+- what I should manually test

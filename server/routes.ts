@@ -50,9 +50,9 @@ import {
   type DocumentVisibility
 } from "../shared/documentPermissions";
 import { db } from "./db";
-import { eq, and, or, lt, gt, sql, desc, ilike, inArray } from "drizzle-orm";
+import { eq, and, or, lt, gt, sql, desc, ilike, inArray, isNull } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit } from "../shared/schema";
+import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit, paymentSignatures as paymentSignaturesTable } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
@@ -10891,11 +10891,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await storage.getPaymentSignature(paymentId);
       if (existing) return res.json({ signature: existing });
 
+      // Resolve jobId from payment, then invoice fallback
+      const pubResolvedInvoiceId = invoiceId || payment.invoiceId || null;
+      let pubResolvedJobId = payment.jobId || null;
+      if (!pubResolvedJobId && pubResolvedInvoiceId) {
+        const inv = await storage.getInvoice(pubResolvedInvoiceId);
+        if (inv?.jobId) pubResolvedJobId = inv.jobId;
+      }
+
       const sig = await storage.createPaymentSignature({
         companyId: payment.companyId,
         paymentId,
-        jobId: payment.jobId || null,
-        invoiceId: invoiceId || payment.invoiceId || null,
+        jobId: pubResolvedJobId,
+        invoiceId: pubResolvedInvoiceId,
         signedByName: '',
         signaturePngBase64,
       });
@@ -16803,11 +16811,21 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       if (!signaturePngBase64 || typeof signaturePngBase64 !== 'string') {
         return res.status(400).json({ error: 'Signature image is required' });
       }
+
+      // Resolve jobId: body → payment.jobId → invoice.jobId
+      const resolvedInvoiceId = invoiceId || payment.invoiceId || null;
+      let resolvedJobId = jobId || payment.jobId || null;
+      if (!resolvedJobId && resolvedInvoiceId) {
+        const inv = await storage.getInvoice(resolvedInvoiceId);
+        if (inv?.jobId) resolvedJobId = inv.jobId;
+        console.log(`[signature] resolved jobId from invoice ${resolvedInvoiceId} → ${resolvedJobId}`);
+      }
+
       const sig = await storage.createPaymentSignature({
         companyId: member.companyId,
         paymentId,
-        jobId: jobId || payment.jobId || null,
-        invoiceId: invoiceId || payment.invoiceId || null,
+        jobId: resolvedJobId,
+        invoiceId: resolvedInvoiceId,
         signedByName: '',
         signaturePngBase64,
       });
@@ -16837,7 +16855,21 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.status(404).json({ error: 'Job not found' });
       }
 
-      const sigs = await storage.getPaymentSignaturesByJobId(jobId);
+      // Get signatures by jobId
+      const sigsByJob = await storage.getPaymentSignaturesByJobId(jobId);
+
+      // Also find signatures linked via the job's invoice (catches legacy records saved without jobId)
+      const jobInvoice = await storage.getInvoiceByJobId(jobId, member.companyId);
+      let sigsById: typeof sigsByJob = [];
+      if (jobInvoice) {
+        sigsById = await db.select().from(paymentSignaturesTable)
+          .where(and(eq(paymentSignaturesTable.invoiceId, jobInvoice.id), isNull(paymentSignaturesTable.jobId)));
+      }
+
+      // Merge, deduplicate by id
+      const seenIds = new Set(sigsByJob.map(s => s.id));
+      const sigs = [...sigsByJob, ...sigsById.filter(s => !seenIds.has(s.id))];
+      sigs.sort((a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime());
 
       const enriched = await Promise.all(sigs.map(async (sig) => {
         let invoiceNumber: string | null = null;
