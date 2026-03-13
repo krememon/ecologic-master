@@ -1,0 +1,112 @@
+Timesheets UI is much better now. Next polish pass:
+
+GOAL
+Add an employee filter / selection behavior to the Timesheets page so when you press an employee, their total time is shown more clearly and their details expand in a cleaner way. Also replace the letter-based employee circles with the actual employee profile pictures wherever available.
+
+WHAT TO CHANGE
+
+1. EMPLOYEE FILTER / FOCUS STATE
+On the Timesheets page, when the user taps an employee card:
+- make that employee become the active/selected employee for the currently selected day
+- visually highlight the selected employee card
+- show that employee’s total time more prominently
+- expand that employee’s detailed entries for the selected day
+- collapse other employee details unless multi-expand is already intentionally supported and clean
+
+Preferred behavior:
+- tap employee row/card
+- that employee becomes selected
+- their detailed entries open underneath
+- their total time is emphasized
+- selected state is obvious
+
+Also add a simple employee filter control near the top of the employee list:
+- “All Employees” by default
+- when a specific employee is selected from the filter, only show that employee’s card/data for the selected day
+- if easiest with current UI, this can be a compact dropdown / select / bottom sheet / popover depending on existing component system
+- mobile-first and clean
+- desktop should still look polished
+
+So there are 2 related behaviors:
+A. tapping a card selects/focuses that employee
+B. optional top filter allows narrowing the visible list to one employee
+
+2. SHOW EMPLOYEE TOTAL TIME MORE CLEARLY
+When an employee is selected:
+- their total hours/minutes for the selected day should be visually stronger
+- make it obvious whose time is being reviewed
+- if helpful, show a small selected employee summary above the entries:
+  - profile photo
+  - employee name
+  - total time for selected day
+  - total entries for selected day
+
+Do not overcomplicate it, just make the selected employee’s time obvious.
+
+3. USE REAL PROFILE PICTURES
+Right now employee icons are initials circles.
+Replace those with actual employee profile photos when available.
+
+Requirements:
+- use the same avatar/profile image source already used elsewhere in EcoLogic if available
+- fallback to initials only if no real profile photo exists
+- keep avatar styling polished and consistent with app design
+- circular avatars
+- correct sizing on mobile
+- no distorted images
+- preserve good spacing/alignment
+
+Use the existing profile/avatar data path already used in the Profile area if possible.
+The screenshot I attached shows the style/source of profile image I mean.
+
+4. KEEP CURRENT DAY-FIRST TIMESHEETS STRUCTURE
+Keep the current improved day-first layout:
+- week selector stays
+- daily summary stays
+- employee cards stay
+- just enhance employee filtering + selection + avatars
+
+5. RBAC
+Do not break RBAC.
+Only show employees the current user is allowed to see.
+Technicians should still only see allowed data.
+
+6. DATA / LOGIC
+Do not rewrite working clock-in/out logic.
+Re-use existing timesheet data and employee/company user data.
+If needed, lightly shape the frontend data for:
+- selected employee
+- filtered employees
+- selected employee daily totals
+
+7. EDGE CASES
+Handle:
+- employee has no profile pic
+- employee has no entries that day
+- selected employee changes when switching days
+- filtered employee not present on a newly selected day
+- currently clocked-in employee
+- empty company/team day
+
+DESIGN NOTES
+- selected employee card should feel clearly active
+- clean highlight/border/background treatment
+- keep EcoLogic modern mobile-first look
+- no clutter
+- no duplicate controls
+- no ugly dropdown styling
+
+DELIVERABLES
+1. Add employee filter control
+2. Tapping employee selects/focuses them
+3. Selected employee total time is shown more clearly
+4. Replace initials circles with real profile pictures where available
+5. Keep fallback to initials if no avatar exists
+6. Preserve existing day-first timesheet layout
+7. Preserve RBAC and working time logic
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- how the employee filter works
+- how avatar/profile image sourcing works
+- anything I should test manually

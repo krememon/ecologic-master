@@ -6,7 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, MoreHorizontal, Pencil, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, MoreHorizontal, Pencil, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, isToday, parseISO, isFuture } from "date-fns";
 import { useCan } from "@/hooks/useCan";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
@@ -37,10 +39,20 @@ interface TimeEntriesResponse {
   entries: TimeEntry[];
 }
 
+interface OrgUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  role: string;
+  status: string;
+}
+
 interface EmployeeDaySummary {
   userId: string;
   name: string;
   initials: string;
+  profileImageUrl: string | null;
   entries: TimeEntry[];
   totalMinutes: number;
   isActive: boolean;
@@ -128,6 +140,26 @@ const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+function EmployeeAvatar({
+  name,
+  profileImageUrl,
+  size = "md",
+}: {
+  name: string;
+  profileImageUrl: string | null;
+  size?: "sm" | "md" | "lg";
+}) {
+  const sizeClass = size === "sm" ? "h-8 w-8 text-xs" : size === "lg" ? "h-14 w-14 text-lg" : "h-10 w-10 text-sm";
+  return (
+    <Avatar className={`${sizeClass} flex-shrink-0`}>
+      {profileImageUrl && <AvatarImage src={profileImageUrl} alt={name} className="object-cover" />}
+      <AvatarFallback className={`font-semibold text-white ${getAvatarColor(name)}`}>
+        {getInitials(name)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 function EntryTags({ entry }: { entry: TimeEntry }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
@@ -173,10 +205,7 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
     mutationFn: async (data: { clockInAt: string; clockOutAt: string; editReason: string }) => {
       return apiRequest("PATCH", `/api/time/entries/${entry?.id}`, data);
     },
-    onSuccess: () => {
-      onSaved();
-      onClose();
-    },
+    onSuccess: () => { onSaved(); onClose(); },
     onError: (err: any) => {
       const message = err?.message || "Failed to save changes";
       setError(message);
@@ -187,23 +216,12 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
   const handleSave = () => {
     if (!entry) return;
     setError("");
-    if (!reason.trim()) {
-      setError("A reason is required for editing time entries");
-      return;
-    }
+    if (!reason.trim()) { setError("A reason is required for editing time entries"); return; }
     const clockInAt = combineDateTime(entry.date, startTime);
     const clockOutAt = combineDateTime(entry.date, endTime);
-    const startDate = new Date(clockInAt);
-    const endDate = new Date(clockOutAt);
-    if (startDate >= endDate) {
-      setError("Start time must be before end time");
-      return;
-    }
-    const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
-    if (durationHours > 16) {
-      setError("Duration cannot exceed 16 hours");
-      return;
-    }
+    const s = new Date(clockInAt), e = new Date(clockOutAt);
+    if (s >= e) { setError("Start time must be before end time"); return; }
+    if ((e.getTime() - s.getTime()) / 3600000 > 16) { setError("Duration cannot exceed 16 hours"); return; }
     updateMutation.mutate({ clockInAt, clockOutAt, editReason: reason.trim() });
   };
 
@@ -212,14 +230,10 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Time Entry</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>Edit Time Entry</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              {employeeName || "Employee"}
-            </p>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{employeeName || "Employee"}</p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {getJobOrCategory(entry).title} · {format(parseISO(entry.date), "EEE, MMM d")}
             </p>
@@ -235,26 +249,15 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
             </div>
           </div>
           <div className="space-y-2">
-            <Label>
-              Reason for Edit <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Forgot to clock out…"
-              rows={3}
-            />
+            <Label>Reason for Edit <span className="text-red-500">*</span></Label>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Forgot to clock out…" rows={3} />
           </div>
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose} disabled={updateMutation.isPending}>
-            Cancel
-          </Button>
+          <Button variant="outline" onClick={onClose} disabled={updateMutation.isPending}>Cancel</Button>
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
-            ) : "Save Changes"}
+            {updateMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -265,28 +268,35 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
 interface EmployeeCardProps {
   emp: EmployeeDaySummary;
   isManager: boolean;
-  expanded: boolean;
-  onToggle: () => void;
+  isSelected: boolean;
+  onSelect: () => void;
   onEdit: (entry: TimeEntry, name: string) => void;
 }
 
-function EmployeeCard({ emp, isManager, expanded, onToggle, onEdit }: EmployeeCardProps) {
+function EmployeeCard({ emp, isManager, isSelected, onSelect, onEdit }: EmployeeCardProps) {
   return (
-    <Card className="overflow-hidden border-slate-200 dark:border-slate-800 shadow-sm">
+    <div
+      className={`rounded-2xl border overflow-hidden transition-all duration-200 ${
+        isSelected
+          ? "border-blue-500 dark:border-blue-500 shadow-md shadow-blue-100 dark:shadow-blue-900/30 ring-1 ring-blue-500/30"
+          : "border-slate-200 dark:border-slate-800 shadow-sm"
+      }`}
+    >
+      {/* Header row — always visible */}
       <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        onClick={onSelect}
+        className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
+          isSelected
+            ? "bg-blue-50 dark:bg-blue-950/40"
+            : "bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+        }`}
       >
-        {/* Avatar */}
-        <div
-          className={`h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 ${getAvatarColor(emp.name)}`}
-        >
-          {emp.initials}
-        </div>
+        <EmployeeAvatar name={emp.name} profileImageUrl={emp.profileImageUrl} />
 
-        {/* Name + meta */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{emp.name}</p>
+          <p className={`font-semibold truncate ${isSelected ? "text-blue-900 dark:text-blue-100" : "text-slate-900 dark:text-slate-100"}`}>
+            {emp.name}
+          </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {emp.entries.length === 1 ? "1 entry" : `${emp.entries.length} entries`}
             {emp.isActive && (
@@ -301,83 +311,90 @@ function EmployeeCard({ emp, isManager, expanded, onToggle, onEdit }: EmployeeCa
           </p>
         </div>
 
-        {/* Hours + chevron */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={`font-bold tabular-nums ${isSelected ? "text-blue-700 dark:text-blue-300 text-base" : "text-slate-800 dark:text-slate-200 text-sm"}`}>
             {formatDuration(emp.totalMinutes)}
           </span>
-          {expanded
-            ? <ChevronUp className="h-4 w-4 text-slate-400" />
+          {isSelected
+            ? <ChevronUp className="h-4 w-4 text-blue-500" />
             : <ChevronDown className="h-4 w-4 text-slate-400" />
           }
         </div>
       </button>
 
-      {expanded && (
-        <div className="border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-          {emp.entries
-            .sort((a, b) => new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime())
-            .map((entry) => {
-              const { title, subtitle } = getJobOrCategory(entry);
-              const mins = calculateMinutes(entry.clockInAt, entry.clockOutAt);
-              const active = entry.clockOutAt && isFuture(parseISO(entry.clockOutAt));
-              return (
-                <div key={entry.id} className="px-4 py-3 flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
-                        {title}
+      {/* Expanded entries */}
+      {isSelected && (
+        <div className="bg-white dark:bg-slate-900 border-t border-blue-100 dark:border-blue-900/40">
+          {/* Selected employee summary banner */}
+          <div className="flex items-center gap-4 px-4 py-3 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40">
+            <EmployeeAvatar name={emp.name} profileImageUrl={emp.profileImageUrl} size="lg" />
+            <div>
+              <p className="font-semibold text-blue-900 dark:text-blue-100">{emp.name}</p>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums leading-tight">
+                {formatDuration(emp.totalMinutes)}
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-400">
+                {emp.entries.length === 1 ? "1 session" : `${emp.entries.length} sessions`} today
+              </p>
+            </div>
+          </div>
+
+          {/* Entry list */}
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {emp.entries
+              .sort((a, b) => new Date(a.clockInAt).getTime() - new Date(b.clockInAt).getTime())
+              .map((entry) => {
+                const { title, subtitle } = getJobOrCategory(entry);
+                const mins = calculateMinutes(entry.clockInAt, entry.clockOutAt);
+                const active = entry.clockOutAt && isFuture(parseISO(entry.clockOutAt));
+                return (
+                  <div key={entry.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{title}</p>
+                        <EntryTags entry={entry} />
+                        {active && (
+                          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Active</span>
+                        )}
+                      </div>
+                      {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {formatTime(entry.clockInAt)}{active ? " → now" : ` → ${formatTime(entry.clockOutAt)}`}
                       </p>
-                      <EntryTags entry={entry} />
-                      {active && (
-                        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                          Active
-                        </span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
+                        {active ? "—" : formatDuration(mins)}
+                      </span>
+                      {isManager && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onEdit(entry, emp.name)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit entry
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
-                    {subtitle && (
-                      <p className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>
-                    )}
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {formatTime(entry.clockInAt)}
-                      {active ? " → now" : ` → ${formatTime(entry.clockOutAt)}`}
-                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
-                      {active ? "—" : formatDuration(mins)}
-                    </span>
-                    {isManager && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onEdit(entry, emp.name)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit entry
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          {/* Daily total row */}
-          <div className="px-4 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Day Total
-            </span>
-            <span className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-              {formatDuration(emp.totalMinutes)}
-            </span>
+                );
+              })}
+          </div>
+
+          {/* Day total */}
+          <div className="px-4 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Day Total</span>
+            <span className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{formatDuration(emp.totalMinutes)}</span>
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -386,11 +403,9 @@ function EmployeeCard({ emp, isManager, expanded, onToggle, onEdit }: EmployeeCa
 export default function Timesheets() {
   const { role } = useCan();
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
-    const today = new Date();
-    return today.getDay(); // 0=Sun ... 6=Sat
-  });
-  const [expandedEmployees, setExpandedEmployees] = useState<Set<string>>(new Set());
+  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => new Date().getDay());
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [filterEmployeeId, setFilterEmployeeId] = useState<string>("all");
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [editEmployeeName, setEditEmployeeName] = useState<string | undefined>(undefined);
 
@@ -402,34 +417,43 @@ export default function Timesheets() {
   const weekDays = useMemo(() => getWeekDays(weekBaseDate), [weekBaseDate]);
   const { startDate, endDate } = useMemo(() => getWeekDateRange(weekBaseDate), [weekBaseDate]);
 
-  // When changing weeks, snap selectedDayIdx to a valid day
+  // Reset selected day to today when returning to current week
   useEffect(() => {
-    if (weekOffset === 0) {
-      setSelectedDayIdx(new Date().getDay());
-    }
-    // For other weeks, keep the same day-of-week index
+    if (weekOffset === 0) setSelectedDayIdx(new Date().getDay());
   }, [weekOffset]);
 
-  // Reset expanded employees when day or week changes
+  // Reset selection when day or week changes
   useEffect(() => {
-    setExpandedEmployees(new Set());
+    setSelectedEmployeeId(null);
   }, [selectedDayIdx, weekOffset]);
 
+  // Time entries — all week
   const { data, isLoading, error } = useQuery<TimeEntriesResponse>({
     queryKey: ["/api/time/entries", startDate, endDate],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/time/entries?startDate=${startDate}&endDate=${endDate}`,
-        { credentials: "include" }
-      );
-      if (res.status === 403) {
-        throw Object.assign(new Error("Access denied"), { status: 403 });
-      }
+      const res = await fetch(`/api/time/entries?startDate=${startDate}&endDate=${endDate}`, { credentials: "include" });
+      if (res.status === 403) throw Object.assign(new Error("Access denied"), { status: 403 });
       if (!res.ok) throw new Error("Failed to fetch time entries");
       return res.json();
     },
     retry: (failureCount, err: any) => err?.status === 403 ? false : failureCount < 2,
   });
+
+  // Org users — for profile images
+  const { data: orgUsersData } = useQuery<{ users: OrgUser[] }>({
+    queryKey: ["/api/org/users"],
+    enabled: data?.role === "manager",
+    retry: false,
+  });
+
+  // Build a map of userId → profileImageUrl
+  const avatarMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const u of orgUsersData?.users ?? []) {
+      map.set(u.id, u.profileImageUrl ?? null);
+    }
+    return map;
+  }, [orgUsersData]);
 
   const isManager = data?.role === "manager";
   const selectedDate = format(weekDays[selectedDayIdx], "yyyy-MM-dd");
@@ -440,14 +464,13 @@ export default function Timesheets() {
     return data.entries.filter((e) => e.date === selectedDate);
   }, [data?.entries, selectedDate]);
 
-  // Employee summaries for the selected day
-  const employeesForDay = useMemo((): EmployeeDaySummary[] => {
+  // All employees who have entries today (for filter dropdown)
+  const allEmployeesForDay = useMemo((): EmployeeDaySummary[] => {
     const map = new Map<string, { name: string; entries: TimeEntry[] }>();
     for (const entry of dayEntries) {
       const existing = map.get(entry.userId);
-      if (existing) {
-        existing.entries.push(entry);
-      } else {
+      if (existing) { existing.entries.push(entry); }
+      else {
         const name = entry.user
           ? `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.trim() || entry.userId
           : entry.userId;
@@ -455,30 +478,35 @@ export default function Timesheets() {
       }
     }
     return Array.from(map.entries())
-      .map(([userId, { name, entries }]) => {
-        const totalMinutes = entries.reduce(
-          (sum, e) => sum + calculateMinutes(e.clockInAt, e.clockOutAt),
-          0
-        );
-        const isActive = entries.some(
-          (e) => e.clockOutAt && isFuture(parseISO(e.clockOutAt))
-        );
-        return {
-          userId,
-          name,
-          initials: getInitials(name),
-          entries,
-          totalMinutes,
-          isActive,
-        };
-      })
+      .map(([userId, { name, entries }]) => ({
+        userId,
+        name,
+        initials: getInitials(name),
+        profileImageUrl: avatarMap.get(userId) ?? null,
+        entries,
+        totalMinutes: entries.reduce((sum, e) => sum + calculateMinutes(e.clockInAt, e.clockOutAt), 0),
+        isActive: entries.some((e) => e.clockOutAt && isFuture(parseISO(e.clockOutAt))),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [dayEntries]);
+  }, [dayEntries, avatarMap]);
 
-  // Day totals
+  // Apply filter
+  const employeesForDay = useMemo(() => {
+    if (filterEmployeeId === "all") return allEmployeesForDay;
+    return allEmployeesForDay.filter((e) => e.userId === filterEmployeeId);
+  }, [allEmployeesForDay, filterEmployeeId]);
+
+  // If the selected filter employee has no entries on the new day, show "all"
+  useEffect(() => {
+    if (filterEmployeeId !== "all" && !allEmployeesForDay.find((e) => e.userId === filterEmployeeId)) {
+      setFilterEmployeeId("all");
+    }
+  }, [allEmployeesForDay, filterEmployeeId]);
+
+  // Day totals (based on filtered list)
   const dayTotalMinutes = useMemo(
-    () => dayEntries.reduce((sum, e) => sum + calculateMinutes(e.clockInAt, e.clockOutAt), 0),
-    [dayEntries]
+    () => employeesForDay.reduce((sum, e) => sum + e.totalMinutes, 0),
+    [employeesForDay]
   );
 
   const handleEditEntry = (entry: TimeEntry, name?: string) => {
@@ -490,25 +518,11 @@ export default function Timesheets() {
     queryClient.invalidateQueries({ queryKey: ["/api/time/entries", startDate, endDate] });
   };
 
-  const toggleEmployee = (userId: string) => {
-    setExpandedEmployees((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
-  };
-
-  const goToPrevWeek = () => setWeekOffset((w) => w - 1);
-  const goToNextWeek = () => {
-    if (weekOffset < 0) setWeekOffset((w) => w + 1);
+  const toggleSelect = (userId: string) => {
+    setSelectedEmployeeId((prev) => (prev === userId ? null : userId));
   };
 
   const selectedDayDate = weekDays[selectedDayIdx];
-  const selectedDayLabel = format(selectedDayDate, "EEEE, MMMM d");
-
-  // Access denied for non-managers
-  const isAccessDenied = (error as any)?.status === 403 || (error && !isLoading);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
@@ -528,7 +542,7 @@ export default function Timesheets() {
         {/* ── Day Selector ─────────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-4">
           <button
-            onClick={goToPrevWeek}
+            onClick={() => setWeekOffset((w) => w - 1)}
             className="h-9 w-9 rounded-full flex items-center justify-center border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0 shadow-sm"
             aria-label="Previous week"
           >
@@ -551,26 +565,14 @@ export default function Timesheets() {
                       : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   }`}
                 >
-                  <span
-                    className={`text-[10px] font-semibold uppercase tracking-wider ${
-                      isSelected
-                        ? "text-blue-100"
-                        : isTodayDay
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-slate-400 dark:text-slate-500"
-                    }`}
-                  >
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                    isSelected ? "text-blue-100" : isTodayDay ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"
+                  }`}>
                     {DAY_LABELS[idx]}
                   </span>
-                  <span
-                    className={`text-sm font-bold mt-0.5 ${
-                      isSelected
-                        ? "text-white"
-                        : isTodayDay
-                        ? "text-blue-700 dark:text-blue-300"
-                        : "text-slate-700 dark:text-slate-300"
-                    }`}
-                  >
+                  <span className={`text-sm font-bold mt-0.5 ${
+                    isSelected ? "text-white" : isTodayDay ? "text-blue-700 dark:text-blue-300" : "text-slate-700 dark:text-slate-300"
+                  }`}>
                     {format(day, "d")}
                   </span>
                 </button>
@@ -579,7 +581,7 @@ export default function Timesheets() {
           </div>
 
           <button
-            onClick={goToNextWeek}
+            onClick={() => { if (weekOffset < 0) setWeekOffset((w) => w + 1); }}
             disabled={weekOffset >= 0}
             className="h-9 w-9 rounded-full flex items-center justify-center border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             aria-label="Next week"
@@ -588,7 +590,7 @@ export default function Timesheets() {
           </button>
         </div>
 
-        {/* Week label */}
+        {/* Week range label */}
         <p className="text-xs text-center text-slate-400 dark:text-slate-500 mb-5 tabular-nums">
           {format(weekDays[0], "MMM d")} – {format(weekDays[6], "MMM d, yyyy")}
         </p>
@@ -606,9 +608,7 @@ export default function Timesheets() {
             <CardContent className="py-10 text-center">
               <AlertCircle className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
               <p className="font-medium text-slate-700 dark:text-slate-300">Access Restricted</p>
-              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                Timesheet data is only visible to managers.
-              </p>
+              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Timesheet data is only visible to managers.</p>
             </CardContent>
           </Card>
         )}
@@ -630,7 +630,7 @@ export default function Timesheets() {
             <Card className="mb-4 border-slate-200 dark:border-slate-800 shadow-sm">
               <CardContent className="px-5 py-4">
                 <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-                  {selectedDayLabel}
+                  {format(selectedDayDate, "EEEE, MMMM d")}
                 </p>
                 {employeesForDay.length === 0 ? (
                   <p className="text-sm text-slate-400 dark:text-slate-500">No entries</p>
@@ -644,10 +644,10 @@ export default function Timesheets() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                        {employeesForDay.length}
+                        {allEmployeesForDay.length}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {employeesForDay.length === 1 ? "Employee" : "Employees"}
+                        {allEmployeesForDay.length === 1 ? "Employee" : "Employees"}
                       </p>
                     </div>
                     <div>
@@ -663,6 +663,34 @@ export default function Timesheets() {
               </CardContent>
             </Card>
 
+            {/* Employee filter — only show if more than 1 employee has entries */}
+            {allEmployeesForDay.length > 1 && (
+              <div className="flex items-center gap-2 mb-3">
+                <Filter className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                <Select value={filterEmployeeId} onValueChange={(v) => { setFilterEmployeeId(v); setSelectedEmployeeId(null); }}>
+                  <SelectTrigger className="h-8 text-xs border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg flex-1 max-w-[220px]">
+                    <SelectValue placeholder="All Employees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Employees</SelectItem>
+                    {allEmployeesForDay.map((emp) => (
+                      <SelectItem key={emp.userId} value={emp.userId}>
+                        {emp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filterEmployeeId !== "all" && (
+                  <button
+                    onClick={() => { setFilterEmployeeId("all"); setSelectedEmployeeId(null); }}
+                    className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Employee List */}
             {employeesForDay.length === 0 ? (
               <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
@@ -670,9 +698,7 @@ export default function Timesheets() {
                   <div className="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
                     <Clock className="h-6 w-6 text-slate-400 dark:text-slate-500" />
                   </div>
-                  <p className="font-medium text-slate-700 dark:text-slate-300">
-                    No time entries
-                  </p>
+                  <p className="font-medium text-slate-700 dark:text-slate-300">No time entries</p>
                   <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                     No one logged hours on {format(selectedDayDate, "EEEE")}
                   </p>
@@ -685,8 +711,8 @@ export default function Timesheets() {
                     key={emp.userId}
                     emp={emp}
                     isManager={isManager}
-                    expanded={expandedEmployees.has(emp.userId)}
-                    onToggle={() => toggleEmployee(emp.userId)}
+                    isSelected={selectedEmployeeId === emp.userId}
+                    onSelect={() => toggleSelect(emp.userId)}
                     onEdit={handleEditEntry}
                   />
                 ))}
