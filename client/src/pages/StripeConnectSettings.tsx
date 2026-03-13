@@ -128,7 +128,7 @@ export default function StripeConnectSettings() {
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/settings")}>
+        <Button variant="ghost" size="icon" onClick={() => setLocation("/customize")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-xl font-bold">Stripe Payouts</h1>
