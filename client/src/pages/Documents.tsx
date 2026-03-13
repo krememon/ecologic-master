@@ -24,6 +24,8 @@ import {
   Loader2,
   FileBadge,
   FolderPlus,
+  ArrowLeft,
+  ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -109,6 +111,162 @@ function isImageFile(type: string | null, name: string): boolean {
 function isPdfFile(type: string | null, name: string): boolean {
   const ext = name.split(".").pop()?.toLowerCase() || "";
   return type === "application/pdf" || ext === "pdf";
+}
+
+// ─── FileViewer ───────────────────────────────────────────────────────────────
+// Full-screen in-app file viewer. Never opens Safari as the primary path.
+//   PDF   → native <iframe> (WKWebView / Safari render PDFs natively)
+//   Image → <img> with touch pinch-zoom
+//   Other → clean fallback card with download / open-externally options
+
+function FileViewer({
+  doc,
+  onClose,
+}: {
+  doc: DocumentItem | null;
+  onClose: () => void;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  const isImage = doc ? isImageFile(doc.type, doc.name) : false;
+  const isPdf   = doc ? isPdfFile(doc.type, doc.name)   : false;
+  const isPreviewable = isImage || isPdf;
+
+  // Reset per-doc state when doc changes
+  useEffect(() => {
+    if (!doc) return;
+    setLoadError(false);
+    // Non-previewable types: mark as "loaded" immediately so fallback shows
+    setLoaded(!isPreviewable);
+  }, [doc?.id]);
+
+  // Lock body scroll while open
+  useEffect(() => {
+    if (!doc) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [!!doc]);
+
+  if (!doc) return null;
+
+  function handleDownload() {
+    const a = document.createElement("a");
+    a.href = doc!.fileUrl;
+    a.download = doc!.name;
+    a.click();
+  }
+
+  function handleOpenExternal() {
+    window.open(doc!.fileUrl, "_blank");
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black flex flex-col"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      {/* ── Header ── */}
+      <div className="flex items-center gap-3 px-3 py-2 bg-black/80 backdrop-blur-sm flex-shrink-0">
+        <button
+          onClick={onClose}
+          className="text-white p-2 -ml-1 rounded-xl active:bg-white/10"
+          aria-label="Close"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <span className="flex-1 text-white font-medium text-sm truncate leading-tight">
+          {doc.name}
+        </span>
+        <button
+          onClick={handleDownload}
+          className="text-white p-2 rounded-xl active:bg-white/10"
+          aria-label="Download"
+        >
+          <Download className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* ── Content ── */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Spinner — shown until iframe/img fires onLoad */}
+        {!loaded && !loadError && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <Loader2 className="w-8 h-8 animate-spin text-white/50" />
+          </div>
+        )}
+
+        {/* ── PDF viewer ── */}
+        {isPdf && !loadError && (
+          <iframe
+            key={doc.id}
+            src={doc.fileUrl}
+            title={doc.name}
+            className="absolute inset-0 w-full h-full border-0"
+            onLoad={() => setLoaded(true)}
+            onError={() => { setLoaded(true); setLoadError(true); }}
+          />
+        )}
+
+        {/* ── Image viewer ── */}
+        {isImage && !loadError && (
+          <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-black">
+            <img
+              key={doc.id}
+              src={doc.fileUrl}
+              alt={doc.name}
+              className="max-w-full max-h-full object-contain select-none"
+              style={{ touchAction: "pinch-zoom" }}
+              onLoad={() => setLoaded(true)}
+              onError={() => { setLoaded(true); setLoadError(true); }}
+            />
+          </div>
+        )}
+
+        {/* ── Fallback (unsupported type or load error) ── */}
+        {((!isPreviewable && loaded) || loadError) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-8 text-center">
+            <div className="w-24 h-24 rounded-3xl bg-white/10 flex items-center justify-center">
+              <div className="scale-150">
+                {getFileIcon(doc.type, doc.name)}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-white font-semibold text-lg leading-snug break-words max-w-xs">
+                {doc.name}
+              </p>
+              {doc.fileSize ? (
+                <p className="text-white/40 text-sm">{formatFileSize(doc.fileSize)}</p>
+              ) : null}
+              {loadError && (
+                <p className="text-red-400 text-sm mt-2">Failed to load preview.</p>
+              )}
+              {!loadError && (
+                <p className="text-white/50 text-sm mt-2">
+                  This file type can't be previewed in-app.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 w-full max-w-[220px]">
+              <Button onClick={handleDownload} variant="secondary" className="gap-2 w-full">
+                <Download className="w-4 h-4" />
+                Download
+              </Button>
+              <Button
+                onClick={handleOpenExternal}
+                variant="ghost"
+                className="gap-2 w-full text-white/70 hover:text-white"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Open in Browser
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── FolderNameModal ─────────────────────────────────────────────────────────
@@ -215,6 +373,7 @@ export default function Documents() {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureDoc, setSignatureDoc] = useState<DocumentItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
+  const [viewerDoc, setViewerDoc] = useState<DocumentItem | null>(null);
 
   // ── Data fetching ──
   const contentsKey = ["/api/folders/contents", currentFolderId ?? "null"];
@@ -368,7 +527,7 @@ export default function Documents() {
 
   // ── View / Download ──
   function handleView(doc: DocumentItem) {
-    window.open(doc.fileUrl, "_blank");
+    setViewerDoc(doc);
   }
 
   function handleDownload(doc: DocumentItem) {
@@ -648,6 +807,9 @@ export default function Documents() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── In-app File Viewer ─────────────────────────────────────────── */}
+      <FileViewer doc={viewerDoc} onClose={() => setViewerDoc(null)} />
     </div>
   );
 }

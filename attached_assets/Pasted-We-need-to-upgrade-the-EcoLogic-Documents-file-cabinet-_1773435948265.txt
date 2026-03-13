@@ -1,0 +1,145 @@
+We need to upgrade the EcoLogic Documents file-cabinet so files open INSIDE the app instead of kicking the user out to Safari.
+
+CURRENT PROBLEM
+Right now when the user taps a document/file, it opens externally in Safari.
+I do NOT want that.
+
+DESIRED BEHAVIOR
+When a user taps a file in Documents:
+- it should open in an in-app file viewer
+- user should be able to view the file right there
+- no forced Safari/browser handoff
+
+I uploaded a screen recording showing the kind of Apple Files-style viewing experience I want.
+Use that as design/behavior reference.
+
+GOAL
+Create an in-app document/file preview experience for the Documents page.
+
+WHAT TO IMPLEMENT
+
+1. OPEN FILES IN-APP
+Replace the current open behavior that sends the user to Safari.
+
+Instead:
+- tapping a file should open an internal viewer/sheet/page/modal
+- the file should display inside EcoLogic
+- user stays in the app
+
+2. SUPPORT COMMON FILE TYPES
+At minimum, support clean viewing for:
+- PDF
+- images (png, jpg, jpeg, webp, heic if possible)
+- text/plain if easy
+- maybe other browser-previewable docs if already supported
+
+Expected behavior:
+- PDFs open in a native-feeling PDF viewer
+- images open full-size in a clean image viewer
+- file types that cannot be previewed cleanly can show a fallback with:
+  - file name
+  - file type
+  - download/open externally action only as fallback
+But Safari should not be the primary path for normal supported files.
+
+3. APPLE FILES-STYLE FEEL
+Use the screen recording as inspiration.
+I want it to feel like opening a file in Apple Files:
+- simple
+- clean
+- in-app
+- focused on the file content
+- easy back/close
+- not clunky
+
+It does NOT need to copy Apple exactly, but the experience should feel polished and native-like.
+
+4. VIEWER UX
+Preferred viewer behavior:
+- tap file row/card
+- open full-screen viewer or large modal/page
+- file content shown immediately
+- close/back returns to the same folder/location in Documents
+- no losing breadcrumb/navigation context
+
+For mobile, a full-screen viewer is probably best.
+For desktop, a modal or full-page viewer is fine if polished.
+
+5. PRESERVE DOCUMENT NAVIGATION CONTEXT
+When the user closes the file:
+- they should return to the same folder they were in
+- same breadcrumb/location
+- same file list state
+- no full page reload
+- no routing chaos
+
+6. KEEP DOWNLOAD AS A SEPARATE ACTION
+Do not remove download.
+Keep download available as a separate action if already supported.
+But opening/tapping a file should preview it in-app, not download/open externally by default.
+
+7. FILE TYPE DETECTION
+Please audit the current file metadata and implement file-type based preview behavior.
+
+Likely logic:
+- image types → image viewer
+- pdf → pdf viewer
+- unsupported types → fallback preview screen with metadata + optional download/open externally
+
+8. NATIVE + WEB
+This needs to work well in:
+- native build / mobile webview
+- web/replit preview
+
+Especially on native/mobile, do NOT bounce the user out to Safari for normal supported file types.
+
+9. DO NOT BREAK EXISTING DOWNLOADS
+Keep existing file download access working.
+This is about changing the primary OPEN behavior.
+
+10. CHECK CURRENT FILE CARD ACTIONS
+Audit all ways files can currently be opened, such as:
+- tapping file row/card
+- “View” action in overflow menu
+- maybe thumbnail tap
+Make them consistent so they all use the in-app preview flow.
+
+11. POLISHED FALLBACK FOR UNSUPPORTED FILE TYPES
+If a file type cannot be previewed well:
+- show a simple in-app fallback screen/card with file info
+- offer download/open externally as a secondary option
+- do not just crash or silently fail
+
+12. PERFORMANCE / SAFETY
+Make sure:
+- large PDFs don’t completely break the UI
+- image preview scales properly
+- loading state exists while preview initializes
+- bad URLs / failed file loads show a clean error state
+
+13. DO NOT REINTRODUCE SAFARI AS DEFAULT
+Safari/external browser should be fallback-only, not the main viewing experience.
+
+SUCCESS CRITERIA
+- tapping a PDF opens it inside EcoLogic
+- tapping an image opens it inside EcoLogic
+- user stays in app
+- closing preview returns to same folder/location
+- unsupported files show clean fallback behavior
+- download still works separately
+
+DELIVERABLES
+1. Add in-app file preview/viewer for Documents
+2. PDFs open inside app
+3. Images open inside app
+4. Unsupported files get clean fallback preview UI
+5. Preserve folder/breadcrumb state when closing viewer
+6. Keep download working separately
+7. Make mobile/native experience polished and no-Safari-first
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- what file types are supported for in-app preview
+- whether the viewer is modal-based, full-screen, or route-based
+- what unsupported file types do
+- what I should manually test on native and web
