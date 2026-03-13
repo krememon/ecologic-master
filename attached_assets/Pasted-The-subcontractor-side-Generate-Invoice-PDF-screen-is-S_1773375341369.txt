@@ -1,0 +1,112 @@
+The subcontractor-side Generate Invoice PDF screen is STILL broken on native. The layout is still cut off and looks bad. This is not fixed.
+
+PROBLEM
+On the subcontractor end, the Generate Invoice PDF modal/screen still has major layout issues:
+- content is cut off
+- filename row is overflowing/truncated badly
+- regenerate action placement is awkward
+- PDF preview is still not properly sized/centered for mobile
+- the right side of the PDF content is getting clipped
+- overall modal composition still looks sloppy on native
+
+This needs a REAL fix on the actual subcontractor/native render path, not a superficial spacing tweak.
+
+GOAL
+Make the subcontractor-side Generate Invoice PDF screen look clean, correctly scaled, centered, and fully visible on native/mobile.
+
+IMPORTANT
+- Focus on the actual subcontractor/native flow shown in the screenshot
+- Do NOT assume the normal invoice PDF modal is the same render path
+- Do NOT just adjust padding and call it done
+- We need the PDF preview/container/scaling/layout to actually fit mobile correctly
+- Preserve existing functionality:
+  - regenerate
+  - enlarge
+  - next
+  - pay invoice
+  - cancel
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE EXACT SCREEN / COMPONENT
+Find the exact component used by the subcontractor-side Generate Invoice PDF flow on native.
+Confirm whether this is:
+- a shared invoice PDF modal
+- a subcontract-specific modal/screen
+- a native-only branch
+- a webview/iframe/pdf preview container with different sizing behavior
+
+2) FIND THE TRUE LAYOUT FAILURE
+Inspect the real root cause of the clipping/cutoff:
+- preview container width too large
+- PDF scale calculation wrong
+- transform scale without proper origin
+- fixed width page inside narrow mobile modal
+- overflow hidden clipping the right side
+- filename header row not wrapping/truncating correctly
+- action buttons taking up too much vertical space
+- safe area/modal width issues on native
+- subcontractor flow using a different preview size than normal flow
+
+3) FIX THE PDF PREVIEW PROPERLY
+Requirements:
+- preview should be centered
+- preview should fit within the modal width on mobile
+- no right-side clipping
+- no awkward giant empty gray area caused by bad scaling math
+- if needed, reduce preview scale for mobile
+- if needed, use contain/fit-to-width logic
+- if needed, allow a better scroll container without clipping the page itself
+- enlarge button should remain usable and visually placed well
+- “Tap to enlarge” should not float awkwardly
+
+4) FIX THE HEADER / FILE ROW
+Clean up:
+- file icon
+- filename text
+- regenerate action
+
+Requirements:
+- filename should not spill awkwardly off-screen
+- use truncation/wrapping intentionally
+- regenerate action should stay aligned and tappable
+- row should feel balanced on mobile
+
+5) FIX THE BOTTOM ACTION AREA
+Buttons should feel clean and intentional:
+- Next
+- Pay Invoice
+- Cancel
+
+Make sure:
+- spacing is balanced
+- no crowding
+- no weird oversized empty sections above them caused by bad preview sizing
+
+6) VERIFY SUBCONTRACTOR FLOW SPECIFICALLY
+After the fix, test the actual subcontractor-side flow shown in the screenshot.
+Do not only verify the standard invoice flow.
+
+7) ADD TARGETED LOGS IF NEEDED
+Only if helpful:
+- component name
+- modal width / preview width / scale values
+- whether subcontract/native branch is active
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact component/file used by the subcontractor-side Generate Invoice PDF screen
+2. exact root cause of the clipping/cutoff
+3. exact files changed
+4. what was changed in scaling/layout/header/actions
+5. confirmation that the subcontractor native PDF preview now fits correctly without clipping
+
+SUCCESS CRITERIA
+- subcontractor Generate Invoice PDF screen looks polished on native
+- PDF preview is centered and fully visible within the modal
+- right side is not cut off
+- filename row is clean and usable
+- actions remain functional and well-spaced
+- this is confirmed on the actual subcontractor/native flow, not just another invoice modal
