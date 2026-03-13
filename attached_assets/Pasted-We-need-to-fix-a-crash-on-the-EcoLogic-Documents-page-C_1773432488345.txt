@@ -1,0 +1,83 @@
+We need to fix a crash on the EcoLogic Documents page.
+
+CURRENT ERROR
+Clicking the Documents page causes an application crash.
+
+The screenshot shows this runtime error:
+- Cannot access 'createFolderOpen' before initialization
+- source points to: src/pages/Documents.tsx around line 124
+
+This is a frontend runtime bug, most likely caused by referencing `createFolderOpen` before the state/value is initialized.
+
+GOAL
+Fix the crash so the Documents page loads normally again on mobile and web.
+
+WHAT TO DO
+
+1. FIX THE ROOT CAUSE
+Audit `src/pages/Documents.tsx` and find every place `createFolderOpen` is referenced.
+
+Most likely causes:
+- a `useMemo`, `useEffect`, derived variable, or JSX block is using `createFolderOpen` before the `useState` declaration
+- destructuring / helper function order issue
+- conditional config/object defined above state initialization
+- same-name shadowing or duplicate declaration
+- refactor accidentally moved state lower than code that consumes it
+
+Fix the actual order/dependency issue cleanly.
+
+2. CHECK FOR RELATED VARIABLES TOO
+Since this page was recently refactored, also audit related modal/sheet state such as:
+- createFolderOpen
+- newFolderName
+- selectedFolder
+- renameFolderOpen
+- upload modal state
+- breadcrumb/current folder derived state
+
+Make sure none of them are referenced before initialization.
+
+3. KEEP DOCUMENTS PAGE FUNCTIONALITY
+Do NOT roll back the new file-cabinet system unless absolutely necessary.
+Keep working:
+- folder list
+- file list
+- create folder
+- subfolder creation
+- upload
+- breadcrumb navigation
+- delete/rename flows
+- mobile formatting improvements
+
+4. VERIFY BOTH WEB + NATIVE
+This crash is happening on native/mobile, but verify on both:
+- native build
+- web/replit preview
+
+The page should load with no runtime error.
+
+5. ADD A QUICK SANITY PASS
+After fixing the crash, test:
+- opening Documents page
+- opening New Folder modal
+- closing New Folder modal
+- creating a folder
+- navigating into a folder
+- going back up breadcrumb
+- opening upload flow
+
+6. CLEAN UP
+If there is dead code from the recent modal/layout refactor, remove it cleanly.
+Do not leave duplicate state or duplicate modal declarations.
+
+DELIVERABLES
+1. Fix `createFolderOpen` runtime crash
+2. Documents page loads normally again
+3. File-cabinet functionality remains intact
+4. Works on native and web
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- files changed
+- whether it was state ordering, shadowing, or another initialization issue
+- what you tested manually

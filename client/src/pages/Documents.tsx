@@ -121,21 +121,6 @@ export default function Documents() {
   const createFolderInputRef = useRef<HTMLInputElement>(null);
   const renameFolderInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus folder name inputs after sheet slides in (delay avoids keyboard fighting animation)
-  useEffect(() => {
-    if (createFolderOpen) {
-      const t = setTimeout(() => createFolderInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [createFolderOpen]);
-
-  useEffect(() => {
-    if (renameFolder) {
-      const t = setTimeout(() => renameFolderInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [renameFolder]);
-
   // ── Navigation state ──
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbEntry[]>([{ id: null, name: "Documents" }]);
   const currentFolder = breadcrumb[breadcrumb.length - 1];
@@ -155,6 +140,21 @@ export default function Documents() {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureDoc, setSignatureDoc] = useState<DocumentItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
+
+  // Auto-focus folder name inputs after sheet slides in (delay avoids keyboard fighting animation)
+  useEffect(() => {
+    if (createFolderOpen) {
+      const t = setTimeout(() => createFolderInputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }
+  }, [createFolderOpen]);
+
+  useEffect(() => {
+    if (renameFolder) {
+      const t = setTimeout(() => renameFolderInputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }
+  }, [renameFolder]);
 
   // ── Data fetching ──
   const contentsKey = ["/api/folders/contents", currentFolderId ?? "null"];
