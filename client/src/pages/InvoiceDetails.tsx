@@ -5,8 +5,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
-import { useStripeConnectGate } from "@/hooks/useStripeConnectGate";
-import { StripeConnectGateModal } from "@/components/StripeConnectGateModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check, Banknote } from "lucide-react";
-import StripePaymentForm from "@/components/StripePaymentForm";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
 import { format } from "date-fns";
 
 interface InvoiceDetailsProps {
@@ -118,19 +114,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { role } = useCan();
-  const stripeGate = useStripeConnectGate();
-  
+
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
-  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-  const [showCardForm, setShowCardForm] = useState(false);
-  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
-  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
-  const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
-  const [partialEnabled, setPartialEnabled] = useState(false);
-  const [partialAmountStr, setPartialAmountStr] = useState("");
-  const [selectedMethod, setSelectedMethod] = useState<'cash' | 'check' | 'card'>('card');
-  const [checkNumber, setCheckNumber] = useState('');
-  const [isManualPaymentLoading, setIsManualPaymentLoading] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [sendMode, setSendMode] = useState<'email' | 'text'>('email');
   const [emailValue, setEmailValue] = useState('');
@@ -165,104 +150,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       toast({ title: "Failed to void invoice", variant: "destructive" });
     },
   });
-
-  const invoiceTotalCents = invoice ? (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100)) : 0;
-  const currentPaidCents = invoice?.paidAmountCents || 0;
-  const balanceRemainingCents = invoice?.balanceDueCents || (invoiceTotalCents - currentPaidCents);
-  const partialAmountCents = Math.round(parseFloat(partialAmountStr || "0") * 100);
-  const isPartialValid = partialAmountCents >= 50 && partialAmountCents <= balanceRemainingCents;
-  const paymentAmountCents = partialEnabled ? partialAmountCents : balanceRemainingCents;
-
-  const startCardPaymentFlow = async () => {
-    setIsCheckoutLoading(true);
-    try {
-      const res = await apiRequest('POST', '/api/payments/stripe/create-intent', {
-        invoiceId: parseInt(invoiceId),
-        ...(partialEnabled ? { amountCents: paymentAmountCents } : {}),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to initialize payment');
-      }
-      const { clientSecret, publishableKey, amountCents } = await res.json();
-      setStripeClientSecret(clientSecret);
-      setStripePublishableKey(publishableKey);
-      setStripeAmountCents(amountCents);
-      setShowCardForm(true);
-    } catch (error: any) {
-      toast({ title: error.message || "Payment failed", variant: "destructive" });
-    } finally {
-      setIsCheckoutLoading(false);
-    }
-  };
-
-  const handlePayWithCard = async () => {
-    if (isCheckoutLoading) return;
-    if (partialEnabled && !isPartialValid) return;
-    const ready = await stripeGate.ensureReady(() => startCardPaymentFlow());
-    if (!ready) return;
-    await startCardPaymentFlow();
-  };
-
-  const handleCardPaymentSuccess = async () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-    queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
-    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-    toast({ title: "Payment successful!" });
-    setShowCardForm(false);
-    setStripeClientSecret(null);
-    setPartialEnabled(false);
-    setPartialAmountStr("");
-  };
-
-  const handleCardPaymentCancel = () => {
-    setShowCardForm(false);
-    setStripeClientSecret(null);
-    setStripePublishableKey(null);
-  };
-
-  const handleManualPayment = async () => {
-    if (isManualPaymentLoading || (partialEnabled && !isPartialValid)) return;
-    setIsManualPaymentLoading(true);
-    try {
-      const body: any = {
-        invoiceId: parseInt(invoiceId),
-        method: selectedMethod,
-      };
-      if (selectedMethod === 'check' && checkNumber.trim()) {
-        body.checkNumber = checkNumber.trim();
-      }
-      if (partialEnabled && partialAmountCents > 0) {
-        body.amountCents = paymentAmountCents;
-      }
-      const res = await apiRequest('POST', '/api/payments/manual', body);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Failed to record payment');
-      }
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-      toast({ title: "Payment recorded!" });
-      setPartialEnabled(false);
-      setPartialAmountStr('');
-      setCheckNumber('');
-    } catch (err: any) {
-      toast({ title: err.message || 'Payment failed', variant: 'destructive' });
-    } finally {
-      setIsManualPaymentLoading(false);
-    }
-  };
-
-  const handlePay = async () => {
-    if (selectedMethod === 'card') {
-      await handlePayWithCard();
-    } else {
-      await handleManualPayment();
-    }
-  };
 
   const formatPhoneNumber = (value: string): string => {
     const digits = value.replace(/\D/g, '');
@@ -436,7 +323,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const lineItems = invoice.lineItems || [];
   // Sender-side referred invoices: viewer subcontracted the job out — receiver collects payment, not sender
   const isSenderSideReferral = !!(invoice as any).referralBreakdown?.isSenderSide;
-  const canPay = !isSenderSideReferral && invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';
   const canSend = !isSenderSideReferral && invoice.status !== 'void' && invoice.status !== 'cancelled';
   const canVoid = invoice.status !== 'void' && invoice.status !== 'cancelled';
 
@@ -469,117 +355,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
             View PDF
           </Button>
         </a>
-      )}
-
-      {/* Inline Card Payment Form */}
-      {showCardForm && stripeClientSecret && stripePublishableKey && (
-        <div className="mb-4">
-          <StripePaymentForm
-            clientSecret={stripeClientSecret}
-            publishableKey={stripePublishableKey}
-            amountCents={stripeAmountCents}
-            invoiceId={parseInt(invoiceId)}
-            onSuccess={handleCardPaymentSuccess}
-            onCancel={handleCardPaymentCancel}
-          />
-        </div>
-      )}
-
-      {/* Payment Method Selector + Pay Button */}
-      {canPay && invoice.totalCents > 0 && !showCardForm && (
-        <div className="space-y-3 mb-2">
-          {/* Method selector */}
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              { key: 'cash' as const, label: 'Cash', icon: Banknote },
-              { key: 'check' as const, label: 'Check', icon: FileText },
-              { key: 'card' as const, label: 'Card', icon: CreditCard },
-            ]).map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => { setSelectedMethod(m.key); setShowCardForm(false); }}
-                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                    selectedMethod === m.key
-                      ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400'
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Check number input */}
-          {selectedMethod === 'check' && (
-            <Input
-              placeholder="Check # (optional)"
-              value={checkNumber}
-              onChange={(e) => setCheckNumber(e.target.value)}
-              className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-            />
-          )}
-
-          {/* Partial payment toggle */}
-          {balanceRemainingCents > 0 && (
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Partial Payment</Label>
-              <Switch
-                checked={partialEnabled}
-                onCheckedChange={(checked) => {
-                  setPartialEnabled(checked);
-                  if (!checked) setPartialAmountStr("");
-                }}
-              />
-            </div>
-          )}
-          {partialEnabled && (
-            <div className="space-y-1">
-              <Input
-                type="number"
-                min="0.50"
-                step="0.01"
-                max={(balanceRemainingCents / 100).toFixed(2)}
-                placeholder="Amount in dollars"
-                value={partialAmountStr}
-                onChange={(e) => setPartialAmountStr(e.target.value)}
-              />
-              {partialAmountStr && !isPartialValid && (
-                <p className="text-xs text-red-500">
-                  {partialAmountCents < 50
-                    ? "Minimum payment is $0.50"
-                    : `Maximum is ${formatCurrency(balanceRemainingCents)}`}
-                </p>
-              )}
-              {partialAmountStr && isPartialValid && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Remaining after payment: {formatCurrency(balanceRemainingCents - partialAmountCents)}
-                </p>
-              )}
-            </div>
-          )}
-          <Button
-            onClick={handlePay}
-            disabled={isCheckoutLoading || isManualPaymentLoading || (partialEnabled && !isPartialValid)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {(isCheckoutLoading || isManualPaymentLoading) ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : selectedMethod === 'cash' ? (
-              <Banknote className="h-4 w-4 mr-2" />
-            ) : selectedMethod === 'check' ? (
-              <FileText className="h-4 w-4 mr-2" />
-            ) : (
-              <CreditCard className="h-4 w-4 mr-2" />
-            )}
-            {(isCheckoutLoading || isManualPaymentLoading)
-              ? 'Processing...'
-              : `Pay ${formatCurrency(paymentAmountCents)}`}
-          </Button>
-        </div>
       )}
 
       {/* Secondary Send Invoice Button */}
@@ -1071,18 +846,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </DialogContent>
       </Dialog>
 
-      <StripeConnectGateModal
-        open={stripeGate.showGateModal}
-        onClose={stripeGate.dismissGateModal}
-        returnPath={`/payments/invoice/${invoiceId}`}
-        readiness={stripeGate.readiness}
-        isOwner={stripeGate.isOwner}
-        isProcessing={stripeGate.isProcessing}
-        statusLabel={stripeGate.statusLabel}
-        actionLabel={stripeGate.actionLabel}
-        showOwnerOnlyMessage={stripeGate.showOwnerOnlyMessage}
-        startOnboarding={stripeGate.startOnboarding}
-      />
     </div>
   );
 }

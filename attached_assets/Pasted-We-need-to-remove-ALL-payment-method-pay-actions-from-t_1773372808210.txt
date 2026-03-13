@@ -1,0 +1,69 @@
+We need to remove ALL payment method / pay actions from the Invoices area.
+
+GOAL
+There should be NO possible way to pay from:
+- the Invoice tab
+- invoice cards
+- invoice detail views inside Invoices
+- any invoice-related CTA/buttons in the Invoices section
+
+I do NOT want users to be able to pay from Invoices anymore.
+
+IMPORTANT
+This is a UI/UX restriction for the Invoices area only.
+Do NOT break:
+- Payments page
+- payment records/history
+- subcontract/referral logic
+- checkout flow elsewhere if it is used from the correct payment flow
+- invoice creation/editing/sending
+- Stripe/manual payment backend logic unless it is directly tied to invoice-tab payment buttons
+
+REMOVE / HIDE
+Anywhere inside Invoices, remove or hide:
+- Cash / Check / Card payment method selectors
+- Pay button
+- any “Pay $X” CTA
+- any quick pay action
+- any payment tiles/buttons
+- any payment entry point from invoice cards
+- any invoice detail action that opens checkout
+
+ALSO CHECK
+Please inspect:
+- invoice list cards
+- invoice detail screen
+- invoice modals
+- mobile/native invoice screens
+- referral/subcontract invoice screens if they are being opened from the Invoices tab
+- any conditional actions that only appear for unpaid invoices
+
+REQUIREMENTS
+- Invoices should remain view/send/manage only
+- Users can still see invoice info, status, totals, customer, notes, etc.
+- “Send Invoice” can stay if appropriate
+- Payment history can stay visible if it is display-only
+- No payment method controls should render in Invoices
+- No pay action should be reachable from invoice cards/details in the Invoices section
+
+IF THERE IS A SHARED COMPONENT
+If invoice detail uses a shared payment component, do NOT break payment flows elsewhere.
+Only suppress/remove payment actions when rendered from the Invoices context/tab.
+
+ADD TARGETED LOGS
+Add minimal logs only if useful to confirm:
+- invoice screen rendered in invoices context
+- payment actions suppressed/hidden
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact invoice screens/components updated
+3. confirmation that no pay methods or pay buttons remain in Invoices
+4. confirmation that other payment flows were not broken
+
+SUCCESS CRITERIA
+- No Cash / Check / Card options appear in Invoices
+- No Pay button appears in Invoices
+- No invoice card/detail inside Invoices can trigger checkout
+- Invoices remains view/send/manage only
