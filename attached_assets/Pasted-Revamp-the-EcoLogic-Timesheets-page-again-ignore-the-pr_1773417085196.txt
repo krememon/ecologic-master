@@ -1,0 +1,168 @@
+Revamp the EcoLogic Timesheets page again — ignore the previous “employee list first” direction. We want the page to work more like the screenshots I attached.
+
+NEW UX DIRECTION
+The Timesheets page should display the DAYS OF THE WEEK first, and when the user taps/clicks a day, it should show the employees’ hours and entries for that selected day.
+
+This should feel similar to the reference screenshots:
+- top horizontal day selector
+- selected day highlighted
+- below that, a summary area
+- below that, employee rows/cards for that selected day
+- each employee can show total time for that day
+- employee section can expand or already show their entries for that day
+
+IMPORTANT
+Do NOT break the current clock-in / clock-out functionality.
+The backend time tracking logic already works:
+- user clocks in
+- time tracks
+- user clocks out
+- entry posts
+Keep that behavior intact.
+We are changing the UI/UX presentation, not the core tracking flow.
+
+GOAL
+Make Timesheets feel clean, useful, mobile-first, and easy to scan.
+
+DESIRED PAGE STRUCTURE
+
+1. HEADER
+- Title: Timesheets
+- Optional small subtext like: “Review daily employee hours”
+
+2. TOP DAY-OF-WEEK SELECTOR
+At the top of the page, show the current week as a horizontal selector like the screenshot:
+- Sun / Mon / Tue / Wed / Thu / Fri / Sat
+- each day shows weekday letter + date number
+- selected day is highlighted with EcoLogic blue
+- left/right arrows move to previous/next week
+- selector updates all content below
+- mobile-first, touch friendly, smooth scrolling if needed
+- desktop should still look polished
+
+3. DAILY SUMMARY CARD
+Under the day selector, show a summary card for the selected day:
+- Total Hours for company/team that day
+- Optional:
+  - total employees who clocked time that day
+  - total entries that day
+Only include stats that are easy to support with current data.
+
+4. EMPLOYEE LIST FOR THE SELECTED DAY
+For the chosen day, show all relevant employees for that date.
+Each employee row/card should show:
+- avatar or initials
+- employee name
+- total hours for that selected day
+- maybe status if currently clocked in on today
+- clean card layout, no ugly tables
+
+5. EMPLOYEE DAY DETAIL
+When clicking an employee row, show that employee’s entries for the selected day.
+Use a card layout like the screenshot:
+- Day header/date
+- Each clock session entry:
+  - label like Work
+  - clock in time
+  - clock out time
+  - duration
+- If there are multiple sessions in that same day, show them all
+- Show daily total for that employee
+- If the person is actively clocked in, clearly show Active and current running duration if safely supported
+
+UX BEHAVIOR
+- Default selected day should be today if it is in the visible week
+- If viewing past/future week, default to first day or preserve last selected day index
+- Tapping another day updates:
+  - company total hours for that day
+  - employee list for that day
+  - each employee’s displayed totals for that day
+- Tapping employee expands/collapses their detailed daily entries
+- Must feel snappy and easy to understand on iPhone
+
+LAYOUT NOTES
+MOBILE FIRST:
+- day selector at top
+- summary card next
+- employee cards below
+- employee details expand underneath
+- avoid giant empty whitespace
+- avoid cramped layouts
+
+DESKTOP:
+- can stay centered in a clean single-column layout
+- or a two-column variation if it looks better
+- but keep same day-first structure
+
+STYLING
+Use EcoLogic styling and make it look polished:
+- rounded cards
+- subtle shadows
+- good spacing
+- strong text hierarchy
+- selected day pill/circle should feel premium
+- professional SaaS/mobile app feel
+- no bland empty-state block like the current version
+
+RBAC / VISIBILITY
+Do NOT break RBAC.
+Respect existing permissions.
+Expected behavior:
+- Owner/Admin: can see everyone they should be able to see
+- Supervisors/Dispatchers: according to current visibility rules
+- Technicians: should only see their own timesheet data unless existing permissions already allow otherwise
+Do not expose employee timesheets to unauthorized users.
+
+DATA / LOGIC REQUIREMENTS
+Reuse existing working clock/timesheet data where possible.
+Do NOT rewrite the core time tracking engine unless absolutely necessary.
+Prefer reshaping/aggregating current data for the new UI.
+
+If needed, add or improve an API response so the page can easily render:
+- selected week days
+- selected day totals
+- employee totals for that day
+- grouped entries per employee for that day
+
+HANDLE THESE EDGE CASES
+- no entries for selected day
+- multiple entries in one day
+- employee with zero hours that day
+- active clock-in with no clock-out yet
+- missing avatar
+- week navigation
+- selected day updates after clocking in/out
+- data refreshes correctly when changing days/weeks
+
+EMPTY STATE
+If no one has hours on a selected day, do NOT use the current giant empty bland box.
+Instead use a cleaner empty state like:
+- “No time entries for this day”
+- light icon
+- compact card
+- still visually polished
+
+DELIVERABLES
+1. Convert Timesheets page to day-first UI
+2. Add top weekly day selector like the screenshot
+3. Show total company/team hours for selected day
+4. Show employees for that selected day
+5. Clicking employee reveals their entries/hours for that day
+6. Preserve existing clock-in / clock-out logic
+7. Preserve RBAC
+8. Make it mobile-first and polished on desktop
+9. Avoid duplicate controls
+10. Add targeted logs only if needed
+
+IMPLEMENTATION APPROACH
+- Audit current Timesheets component and existing time entry API/data flow
+- Keep backend changes minimal
+- Focus mainly on UI/UX restructure
+- Reuse current logic and data model wherever possible
+- Make the page production-ready, clean, and consistent with EcoLogic
+
+WHEN DONE, REPORT BACK WITH
+- files changed
+- UI behavior added
+- API/data shaping changes made
+- anything I should test manually
