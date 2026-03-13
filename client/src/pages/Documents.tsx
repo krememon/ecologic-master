@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -112,14 +111,126 @@ function isPdfFile(type: string | null, name: string): boolean {
   return type === "application/pdf" || ext === "pdf";
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── FolderNameModal ─────────────────────────────────────────────────────────
+// Custom bottom-anchored sheet that tracks window.visualViewport so it stays
+// pinned just above the keyboard without any layout shift on iOS/WKWebView.
+
+function FolderNameModal({
+  open,
+  title,
+  submitLabel,
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  open: boolean;
+  title: string;
+  submitLabel: string;
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Lock body scroll while open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Track visual viewport to stay above keyboard — works on iOS WKWebView/Capacitor
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    function update() {
+      // Amount the keyboard has pushed up from the bottom of the screen
+      const pushed = window.innerHeight - (vv!.height + vv!.offsetTop);
+      if (panelRef.current) {
+        panelRef.current.style.transform = `translateY(-${Math.max(0, pushed)}px)`;
+      }
+    }
+
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [open]);
+
+  // Focus input shortly after the panel appears (let slide-in finish first)
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60]" aria-modal="true">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+
+      {/* Panel — anchored bottom-0, translateY tracks keyboard via visualViewport */}
+      <div
+        ref={panelRef}
+        className="absolute bottom-0 inset-x-0 bg-background rounded-t-2xl shadow-xl"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-muted-foreground hover:text-foreground min-w-[56px]"
+          >
+            Cancel
+          </button>
+          <span className="text-base font-semibold">{title}</span>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!value.trim() || isPending}
+            className="text-sm font-semibold text-primary min-w-[56px] text-right disabled:opacity-40"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : submitLabel}
+          </button>
+        </div>
+        {/* Input */}
+        <div className="px-4 pb-4">
+          <Label className="text-sm font-medium">Folder Name</Label>
+          <Input
+            ref={inputRef}
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder="Folder Name"
+            className="mt-1.5"
+            onKeyDown={e => {
+              if (e.key === "Enter" && value.trim() && !isPending) onSubmit();
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const createFolderInputRef = useRef<HTMLInputElement>(null);
-  const renameFolderInputRef = useRef<HTMLInputElement>(null);
 
   // ── Navigation state ──
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbEntry[]>([{ id: null, name: "Documents" }]);
@@ -140,21 +251,6 @@ export default function Documents() {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureDoc, setSignatureDoc] = useState<DocumentItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
-
-  // Auto-focus folder name inputs after sheet slides in (delay avoids keyboard fighting animation)
-  useEffect(() => {
-    if (createFolderOpen) {
-      const t = setTimeout(() => createFolderInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [createFolderOpen]);
-
-  useEffect(() => {
-    if (renameFolder) {
-      const t = setTimeout(() => renameFolderInputRef.current?.focus(), 350);
-      return () => clearTimeout(t);
-    }
-  }, [renameFolder]);
 
   // ── Data fetching ──
   const contentsKey = ["/api/folders/contents", currentFolderId ?? "null"];
@@ -213,8 +309,7 @@ export default function Documents() {
     onError: () => toast({ title: "Failed to create folder", variant: "destructive" }),
   });
 
-  function handleCreateFolder(e: React.FormEvent) {
-    e.preventDefault();
+  function handleCreateFolder() {
     if (!newFolderName.trim()) return;
     createFolderMutation.mutate(newFolderName.trim());
   }
@@ -233,8 +328,7 @@ export default function Documents() {
     onError: () => toast({ title: "Failed to rename folder", variant: "destructive" }),
   });
 
-  function handleRenameFolder(e: React.FormEvent) {
-    e.preventDefault();
+  function handleRenameFolder() {
     if (!renameFolder || !renameName.trim()) return;
     renameFolderMutation.mutate({ id: renameFolder.id, name: renameName.trim() });
   }
@@ -452,87 +546,29 @@ export default function Documents() {
         )}
       </div>
 
-      {/* ── Create Folder Sheet (bottom — keyboard-safe on mobile) ──── */}
-      <Sheet open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
-        <SheetContent
-          side="bottom"
-          hideCloseButton
-          className="rounded-t-2xl px-4 pt-4 pb-[env(safe-area-inset-bottom,16px)]"
-        >
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => { setCreateFolderOpen(false); setNewFolderName(""); }}
-              className="text-sm text-muted-foreground hover:text-foreground min-w-[56px]"
-            >
-              Cancel
-            </button>
-            <SheetTitle className="text-base font-semibold">New Folder</SheetTitle>
-            <button
-              type="submit"
-              form="create-folder-form"
-              className="text-sm font-semibold text-primary disabled:opacity-40 min-w-[56px] text-right"
-              disabled={!newFolderName.trim() || createFolderMutation.isPending}
-            >
-              {createFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Create"}
-            </button>
-          </div>
-          {/* Form */}
-          <form id="create-folder-form" onSubmit={handleCreateFolder}>
-            <Label htmlFor="folder-name" className="text-sm font-medium">Folder Name</Label>
-            <Input
-              id="folder-name"
-              ref={createFolderInputRef}
-              value={newFolderName}
-              onChange={e => setNewFolderName(e.target.value)}
-              placeholder="Folder Name"
-              className="mt-1.5"
-              onKeyDown={e => e.key === "Enter" && handleCreateFolder(e as any)}
-            />
-          </form>
-        </SheetContent>
-      </Sheet>
+      {/* ── Create Folder ──────────────────────────────────────────── */}
+      <FolderNameModal
+        open={createFolderOpen}
+        title="New Folder"
+        submitLabel="Create"
+        value={newFolderName}
+        onChange={setNewFolderName}
+        onSubmit={handleCreateFolder}
+        onCancel={() => { setCreateFolderOpen(false); setNewFolderName(""); }}
+        isPending={createFolderMutation.isPending}
+      />
 
-      {/* ── Rename Folder Sheet (bottom — keyboard-safe on mobile) ──── */}
-      <Sheet open={!!renameFolder} onOpenChange={open => !open && setRenameFolder(null)}>
-        <SheetContent
-          side="bottom"
-          hideCloseButton
-          className="rounded-t-2xl px-4 pt-4 pb-[env(safe-area-inset-bottom,16px)]"
-        >
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => setRenameFolder(null)}
-              className="text-sm text-muted-foreground hover:text-foreground min-w-[56px]"
-            >
-              Cancel
-            </button>
-            <SheetTitle className="text-base font-semibold">Rename Folder</SheetTitle>
-            <button
-              type="submit"
-              form="rename-folder-form"
-              className="text-sm font-semibold text-primary disabled:opacity-40 min-w-[56px] text-right"
-              disabled={!renameName.trim() || renameFolderMutation.isPending}
-            >
-              {renameFolderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Save"}
-            </button>
-          </div>
-          {/* Form */}
-          <form id="rename-folder-form" onSubmit={handleRenameFolder}>
-            <Label htmlFor="rename-name" className="text-sm font-medium">Folder Name</Label>
-            <Input
-              id="rename-name"
-              ref={renameFolderInputRef}
-              value={renameName}
-              onChange={e => setRenameName(e.target.value)}
-              placeholder="Folder Name"
-              className="mt-1.5"
-              onKeyDown={e => e.key === "Enter" && handleRenameFolder(e as any)}
-            />
-          </form>
-        </SheetContent>
-      </Sheet>
+      {/* ── Rename Folder ──────────────────────────────────────────── */}
+      <FolderNameModal
+        open={!!renameFolder}
+        title="Rename Folder"
+        submitLabel="Save"
+        value={renameName}
+        onChange={setRenameName}
+        onSubmit={handleRenameFolder}
+        onCancel={() => { setRenameFolder(null); setRenameName(""); }}
+        isPending={renameFolderMutation.isPending}
+      />
 
       {/* ── Upload Modal ─────────────────────────────────────────────── */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

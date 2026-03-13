@@ -1,0 +1,142 @@
+We need to properly fix the mobile New Folder sheet on the Documents page.
+
+CURRENT ISSUE
+The current “fix” still looks bad.
+When the keyboard opens, the New Folder sheet still shifts/moves in a janky way and looks broken.
+It should NOT do that.
+
+I attached another screenshot and a screen recording.
+Use those as the reference for what is currently wrong.
+
+GOAL
+Make the New Folder experience feel stable and native on mobile:
+- no weird jumping
+- no floating/moving sheet
+- no ugly layout shift when keyboard opens
+- no half-modal / half-bottom-sheet broken state
+- no awkward safe-area / spacing issues
+
+DESIRED UX
+This should feel like a proper native bottom sheet / modal input flow:
+- tap “New Folder”
+- sheet opens cleanly
+- tap into Folder Name
+- keyboard opens
+- sheet stays anchored and stable
+- input remains visible
+- header remains clean
+- Create / Cancel remain properly placed
+- no visual chaos
+
+WHAT TO FIX
+
+1. STOP THE JANKY KEYBOARD SHIFTING
+The current sheet is visibly moving around when the keyboard appears.
+Find the actual reason and fix it.
+
+Likely causes to audit:
+- sheet is centered/flex-positioned instead of bottom-anchored
+- visual viewport resizing is moving the modal incorrectly
+- using vh / dvh / full-screen overlay sizing wrong on iPhone
+- keyboard avoidance logic is overcompensating
+- fixed/absolute positioning conflict
+- body scroll lock + modal positioning conflict
+- sheet container height recalculates incorrectly on focus
+- safe-area + keyboard inset logic is being applied twice
+
+Fix the root cause, not just add more padding.
+
+2. MAKE IT A TRUE BOTTOM-ANCHORED SHEET ON MOBILE
+On mobile, this should behave like a true bottom sheet:
+- anchored to bottom of viewport
+- rounded top corners
+- stable header
+- content area above keyboard
+- keyboard does NOT make the whole thing drift upward awkwardly
+
+If needed:
+- use a dedicated mobile sheet layout for this modal
+- keep desktop modal behavior separate if that is cleaner
+
+3. KEEP THE SHEET COMPACT
+This sheet only needs:
+- header row
+- Folder Name label
+- input
+That’s it.
+
+So it should stay compact and controlled.
+Do NOT let it become a giant floating panel with weird extra empty space.
+
+4. HEADER MUST STAY CLEAN
+Keep:
+- Cancel on left
+- centered “New Folder”
+- Create on right
+
+But make sure when keyboard opens:
+- header remains aligned
+- title does not shift weirdly
+- buttons stay tappable and visible
+- no overlap with top safe area / Dynamic Island
+
+5. INPUT AREA MUST STAY STABLE
+The Folder Name input should:
+- remain fully visible above the keyboard
+- not stretch awkwardly
+- not cause the whole sheet to animate badly
+- keep proper padding and border radius
+- not get jammed against the keyboard accessory bar
+
+6. USE THE SCREEN RECORDING
+I uploaded a screen recording too.
+Please use that to understand the exact motion/jank, not just the screenshot.
+
+7. DO NOT BREAK FUNCTIONALITY
+Keep working:
+- open New Folder
+- type folder name
+- cancel
+- create folder
+- create subfolder
+- root folder creation
+- keyboard return/submit if already supported
+
+8. DO NOT JUST HIDE THE PROBLEM
+This should be a real UX fix, not:
+- disabling focus behavior
+- pushing the field offscreen
+- forcing zoom weirdness
+- leaving Create inaccessible
+- creating a desktop-looking modal on mobile
+
+9. IF NEEDED, SPLIT MOBILE VS DESKTOP IMPLEMENTATION
+If the cleanest fix is:
+- mobile = bottom sheet
+- desktop = centered modal
+that is fine.
+
+Prioritize making mobile feel correct.
+
+10. POLISH
+Final result should feel:
+- native
+- stable
+- smooth
+- minimal
+- not “moving and shit”
+- visually consistent with EcoLogic
+
+DELIVERABLES
+1. Properly fix the janky mobile keyboard/sheet movement
+2. New Folder sheet stays stable when keyboard opens
+3. Input/header/actions remain properly visible
+4. Root + subfolder creation still work
+5. Desktop behavior stays clean too
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- files changed
+- whether the fix was CSS/layout, sheet component behavior, keyboard handling, or multiple issues
+- whether mobile and desktop now use different modal behaviors
+- what you tested manually on mobile
