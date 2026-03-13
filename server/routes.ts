@@ -838,6 +838,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload profile picture
+  app.post('/api/auth/user/profile-image', isAuthenticated, upload.single('profileImage'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const file = req.file;
+
+      if (!file) {
+        console.log('[profile-image] No file received in request');
+        return res.status(400).json({ message: "No image file provided" });
+      }
+
+      // Validate it's an image
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        fs.unlinkSync(file.path);
+        return res.status(400).json({ message: "Only image files are allowed (JPEG, PNG, WebP, GIF)" });
+      }
+
+      // Move to permanent location with unique name
+      const ext = path.extname(file.originalname) || '.jpg';
+      const fileName = `profile-${userId}-${Date.now()}${ext}`;
+      const destPath = path.join('uploads', fileName);
+      fs.renameSync(file.path, destPath);
+
+      const profileImageUrl = `/uploads/${fileName}`;
+      console.log('[profile-image] saved file:', profileImageUrl, 'for userId:', userId);
+
+      // Update user record
+      const updatedUser = await storage.updateUser(userId, { profileImageUrl });
+      console.log('[profile-image] DB updated profileImageUrl for userId:', userId);
+
+      res.json({ profileImageUrl, user: updatedUser });
+    } catch (error: any) {
+      console.error('[profile-image] upload error:', error);
+      // Clean up temp file if it exists
+      if (req.file?.path) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+      }
+      res.status(500).json({ message: error.message || "Failed to upload profile image" });
+    }
+  });
+
   // Update user profile
   app.patch('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {

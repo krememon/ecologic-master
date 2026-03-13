@@ -252,25 +252,33 @@ export default function Settings() {
   // Profile picture upload mutation
   const updateProfilePictureMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      console.log('[profile-image] sending upload request');
       const res = await fetch("/api/auth/user/profile-image", {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to upload profile picture");
-      return res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error('[profile-image] upload failed:', res.status, data);
+        throw new Error(data.message || "Failed to upload profile picture");
+      }
+      console.log('[profile-image] upload succeeded, url:', data.profileImageUrl);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setProfileImagePreview(null);
       toast({
-        title: "Success",
-        description: "Profile picture updated successfully",
+        title: "Profile picture updated",
+        description: "Your photo has been saved successfully.",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: "Failed to update profile picture",
+        title: "Upload failed",
+        description: error.message || "Failed to update profile picture",
         variant: "destructive",
       });
     },

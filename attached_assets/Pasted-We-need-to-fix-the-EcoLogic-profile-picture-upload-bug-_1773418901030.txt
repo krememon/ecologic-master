@@ -1,0 +1,100 @@
+We need to fix the EcoLogic profile picture upload bug.
+
+ISSUE
+Uploading/updating the profile picture is failing and showing this error toast:
+- “Failed to update profile picture”
+
+The screenshot shows the Profile settings page is otherwise working, but avatar upload/save is broken.
+
+GOAL
+Make profile picture upload/update work reliably on web and native build, using the same avatar source the app should use in places like Timesheets and anywhere employee profile pictures appear.
+
+WHAT TO DO
+
+1. TRACE THE FULL PROFILE PHOTO FLOW
+Audit the full flow end to end:
+- profile page frontend upload handler
+- file picker / image selection
+- request payload
+- API route
+- backend validation
+- storage upload
+- DB update for user avatar/profile image field
+- response handling
+- UI refresh after save
+
+Find exactly where it is failing instead of guessing.
+
+2. FIX THE ROOT CAUSE
+Possible failure points to check:
+- wrong multipart/form-data handling
+- request body parser conflict
+- incorrect field name for uploaded file
+- missing native/web file compatibility handling
+- storage upload failing
+- auth/session issue on upload endpoint
+- DB field not updating
+- response shape mismatch causing frontend to think it failed
+- frontend expecting one avatar field name while backend returns another
+
+Fix the actual root issue, not just the toast.
+
+3. KEEP EXISTING PROFILE PAGE UX
+Do not redesign the whole page.
+Just make avatar upload/update work cleanly.
+
+Desired behavior:
+- user selects new profile photo
+- upload succeeds
+- DB/user profile updates
+- UI immediately reflects new photo
+- success state is clear
+- no false error toast
+- avatar persists after refresh / relog
+
+4. MAKE AVATAR SOURCE CONSISTENT APP-WIDE
+Make sure the same saved avatar/profile image path is what other pages use too, including Timesheets employee avatars.
+We want one source of truth for profile pictures.
+
+If the app currently has multiple possible avatar fields, standardize carefully and preserve backward compatibility if needed.
+
+5. HANDLE WEB + NATIVE
+Because EcoLogic is being tested in native builds too, make sure upload works for:
+- normal web browser / Replit preview
+- wrapped native/webview flow if applicable
+
+Check whether file objects / blob handling differ between environments and fix accordingly.
+
+6. ADD TARGETED LOGS
+Add temporary targeted logs only where needed to verify:
+- file selected
+- request hits endpoint
+- upload succeeds/fails
+- DB update succeeds/fails
+- returned avatar URL/path
+Do not spam logs everywhere.
+
+7. ERROR HANDLING
+Improve the error handling so the user gets the real issue if something fails.
+Do not just show generic “Failed to update profile picture” unless absolutely necessary.
+
+8. VERIFY DISPLAY
+After successful upload:
+- profile page avatar updates immediately
+- settings/profile header avatar updates
+- refreshed page still shows correct avatar
+- other components that use employee avatars can read the same saved field
+
+DELIVERABLES
+1. Fix profile picture upload/update
+2. Ensure saved avatar persists in DB/storage correctly
+3. Ensure frontend refreshes with new image
+4. Use consistent avatar source across app
+5. Keep fallback behavior if user has no avatar
+6. Add/remove only targeted logs as needed
+
+PLEASE REPORT BACK WITH
+- exact root cause
+- files changed
+- what avatar field/source is now the source of truth
+- what I should test manually on web and native
