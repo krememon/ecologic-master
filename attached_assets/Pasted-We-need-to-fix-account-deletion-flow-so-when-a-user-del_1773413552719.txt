@@ -1,0 +1,81 @@
+We need to fix account deletion flow so when a user deletes their account, they are sent to the SIGN IN screen — not onboarding.
+
+BUG
+After deleting the jpellegrino account, the app forwarded to:
+`/onboarding/industry`
+and got stuck there.
+
+That is wrong.
+
+GOAL
+When a user deletes their account, they should be fully signed out and redirected to the login/sign-in screen.
+
+EXPECTED BEHAVIOR
+After account deletion:
+- session is cleared
+- auth state is cleared
+- any local user/company/onboarding state is cleared
+- user is redirected to the sign-in/login screen
+- user should NOT be routed to onboarding
+- user should NOT be stuck on any protected or half-authenticated route
+
+WHAT TO CHECK
+
+1) TRACE ACCOUNT DELETE FLOW
+Find the exact flow for:
+- delete account action/button
+- backend delete endpoint
+- frontend success handler after deletion
+- auth/session cleanup logic
+- router redirect logic after deletion
+
+2) FIND WHY IT GOES TO ONBOARDING
+Inspect what is causing `/onboarding/industry` redirect after deletion.
+Likely causes:
+- auth state partially remains
+- onboarding guard sees “no company / incomplete onboarding” and pushes to onboarding
+- delete flow removes company/user but does not log out fully
+- frontend caches stale authenticated user object
+- route guard runs before session/local state is cleared
+
+3) FIX DELETE SUCCESS FLOW
+After successful deletion, explicitly:
+- clear session/cookies/auth tokens if applicable
+- clear cached current user/company state
+- clear onboarding-related local state
+- clear query cache/store if used
+- redirect to sign-in/login route
+
+Make this deterministic — do not rely on guards to infer the right route.
+
+4) GUARD AGAINST HALF-DELETED STATE
+If the backend deleted the user/account but frontend still thinks user is authenticated, fix that.
+A deleted user should never be able to fall into onboarding.
+Deleted account state should always resolve to signed-out state.
+
+5) VERIFY WEB + NATIVE
+Make sure this works correctly in:
+- Replit web
+- native/mobile wrapper if account deletion exists there too
+
+6) ADD TARGETED LOGS
+Add concise logs only where useful:
+- delete account success
+- auth/session cleared
+- local user state cleared
+- redirect target after delete
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. root cause of why deleted users were sent to onboarding
+3. what was changed to force sign-out + redirect to login
+4. confirmation that deleted users now land on sign-in screen
+
+SUCCESS CRITERIA
+- deleting an account fully signs the user out
+- user is redirected to login/sign-in
+- user is NOT redirected to onboarding
+- no stuck half-authenticated state remains

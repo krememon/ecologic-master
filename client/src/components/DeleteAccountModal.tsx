@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -30,10 +30,17 @@ export default function DeleteAccountModal({ open, onOpenChange }: DeleteAccount
       return res.json();
     },
     onSuccess: () => {
+      console.log("[delete-account] Success — clearing auth state and redirecting to login");
+      // Wipe all cached queries so no stale auth/user/company state leaks through
+      queryClient.clear();
+      // Clear any onboarding-related localStorage that could trigger onboarding redirect
+      localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
       toast({
         title: "Account deleted",
         description: "Your account has been permanently deleted.",
       });
+      // Hard navigation: reloads the page completely, destroying all React state
       window.location.href = "/login";
     },
     onError: () => {

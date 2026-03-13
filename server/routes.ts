@@ -709,6 +709,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Soft-deleted accounts must be treated as unauthenticated
+      if (user.status === 'DELETED') {
+        console.log(`[auth] Rejected deleted user userId=${userId}`);
+        req.logout(() => req.session?.destroy(() => {}));
+        return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', message: 'Account deleted' });
+      }
+
       // Get user's company
       const company = await storage.getUserCompany(user.id);
       
@@ -4044,9 +4051,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[delete-account] User deletion completed`);
       }
       
-      // Session was already deleted in deleteUserAccount(), so just respond
-      // The client will redirect to login page after receiving success
-      res.json({ ok: true });
+      // Explicitly destroy the session so the cookie becomes invalid immediately
+      req.logout((logoutErr) => {
+        if (logoutErr) console.warn(`[delete-account] req.logout error (non-fatal):`, logoutErr);
+        req.session?.destroy((destroyErr) => {
+          if (destroyErr) console.warn(`[delete-account] session.destroy error (non-fatal):`, destroyErr);
+          console.log(`[delete-account] Session destroyed for userId=${userId}`);
+          res.json({ ok: true });
+        });
+      });
     } catch (error: any) {
       console.error("[delete-account] Error:", error);
       res.status(500).json({ message: "Something went wrong. Please try again." });
