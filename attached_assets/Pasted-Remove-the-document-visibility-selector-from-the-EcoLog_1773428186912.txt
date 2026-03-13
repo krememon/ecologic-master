@@ -1,0 +1,69 @@
+Remove the document visibility selector from the EcoLogic document upload/create flow.
+
+REASON
+This visibility dropdown serves no purpose now because only Owner / Supervisor can access the Documents page/tab anyway.
+
+WHAT TO REMOVE
+Please remove the entire visibility control section, including:
+- the label: “Who can see this?”
+- the dropdown/select input
+- all options:
+  - Everyone (Customer & Team)
+  - Assigned Crew Only
+  - Office Staff Only
+  - Internal Team Only
+  - Owner Only
+- any helper text / selected state / checkmark UI tied to it
+
+DESIRED RESULT
+When adding/uploading a document from the Documents page/tab, there should be no visibility picker at all.
+
+IMPORTANT
+- Keep document upload/create working
+- Do not leave dead required validation behind
+- Do not leave dead form state/default values causing save failures
+- If payload currently includes visibility, either remove it safely or set a backend-safe default without exposing this control in the UI
+
+RBAC / LOGIC
+Since only Owner / Supervisor can see the Documents page/tab now:
+- remove this visibility choice from the frontend flow
+- make sure backend/save logic still works without the user choosing a visibility option
+- if a default visibility is still required internally, apply it automatically behind the scenes
+
+PLEASE CHECK
+1. FRONTEND
+- remove the visibility section from the upload/create document modal/form
+- remove related state/hooks/defaults for this UI
+- remove any validation requiring a user-selected visibility
+
+2. BACKEND / SAVE FLOW
+- if document creation currently expects a visibility field, handle it safely
+- set a sensible internal default if needed
+- do not break existing document uploads
+
+3. ALL DOCUMENT UPLOAD SURFACES
+Audit every place this same visibility picker appears, including:
+- Documents page upload flow
+- any Job Insights / document attach flow using the same upload component
+- any shared document modal/component
+
+I do not want one document upload surface cleaned up while another still shows this dropdown.
+
+4. LAYOUT POLISH
+After removal:
+- modal/form spacing should still look clean
+- no awkward blank gap where this section used to be
+- upload flow should feel simpler and cleaner
+
+DELIVERABLES
+1. Remove the “Who can see this?” visibility selector from document upload/create UI
+2. Keep document upload/save working
+3. Remove dead frontend state/validation tied to the selector
+4. Ensure backend handles missing visibility safely
+5. Clean up all surfaces using the same document upload UI
+
+WHEN DONE REPORT BACK WITH
+- files changed
+- whether this was removed from a shared upload component or page-specific UI
+- what default visibility behavior now happens behind the scenes
+- any other document-related surfaces still using old visibility UI

@@ -117,7 +117,6 @@ export default function Documents() {
   const [uploadCustomerId, setUploadCustomerId] = useState<string>('company-wide');
   const [uploadCustomerPickerOpen, setUploadCustomerPickerOpen] = useState(false);
   const [uploadCustomerSearchQuery, setUploadCustomerSearchQuery] = useState('');
-  const [uploadVisibility, setUploadVisibility] = useState<DocumentVisibility>('internal');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
@@ -464,7 +463,7 @@ export default function Documents() {
     formData.append("file", selectedFile);
     formData.append("name", uploadName || selectedFile.name);
     formData.append("category", uploadCategory);
-    formData.append("visibility", uploadVisibility);
+    formData.append("visibility", "customer_internal");
     if (uploadCustomerId !== 'company-wide') {
       formData.append("customerId", uploadCustomerId);
     }
@@ -690,34 +689,6 @@ export default function Documents() {
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="visibility" className="text-sm font-medium text-slate-700 dark:text-slate-300">Who can see this?</Label>
-                        <Select value={uploadVisibility} onValueChange={(v) => setUploadVisibility(v as DocumentVisibility)}>
-                          <SelectTrigger className="h-10" data-testid="select-visibility">
-                            <SelectValue placeholder="Select visibility" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="customer_internal" data-testid="visibility-customer-internal">
-                              Everyone (Customer & Team)
-                            </SelectItem>
-                            <SelectItem value="assigned_crew_only" data-testid="visibility-assigned-crew">
-                              Assigned Crew Only
-                            </SelectItem>
-                            <SelectItem value="office_only" data-testid="visibility-office-only">
-                              Office Staff Only
-                            </SelectItem>
-                            <SelectItem value="internal" data-testid="visibility-internal">
-                              Internal Team Only
-                            </SelectItem>
-                            <SelectItem value="owner_only" data-testid="visibility-owner-only">
-                              Owner Only
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                          Controls which team members can view this document
-                        </p>
                       </div>
                     </>
                   ) : (
