@@ -118,25 +118,34 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
 
   const runConfirmPoll = useCallback(async (piId: string) => {
     if (!piId) return;
+    console.log(`[PublicPay] Starting confirm poll invoiceId=${invoiceId} pi=${piId}`);
     for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
       try {
         const res = await fetch(`/api/payments/stripe/confirm?invoiceId=${invoiceId}&payment_intent_id=${piId}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.status === 'recorded' && data.paymentId) {
+          console.log(`[PublicPay] Poll attempt=${attempt + 1} status=${data.status} paymentId=${data.paymentId ?? 'none'}`);
+          // Backend returns status:'succeeded' (not 'recorded') — accept both for resilience
+          const isSuccess = (data.status === 'succeeded' || data.status === 'recorded') && data.paymentId;
+          if (isSuccess) {
             setPaymentId(data.paymentId);
             setConfirmedAmountCents(data.amountCents || null);
             setIsPartialPayment(!!data.isPartial);
             setPaymentConfirmed(true);
             setPollTimedOut(false);
+            console.log(`[PublicPay] Payment confirmed paymentId=${data.paymentId} amountCents=${data.amountCents} isPartial=${data.isPartial}`);
             return;
           }
+        } else {
+          console.warn(`[PublicPay] Poll attempt=${attempt + 1} returned HTTP ${res.status}`);
         }
       } catch (e) {
+        console.warn(`[PublicPay] Poll attempt=${attempt + 1} threw:`, e);
       }
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
     pollingRef.current = false;
+    console.warn(`[PublicPay] Poll timed out after ${MAX_POLL_ATTEMPTS} attempts for pi=${piId}`);
     setPollTimedOut(true);
   }, [invoiceId]);
 

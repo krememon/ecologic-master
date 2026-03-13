@@ -1,0 +1,119 @@
+We need to fix the public/send-invoice Stripe payment completion flow.
+
+BUG
+I tested the Send Invoice feature and even though the payment SUCCESSFULLY went through on Stripe, the customer-facing page still showed:
+
+“We're still finalizing your payment”
+with buttons:
+- Back to Invoice
+- Retry
+
+So Stripe captured/processed the payment, but EcoLogic failed to transition the public invoice pay flow into a proper success state.
+
+GOAL
+When a public/send-invoice card payment succeeds, the customer should be taken to a real success/paid state — not left on a stuck “finalizing” screen.
+
+IMPORTANT
+This is specifically about the PUBLIC / SEND-INVOICE payment flow.
+Do NOT break:
+- internal office payment flows
+- subcontract flows unless shared logic is involved
+- Stripe payment recording
+- refund support
+- invoice/payment history recording
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE EXACT PUBLIC PAYMENT FLOW
+Find the exact flow for:
+- send invoice link
+- public invoice pay page
+- Stripe PaymentIntent confirmation
+- any polling/finalization endpoint
+- any webhook reconciliation
+- redirect/success-state logic after Stripe confirms payment
+
+Trace the exact route/component/backend endpoints involved in:
+`/invoice/:id/pay` or equivalent public payment route.
+
+2) IDENTIFY WHY UI STAYS IN “FINALIZING”
+The likely issue is one of these:
+- PaymentIntent succeeded in Stripe but EcoLogic DB/payment row wasn’t updated in time
+- polling endpoint only checks a narrow state and misses already-succeeded payments
+- webhook updated Stripe/payment record, but frontend is waiting for a different flag
+- confirm endpoint expects `processing -> succeeded` and misses direct `succeeded`
+- transfer/payment record was created, but invoice status was not updated fast enough
+- public flow success page depends on wrong field / wrong query / wrong payment record
+- retry/finalizing logic times out even though payment is actually complete
+
+Find the ACTUAL root cause, not assumptions.
+
+3) FIX SUCCESS DETECTION
+Requirements:
+- if Stripe payment has actually succeeded, public pay flow must resolve to success
+- do not strand user on “still finalizing”
+- if DB/webhook race exists, make finalization logic resilient to:
+  - already-succeeded PaymentIntent
+  - webhook-first update
+  - confirm-endpoint-first update
+- success state should be idempotent and safe on reload
+
+4) MAKE FINALIZATION LOGIC ROBUST
+Fix the polling/finalization logic so it properly handles:
+- `requires_capture` if applicable
+- `processing`
+- `succeeded`
+- already-recorded payments
+- invoice already marked paid
+- payment exists in DB even if frontend missed the transition
+
+If payment is truly complete, UI should move to success even if there is a small delay in one subsystem.
+
+5) VERIFY DB + UI RECONCILIATION
+After success:
+- payment record should exist
+- invoice should show paid / updated correctly
+- public page should show a success/paid result
+- no false “Retry” prompt when payment is already completed
+
+6) CHECK STRIPE WEBHOOK + CONFIRM INTERACTION
+Inspect whether the webhook and confirm/poll endpoints are stepping on each other or relying on the wrong order.
+Make sure the public success state works whether:
+- webhook lands first
+- confirm handler lands first
+- both happen nearly simultaneously
+
+7) ADD TARGETED LOGS
+Add concise logs only where useful:
+- public invoice id
+- PaymentIntent id
+- Stripe status returned
+- DB payment row found or not
+- invoice paid status
+- finalization/poll state returned to frontend
+- why frontend chose “finalizing” vs “success”
+
+Avoid noisy logs.
+
+8) VERIFY WITH A REAL/CONTROLLED TEST
+Re-test the same public send-invoice flow:
+- open sent invoice link
+- pay by card
+- verify Stripe succeeds
+- verify customer sees success state, not stuck finalizing
+- verify invoice/payment history still correct
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact root cause
+3. whether this was frontend polling logic, backend finalization logic, webhook race, or multiple causes
+4. what was changed to make success detection reliable
+5. confirmation that successful public invoice payments no longer get stuck on “finalizing”
+6. short regression test plan
+
+SUCCESS CRITERIA
+- Stripe-successful public/send-invoice payments resolve to a real success state
+- customer is not left on “We’re still finalizing your payment”
+- invoice/payment history remain correct
+- retry is only shown for truly incomplete/failed payments
