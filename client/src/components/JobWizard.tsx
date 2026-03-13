@@ -484,7 +484,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input {...field} type="email" placeholder="client@example.com" className="w-full" data-testid="input-wizard-client-email" />
+                              <Input {...field} type="email" placeholder="Email" className="w-full" data-testid="input-wizard-client-email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -502,7 +502,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                                 {...field} 
                                 value={field.value || ""}
                                 onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
-                                placeholder="555-123-4567" 
+                                placeholder="Phone Number" 
                                 inputMode="numeric"
                                 autoComplete="tel"
                                 className="w-full" 
@@ -521,7 +521,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Address</FormLabel>
                             <FormControl>
-                              <Textarea {...field} placeholder="Client address..." className="w-full" data-testid="input-wizard-client-address" />
+                              <Textarea {...field} placeholder="Address" className="w-full" data-testid="input-wizard-client-address" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
