@@ -142,7 +142,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [activeTab, setActiveTab] = useState<'documents' | 'approvals'>('documents');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; id?: number } | null>(null);
@@ -164,7 +163,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   const canEditJob = role === 'OWNER' || role === 'SUPERVISOR';
   const canCreatePaymentLink = role === 'OWNER' || role === 'SUPERVISOR' || role === 'TECHNICIAN';
-  const canCancelJob = role === 'OWNER' || role === 'SUPERVISOR';
 
   const { data: job, isLoading, error } = useQuery<JobWithClient>({
     queryKey: [`/api/jobs/${jobId}`],
@@ -445,20 +443,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     },
   });
 
-  const cancelJobMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest('PATCH', `/api/jobs/${jobId}/cancel`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      setIsCancelDialogOpen(false);
-    },
-    onError: () => {
-      toast({ title: "Failed to cancel job", variant: "destructive" });
-    },
-  });
-
   const uploadPhotoMutation = useMutation({
     mutationFn: async ({ formData }: { formData: FormData }) => {
       const res = await fetch(`/api/jobs/${jobId}/documents`, {
@@ -671,8 +655,8 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             )
           )}
           
-          {/* Overflow Menu for Edit/Cancel/Delete */}
-          {(canEditJob || canCancelJob || isAdmin) && (
+          {/* Overflow Menu for Edit/Delete */}
+          {(canEditJob || isAdmin) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 px-2">
@@ -684,15 +668,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                   <DropdownMenuItem onClick={() => navigate(`/jobs/${jobId}/edit`)}>
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Job
-                  </DropdownMenuItem>
-                )}
-                {canCancelJob && job?.status !== 'cancelled' && (
-                  <DropdownMenuItem 
-                    onClick={() => setIsCancelDialogOpen(true)}
-                    className="text-amber-600 focus:text-amber-600"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel Job
                   </DropdownMenuItem>
                 )}
                 {isAdmin && (
@@ -1431,28 +1406,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               className="bg-red-600 hover:bg-red-700"
             >
               Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Cancel Job Confirmation Dialog */}
-      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Job</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to cancel this job? Assigned crew members will be notified.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Go Back</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => cancelJobMutation.mutate()}
-              className="bg-amber-600 hover:bg-amber-700"
-              disabled={cancelJobMutation.isPending}
-            >
-              {cancelJobMutation.isPending ? "Cancelling..." : "Cancel Job"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
