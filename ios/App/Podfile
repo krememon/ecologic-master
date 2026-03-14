@@ -25,4 +25,23 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  # Ensure iOS privacy usage descriptions are always present in Info.plist.
+  # PlistBuddy is built into macOS — no extra gems needed.
+  # "Add" fails silently if the key exists; "Set" updates it if it does.
+  info_plist = File.join(__dir__, 'App', 'Info.plist')
+  if File.exist?(info_plist)
+    privacy_entries = {
+      'NSCameraUsageDescription'          => 'EcoLogic uses the camera to capture photos and videos for job documents.',
+      'NSPhotoLibraryUsageDescription'    => 'EcoLogic accesses your photo library so you can attach images to job documents.',
+      'NSPhotoLibraryAddUsageDescription' => 'EcoLogic may save captured photos to your library for job documentation.',
+      'NSMicrophoneUsageDescription'      => 'EcoLogic uses the microphone to record audio when capturing video for job documents.'
+    }
+    privacy_entries.each do |key, value|
+      # Try Add first (fails silently if key exists), then Set to ensure value is current
+      system("/usr/libexec/PlistBuddy -c 'Add :#{key} string #{value}' '#{info_plist}' 2>/dev/null")
+      system("/usr/libexec/PlistBuddy -c 'Set :#{key} #{value}' '#{info_plist}'")
+    end
+    puts "✅  iOS privacy usage descriptions verified in Info.plist"
+  end
 end

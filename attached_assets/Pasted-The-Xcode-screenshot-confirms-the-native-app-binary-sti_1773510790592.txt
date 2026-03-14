@@ -1,0 +1,104 @@
+The Xcode screenshot confirms the native app binary still does NOT have the camera privacy usage string available at runtime.
+
+This is no longer just “maybe stale.”
+We need to verify the active iOS target, the actual plist being bundled, and the native sync/build pipeline.
+
+COPY/PASTE THIS INTO REPLIT AGENT:
+
+We have hard proof from Xcode that the active iOS app build still does not include NSCameraUsageDescription at runtime.
+
+XCODE EVIDENCE
+The crash message still says:
+“This app has crashed because it attempted to access privacy-sensitive data without a usage description. The app's Info.plist must contain an NSCameraUsageDescription key…”
+
+So the native app installed on device is still missing the camera permission string in the actual built bundle.
+
+GOAL
+Find why the permission keys are not making it into the real iOS app target and fix it so the native camera flow works.
+
+WHAT TO DO
+
+1. VERIFY THE REAL ACTIVE INFO.PLIST USED BY XCODE
+Do NOT assume the edited plist is the one being used.
+
+I need you to audit the iOS project and confirm:
+- the exact Info.plist path configured in the active app target’s Build Settings
+- whether ios/App/App/Info.plist is truly the plist for the running target
+- whether there are multiple plist files or generated plist values overriding this
+- whether Debug/Release use different plist/configs
+
+Please inspect:
+- Xcode target build settings → “Info.plist File”
+- project.pbxproj if needed
+- any generated Capacitor/native config behavior that may overwrite plist contents
+
+2. CONFIRM THE KEYS EXIST IN THE ACTIVE TARGET CONFIG
+The active app target must contain these keys:
+- NSCameraUsageDescription
+- NSPhotoLibraryUsageDescription
+- NSPhotoLibraryAddUsageDescription
+- NSMicrophoneUsageDescription
+
+Do not just check the file in the repo.
+Confirm the actual active target plist that Xcode builds contains them.
+
+3. CHECK WHETHER THE IOS PROJECT WAS EVER RE-SYNCED
+If the plist or native project was changed in source but not synced/rebuilt properly, fix that.
+
+Audit whether we need:
+- npx cap sync ios
+- ios project regeneration/update
+- pod install if needed
+- clean build folder
+- reinstall app on device
+
+4. VERIFY THE FINAL APP BUNDLE
+I want you to verify that after the fix, the built app bundle really contains NSCameraUsageDescription.
+
+If useful, inspect the built app / processed plist for the running build product instead of only the source plist.
+
+5. LOOK FOR MULTIPLE TARGET / CONFIG MISMATCHES
+Possible causes:
+- wrong plist edited
+- build target points elsewhere
+- generated plist overwriting source
+- stale installed app
+- debug config using different plist than expected
+- app extension target confusion
+
+Find the exact one.
+
+6. DO NOT CHANGE THE CAMERA JS FLOW YET
+The crash is still at the iOS privacy-policy layer.
+Until the plist issue is truly fixed in the binary, JS-side camera flow changes are not the main problem.
+Keep focus on getting the native permission strings into the compiled app.
+
+7. AFTER FIXING, GIVE ME EXACT STEPS I NEED TO DO
+Tell me exactly what I need to do in order:
+- whether to run cap sync
+- whether to reopen Xcode
+- whether to Clean Build Folder
+- whether to delete app from device
+- whether to rebuild/reinstall
+
+I want the precise workflow so I stop testing an old/stale build.
+
+SUCCESS CRITERIA
+After your fix and rebuild:
+- tapping “Take Photo or Video” does NOT crash
+- iOS shows camera permission prompt
+- camera opens
+- captured image returns to upload modal
+
+DELIVERABLES
+1. Identify exact plist/build-target mismatch or stale native issue
+2. Fix the active iOS target so permission keys are included
+3. Confirm NSCameraUsageDescription exists in the actual built target
+4. Give exact rebuild/reinstall steps I should do next
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- exact active plist path used by Xcode
+- files changed
+- whether the issue was wrong plist, stale build, multiple configs, or sync failure
+- exact steps I should follow in Xcode/device testing
