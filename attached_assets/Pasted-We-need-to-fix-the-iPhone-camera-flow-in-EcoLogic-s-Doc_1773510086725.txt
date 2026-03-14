@@ -1,0 +1,149 @@
+We need to fix the iPhone camera flow in EcoLogic’s Documents upload so taking a photo works natively and inserts the image back into the app instead of crashing.
+
+ISSUE
+On iPhone/native build, when I tap:
+- Take Photo or Video
+
+the app crashes.
+
+GOAL
+Make the native iPhone camera work properly so a user can:
+1. tap “Take Photo or Video”
+2. open the actual iPhone camera
+3. take a picture
+4. return to EcoLogic
+5. have that image attached in the Upload Document flow
+6. upload it normally into the selected folder
+
+DESIRED BEHAVIOR
+Inside the Upload Document modal:
+- user taps file picker area
+- action sheet appears:
+  - Photo Library
+  - Take Photo or Video
+  - Choose File
+- if user taps Take Photo or Video:
+  - native camera opens successfully
+  - no crash
+  - after capture, file/image is returned to the modal
+  - upload area reflects chosen file
+  - user can tap Upload and save it into the folder
+
+IMPORTANT
+This is specifically about the native iPhone / Capacitor / iOS wrapper flow.
+Fix the actual native camera integration, not just web fallback.
+
+WHAT TO DEBUG
+
+1. FIND THE ROOT CAUSE OF THE CRASH
+Audit the full native camera path for iPhone:
+- upload modal action sheet handler
+- native bridge/plugin call
+- Capacitor camera integration if used
+- permissions flow
+- iOS Info.plist usage descriptions
+- returned image/file format handling
+- conversion from native result → file/blob for upload
+- modal state update after capture
+
+Likely failure areas:
+- missing iOS camera permission string in Info.plist
+- missing photo library add/read usage description
+- wrong Capacitor Camera resultType / source config
+- plugin not available in native build
+- app trying to use web file input path for native camera source
+- returned URI/file not converted correctly into upload payload
+- crash when modal state tries to use invalid file object
+- unsupported media path from camera response
+
+Find the exact root cause and fix it properly.
+
+2. VERIFY IOS PERMISSIONS
+Check iOS native config carefully.
+If needed, ensure proper usage strings exist for:
+- camera access
+- photo library access
+- saving/reading captured media
+
+Make sure the app asks for permission correctly and does not crash if permission is denied.
+
+3. IMPLEMENT A WORKING NATIVE CAMERA FLOW
+Preferred behavior:
+- use native camera on iPhone
+- capture image
+- convert result into something the upload flow can handle cleanly
+- show selected preview/filename in Upload Document modal
+- upload into current folder like any other chosen file
+
+If video support is harder, prioritize photo capture first.
+Main priority is: TAKE A PICTURE and put it into the app.
+
+4. KEEP PHOTO LIBRARY + CHOOSE FILE WORKING
+Do not break the other two options:
+- Photo Library
+- Choose File
+
+All three options should work correctly.
+
+5. HANDLE RETURNED FILE CLEANLY
+After taking a picture:
+- file should appear as selected in the upload modal
+- upload button should enable properly
+- document name can auto-fill from filename if your current UX does that, or stay blank if intentional
+- upload target folder should remain correct
+
+6. DO NOT KICK USER OUT OF FLOW
+User should not lose modal state after taking a photo.
+After camera capture:
+- come back into EcoLogic
+- still in Upload Document flow
+- selected folder still correct
+- selected image ready to upload
+
+7. ERROR HANDLING
+If camera permission is denied or capture fails:
+- do not crash
+- show a clean error message
+- keep the modal usable
+- user can still choose Photo Library or Choose File
+
+8. CHECK BOTH ROOT + SUBFOLDER UPLOADS
+Make sure this works when uploading:
+- at documents root
+- inside a subfolder
+
+9. NATIVE FIRST, WEB SAFE
+For web preview:
+- keep sane fallback behavior
+For native iPhone:
+- use proper native camera path
+
+10. TEST IMAGE TYPES / UPLOAD PIPELINE
+Make sure captured photo:
+- uploads successfully
+- appears in the current folder
+- opens in the new in-app preview viewer
+- can be deleted/downloaded normally afterward
+
+SUCCESS CRITERIA
+- tapping Take Photo or Video no longer crashes
+- iPhone camera opens
+- user can take a photo
+- app returns to Upload Document modal
+- captured image is attached
+- upload succeeds into selected folder
+- document can then be viewed in-app
+
+DELIVERABLES
+1. Fix iPhone native camera crash
+2. Implement working take-photo → attach-to-upload flow
+3. Keep Photo Library and Choose File working
+4. Add proper permission handling and graceful failure states
+5. Preserve selected folder/upload flow
+
+WHEN DONE REPORT BACK WITH
+- exact root cause
+- files changed
+- whether the fix involved Capacitor/native config, frontend handling, or both
+- what iOS permission keys were added/changed
+- what you tested manually on native iPhone
