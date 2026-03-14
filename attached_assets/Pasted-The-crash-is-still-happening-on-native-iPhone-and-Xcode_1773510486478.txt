@@ -1,0 +1,78 @@
+The crash is still happening on native iPhone, and Xcode confirms the app bundle still does not have the camera privacy usage description available at runtime.
+
+IMPORTANT EVIDENCE
+Xcode says:
+“This app has crashed because it attempted to access privacy-sensitive data without a usage description. The app's Info.plist must contain an NSCameraUsageDescription key...”
+
+So this is no longer a JS-side mystery.
+This means the native app currently installed/running on device does NOT actually include the required camera permission keys in the final built bundle.
+
+GOAL
+Make sure the iOS native app bundle truly contains the camera/photo permission strings and that the upload flow works after a proper native rebuild.
+
+WHAT TO DO
+
+1. VERIFY THE CORRECT INFO.PLIST FILE
+Do not assume the file you edited is the one Xcode is actually using.
+Audit the iOS project and confirm the active target’s real Info.plist path.
+
+Check:
+- ios/App/App/Info.plist
+- Xcode target build settings → Info.plist File
+- whether there are multiple plist files
+- whether a generated plist is overriding the edited one
+
+I want the exact plist file used by the running iOS target.
+
+2. CONFIRM THE KEYS EXIST IN THE ACTIVE TARGET
+Make sure the actual target plist contains these keys with string values:
+- NSCameraUsageDescription
+- NSPhotoLibraryUsageDescription
+- NSPhotoLibraryAddUsageDescription
+- NSMicrophoneUsageDescription
+
+Do not just say they exist in the repo — confirm they exist in the plist for the active build target.
+
+3. RE-SYNC / REBUILD THE NATIVE PROJECT
+This is likely a stale native build issue.
+
+Please do the proper native refresh process so the updated plist is actually baked into the app:
+- sync Capacitor/native project if needed
+- ensure ios project files are updated
+- rebuild the iOS app fully
+- do not rely on hot reload/live reload for this
+- the app likely needs a fresh native build/install
+
+4. CHECK FOR MULTIPLE APP TARGETS / CONFIGS
+Verify there isn’t another target/configuration using a different plist:
+- Debug vs Release plist differences
+- App target vs extension target
+- duplicate plist file in project navigator
+- stale copied plist in build output
+
+5. GIVE ME THE EXACT XCODE STEP I NEED TO DO
+After you verify/fix it, tell me the exact steps I need to perform in Xcode/native testing so I’m not still running an old build.
+
+For example, whether I need to:
+- re-run sync
+- clean build folder
+- uninstall app from simulator/device
+- rebuild and reinstall
+
+6. DO NOT CHANGE THE EXISTING UPLOAD FLOW UNLESS NEEDED
+The JS/web upload flow already sounds correct.
+This task is mainly about making the native iOS camera permission path truly present in the final app bundle.
+
+7. SUCCESS CRITERIA
+After the rebuild:
+- tapping “Take Photo or Video” does NOT crash
+- iOS camera permission prompt appears
+- camera opens
+- captured image returns to upload modal
+- upload works normally
+
+WHEN DONE REPORT BACK WITH
+- exact plist file used by the active iOS target
+- whether the problem was stale native build, wrong plist, or multiple targets/configs
+- exact rebuild/sync steps I need to do
+- confirmation that NSCameraUsageDescription is present in the final active target config
