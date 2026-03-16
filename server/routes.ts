@@ -2209,11 +2209,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Set PaymentRefNum for de-duplication: prefer check number, then Stripe PaymentIntent ID
+      // QBO enforces a strict 21-character max on PaymentRefNum — truncate to the LAST 21 chars
+      // (the tail of Stripe PI IDs has the highest entropy and remains unique per payment)
       if (paymentRecord.checkNumber) {
-        qboPaymentData.PaymentRefNum = paymentRecord.checkNumber;
+        qboPaymentData.PaymentRefNum = String(paymentRecord.checkNumber).slice(0, 21);
       } else if (paymentRecord.stripePaymentIntentId) {
-        // Use Stripe PaymentIntent ID as reference for de-duplication
-        qboPaymentData.PaymentRefNum = paymentRecord.stripePaymentIntentId;
+        const piId = paymentRecord.stripePaymentIntentId;
+        qboPaymentData.PaymentRefNum = piId.length > 21 ? piId.slice(-21) : piId;
+        console.log(`[QB-PAY] PaymentRefNum set (truncated to 21): "${qboPaymentData.PaymentRefNum}" (original: "${piId}")`);
       }
 
       // Add private note with EcoLogic payment info for audit trail
@@ -2286,12 +2289,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!createResponse.ok) {
         const errorText = await createResponse.text();
         console.error('[QB-PAY] Payment creation failed status=' + createResponse.status + ':', errorText);
-        // Store up to 500 chars of the actual QB error body for diagnosis
+        // Store the QBO Detail (specific fault) AND Message for diagnosis
         let errorDetail = `QBO API error: ${createResponse.status}`;
         try {
           const parsed = JSON.parse(errorText);
-          const msg = parsed?.Fault?.Error?.[0]?.Message || parsed?.Fault?.Error?.[0]?.Detail || errorText;
-          errorDetail = `QBO ${createResponse.status}: ${String(msg).substring(0, 450)}`;
+          const faultErr = parsed?.Fault?.Error?.[0];
+          // Detail is the specific failure reason; Message is generic — prefer Detail
+          const specific = faultErr?.Detail || faultErr?.Message || errorText;
+          errorDetail = `QBO ${createResponse.status}: ${String(specific).substring(0, 450)}`;
+          if (faultErr?.Detail && faultErr?.Message) {
+            console.error(`[QB-PAY] Fault Message: ${faultErr.Message} | Detail: ${faultErr.Detail}`);
+          }
         } catch {
           errorDetail = `QBO ${createResponse.status}: ${errorText.substring(0, 450)}`;
         }
@@ -2762,7 +2770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
           body: JSON.stringify({
             CustomerRef: { value: qboCustomerId },
-            DocNumber: invoice.invoiceNumber,
+            DocNumber: invoice.invoiceNumber?.slice(0, 21),
             TxnDate: invoice.issueDate,
             DueDate: invoice.dueDate,
             Line: qboLines,

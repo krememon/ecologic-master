@@ -1,0 +1,96 @@
+QuickBooks still is NOT reliably showing Stripe-paid invoices as paid. The previous fix was not enough.
+
+CURRENT OBSERVATION
+After another Stripe payment test, QuickBooks still does not consistently show the invoice as paid on the QuickBooks side.
+
+So we need to stop assuming the sync is fixed and trace the exact live failure on this new test case.
+
+GOAL
+Make a Stripe-paid EcoLogic invoice actually show as PAID in QuickBooks, not just succeed in Stripe/EcoLogic.
+
+IMPORTANT
+Do NOT give me another theory-only answer.
+Trace the exact invoice/payment from this latest failed test end to end and identify the real broken step.
+
+WHAT TO DO
+
+1) TRACE THIS EXACT FAILED PAYMENT
+For the latest Stripe-paid invoice that still is not showing paid in QuickBooks, inspect:
+- EcoLogic invoice id
+- QuickBooks invoice id / DocNumber
+- Stripe payment/paymentIntent id
+- EcoLogic payment id
+- qboInvoiceId
+- qboPaymentId
+- qboPaymentSyncStatus
+- qbo sync error field/body
+- company id
+
+2) VERIFY WHAT ACTUALLY HAPPENED
+For this exact payment, determine which of these is true:
+- syncPaymentToQbo was never called
+- syncPaymentToQbo was called and failed
+- QuickBooks payment was created but not applied to the invoice
+- payment was applied to the wrong invoice
+- invoice was not yet in QuickBooks when payment sync ran
+- sync was skipped due to a guard/idempotency condition
+- retry job still did not recover it
+
+3) CHECK THE REAL QUICKBOOKS RESPONSE
+Do not summarize vaguely.
+Capture the actual QuickBooks API request/response for this failed Stripe payment sync, including:
+- endpoint called
+- payload sent
+- error body returned
+- whether QuickBooks rejected amount/application/customer linkage
+
+4) COMPARE AGAINST CASH/CHECK
+Take one working cash/check payment that DOES mark paid in QuickBooks and compare it against this Stripe case:
+- same invoice mapping?
+- same customer mapping?
+- same payment apply payload?
+- same timing/order?
+- same status fields?
+
+We need the exact difference.
+
+5) VERIFY IF THE PAYMENT IS BEING CREATED AS A PAYMENT OBJECT AT ALL
+Check whether QuickBooks now has:
+- no payment object
+- payment object not linked to invoice
+- payment object linked incorrectly
+- duplicate payment attempt blocked
+
+6) FIX THE REAL ISSUE
+Based on the above, implement the actual fix.
+Possible classes of real fix:
+- payment sync called too early before qboInvoiceId exists
+- retry path not chaining invoice-sync-first then payment-sync
+- Stripe path missing required apply-to-invoice data
+- QuickBooks Payment create payload wrong for Stripe
+- invoice/customer reference mismatch
+- idempotency guard incorrectly skipping unsynced Stripe payments
+
+7) ADD TARGETED LOGS
+Add concise logs for this exact flow:
+- stripe payment success
+- qboInvoiceId presence
+- qbo sync start
+- qbo payload summary
+- qbo response
+- qboPaymentId written or not
+- skip reason if skipped
+
+8) GIVE ME A FACTUAL RESULT
+Return:
+1. exact invoice/payment IDs checked
+2. exact failure point for THIS latest Stripe test
+3. exact QuickBooks error/response
+4. exact files changed
+5. exact fix applied
+6. confirmation after retest whether the same invoice now shows paid in QuickBooks
+
+SUCCESS CRITERIA
+- the latest Stripe-paid invoice actually shows as paid in QuickBooks
+- no vague “should work now”
+- clear evidence of the real broken link and real fix
