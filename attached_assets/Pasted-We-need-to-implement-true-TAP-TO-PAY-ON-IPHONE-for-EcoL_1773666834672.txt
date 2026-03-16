@@ -1,0 +1,69 @@
+We need to implement true TAP TO PAY ON IPHONE for EcoLogic using Stripe Terminal, not just Apple Pay in web checkout.
+
+GOAL
+Allow EcoLogic users (techs/owners) to accept in-person contactless payments directly on their iPhone inside the EcoLogic app, using Tap to Pay on iPhone.
+
+IMPORTANT
+This is NOT the same as Apple Pay in web checkout.
+This must be built as a native in-person payment flow using Stripe Terminal’s iOS/native integration path.
+
+WHAT TO DO
+
+1) AUDIT CURRENT PAYMENT ARCHITECTURE
+Determine exactly what EcoLogic currently uses:
+- web Stripe checkout / Payment Element
+- wrapper/native shell
+- Capacitor/native bridge
+- any existing native Stripe SDK usage
+
+2) DETERMINE THE BEST TAP TO PAY PATH
+Figure out whether EcoLogic should implement:
+- Stripe Terminal iOS SDK directly
+- Stripe Terminal React Native SDK
+- a Capacitor/native bridge to Stripe Terminal if the app is wrapper-based
+
+Do NOT guess. Choose the path that actually fits the current app architecture.
+
+3) DESIGN THE ECOLOGIC UX
+Add a separate in-person flow such as:
+- “Collect in Person”
+- “Tap to Pay”
+- amount shown in-app
+- launch Tap to Pay sheet
+- customer taps card / Apple Pay / wallet to the iPhone
+
+This should be separate from the normal invoice web checkout flow.
+
+4) TERMINAL BACKEND SUPPORT
+Check what backend pieces are needed for Stripe Terminal:
+- connection token endpoint
+- location handling
+- reader discovery / tap to pay initiation
+- payment intent creation/confirmation for in-person payments
+- connected account routing if needed
+
+5) CONNECTED ACCOUNT / STRIPE ROUTING
+Make sure in-person Tap to Pay payments still route to the correct business/connected account in EcoLogic.
+
+6) REQUIREMENTS / SETUP
+Identify exactly what is required for:
+- Apple Tap to Pay entitlement
+- Stripe Terminal enablement
+- supported iPhone/iOS requirements
+- any Stripe account configuration needed
+
+7) DO NOT BREAK EXISTING FLOWS
+Keep existing web invoice payments intact:
+- card checkout
+- Apple Pay web if enabled
+- QuickBooks sync
+- payment history
+- refunds
+
+8) DELIVERABLES
+Return:
+1. recommended implementation path for EcoLogic’s current architecture
+2. exact files/native modules/endpoints that need to be added
+3. any Apple/Stripe account setup still required
+4. phased implementation plan for shipping Tap to Pay
+5. confirmation whether this can be done in the current wrapper architecture or requires a native bridge/module
