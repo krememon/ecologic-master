@@ -30,6 +30,7 @@ export default function QuickBooksSettings() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   
@@ -88,8 +89,31 @@ export default function QuickBooksSettings() {
     },
   });
 
-  const handleConnect = () => {
-    window.location.href = '/api/integrations/quickbooks/connect';
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      // Fetch the OAuth URL via an authenticated API call so the Bearer token
+      // (mobile) or session cookie (web) is attached automatically. Then
+      // navigate to the returned URL — avoiding a raw browser navigation to a
+      // protected backend route, which fails on mobile because Bearer tokens
+      // are not included in window.location navigations.
+      console.log('[QB] connect tapped — fetching OAuth URL');
+      const res = await apiRequest('GET', '/api/integrations/quickbooks/connect-url');
+      const data = await res.json();
+      if (!data?.url) {
+        throw new Error('No OAuth URL returned');
+      }
+      console.log('[QB] OAuth URL received, navigating');
+      window.location.href = data.url;
+    } catch (error: any) {
+      console.error('[QB] Failed to start QuickBooks connect:', error);
+      setIsConnecting(false);
+      toast({
+        title: 'Connection Failed',
+        description: 'Could not start QuickBooks connection. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDisconnect = async () => {
@@ -254,9 +278,13 @@ export default function QuickBooksSettings() {
                 payments, and customer data.
               </p>
               
-              <Button onClick={handleConnect} className="bg-green-600 hover:bg-green-700">
-                <img src={quickbooksLogo} alt="QuickBooks" className="w-5 h-5 mr-2 object-contain" />
-                Connect QuickBooks
+              <Button onClick={handleConnect} disabled={isConnecting} className="bg-green-600 hover:bg-green-700">
+                {isConnecting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <img src={quickbooksLogo} alt="QuickBooks" className="w-5 h-5 mr-2 object-contain" />
+                )}
+                {isConnecting ? 'Connecting...' : 'Connect QuickBooks'}
               </Button>
             </div>
           )}

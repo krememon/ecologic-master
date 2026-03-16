@@ -2359,7 +2359,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/integrations/quickbooks/connect - Initiate OAuth flow
+  // GET /api/integrations/quickbooks/connect-url - Return OAuth URL as JSON (for mobile/native Bearer-token auth)
+  app.get('/api/integrations/quickbooks/connect-url', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      if (!QB_CLIENT_ID || !QB_REDIRECT_URI) {
+        return res.status(500).json({ error: 'QuickBooks integration not configured' });
+      }
+      const state = createQboState(member.companyId);
+      console.log('[QB] connect-url: generating OAuth URL for companyId:', member.companyId);
+      const authUrl = new URL(QB_AUTH_BASE);
+      authUrl.searchParams.set('client_id', QB_CLIENT_ID);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', 'com.intuit.quickbooks.accounting');
+      authUrl.searchParams.set('redirect_uri', QB_REDIRECT_URI);
+      authUrl.searchParams.set('state', state);
+      res.json({ url: authUrl.toString() });
+    } catch (error: any) {
+      console.error('[QB] Error generating connect URL:', error);
+      res.status(500).json({ error: 'Failed to generate QuickBooks connect URL' });
+    }
+  });
+
+  // GET /api/integrations/quickbooks/connect - Initiate OAuth flow (web: session-cookie redirect)
   app.get('/api/integrations/quickbooks/connect', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

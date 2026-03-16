@@ -1,0 +1,104 @@
+We need to fix QuickBooks Connect on MOBILE/NATIVE.
+
+BUG
+When I tap Connect QuickBooks on my phone in EcoLogic, I get a black screen with raw JSON:
+
+{"ok":false,"code":"UNAUTHENTICATED", ...}
+
+So the QuickBooks connect flow is failing auth on mobile/native instead of starting the OAuth connection flow properly.
+
+GOAL
+Tapping Connect QuickBooks on mobile/native should correctly launch the QuickBooks OAuth flow, not show a raw unauthenticated JSON response.
+
+IMPORTANT
+This is likely a mobile/native auth handoff issue.
+Do NOT assume QuickBooks itself is broken.
+The likely problem is that the mobile/native connect request is hitting a backend route that expects session-cookie auth, but mobile/native is not sending the same auth context.
+
+DO NOT BREAK
+- existing web QuickBooks connect flow if it works
+- normal app auth
+- other OAuth integrations
+- QuickBooks callback/storage logic
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE EXACT QUICKBOOKS CONNECT FLOW
+Find:
+- the frontend button/action used when tapping “Connect” for QuickBooks
+- the exact URL/route it opens on mobile
+- whether it uses:
+  - window.location
+  - Browser.open / Capacitor browser
+  - in-app webview
+  - fetch before redirect
+- the backend route that starts QuickBooks OAuth
+
+2) IDENTIFY THE AUTH EXPECTATION
+Inspect the backend route that starts QuickBooks connect.
+Determine whether it expects:
+- session cookie auth
+- bearer token auth
+- req.user from session
+- mobile auth headers
+
+Confirm why the route is returning:
+- `UNAUTHENTICATED`
+
+3) FIX MOBILE/NATIVE AUTH HANDOFF
+Make the QuickBooks connect flow work correctly on native/mobile.
+
+Possible valid fixes include:
+- generating the connect URL from an authenticated API request first, then opening the returned OAuth URL
+- passing auth through the mobile API layer instead of directly opening a protected backend route
+- using bearer-token-authenticated endpoint for mobile to bootstrap the QuickBooks OAuth session/state
+- making the backend start route support the mobile auth path correctly
+
+Do NOT just suppress the error.
+We need the actual connect flow to work.
+
+4) HANDLE UNAUTHENTICATED CLEANLY
+Even if auth fails, the user should never see raw JSON on a black screen.
+Add graceful behavior:
+- redirect back into app
+- show a proper error screen/toast
+- or require re-auth cleanly
+
+5) VERIFY CALLBACK / RETURN FLOW
+After starting QuickBooks OAuth from mobile:
+- user should authenticate with QuickBooks
+- callback should complete correctly
+- connection state should update in EcoLogic
+- user should return cleanly to the app
+
+6) CHECK WEB VS MOBILE DIFFERENCE
+Compare why web works and mobile fails:
+- session cookie present on web?
+- bearer token only on mobile?
+- Browser.open losing cookies?
+- protected GET route being opened directly in mobile?
+
+7) ADD TARGETED LOGS
+Add concise logs only where useful:
+- mobile quickbooks connect tapped
+- route hit
+- auth mode detected (session vs bearer)
+- user/company resolved or not
+- OAuth init URL generated
+- callback success/failure
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact route that was returning UNAUTHENTICATED
+3. root cause of why mobile QuickBooks connect failed
+4. what was changed to make mobile auth handoff work
+5. confirmation that mobile now starts QuickBooks OAuth instead of showing raw JSON
+
+SUCCESS CRITERIA
+- tapping Connect QuickBooks on phone starts the real QuickBooks OAuth flow
+- no raw UNAUTHENTICATED JSON appears
+- callback returns cleanly
+- QuickBooks connection succeeds on mobile/native
