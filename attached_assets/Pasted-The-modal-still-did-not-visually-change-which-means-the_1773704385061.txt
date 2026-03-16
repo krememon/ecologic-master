@@ -1,0 +1,49 @@
+The modal still did not visually change, which means the previous edit likely hit the wrong component, the wrong variant, or a wrapper style is overriding it.
+
+Fix the actual Delete Job modal that is rendering on the Job Details screen.
+
+What to do:
+1. Find the exact delete confirmation modal triggered from the 3-dot menu on the Job Details page for a job like /jobs/772.
+2. Trace from the actual Delete button click handler all the way to the rendered modal component.
+3. Confirm you are editing the exact rendered component, not a shared AlertDialog variant that is not actually being used here.
+4. Add a temporary obvious debug marker to prove you found the correct modal:
+   - change title from "Delete Job" to "Delete Job TEST"
+   - once confirmed, change it back to "Delete Job"
+5. If styles are being overridden by shared AlertDialogContent classes, remove the shared wrapper for this modal and render a custom modal content block for this specific delete dialog.
+6. Make the modal match this exact visual direction from the 2nd screenshot:
+   - compact centered white card
+   - max width around 320px on mobile
+   - rounded corners around 28px
+   - tighter vertical spacing
+   - centered title
+   - centered description text with the actual job name
+   - full-width red Delete button
+   - full-width light gray Cancel button
+   - equal button widths
+   - subtle shadow
+7. Use explicit classes directly on the rendered modal content and buttons so nothing relies on inherited defaults.
+8. Do not leave any default AlertDialogHeader / AlertDialogFooter layout if that is causing the old appearance.
+9. Do not change delete logic.
+10. After changing it, verify visually that:
+   - the modal is shorter/cleaner
+   - buttons are vertically stacked
+   - corners are much rounder
+   - copy includes the job name
+   - the old tall modal is gone
+
+Implementation guidance:
+- If needed, replace the current content section with a custom structure like:
+  - AlertDialogContent with explicit className
+  - custom div for title/body
+  - custom div for actions
+- Make sure no shared class like max-w-lg, p-6, or footer flex-row is still applying.
+- Search for:
+  - "Delete Job"
+  - "Are you sure you want to delete this job?"
+  - the delete mutation / deleteJob handler
+  - AlertDialogContent usage on the Job Details page
+
+Deliverables:
+- exact file where the real Delete Job modal lives
+- exact component updated
+- concise summary of why the first attempt did not affect the visible modal

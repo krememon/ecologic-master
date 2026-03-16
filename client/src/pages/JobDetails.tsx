@@ -8,7 +8,8 @@ import { useCan } from "@/hooks/useCan";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog } from "@/components/ui/alert-dialog";
+import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus } from "lucide-react";
@@ -1476,27 +1477,30 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="max-w-[310px] rounded-[28px] p-0 overflow-hidden border-0 shadow-2xl gap-0">
-          <div className="px-6 pt-7 pb-5 text-center">
-            <AlertDialogTitle className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 mb-2 leading-snug">
-              Delete Job
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Are you sure you want to delete{job?.title ? <> &ldquo;{job.title}&rdquo;</> : " this job"}? This action cannot be undone.
-            </AlertDialogDescription>
-          </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 px-5 pb-5 pt-4 flex flex-col gap-2.5">
-            <AlertDialogAction
-              onClick={() => deleteJobMutation.mutate()}
-              className="w-full h-[46px] rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-[15px] font-semibold transition-colors shadow-none border-0"
-            >
-              Delete
-            </AlertDialogAction>
-            <AlertDialogCancel className="w-full h-[46px] rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 text-[15px] font-medium border-0 transition-colors mt-0 shadow-none">
-              Cancel
-            </AlertDialogCancel>
-          </div>
-        </AlertDialogContent>
+        <AlertDialogPrimitive.Portal>
+          <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <AlertDialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[310px] bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <div className="px-6 pt-7 pb-5 text-center">
+              <AlertDialogPrimitive.Title className="text-[17px] font-semibold text-slate-900 dark:text-slate-100 mb-2 leading-snug">
+                Delete Job
+              </AlertDialogPrimitive.Title>
+              <AlertDialogPrimitive.Description className="text-[13.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Are you sure you want to delete{job?.title ? <> &ldquo;{job.title}&rdquo;</> : " this job"}? This action cannot be undone.
+              </AlertDialogPrimitive.Description>
+            </div>
+            <div className="border-t border-slate-100 dark:border-slate-800 px-5 pb-5 pt-4 flex flex-col gap-2.5">
+              <AlertDialogPrimitive.Action
+                onClick={() => deleteJobMutation.mutate()}
+                className="w-full h-[46px] rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-[15px] font-semibold transition-colors"
+              >
+                Delete
+              </AlertDialogPrimitive.Action>
+              <AlertDialogPrimitive.Cancel className="w-full h-[46px] rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 text-[15px] font-medium transition-colors">
+                Cancel
+              </AlertDialogPrimitive.Cancel>
+            </div>
+          </AlertDialogPrimitive.Content>
+        </AlertDialogPrimitive.Portal>
       </AlertDialog>
 
       {/* Image Preview Modal */}
