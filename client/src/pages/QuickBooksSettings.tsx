@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, CheckCircle2, XCircle, Zap } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle2, XCircle, Zap, RefreshCw } from "lucide-react";
 import quickbooksLogo from "@/assets/logos/quickbooks-transparent.png";
 import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -339,6 +339,23 @@ export default function QuickBooksSettings() {
     });
   };
 
+  const retryMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/integrations/quickbooks/retry-unsynced-payments"),
+    onSuccess: (data: any) => {
+      if (data.triggered === 0) {
+        toast({ title: "All payments already synced", description: "No unsynced payments were found." });
+      } else {
+        toast({
+          title: "Payment sync started",
+          description: `Syncing ${data.triggered} payment${data.triggered !== 1 ? "s" : ""} to QuickBooks.`,
+        });
+      }
+    },
+    onError: () => {
+      toast({ title: "Sync failed", description: "Could not start payment sync. Please try again.", variant: "destructive" });
+    },
+  });
+
   if (authLoading || statusLoading || !hasPermission) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -439,6 +456,25 @@ export default function QuickBooksSettings() {
                   </span>
                 )}
               </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => retryMutation.mutate()}
+                disabled={retryMutation.isPending}
+              >
+                {retryMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Sync Unsynced Payments
+                  </>
+                )}
+              </Button>
 
               <Button
                 variant="outline"

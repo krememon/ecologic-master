@@ -50,7 +50,7 @@ import {
   type DocumentVisibility
 } from "../shared/documentPermissions";
 import { db } from "./db";
-import { eq, and, or, lt, gt, sql, desc, ilike, inArray, isNull } from "drizzle-orm";
+import { eq, and, or, lt, gt, sql, desc, ilike, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import Stripe from "stripe";
 import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents, jobReferrals, subcontractPayoutAudit, paymentSignatures as paymentSignaturesTable } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
@@ -2842,6 +2842,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('[QB] Error in sync endpoint:', error);
       res.status(500).json({ error: 'Failed to sync invoice' });
+    }
+  });
+
+  // POST /api/integrations/quickbooks/retry-unsynced-payments — retry all unsynced Stripe payments for the company
+  app.post('/api/integrations/quickbooks/retry-unsynced-payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ error: 'Not a company member' });
+      if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
+
+      const companyId = member.companyId;
+      const company = await storage.getCompany(companyId);
+      if (!company?.qboRealmId) return res.status(400).json({ error: 'QuickBooks not connected' });
+
+      const unsyncedRows = await db
+        .select({ id: payments.id, qboPaymentSyncStatus: payments.qboPaymentSyncStatus })
+        .from(payments)
+        .where(and(
+          eq(payments.companyId, companyId),
+          eq(payments.status, 'succeeded'),
+          isNull(payments.qboPaymentId),
+          or(isNull(payments.qboPaymentSyncStatus), eq(payments.qboPaymentSyncStatus, 'waiting'))
+        ))
+        .limit(50);
+
+      console.log(`[QB-PAY] retry-unsynced companyId=${companyId} found=${unsyncedRows.length}`);
+
+      let triggered = 0;
+      for (const p of unsyncedRows) {
+        if (p.qboPaymentSyncStatus !== 'syncing') {
+          triggered++;
+          syncPaymentToQbo(p.id, companyId)
+            .then(r => console.log(`[QB-PAY] retry paymentId=${p.id} success=${r.success} ref=${r.qboPaymentId || r.error}`))
+            .catch(err => console.error(`[QB-PAY] retry paymentId=${p.id} error:`, err));
+        }
+      }
+
+      res.json({ triggered, total: unsyncedRows.length });
+    } catch (error: any) {
+      console.error('[QB-PAY] retry-unsynced error:', error);
+      res.status(500).json({ error: 'Failed to retry payment sync' });
     }
   });
 
@@ -10986,6 +11028,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         sendReceiptForPayment(matchedPayment.id).catch(err =>
           console.error('[receipt] stripe-confirm error:', err?.message));
+
+        // Trigger QB payment sync — in-app PaymentElement path
+        const confirmCompanyId = (matchedPayment as any).companyId || inv?.companyId;
+        if (confirmCompanyId) {
+          console.log(`[QB-PAY] stripe-confirm upgrade paymentId=${matchedPayment.id} companyId=${confirmCompanyId}`);
+          syncPaymentToQbo(matchedPayment.id, confirmCompanyId)
+            .then(r => console.log(`[QB-PAY] stripe-confirm paymentId=${matchedPayment.id} success=${r.success} qboId=${r.qboPaymentId || r.error}`))
+            .catch(err => console.error('[QB-PAY] stripe-confirm sync error:', err));
+        }
       } else if (matchedPayment.status === 'succeeded') {
         // Safety net: payment already succeeded — payout may have been skipped due to race condition or referral status bug.
         // executeSubcontractPayout is fully idempotent (checkExistingPayout prevents duplicate transfers).
@@ -11002,6 +11053,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             source: "stripe-confirm-safetynet",
             chargeId: confirmChargeId,
           }).catch(err => console.error('[SubPayExec] stripe-confirm-safetynet error:', err?.message));
+        }
+
+        // QB sync safety-net: ensures already-succeeded payments are synced if missed the first time
+        const safeCompanyId = (matchedPayment as any).companyId || inv?.companyId;
+        if (safeCompanyId && !(matchedPayment as any).qboPaymentId) {
+          syncPaymentToQbo(matchedPayment.id, safeCompanyId)
+            .then(r => { if (!r.success && r.error !== 'Already syncing in another process') console.log(`[QB-PAY] stripe-confirm-safetynet paymentId=${matchedPayment.id}: ${r.error}`); })
+            .catch(() => {});
         }
       }
 
@@ -18118,6 +18177,38 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       res.status(500).json({ error: 'Failed to fetch companies' });
     }
   });
+
+  // Periodic QB payment sync retry: every 15 min, retry unsynced succeeded payments
+  // where the invoice IS already in QBO and the company IS connected to QBO.
+  setInterval(async () => {
+    try {
+      const rows = await db
+        .select({ id: payments.id, companyId: payments.companyId, qboStatus: payments.qboPaymentSyncStatus })
+        .from(payments)
+        .innerJoin(invoices, eq(invoices.id, payments.invoiceId))
+        .innerJoin(companies, eq(companies.id, payments.companyId))
+        .where(and(
+          eq(payments.status, 'succeeded'),
+          isNull(payments.qboPaymentId),
+          isNotNull(companies.qboRealmId),
+          isNotNull(invoices.qboInvoiceId),
+          or(isNull(payments.qboPaymentSyncStatus), eq(payments.qboPaymentSyncStatus, 'waiting'))
+        ))
+        .limit(20);
+
+      if (rows.length > 0) {
+        console.log(`[QB-PAY] Periodic retry: found ${rows.length} unsynced payment(s)`);
+        for (const row of rows) {
+          if (row.qboStatus === 'syncing') continue;
+          syncPaymentToQbo(row.id, row.companyId)
+            .then(r => console.log(`[QB-PAY] Periodic retry paymentId=${row.id} success=${r.success} ref=${r.qboPaymentId || r.error}`))
+            .catch(err => console.error(`[QB-PAY] Periodic retry paymentId=${row.id} error:`, err));
+        }
+      }
+    } catch (err) {
+      console.error('[QB-PAY] Periodic retry scan error:', err);
+    }
+  }, 15 * 60 * 1000);
 
   // WebSocket server
   const httpServer = createServer(app);

@@ -1,0 +1,93 @@
+We need to fix QuickBooks payment sync because Stripe payment succeeded, but QuickBooks still shows the invoice as unpaid.
+
+BUG
+A customer paid $1,000 successfully through Stripe, but in QuickBooks the invoice still shows:
+- “Due in 30 days”
+- “Receive payment”
+
+So:
+- Stripe payment succeeded
+- QuickBooks invoice exists
+- but QuickBooks is NOT marking the invoice paid
+
+GOAL
+When a Stripe payment succeeds for an invoice that is synced to QuickBooks, QuickBooks should also show that invoice as PAID by recording/applying the payment correctly.
+
+IMPORTANT
+Do NOT confuse:
+- invoice sync
+with
+- payment sync
+
+The invoice is clearly being created in QuickBooks already.
+The bug is that the Stripe payment is not being reflected as a QuickBooks payment applied to that invoice.
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE FULL FLOW FOR A STRIPE PAID INVOICE
+For a normal invoice paid by Stripe, trace:
+- Stripe payment success path
+- EcoLogic payment record creation
+- QuickBooks invoice sync lookup
+- QuickBooks payment creation/apply step
+
+2) IDENTIFY WHETHER PAYMENT SYNC EXISTS
+Determine whether the current code:
+- creates only the invoice in QuickBooks
+- creates a QuickBooks payment object
+- links/applies the payment to the QuickBooks invoice
+- updates QuickBooks only for manual payments or not at all
+
+3) FIND THE EXACT MISSING/BROKEN STEP
+We need the exact broken link:
+- no QuickBooks payment creation at all
+- payment creation failed
+- payment created but not applied to invoice
+- wrong QuickBooks invoice id used
+- payment sync only runs on certain payment methods
+- Stripe success handler never triggers QuickBooks payment sync
+
+4) VERIFY SOURCE OF TRUTH FIELDS
+Check what IDs are stored for:
+- EcoLogic invoice
+- QuickBooks invoice id / doc number
+- Stripe payment id / charge id
+- QuickBooks customer id
+- any QuickBooks payment record id
+
+5) FIX QUICKBOOKS PAYMENT APPLICATION
+After successful Stripe payment, ensure QuickBooks receives the correct payment sync:
+- create/apply payment to the matching QuickBooks invoice
+- mark the invoice paid in QuickBooks
+- keep amount/customer/invoice mapping correct
+- avoid duplicates if webhook/retry happens
+
+6) MAKE IT IDEMPOTENT
+Do not create duplicate QuickBooks payments on retries/webhooks.
+Use a guard/check if the payment was already synced to QuickBooks.
+
+7) ADD TARGETED LOGS
+Add concise logs for:
+- Stripe payment success
+- QuickBooks sync started
+- invoice id mapping found
+- payment create/apply attempted
+- success/failure response from QuickBooks
+- duplicate guard triggered or not
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. whether QuickBooks invoice sync was already working
+3. exact reason QuickBooks payment sync was not marking invoice paid
+4. what was changed to create/apply the payment correctly
+5. confirmation that Stripe-paid invoices now show as paid in QuickBooks
+
+SUCCESS CRITERIA
+- Stripe payment succeeds
+- matching QuickBooks invoice is updated with an applied payment
+- QuickBooks no longer shows “Receive payment”
+- invoice displays as paid in QuickBooks
+- no duplicate QuickBooks payments are created
