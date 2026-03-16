@@ -15548,6 +15548,182 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  // ============ STRIPE TERMINAL (TAP TO PAY ON IPHONE) API ============
+  // These endpoints back the native Capacitor plugin (Phase 3).
+  // The plugin bridge exists in client/src/lib/terminalPlugin.ts and only
+  // activates when the Swift plugin is installed in the Xcode project.
+
+  // POST /api/payments/terminal/connection-token — Stripe Terminal connection token
+  app.post('/api/payments/terminal/connection-token', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: 'Stripe not configured' });
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: 'Company not found' });
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) return res.status(403).json({ message: 'Access denied' });
+
+      const token = await stripe.terminal.connectionTokens.create();
+      console.log(`[Terminal] Connection token created for companyId=${company.id}`);
+      res.json({ secret: token.secret });
+    } catch (err: any) {
+      console.error('[Terminal] Connection token error:', err.message);
+      res.status(500).json({ message: err.message || 'Failed to create connection token' });
+    }
+  });
+
+  // POST /api/payments/terminal/create-intent — Create Terminal PaymentIntent
+  app.post('/api/payments/terminal/create-intent', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: 'Stripe not configured' });
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: 'Company not found' });
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) return res.status(403).json({ message: 'Access denied' });
+
+      const { invoiceId: invoiceIdRaw, amountCents } = req.body;
+      if (!invoiceIdRaw || !amountCents) {
+        return res.status(400).json({ message: 'invoiceId and amountCents are required' });
+      }
+      const invoiceIdNum = parseInt(invoiceIdRaw);
+      const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceIdNum));
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: 'Invoice not found' });
+      }
+
+      // Connected account routing — same logic as web create-intent
+      let connectedAccountId: string | null = null;
+      if (invoice.jobId) {
+        const [job] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
+        if (job?.isSubcontractJob && job.referralId) {
+          const [referral] = await db.select().from(jobReferrals).where(eq(jobReferrals.id, job.referralId));
+          if (referral) {
+            const [receiverCompany] = await db.select().from(companies).where(eq(companies.id, referral.receiverCompanyId));
+            if (receiverCompany?.stripeAccountId) connectedAccountId = receiverCompany.stripeAccountId;
+          }
+        }
+      }
+
+      const piParams: any = {
+        amount: amountCents,
+        currency: 'usd',
+        payment_method_types: ['card_present'],
+        capture_method: 'automatic',
+        metadata: {
+          invoiceId: String(invoice.id),
+          companyId: String(company.id),
+          jobId: invoice.jobId ? String(invoice.jobId) : '',
+          source: 'terminal',
+        },
+      };
+      if (connectedAccountId) piParams.transfer_data = { destination: connectedAccountId };
+
+      const paymentIntent = await stripe.paymentIntents.create(piParams);
+
+      const [existingRow] = await db.select({ id: payments.id }).from(payments).where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+      if (!existingRow) {
+        await db.insert(payments).values({
+          companyId: company.id,
+          invoiceId: invoice.id,
+          jobId: invoice.jobId || null,
+          customerId: invoice.customerId || null,
+          amount: (amountCents / 100).toFixed(2),
+          amountCents,
+          paymentMethod: 'card',
+          status: 'processing',
+          stripePaymentIntentId: paymentIntent.id,
+          paidDate: null,
+        });
+      }
+
+      console.log(`[Terminal] Created PaymentIntent ${paymentIntent.id} invoiceId=${invoice.id} routing=${connectedAccountId ? `destination:${connectedAccountId}` : 'platform'}`);
+      res.json({ paymentIntentSecret: paymentIntent.client_secret, paymentIntentId: paymentIntent.id });
+    } catch (err: any) {
+      console.error('[Terminal] Create intent error:', err.message);
+      res.status(500).json({ message: err.message || 'Failed to create terminal payment intent' });
+    }
+  });
+
+  // POST /api/payments/terminal/confirm — Mark terminal payment succeeded, run full paid-invoice flow
+  app.post('/api/payments/terminal/confirm', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: 'Stripe not configured' });
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: 'Company not found' });
+
+      const { paymentIntentId, invoiceId: invoiceIdRaw } = req.body;
+      if (!paymentIntentId || !invoiceIdRaw) {
+        return res.status(400).json({ message: 'paymentIntentId and invoiceId are required' });
+      }
+      const invoiceIdNum = parseInt(invoiceIdRaw);
+
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (!pi || pi.status !== 'succeeded') {
+        return res.status(400).json({ message: `Payment not yet succeeded (status: ${pi?.status})` });
+      }
+      if (pi.metadata?.companyId && parseInt(pi.metadata.companyId) !== company.id) {
+        return res.status(403).json({ message: 'Payment intent does not belong to your company' });
+      }
+
+      const allPayments = await storage.getPaymentsByInvoiceId(invoiceIdNum);
+      let matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === paymentIntentId);
+      if (!matchedPayment) {
+        return res.status(404).json({ message: 'Payment record not found. Please try again in a moment.' });
+      }
+
+      if (matchedPayment.status === 'processing') {
+        await db.update(payments).set({ status: 'succeeded', paidDate: new Date() }).where(eq(payments.id, matchedPayment.id));
+        matchedPayment = { ...matchedPayment, status: 'succeeded' };
+        await persistRecomputedTotals(invoiceIdNum);
+
+        const [inv] = await db.select().from(invoices).where(eq(invoices.id, invoiceIdNum));
+        if (inv?.jobId) {
+          await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'terminal-confirm');
+          let chargeId: string | null = null;
+          try {
+            chargeId = pi.latest_charge
+              ? (typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge as any).id)
+              : null;
+          } catch {}
+          stripeConnectService.executeSubcontractPayout({
+            jobId: inv.jobId,
+            invoiceId: invoiceIdNum,
+            paymentId: matchedPayment.id,
+            paymentIntentId,
+            paymentAmountCents: matchedPayment.amountCents || Math.round(parseFloat(matchedPayment.amount) * 100),
+            ownerCompanyId: inv.companyId,
+            source: 'terminal-confirm',
+            chargeId,
+          }).catch(err => console.error('[Terminal] Subcontract payout error:', err?.message));
+        }
+
+        sendReceiptForPayment(matchedPayment.id)
+          .catch(err => console.error('[Terminal] Receipt error:', err?.message));
+
+        syncPaymentToQbo(matchedPayment.id, company.id)
+          .then(r => console.log(`[Terminal] QB sync paymentId=${matchedPayment.id} success=${r.success}`))
+          .catch(err => console.error('[Terminal] QB sync error:', err));
+      }
+
+      const computed = await recomputeInvoiceTotalsFromPayments(invoiceIdNum);
+      console.log(`[Terminal] Confirmed paymentId=${matchedPayment.id} invoiceId=${invoiceIdNum} status=${computed.computedStatus}`);
+      res.json({
+        status: 'succeeded',
+        paid: true,
+        paymentId: matchedPayment.id,
+        amountCents: matchedPayment.amountCents,
+        balanceRemaining: computed.owedCents,
+        newStatus: computed.computedStatus,
+        isPartial: computed.owedCents > 0,
+      });
+    } catch (err: any) {
+      console.error('[Terminal] Confirm error:', err.message);
+      res.status(500).json({ message: err.message || 'Failed to confirm terminal payment' });
+    }
+  });
+
   // ============ REFUNDS API ============
 
   app.get('/api/payments/:id/refund-context', isAuthenticated, async (req: any, res) => {

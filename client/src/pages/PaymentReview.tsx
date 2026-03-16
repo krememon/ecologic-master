@@ -10,7 +10,7 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
-import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff, Percent, DollarSign } from "lucide-react";
+import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff, Percent, DollarSign, Smartphone } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import { useStripeConnectGate } from "@/hooks/useStripeConnectGate";
@@ -18,6 +18,7 @@ import { StripeConnectGateModal } from "@/components/StripeConnectGateModal";
 import StripePaymentForm from "@/components/StripePaymentForm";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
+import { isTerminalAvailable, initTerminal, collectTerminalPayment, cancelTerminalCollection } from "@/lib/terminalPlugin";
 
 interface Invoice {
   id: number;
@@ -58,7 +59,7 @@ interface PaymentReviewProps {
   invoiceId: string;
 }
 
-type PaymentMethod = 'cash' | 'check' | 'card';
+type PaymentMethod = 'cash' | 'check' | 'card' | 'terminal';
 type ViewState = 'review' | 'processing' | 'success';
 
 export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) {
@@ -96,6 +97,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
   const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
   const [stripePaymentIntentId, setStripePaymentIntentId] = useState<string | null>(null);
+
+  const [terminalAvailable, setTerminalAvailable] = useState(false);
+  const [terminalStatus, setTerminalStatus] = useState<string | null>(null);
 
   const {
     isModalOpen: signatureModalOpen,
@@ -166,6 +170,10 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       setPartialAmountStr((balanceRemainingCents / 100).toFixed(2));
     }
   }, [invoice, balanceRemainingCents, partialEnabled]);
+
+  useEffect(() => {
+    setTerminalAvailable(isTerminalAvailable());
+  }, []);
 
   const discountValue = parseFloat(discountValueStr || "0");
   const discountAmountCents = discountEnabled
@@ -303,6 +311,52 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     // Refresh invoice data so frontend balance matches the real DB state
     // (important if a prior card attempt with discount mutated any state)
     queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
+  };
+
+  const handleTerminalPayment = async () => {
+    if (!terminalAvailable) return;
+    if (partialEnabled && !isPartialValid) return;
+    setIsLoading(true);
+    setError(null);
+    setTerminalStatus("Initializing...");
+    try {
+      await initTerminal();
+      setTerminalStatus("Creating payment...");
+      const intentRes = await apiRequest("POST", "/api/payments/terminal/create-intent", {
+        invoiceId: numericInvoiceId,
+        amountCents: paymentAmountCents,
+      });
+      const intentData = await intentRes.json();
+      if (!intentData.paymentIntentSecret || !intentData.paymentIntentId) {
+        throw new Error("Failed to create terminal payment");
+      }
+      setTerminalStatus("Present card or NFC device to iPhone...");
+      await collectTerminalPayment(intentData.paymentIntentSecret);
+      setTerminalStatus("Confirming payment...");
+      const confirmRes = await apiRequest("POST", "/api/payments/terminal/confirm", {
+        paymentIntentId: intentData.paymentIntentId,
+        invoiceId: numericInvoiceId,
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmData.paid) throw new Error(confirmData.message || "Payment confirmation failed");
+
+      setPaidAmount(confirmData.amountCents || paymentAmountCents);
+      setResultNewStatus(confirmData.newStatus || (confirmData.balanceRemaining > 0 ? 'partial' : 'paid'));
+      setResultBalanceRemaining(confirmData.balanceRemaining || 0);
+      setResultPaymentId(confirmData.paymentId || null);
+      invalidateAll();
+      if (confirmData.paymentId) {
+        triggerSignature({ paymentId: confirmData.paymentId, jobId: numericJobId, invoiceId: numericInvoiceId });
+      }
+      setTerminalStatus(null);
+      setViewState('success');
+    } catch (err: any) {
+      await cancelTerminalCollection().catch(() => {});
+      setTerminalStatus(null);
+      setError(err.message || "Terminal payment failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const invalidateAll = () => {
@@ -928,6 +982,27 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
                 <span className="text-sm font-medium">Card</span>
               </Button>
             </div>
+
+            {terminalAvailable && (
+              <Button
+                variant="outline"
+                className="w-full flex items-center justify-center gap-3 h-14 mt-1 border-teal-300 dark:border-teal-700 hover:border-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-700 dark:text-teal-400"
+                onClick={handleTerminalPayment}
+                disabled={paymentDisabled || isLoading}
+              >
+                {isLoading && terminalStatus ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm font-medium">{terminalStatus}</span>
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="h-5 w-5" />
+                    <span className="text-sm font-medium">Collect in Person · Tap to Pay</span>
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </div>
