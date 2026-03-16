@@ -1,0 +1,64 @@
+The logs you sent are not the actual crash. They only show the job page loading successfully:
+- /api/jobs/772 = 200
+- /invoice = 200
+- /documents = 200
+- /labor = 200
+- /line-items = 200
+- /subcontract-payouts = 200
+
+So the crash is most likely happening on the frontend render path right after the data loads, or in the native wrapper/webview layer when the Job Details screen mounts.
+
+I need you to debug the actual crash on opening a job.
+
+What to do:
+1. Find the exact component/render path for tapping into a job from the Jobs list into /jobs/:id.
+2. Instrument the Job Details screen and all major child sections with targeted logs so we can see the last thing that renders before the crash.
+
+Add logs like:
+- [job-open] route mounted jobId=...
+- [job-open] job query loaded
+- [job-open] invoice query loaded
+- [job-open] labor query loaded
+- [job-open] documents query loaded
+- [job-open] line-items query loaded
+- [job-open] subcontract query loaded
+- [job-open] rendering header
+- [job-open] rendering action buttons
+- [job-open] rendering tabs
+- [job-open] rendering customer card
+- [job-open] rendering schedule card
+- [job-open] rendering labor card
+- [job-open] rendering delete modal
+- [job-open] mounted complete
+
+3. Wrap risky computed access in safe guards:
+   - no direct .map on possibly undefined arrays
+   - no direct property access on possibly null invoice/job/customer/etc
+   - no date formatting on undefined/null values
+   - no string operations on undefined values
+4. Search for any recent changes to the Job Details page, especially:
+   - Delete Job modal
+   - action menu / 3-dot menu
+   - invoice/pay button area
+   - tabs
+   - schedule/labor cards
+5. Add a top-level error boundary or temporary try/catch-safe render guard around the Job Details screen so the app shows a visible fallback instead of crashing outright.
+6. Check for any useLayoutEffect/useEffect/navigation code that runs immediately on mount and could be throwing.
+7. Check for any modal/dialog component that auto-mounts on page open and may be crashing in native webview.
+8. Do not change business logic yet — first identify the exact crashing component.
+9. If the issue is in the Delete Job modal path, temporarily comment out that modal/action-menu rendering entirely and retest opening /jobs/772.
+10. Give me:
+   - the exact file/component causing the crash
+   - the exact line/reason
+   - the minimal fix applied
+
+Important:
+- The backend is not the crash source here; the endpoints are succeeding.
+- Focus on the frontend/native render path after data hydration.
+- If needed, add temporary defensive fallback UI instead of hard crashing.
+
+Deliverables:
+- exact crashing component identified
+- targeted logs added
+- minimal safe fix
+- concise summary of root cause
