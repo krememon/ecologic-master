@@ -1,0 +1,104 @@
+Fix the stuck "Pay with card" loading state and Stripe confirmPayment failure for ppellegrino@ecologicc.com.
+
+Confirmed root cause from logs:
+Stripe throws:
+"You specified 'never' for fields.billing_details.email when creating the payment Element, but did not pass confirmParams.payment_method_data.billing_details.email when calling stripe.confirmPayment()."
+
+Current behavior:
+- user taps Pay with card
+- checkout enters loading state
+- Stripe throws
+- UI stays stuck forever
+
+What to do:
+
+1. Find the frontend submit handler for the card payment / Payment Element flow.
+2. Wrap the entire payment submission in try/catch/finally.
+3. Ensure loading/submitting state is ALWAYS cleared in finally, even if Stripe throws.
+4. Ensure any thrown Stripe error is surfaced to the user with the existing error toast/banner.
+5. Keep current Payment Element UI if desired, but if fields.billing_details.email is set to "never", then stripe.confirmPayment() MUST pass:
+   confirmParams: {
+     payment_method_data: {
+       billing_details: {
+         email: billingEmail
+       }
+     }
+   }
+
+6. Resolve billingEmail from best available source in this order:
+   - invoice customer email
+   - job/client email
+   - authenticated user email
+7. Add targeted logs immediately before confirmPayment:
+   [stripe-pay] invoiceId=...
+   [stripe-pay] billingEmail=...
+   [stripe-pay] submitting=true
+8. Add targeted logs in catch/finally:
+   [stripe-pay] confirmPayment error=...
+   [stripe-pay] submitting=false
+9. If billingEmail cannot be guaranteed, then stop suppressing email collection and change the Payment Element email field from "never" to "auto".
+10. Do not touch backend routing or Stripe Terminal / Tap to Pay logic.
+
+Deliverables:
+- fixed confirmPayment billing email handling
+- fixed endless loading state
+- user-visible error handling on failure
+- concise summary of files changed
+
+And this is the shape the code should end up with:
+
+const handleSubmit = async () => {
+  if (!stripe || !elements) return;
+
+  setSubmitting(true);
+  setError(null);
+
+  try {
+    const billingEmail =
+      invoice?.customerEmail ||
+      job?.clientEmail ||
+      user?.email ||
+      '';
+
+    console.log('[stripe-pay] invoiceId=%s', invoice?.id);
+    console.log('[stripe-pay] billingEmail=%s', billingEmail);
+    console.log('[stripe-pay] submitting=true');
+
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        payment_method_data: {
+          billing_details: {
+            email: billingEmail,
+          },
+        },
+        return_url: returnUrl,
+      },
+      redirect: 'if_required',
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    // success handling here
+  } catch (err: any) {
+    console.error('[stripe-pay] confirmPayment error=', err);
+    setError(err?.message || 'Payment failed');
+  } finally {
+    console.log('[stripe-pay] submitting=false');
+    setSubmitting(false);
+  }
+};
+
+A couple of important notes:
+
+The RTIInputSystemClient, keyboard, snapshotting, and constraint logs are not the payment blocker. They look noisy, but they do not explain the Stripe failure. The Stripe integration error does.
+
+If Apple Pay is also showing, that Replit hostname warning is still valid: Apple Pay on web requires the domain to be registered/verified, so preview domains often won’t work for wallet payments.
+
+So the plain-English diagnosis is:
+
+The card payment fails because Stripe is missing the billing email, and the screen spins forever because your frontend doesn’t reset the submit state after that thrown error.
+
+Paste me what the agent changes in the payment submit handler and I’ll verify whether it’s actually fixed.

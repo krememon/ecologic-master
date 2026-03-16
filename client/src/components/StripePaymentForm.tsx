@@ -32,11 +32,13 @@ function isApplePayAllowed(): boolean {
 
 function CheckoutForm({
   amountCents,
+  invoiceId,
   billingEmail,
   onSuccess,
   onCancel,
 }: {
   amountCents: number;
+  invoiceId: number;
   billingEmail: string;
   onSuccess: (paymentIntentId: string) => void;
   onCancel: () => void;
@@ -62,37 +64,49 @@ function CheckoutForm({
     setIsProcessing(true);
     setErrorMessage(null);
 
-    console.log(`[stripe-pay] paymentElementEmailMode=${hasEmail ? "never" : "auto"}`);
-    console.log(`[stripe-pay] billingEmail=${hasEmail ? billingEmail : "(none — Stripe will collect)"}`);
+    try {
+      console.log(`[stripe-pay] invoiceId=${invoiceId}`);
+      console.log(`[stripe-pay] billingEmail=${hasEmail ? billingEmail : "(none — Stripe will collect)"}`);
+      console.log(`[stripe-pay] paymentElementEmailMode=${hasEmail ? "never" : "auto"}`);
+      console.log(`[stripe-pay] submitting=true`);
 
-    const confirmParams: any = {
-      return_url: window.location.origin + "/jobs",
-    };
-
-    if (hasEmail) {
-      confirmParams.payment_method_data = {
-        billing_details: {
-          email: billingEmail,
-        },
+      const confirmParams: Parameters<typeof stripe.confirmPayment>[0]["confirmParams"] = {
+        return_url: window.location.origin + "/jobs",
       };
-    }
 
-    const result = await stripe.confirmPayment({
-      elements,
-      confirmParams,
-      redirect: "if_required",
-    });
+      if (hasEmail) {
+        confirmParams.payment_method_data = {
+          billing_details: {
+            email: billingEmail,
+          },
+        };
+      }
 
-    if (result.error) {
-      setErrorMessage(result.error.message || "Payment failed. Please try again.");
-      setIsProcessing(false);
-    } else if (result.paymentIntent && result.paymentIntent.status === "succeeded") {
-      onSuccess(result.paymentIntent.id);
-    } else if (result.paymentIntent && result.paymentIntent.status === "requires_action") {
-      setErrorMessage("Additional authentication required. Please complete the verification.");
-      setIsProcessing(false);
-    } else {
-      setErrorMessage("Something went wrong. Please try again.");
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams,
+        redirect: "if_required",
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.paymentIntent?.status === "succeeded") {
+        onSuccess(result.paymentIntent.id);
+        return;
+      }
+
+      if (result.paymentIntent?.status === "requires_action") {
+        throw new Error("Additional authentication required. Please complete the verification.");
+      }
+
+      throw new Error("Unexpected payment state. Please try again.");
+    } catch (err: any) {
+      console.error(`[stripe-pay] confirmPayment error=`, err);
+      setErrorMessage(err?.message || "Payment failed. Please try again.");
+    } finally {
+      console.log(`[stripe-pay] submitting=false`);
       setIsProcessing(false);
     }
   };
@@ -216,6 +230,7 @@ export default function StripePaymentForm({
     >
       <CheckoutForm
         amountCents={amountCents}
+        invoiceId={invoiceId}
         billingEmail={billingEmail}
         onSuccess={onSuccess}
         onCancel={onCancel}
