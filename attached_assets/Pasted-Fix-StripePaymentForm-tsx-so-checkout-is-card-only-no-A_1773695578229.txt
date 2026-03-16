@@ -1,0 +1,76 @@
+Fix StripePaymentForm.tsx so checkout is card-only, no Apple Pay, no Link/save-info box, and no hidden billing-details integration errors.
+
+Current issue from screenshot:
+Stripe now errors on phone:
+"You specified 'never' for fields.billing_details.phone ... but did not pass confirmParams.payment_method_data.billing_details.phone when calling stripe.confirmPayment()."
+
+What to do in client/src/components/StripePaymentForm.tsx:
+
+1. Remove Apple Pay completely if anything remains.
+2. Remove/disable Link so the "Save my information for faster checkout" section no longer appears.
+3. Keep standard manual card entry only.
+4. Audit the Payment Element options for hidden billing fields.
+5. If any of these are set to "never":
+   - fields.billing_details.email
+   - fields.billing_details.phone
+   then stripe.confirmPayment() MUST pass matching values in:
+   confirmParams.payment_method_data.billing_details
+
+6. Safest fix:
+   - keep email passed explicitly
+   - either also pass phone explicitly from the best available source
+   - OR change phone from "never" to "auto" so Stripe collects it itself
+7. If we do not have a reliable phone number for every payment, do NOT keep phone as "never".
+8. Add logs before confirmPayment:
+   [stripe-pay] invoiceId=...
+   [stripe-pay] billingEmail=...
+   [stripe-pay] billingPhone=...
+9. Preserve the try/catch/finally loading-state fix.
+10. Do not touch backend routes.
+
+Preferred outcome:
+- card form only
+- no Apple Pay
+- no Link/save-information section
+- no hidden phone/email field mismatch
+- no infinite loading
+
+Most likely correct code direction:
+
+const billingEmail =
+  invoice?.customerEmail ||
+  job?.clientEmail ||
+  user?.email ||
+  '';
+
+const billingPhone =
+  invoice?.customerPhone ||
+  job?.clientPhone ||
+  user?.phone ||
+  '';
+
+const result = await stripe.confirmPayment({
+  elements,
+  confirmParams: {
+    payment_method_data: {
+      billing_details: {
+        email: billingEmail || undefined,
+        phone: billingPhone || undefined,
+      },
+    },
+    return_url: returnUrl,
+  },
+  redirect: 'if_required',
+});
+
+But the cleaner fix is this:
+
+only hide fields you can always provide yourself
+
+for anything you cannot guarantee, set it to auto instead of never
+
+So the real diagnosis now is:
+
+Apple Pay is separate, but your current hard failure is that phone is also hidden with never and not being supplied on confirm.
+
+Paste the StripePaymentForm after this next change and I’ll check whether Link is truly gone and whether phone is fixed correctly.

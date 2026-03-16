@@ -55,6 +55,7 @@ function CheckoutForm({
     try {
       console.log(`[stripe-pay] invoiceId=${invoiceId}`);
       console.log(`[stripe-pay] billingEmail=${hasEmail ? billingEmail : "(none — Stripe will collect)"}`);
+      console.log(`[stripe-pay] billingPhone=(Stripe collects — phone field set to auto)`);
       console.log(`[stripe-pay] paymentElementEmailMode=${hasEmail ? "never" : "auto"}`);
       console.log(`[stripe-pay] submitting=true`);
 
@@ -111,13 +112,16 @@ function CheckoutForm({
               wallets: {
                 applePay: "never",
                 googlePay: "never",
+                link: "never",
               },
               fields: {
                 billingDetails: {
                   // If we have an email to supply manually, hide the field.
                   // If we don't, let Stripe collect it so confirmPayment never fails.
                   email: hasEmail ? "never" : "auto",
-                  phone: "never",
+                  // phone left as "auto" — we never pass it in confirmParams so
+                  // setting it to "never" would cause a Stripe mismatch error.
+                  phone: "auto",
                 },
               },
               terms: {
