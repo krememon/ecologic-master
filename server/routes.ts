@@ -10922,7 +10922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const publicPiParams: any = {
         amount: amountInCents,
         currency: 'usd',
-        payment_method_types: ['card'],
+        automatic_payment_methods: { enabled: true },
         metadata: {
           invoiceId: String(invoice.id),
           invoiceNumber: invoice.invoiceNumber,
@@ -15451,7 +15451,7 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       const piParams: any = {
         amount: amountInCents,
         currency: 'usd',
-        payment_method_types: ['card'],
+        automatic_payment_methods: { enabled: true },
         metadata: {
           invoiceId: String(invoice.id),
           companyId: String(company.id),

@@ -1,0 +1,91 @@
+We need to correct the Stripe checkout UI change because the wrong thing was removed.
+
+WHAT I ACTUALLY WANT
+I do NOT want the “Save my information for faster checkout” / Link sign-up block that appears LOWER in the card form.
+
+I do NOT mind keeping:
+- the “Secure, fast checkout with Link” header/toggle near the top
+- Klarna / other payment methods if they were intentionally enabled
+- other valid payment method options
+
+WHAT WAS DONE WRONG
+The previous change removed the wrong thing and got rid of other payment methods (like Klarna / other forms) that I did NOT want removed.
+
+GOAL
+Restore the other payment methods that were removed, and ONLY remove/hide the LOWER Link sign-up section:
+- the Optional badge
+- “Save my information for faster checkout”
+- email field
+- mobile number field
+- Link terms/privacy text block
+
+IMPORTANT
+Do NOT convert checkout into card-only if it was previously multi-method by design.
+This fix is specifically about removing the LOWER Link enrollment/signup form, not stripping out the rest of Stripe’s payment options.
+
+WHAT TO CHECK
+
+1) TRACE THE EXACT STRIPE ELEMENT/CONFIG
+Find the exact component/config currently rendering:
+- card form
+- Klarna / other payment methods
+- Link top header/toggle
+- lower Link sign-up block
+
+2) IDENTIFY WHAT CHANGE REMOVED OTHER PAYMENT METHODS
+Determine exactly what was changed last time that caused:
+- Klarna / other payment methods to disappear
+- checkout to become narrower/more card-only than intended
+
+3) RESTORE THE PREVIOUS PAYMENT METHODS
+Bring back the intended Stripe payment methods that existed before, including any:
+- Klarna
+- other enabled methods
+- existing multi-method behavior
+
+Do NOT break working card checkout.
+
+4) REMOVE ONLY THE LOWER LINK SIGN-UP BLOCK
+The specific thing to remove/hide is:
+- Optional badge
+- Save my information for faster checkout
+- email input
+- mobile number input
+- Link legal text
+
+If Stripe does not allow removing that lower block via simple config while keeping the rest of the element intact, find the cleanest supported approach that preserves the other payment methods and removes that lower Link enrollment UI.
+
+5) DO NOT BREAK CHECKOUT
+After the fix:
+- card should still work
+- other intended payment methods should still show
+- top “Secure, fast checkout with Link” area can stay if needed
+- only the lower save-info/signup section should be gone
+
+6) VERIFY ALL FLOWS
+Test:
+- normal invoice checkout
+- public/send-invoice checkout if shared
+- subcontract card checkout if shared
+
+7) ADD TARGETED LOGS ONLY IF NEEDED
+Only if useful:
+- final Stripe element/payment method config
+- whether Link lower block is present
+- which payment methods are restored
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact thing that was mistakenly removed last time
+3. what was changed to restore Klarna/other payment methods
+4. what was changed to remove only the lower Link sign-up block
+5. confirmation that checkout still supports the intended payment methods
+
+SUCCESS CRITERIA
+- Klarna / other intended payment methods are back
+- the lower “Save my information for faster checkout” Link signup block is gone
+- card checkout still works
+- top “Secure, fast checkout with Link” area can remain if unavoidable
