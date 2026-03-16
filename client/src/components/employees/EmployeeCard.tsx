@@ -11,6 +11,41 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCan } from "@/hooks/useCan";
 import { formatPhone } from "@shared/phoneUtils";
 
+function EmployeeAvatar({ firstName, lastName, profileImageUrl, role }: {
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl?: string | null;
+  role: string;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+
+  const roleColors: Record<string, string> = {
+    OWNER:      "bg-slate-700 text-white",
+    SUPERVISOR: "bg-indigo-600 text-white",
+    TECHNICIAN: "bg-green-600 text-white",
+  };
+  const fallbackClass = roleColors[role] ?? "bg-gray-500 text-white";
+
+  if (profileImageUrl && !imgError) {
+    return (
+      <img
+        src={profileImageUrl}
+        alt={`${firstName} ${lastName}`}
+        onError={() => setImgError(true)}
+        className="w-12 h-12 rounded-full object-cover flex-shrink-0 ring-2 ring-white dark:ring-slate-800 shadow-sm"
+      />
+    );
+  }
+
+  return (
+    <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ring-2 ring-white dark:ring-slate-800 shadow-sm ${fallbackClass}`}>
+      {initials}
+    </div>
+  );
+}
+
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
 
 interface EmployeeCardProps {
@@ -30,6 +65,7 @@ interface EmployeeCardProps {
     status: string;
     createdAt: string;
     isClockedIn?: boolean;
+    profileImageUrl?: string | null;
   };
   onRoleChange: (userId: string, newRole: UserRole) => void;
   onStatusToggle: (userId: string, newStatus: 'active' | 'inactive') => void;
@@ -95,28 +131,37 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
   return (
     <Card className="hover:shadow-md transition-shadow" data-testid={`card-employee-${employee.id}`}>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge className={getRoleBadgeColor(employee.role)} data-testid={`badge-role-${employee.id}`}>
-                {getRoleLabel(employee.role)}
-              </Badge>
-              <Badge 
-                className={employee.isClockedIn
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                }
-                data-testid={`badge-status-${employee.id}`}
-              >
-                {employee.isClockedIn ? 'Active' : 'Inactive'}
-              </Badge>
+        <div className="flex items-start justify-between gap-2">
+          {/* Avatar + name/badges */}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <EmployeeAvatar
+              firstName={employee.firstName}
+              lastName={employee.lastName}
+              profileImageUrl={employee.profileImageUrl}
+              role={employee.role}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <Badge className={getRoleBadgeColor(employee.role)} data-testid={`badge-role-${employee.id}`}>
+                  {getRoleLabel(employee.role)}
+                </Badge>
+                <Badge 
+                  className={employee.isClockedIn
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                  }
+                  data-testid={`badge-status-${employee.id}`}
+                >
+                  {employee.isClockedIn ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              <CardTitle className="text-lg leading-snug" data-testid={`text-employee-name-${employee.id}`}>
+                {fullName}
+              </CardTitle>
             </div>
-            <CardTitle className="text-xl" data-testid={`text-employee-name-${employee.id}`}>
-              {fullName}
-            </CardTitle>
           </div>
-          
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1 flex-shrink-0">
             {canModify && (
               <TooltipProvider>
                 <Tooltip>

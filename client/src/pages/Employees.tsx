@@ -35,6 +35,7 @@ interface Employee {
   status: string;
   lastLoginAt: string | null;
   createdAt: string;
+  profileImageUrl?: string | null;
 }
 
 const roleOptions = [

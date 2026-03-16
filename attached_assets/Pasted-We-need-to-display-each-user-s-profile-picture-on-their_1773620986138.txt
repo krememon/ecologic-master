@@ -1,0 +1,72 @@
+We need to display each user’s profile picture on their employee cards.
+
+GOAL
+On the Employees page/cards, show the employee’s profile picture/avatar instead of having no image.
+
+EXAMPLE
+In the employee card for Peter Pellegrino, I want his profile image to appear on the card.
+
+IMPORTANT
+- Do NOT break the existing employee card layout
+- Keep it clean and modern
+- If a user has no profile photo, show a polished fallback avatar (initials/default circle)
+- Make sure this works on mobile and desktop
+- Preserve role/status pills, menu button, email, joined date, etc.
+
+WHAT TO CHECK
+
+1) TRACE EMPLOYEE CARD DATA
+Find the exact component and data source for employee cards.
+Check whether employee/user records already include:
+- profileImageUrl
+- avatarUrl
+- photoUrl
+- profilePicture
+- Google profile image
+- any equivalent field
+
+2) VERIFY BACKEND/API PAYLOAD
+Confirm the employee list endpoint is returning the profile image field.
+If not, update the backend/API mapping so employee cards receive the correct avatar/profile photo URL.
+
+3) UPDATE THE CARD UI
+Add a profile image area to each employee card:
+- clean circular avatar
+- positioned nicely in the card header/top section
+- should not make the card look crowded
+- keep spacing balanced
+
+4) FALLBACK BEHAVIOR
+If no profile image exists:
+- show a clean fallback avatar with initials
+- do NOT show broken images
+- handle invalid/missing URLs gracefully
+
+5) KEEP CARD LAYOUT POLISHED
+Make sure the employee card still looks good with:
+- Owner/role badge
+- Active/Inactive badge
+- overflow menu
+- name
+- email
+- joined date
+
+6) ADD TARGETED LOGS ONLY IF NEEDED
+Only if helpful:
+- whether avatar/profile image exists per employee
+- whether API payload includes the image field
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. whether the profile picture field already existed or needed backend wiring
+3. confirmation that employee cards now show profile pictures
+4. confirmation that fallback avatars appear when no image exists
+5. confirmation that mobile + desktop still look clean
+
+SUCCESS CRITERIA
+- employee cards show each user’s profile picture when available
+- fallback avatar shows when not available
+- card layout remains clean and professional
