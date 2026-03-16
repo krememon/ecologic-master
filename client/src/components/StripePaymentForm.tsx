@@ -18,18 +18,6 @@ interface StripePaymentFormProps {
   onCancel: () => void;
 }
 
-// Apple Pay is only valid on domains registered with Apple via Stripe.
-// Replit preview URLs (picard.replit.dev) and localhost are never registered.
-function isApplePayAllowed(): boolean {
-  const hostname = window.location.hostname;
-  const allowed =
-    hostname === "eco-logic-pjpell077.replit.app" ||
-    hostname === "ecologicc.com" ||
-    hostname.endsWith(".ecologicc.com");
-  console.log(`[apple-pay] hostname=${hostname} allowed=${allowed}`);
-  return allowed;
-}
-
 function CheckoutForm({
   amountCents,
   invoiceId,
@@ -121,7 +109,7 @@ function CheckoutForm({
             options={{
               layout: "tabs",
               wallets: {
-                applePay: isApplePayAllowed() ? "auto" : "never",
+                applePay: "never",
                 googlePay: "never",
               },
               fields: {
