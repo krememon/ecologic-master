@@ -1,0 +1,171 @@
+Build a private Developer Tools system for EcoLogic that is ONLY accessible by my specific user account and hidden from all other users.
+
+GOAL
+Create an internal dev/admin toolbox so I can test, inspect, and manage the app safely without affecting normal users. This must feel like a professional hidden admin console, not a public feature.
+
+ACCESS CONTROL
+- Only allow access for my exact account email: pjpell077@gmail.com
+- Also support a hardcoded allowlist for future dev accounts
+- If a non-allowed user somehow hits the route, return 403
+- Hide all entry points in the UI unless user is on the allowlist
+- Follow EcoLogic’s “hidden not disabled” rule
+
+WHAT TO BUILD
+
+1) DEV TOOLS PAGE
+Create a new page:
+- /dev-tools
+
+Add sections/cards for:
+
+A. Account / Session Inspector
+- Show current user id
+- Show current company id
+- Show role
+- Show email
+- Show session status
+- Show platform (web / native)
+- Show whether the user is in the dev allowlist
+
+B. Feature Flags Panel
+- Add simple toggles for temporary dev-only flags
+- Store flags in a safe way for dev use
+- Example flags:
+  - forceShowPaymentsDebug
+  - enableExperimentalUI
+  - showHiddenRoutes
+  - bypassNonCriticalAnimations
+  - showApiLogsPanel
+
+C. Job Debugger
+- Search job by job ID
+- Open a quick debug card showing:
+  - job id
+  - title
+  - status
+  - company id
+  - assigned crew
+  - invoice id
+  - estimate id
+  - subcontract / referral info if present
+- Add buttons:
+  - open job
+  - copy job JSON
+  - refetch job data
+  - inspect related documents
+  - inspect invoice/payments for this job
+
+D. Payments Debugger
+- Search invoice id / job id
+- Show raw payment records
+- Show referral/subcontract payout state
+- Show sender company / receiver company
+- Show computed display totals vs raw totals
+- Add a “recompute payment state” button for dev use only if safe
+- Add a “refresh payment data” button
+
+E. Quick Data Actions
+Dev-only utilities with confirmation modals:
+- Re-sync current company settings
+- Re-fetch QuickBooks connection state
+- Recompute invoice totals for a job
+- Recompute payment ledger for a job
+- Rebuild job insights cache for a job
+- Trigger test notification to my account
+- Generate test document record
+All actions must have confirmation and visible success/error toast
+
+F. API Inspector
+- Small panel showing recent API calls in the client
+- Method
+- Route
+- Status
+- Duration
+- Error response if failed
+- Make this dev-only and lightweight
+- Keep last 25 requests in memory
+
+G. Environment / Integration Status
+Show live status cards for:
+- Stripe connected?
+- QuickBooks connected?
+- Email provider configured?
+- Storage configured?
+- Push notifications configured?
+- Native wrapper detected?
+Do not expose secrets, only boolean/config status and safe metadata
+
+H. Logs / Debug Notes
+- Add a small notes panel where I can type temporary dev notes saved locally in browser storage
+- Add “copy environment summary” button
+- Add “copy current debug snapshot” button
+
+2) GLOBAL DEV ENTRY
+For allowed dev accounts only:
+- Add a hidden entry point in the user menu OR profile menu labeled “Developer Tools”
+- Add optional keyboard shortcut:
+  - Shift + D then V
+- Never show this to normal users
+
+3) BACKEND PROTECTION
+Create backend middleware/helper:
+- isDevAccount(req.user)
+- checks email against allowlist
+Protect all dev-only endpoints with this helper
+
+4) DEV-ONLY API ROUTES
+Create safe dev endpoints under:
+- /api/dev/*
+Examples:
+- GET /api/dev/me
+- GET /api/dev/job/:jobId
+- GET /api/dev/payments/job/:jobId
+- POST /api/dev/recompute/invoice/:jobId
+- POST /api/dev/recompute/payments/:jobId
+- GET /api/dev/integrations/status
+
+Rules:
+- Never expose secrets or raw tokens
+- Return structured JSON
+- Log dev route usage with a [dev-tools] prefix
+- Keep changes isolated and safe
+
+5) UI STYLE
+Match EcoLogic design system:
+- Modern dark admin look
+- Clean cards
+- Strong spacing
+- Mobile-friendly
+- Feels internal/power-user
+- No ugly debug dump wall unless inside expandable JSON viewer
+
+6) JSON VIEWER
+For objects like job/payment/debug payloads:
+- Use collapsible pretty JSON blocks
+- Add copy button
+- Keep readable on mobile
+
+7) SAFETY
+- Any destructive action must require confirmation
+- Label all dev actions clearly
+- Do not let normal users see, hit, or infer these tools
+- Keep all dev tools isolated from the normal workflow
+
+DELIVERABLES
+- New /dev-tools page
+- Dev-only navigation entry
+- Dev auth helper middleware
+- Dev API endpoints
+- Feature flags panel
+- API inspector panel
+- Job debugger
+- Payments debugger
+- Integration status panel
+- Safe confirmation modals
+- Targeted logs with [dev-tools] prefix
+
+IMPORTANT
+Do not break existing RBAC.
+Do not expose secrets.
+Do not make this visible to non-dev users.
+Keep everything hidden unless the logged-in email is pjpell077@gmail.com or another future allowlisted dev account.

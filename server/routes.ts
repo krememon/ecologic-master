@@ -19111,5 +19111,109 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     }
   });
 
+  // ─── DEV TOOLS API ────────────────────────────────────────────────────────
+  {
+    const { requireDev } = await import('./devAuth');
+
+    app.get('/api/dev/me', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const user = req.user;
+        const email = user.email || user.claims?.email;
+        const userId = user.id || user.claims?.sub;
+        console.log(`[dev-tools] /api/dev/me userId=${userId}`);
+        res.json({
+          ok: true,
+          userId,
+          email,
+          companyId: user.companyId,
+          role: user.role,
+          platform: req.headers['x-capacitor'] ? 'native' : 'web',
+          sessionId: req.sessionID || null,
+          isDevAccount: true,
+        });
+      } catch (e: any) {
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    app.get('/api/dev/job/:jobId', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const jobId = parseInt(req.params.jobId);
+        if (isNaN(jobId)) return res.status(400).json({ ok: false, error: 'Invalid job ID' });
+        console.log(`[dev-tools] /api/dev/job/${jobId}`);
+        const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        if (!job) return res.status(404).json({ ok: false, error: 'Job not found' });
+        const invoiceRows = await db.select().from(invoices).where(eq(invoices.jobId, jobId));
+        const invoice = invoiceRows[0] || null;
+        const crewRows = await db.select().from(crewAssignments).where(eq(crewAssignments.jobId, jobId));
+        res.json({ ok: true, job, invoice, crew: crewRows });
+      } catch (e: any) {
+        console.error('[dev-tools] job error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    app.get('/api/dev/payments/job/:jobId', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const jobId = parseInt(req.params.jobId);
+        if (isNaN(jobId)) return res.status(400).json({ ok: false, error: 'Invalid job ID' });
+        console.log(`[dev-tools] /api/dev/payments/job/${jobId}`);
+        const invoiceRows = await db.select().from(invoices).where(eq(invoices.jobId, jobId));
+        const invoice = invoiceRows[0] || null;
+        let paymentRows: any[] = [];
+        if (invoice) {
+          paymentRows = await db.select().from(payments).where(eq(payments.invoiceId, invoice.id));
+        }
+        res.json({ ok: true, invoice, payments: paymentRows });
+      } catch (e: any) {
+        console.error('[dev-tools] payments error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    app.post('/api/dev/recompute/invoice/:invoiceId', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const invoiceId = parseInt(req.params.invoiceId);
+        if (isNaN(invoiceId)) return res.status(400).json({ ok: false, error: 'Invalid invoice ID' });
+        console.log(`[dev-tools] recompute invoice ${invoiceId}`);
+        const { persistRecomputedTotals } = await import('./invoiceRecompute');
+        const result = await persistRecomputedTotals(invoiceId);
+        res.json({ ok: true, result });
+      } catch (e: any) {
+        console.error('[dev-tools] recompute error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    app.get('/api/dev/integrations/status', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const user = req.user;
+        const companyId = user.companyId;
+        console.log(`[dev-tools] integrations/status companyId=${companyId}`);
+        const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+        const stripeKey = !!process.env.STRIPE_SECRET_KEY;
+        const resendKey = !!process.env.RESEND_API_KEY;
+        const apnsConfigured = !!(process.env.APPLE_KEY_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_PRIVATE_KEY);
+        const qboConnected = !!(company?.qboRealmId && company?.qboAccessToken);
+        const stripeConnectConnected = !!(company?.stripeConnectAccountId);
+        res.json({
+          ok: true,
+          stripe: { configured: stripeKey, keyPrefix: process.env.STRIPE_SECRET_KEY?.slice(0, 7) || null },
+          email: { configured: resendKey, from: process.env.EMAIL_FROM || null },
+          pushNotifications: { configured: apnsConfigured },
+          quickBooks: { connected: qboConnected, realmId: company?.qboRealmId || null },
+          stripeConnect: { connected: stripeConnectConnected, accountId: company?.stripeConnectAccountId || null },
+          plaid: { configured: !!(company?.plaidAccessToken) },
+          nodeEnv: process.env.NODE_ENV,
+          appBaseUrl: process.env.APP_BASE_URL || null,
+        });
+      } catch (e: any) {
+        console.error('[dev-tools] integrations error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   return httpServer;
 }

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target, Clock } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target, Clock, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -175,6 +175,21 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             )}>
               <Wrench className="w-4 h-4" />
               <span>Customize</span>
+            </button>
+          </Link>
+        )}
+
+        {/* Developer Tools — hidden, only for dev allowlist */}
+        {user?.email === 'pjpell077@gmail.com' && (
+          <Link href="/dev-tools">
+            <button className={cn(
+              "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mt-1",
+              location === "/dev-tools"
+                ? "bg-violet-900 text-violet-300"
+                : "text-violet-500 dark:text-violet-500 hover:bg-violet-950 hover:text-violet-300"
+            )}>
+              <Terminal className="w-4 h-4" />
+              <span>Developer Tools</span>
             </button>
           </Link>
         )}

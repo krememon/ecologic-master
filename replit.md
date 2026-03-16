@@ -63,6 +63,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Job Offer Deep Links**: Universal Links (iOS) and App Links (Android) for job offer paths, with fallback landing pages.
 - **Legal Pages**: Settings hub with Terms of Service and Privacy Policy.
 - **Support System**: Settings hub for contacting support, reporting bugs, requesting features, and FAQs.
+- **Developer Tools**: Private admin console at `/dev-tools` for `pjpell077@gmail.com` only. Features: session inspector, feature flags (localStorage), job/payments debugger, API call inspector, integration status, dev notes panel. Entry via sidebar item (dev accounts only) or keyboard shortcut Shift+D → V. Backend protected by `server/devAuth.ts` allowlist + `requireDev` middleware on all `/api/dev/*` routes.
 
 **Mobile App (React Native + Expo)**:
 - Native iOS/Android app with `expo-secure-store` for session management.
