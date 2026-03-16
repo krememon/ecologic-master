@@ -2336,10 +2336,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const member = await storage.getCompanyMemberByUserId(userId);
       if (!member) {
+        console.log('[QB_STATUS] 403 — not a company member userId=' + userId);
         return res.status(403).json({ error: 'Not a company member' });
       }
       
       if (!can(member.role as UserRole, 'customize.manage')) {
+        console.log('[QB_STATUS] 403 — insufficient permissions userId=' + userId);
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
       
@@ -2348,13 +2350,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Company not found' });
       }
       
+      const connected = !!company.qboRealmId && !!company.qboRefreshToken;
+      console.log('[QB_STATUS] companyId=' + member.companyId + ' userId=' + userId + ' connected=' + connected);
       res.json({
-        connected: !!company.qboRealmId && !!company.qboRefreshToken,
+        connected,
         connectedAt: company.qboConnectedAt,
         realmId: company.qboRealmId,
       });
     } catch (error: any) {
-      console.error('Error checking QuickBooks status:', error);
+      console.error('[QB_STATUS] error:', error);
       res.status(500).json({ error: 'Failed to check QuickBooks status' });
     }
   });
@@ -2371,10 +2375,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
       if (!QB_CLIENT_ID || !QB_REDIRECT_URI) {
+        console.log('[QB_START] misconfigured — QB_CLIENT_ID or QB_REDIRECT_URI missing');
         return res.status(500).json({ error: 'QuickBooks integration not configured' });
       }
       const state = createQboState(member.companyId);
-      console.log('[QB] connect-url: generating OAuth URL for companyId:', member.companyId);
+      console.log('[QB_START] companyId=' + member.companyId + ' userId=' + userId + ' redirectUri=' + QB_REDIRECT_URI);
       const authUrl = new URL(QB_AUTH_BASE);
       authUrl.searchParams.set('client_id', QB_CLIENT_ID);
       authUrl.searchParams.set('response_type', 'code');
@@ -2425,50 +2430,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/integrations/quickbooks/callback - OAuth callback
+  // GET /api/integrations/quickbooks/callback - OAuth callback (no session required — uses signed state)
   app.get('/api/integrations/quickbooks/callback', async (req: any, res) => {
-    console.log('[QB] CALLBACK HIT');
-    console.log('[QB] Query params:', JSON.stringify(req.query));
-    console.log('[QB] Full URL:', req.originalUrl);
+    console.log('[QB_CALLBACK] hit url=' + req.originalUrl);
     try {
       const { code, realmId, state, error: oauthError, error_description } = req.query;
-      
-      if (error_description) {
-        console.error('[QB] Error description:', error_description);
-      }
-      
+
       if (oauthError) {
-        console.error('[QB] OAuth error from Intuit:', oauthError);
-        return res.redirect('/customize/quickbooks?error=oauth');
+        console.error('[QB_CALLBACK] OAuth error from Intuit: ' + oauthError + (error_description ? ' — ' + error_description : ''));
+        return res.redirect('/quickbooks-error');
       }
-      
-      // Verify signed state token and extract companyId
+
       if (!state) {
-        console.error('[QB] No state parameter');
-        return res.redirect('/customize/quickbooks?error=state');
+        console.error('[QB_CALLBACK] No state parameter');
+        return res.redirect('/quickbooks-error');
       }
-      
+
       const stateData = verifyQboState(state as string);
       if (!stateData) {
-        console.error('[QB] Invalid or expired state token');
-        return res.redirect('/customize/quickbooks?error=state');
+        console.error('[QB_CALLBACK] Invalid or expired state token');
+        return res.redirect('/quickbooks-error');
       }
-      
+
       const { companyId } = stateData;
-      console.log('[QB] Valid state for companyId:', companyId);
-      
+      console.log('[QB_CALLBACK] state verified companyId=' + companyId);
+
       if (!code || !realmId) {
-        console.error('[QB] Missing code or realmId');
-        return res.redirect('/customize/quickbooks?error=missing');
+        console.error('[QB_CALLBACK] Missing code or realmId code=' + !!code + ' realmId=' + !!realmId);
+        return res.redirect('/quickbooks-error');
       }
-      
+
       if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
-        console.error('[QB] QuickBooks credentials not configured');
-        return res.redirect('/customize/quickbooks?error=config');
+        console.error('[QB_CALLBACK] QB credentials not configured');
+        return res.redirect('/quickbooks-error');
       }
-      
-      // Exchange code for tokens
-      console.log('[QB] Exchanging code for tokens...');
+
+      // Exchange authorization code for tokens
+      console.log('[QB_CALLBACK] exchanging code for tokens companyId=' + companyId + ' redirectUri=' + QB_REDIRECT_URI);
       const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
       const tokenResponse = await fetch(QB_TOKEN_URL, {
         method: 'POST',
@@ -2483,18 +2481,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           redirect_uri: QB_REDIRECT_URI,
         }),
       });
-      
+
       if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
-        console.error('[QB] Token exchange failed:', errorText);
-        return res.redirect('/customize/quickbooks?error=token');
+        console.error('[QB_CALLBACK] token exchange failed status=' + tokenResponse.status + ' body=' + errorText);
+        return res.redirect('/quickbooks-error');
       }
-      
+
       const tokens = await tokenResponse.json();
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
-      console.log('[QB] Token exchange successful, saving to company:', companyId);
-      
-      // Store tokens in database
+      console.log('[QB_CALLBACK] token exchange OK companyId=' + companyId + ' realmId=' + realmId + ' expiresIn=' + tokens.expires_in + 's');
+
+      // Persist tokens — no session dependency, companyId came from the signed state
       await storage.updateCompany(companyId, {
         qboRealmId: realmId as string,
         qboAccessToken: tokens.access_token,
@@ -2502,14 +2500,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qboTokenExpiresAt: expiresAt,
         qboConnectedAt: new Date(),
       });
-      
-      console.log('[QB] Connection saved successfully');
-      // Redirect to a lightweight bridge page instead of the full SPA so that
-      // on native the user sees a simple "Connected!" screen in Safari while
-      // the native WebView's poll detects the connection and closes the browser.
+
+      console.log('[QB_REDIRECT] success companyId=' + companyId + ' → /quickbooks-success');
+      // Redirect to lightweight bridge page.
+      // On native: the bridge page fires ecologic://quickbooks/connected deep link.
+      // On web: the meta-refresh sends the user back to the settings page.
       res.redirect('/quickbooks-success');
     } catch (error: any) {
-      console.error('[QB] Error in callback:', error);
+      console.error('[QB_CALLBACK] uncaught error:', error);
       res.redirect('/quickbooks-error');
     }
   });
@@ -2525,13 +2523,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   `;
   app.get('/quickbooks-success', (_req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    // On native: the native WebView poll detects connected and closes Safari within ~500ms.
-    // On web: the meta-refresh returns the user to the QuickBooks settings page after 2s.
-    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2; url=/customize/quickbooks"><title>QuickBooks Connected</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">✅</div><h1>QuickBooks Connected!</h1><p>Your QuickBooks account has been linked to EcoLogic.</p><p class="sub">Returning to the app…</p></body></html>`);
+    // On native iOS: the inline script fires the ecologic:// deep link which closes
+    // SFSafariViewController and triggers appUrlOpen in the Capacitor app.
+    // On web: the meta-refresh returns the user to the settings page after 2 s.
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2; url=/customize/quickbooks"><title>QuickBooks Connected</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">✅</div><h1>QuickBooks Connected!</h1><p>Your QuickBooks account has been linked to EcoLogic.</p><p class="sub">Returning to the app…</p><script>if(/iPhone|iPad|iPod|Android/.test(navigator.userAgent)){try{window.location.href='ecologic://quickbooks/connected';}catch(e){}}</script></body></html>`);
   });
   app.get('/quickbooks-error', (_req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="3; url=/customize/quickbooks"><title>Connection Failed</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">❌</div><h1>Connection Failed</h1><p>Could not connect your QuickBooks account.</p><p class="sub">Please close this window and try again in EcoLogic.</p></body></html>`);
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="3; url=/customize/quickbooks"><title>Connection Failed</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">❌</div><h1>Connection Failed</h1><p>Could not connect your QuickBooks account.</p><p class="sub">Please close this window and try again in EcoLogic.</p><script>if(/iPhone|iPad|iPod|Android/.test(navigator.userAgent)){try{window.location.href='ecologic://quickbooks/error';}catch(e){}}</script></body></html>`);
   });
 
   // POST /api/integrations/quickbooks/test - Test QuickBooks connection

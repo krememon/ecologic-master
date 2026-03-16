@@ -699,6 +699,14 @@ function useCapacitorDeepLinks() {
             return;
           }
 
+          // QuickBooks OAuth deep link — dispatch to QuickBooksSettings via DOM event
+          if (url.startsWith("ecologic://quickbooks/")) {
+            const result = url.includes("/connected") ? "connected" : "error";
+            console.log("[deep-link] QB deep link result=" + result);
+            window.dispatchEvent(new CustomEvent("qb-oauth-deeplink", { detail: { result } }));
+            return;
+          }
+
           const target = extractDeepLinkTarget(pathToMatch);
           if (target) {
             const tokenMatch = pathToMatch.match(/([a-f0-9]{16,})/);

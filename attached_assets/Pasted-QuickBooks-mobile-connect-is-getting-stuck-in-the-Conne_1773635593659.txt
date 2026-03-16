@@ -1,0 +1,223 @@
+QuickBooks mobile connect is getting stuck in the “Connecting…” polling state because the native app is not reliably receiving the OAuth completion back into the authenticated in-app session. The important logs are not the RunningBoard entitlement lines — those are iOS noise and not the issue. The real signals are:
+
+[QB] poll — connected: false repeating forever
+
+[WS] closed code=1006
+
+no successful transition to connected state after returning from QuickBooks
+
+This means one or more of these is broken:
+
+the QuickBooks callback is returning to a URL that does not complete auth for the currently logged-in mobile user
+
+the Capacitor wrapper is reopening EcoLogic without restoring the correct bearer/session auth
+
+the frontend polling endpoint is checking connection status with missing/invalid auth
+
+the backend callback may complete, but the company/user record being polled is not the same authenticated tenant in mobile
+
+UI never exits loading when callback fails or user returns without a completed connection
+
+I need you to fully harden the QuickBooks mobile OAuth flow.
+
+Goals:
+
+QuickBooks OAuth must work inside the native iOS wrapper
+
+after QuickBooks sign-in, user must return back into the native EcoLogic app, not generic web
+
+authenticated mobile user/session must remain valid after return
+
+connection status must flip to connected immediately once OAuth succeeds
+
+if callback fails, show a clear error and stop infinite “Connecting…”
+
+Web must keep working too
+
+Implement this exactly:
+
+PART 1 — backend audit and fixes
+
+Inspect all QuickBooks routes:
+
+start/connect route
+
+callback route
+
+status/check route
+
+disconnect route
+
+Verify OAuth state contains enough context to restore:
+
+companyId
+
+userId
+
+platform source (web vs mobile)
+
+return path
+
+Make callback complete connection server-side without depending on websocket
+
+Add targeted logs:
+
+[QB_START]
+
+[QB_CALLBACK]
+
+[QB_STATUS]
+
+[QB_AUTH]
+
+[QB_REDIRECT]
+Include companyId, userId, platform, auth type, and final connected result
+
+Ensure callback updates the correct company integration record for the authenticated tenant
+
+If session-cookie auth is unreliable on mobile callback, support bearer-token-safe mobile callback restoration using signed state / nonce flow
+
+Return a deterministic success redirect target for mobile, not a generic browser page
+
+PART 2 — native/mobile return flow
+
+Check Capacitor deep link / appUrlOpen handling for QuickBooks return
+
+If not already present, add a dedicated deep link path like:
+
+ecologic://quickbooks/callback
+or equivalent universal/app link flow already used in the app
+
+On app reopen:
+
+parse callback params
+
+finalize frontend state
+
+refresh auth user
+
+refresh company settings/integrations
+
+poll status with authenticated mobile API client
+
+Do not rely on websocket for this flow
+
+If webview loses socket and shows code 1006, that should not affect QuickBooks completion
+
+PART 3 — frontend UX fixes
+
+On QuickBooks connect button:
+
+disable button only during actual launch
+
+do not leave permanent spinner
+
+Add a connection state machine:
+
+idle
+
+launching
+
+waiting_for_return
+
+verifying
+
+connected
+
+failed
+
+After returning from QuickBooks:
+
+show “Finishing QuickBooks connection…”
+
+verify status with REST polling
+
+timeout after a reasonable window like 15–30 seconds
+
+If timeout/failure:
+
+stop spinner
+
+show clear error toast/banner:
+“QuickBooks connection didn’t finish. Please try again.”
+
+If success:
+
+instantly switch card to Connected
+
+show success toast
+
+PART 4 — auth hardening for mobile
+
+Audit how mobile authenticated requests are made after external browser/app return
+
+Confirm bearer token or session restoration is working for:
+
+/api/auth/user
+
+QuickBooks status endpoint
+
+If needed, force a post-return auth refresh before status polling
+
+Prevent unauthenticated poll loops from silently returning false forever
+
+If auth is missing, surface that explicitly in logs and UI
+
+PART 5 — debugging output
+Add concise logs only around this flow:
+
+app launched QuickBooks connect
+
+callback received
+
+callback tenant resolved
+
+mobile app reopened
+
+auth restored yes/no
+
+status poll result
+
+UI transitioned to connected/failed
+
+Deliverables:
+
+fix the full native QuickBooks connect flow
+
+keep web flow working
+
+remove infinite “Connecting…” state
+
+add clear success/failure UX
+
+provide a short summary of:
+
+exact root cause found
+
+files changed
+
+final callback URL/deep link flow
+
+how I should test on native iPhone build step by step
+
+Important:
+
+preserve EcoLogic’s existing auth architecture
+
+do not break Stripe, Google auth, or other external OAuth flows
+
+do not use websocket dependency for QuickBooks completion
+
+use hidden-not-disabled UX style already used in EcoLogic
+
+keep logs targeted and minimal
+
+Also, for my awareness:
+
+the RBSServiceErrorDomain / Client not entitled lines from iOS are not the root problem here
+
+the real issue is QuickBooks callback/auth restoration/status verification in native mobile
+
+My guess is the actual bug is that the OAuth callback succeeds or partially succeeds, but the native app returns without the same authenticated context, so the status poll keeps hitting “not connected” forever.
+
+After fixing, tell me exactly where the callback lands and how the native wrapper picks it up.
