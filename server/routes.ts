@@ -2286,12 +2286,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!createResponse.ok) {
         const errorText = await createResponse.text();
         console.error('[QB-PAY] Payment creation failed status=' + createResponse.status + ':', errorText);
+        // Store up to 500 chars of the actual QB error body for diagnosis
+        let errorDetail = `QBO API error: ${createResponse.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          const msg = parsed?.Fault?.Error?.[0]?.Message || parsed?.Fault?.Error?.[0]?.Detail || errorText;
+          errorDetail = `QBO ${createResponse.status}: ${String(msg).substring(0, 450)}`;
+        } catch {
+          errorDetail = `QBO ${createResponse.status}: ${errorText.substring(0, 450)}`;
+        }
         await db.update(payments).set({
           qboPaymentSyncStatus: 'failed',
-          qboPaymentLastSyncError: `QBO API error: ${createResponse.status}`,
+          qboPaymentLastSyncError: errorDetail,
           updatedAt: new Date()
         }).where(eq(payments.id, paymentId));
-        return { success: false, error: `QBO API error: ${createResponse.status}` };
+        return { success: false, error: errorDetail };
       }
 
       const createData = await createResponse.json();

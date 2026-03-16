@@ -1,0 +1,101 @@
+We found the QuickBooks sync bug more clearly:
+
+CURRENT BEHAVIOR
+- Cash payments → QuickBooks reports invoice as PAID
+- Check payments → QuickBooks reports invoice as PAID
+- Stripe/card payments → QuickBooks does NOT report invoice as PAID
+
+So QuickBooks sync is working for manual payment methods, but failing specifically for Stripe payments.
+
+GOAL
+Make Stripe/card invoice payments sync to QuickBooks the same way cash/check already do, so QuickBooks marks the invoice as paid.
+
+IMPORTANT
+Do NOT change the working cash/check QuickBooks sync behavior.
+This task is specifically about why STRIPE payments are not being pushed/applied to QuickBooks as paid.
+
+WHAT THIS PROVES
+- QuickBooks connection itself is working
+- invoice sync itself is likely working
+- payment sync path exists at least for cash/check
+- the bug is in the Stripe-specific payment-to-QuickBooks path
+
+WHAT TO INVESTIGATE
+
+1) TRACE ALL 3 PAYMENT PATHS SIDE BY SIDE
+Compare:
+- cash payment success flow
+- check payment success flow
+- Stripe/card payment success flow
+
+For each one, trace:
+- payment record creation
+- invoice status update
+- QuickBooks sync trigger
+- QuickBooks payment/apply call
+- any guards/conditions that decide whether to sync payment to QuickBooks
+
+2) FIND THE STRIPE-SPECIFIC BRANCH THAT FAILS
+We need the exact broken link for Stripe only.
+Check whether:
+- QuickBooks payment sync is only called for manual payments
+- Stripe success path never invokes the QuickBooks payment sync helper
+- Stripe path uses a different status (`succeeded`, `processing`, etc.) and misses the sync trigger
+- webhook path records payment but skips QuickBooks
+- polling/finalization path updates EcoLogic but not QuickBooks
+- QuickBooks sync helper rejects `card` method or Stripe-origin payments
+- the sync is using the wrong invoice ID/customer mapping for Stripe only
+
+3) IDENTIFY THE WORKING QUICKBOOKS PAYMENT SYNC HELPER
+Find the exact helper/function/path that makes cash/check mark the invoice paid in QuickBooks.
+Then ensure Stripe success uses that same logic, or a compatible version of it.
+
+4) FIX STRIPE QUICKBOOKS PAYMENT SYNC
+After a Stripe/card payment is truly successful:
+- create/apply the QuickBooks payment correctly
+- attach it to the correct QuickBooks invoice
+- ensure QuickBooks marks invoice as paid
+- preserve method metadata if relevant
+- keep EcoLogic invoice/payment history behavior unchanged
+
+5) MAKE IT IDEMPOTENT
+Be careful not to create duplicate QuickBooks payments if:
+- Stripe webhook retries
+- poll/finalize endpoint runs more than once
+- page refresh happens during completion
+- payment is already synced to QuickBooks
+
+Add a proper guard/check before creating the QuickBooks payment.
+
+6) VERIFY REAL CASES
+Test all 3:
+- Cash invoice payment → still marks paid in QuickBooks
+- Check invoice payment → still marks paid in QuickBooks
+- Stripe/card invoice payment → NOW also marks paid in QuickBooks
+
+7) ADD TARGETED LOGS
+Add concise logs only where useful:
+- payment method
+- payment success path entered
+- QuickBooks sync triggered or skipped
+- QuickBooks invoice id resolved
+- QuickBooks payment create/apply attempted
+- success/failure response
+- duplicate guard hit or not
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact reason cash/check sync worked but Stripe did not
+3. exact Stripe-specific condition/path that was missing or broken
+4. what was changed so Stripe now syncs payment to QuickBooks
+5. confirmation that cash/check still work
+6. confirmation that Stripe-paid invoices now show as paid in QuickBooks
+
+SUCCESS CRITERIA
+- cash still marks invoice paid in QuickBooks
+- check still marks invoice paid in QuickBooks
+- Stripe/card now also marks invoice paid in QuickBooks
+- no duplicate QuickBooks payments are created
