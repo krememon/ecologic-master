@@ -75,9 +75,17 @@ function CheckoutForm({
           <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">Enter card details to collect the remaining balance.</p>
           <PaymentElement
             options={{
-              layout: "tabs",
-              paymentMethodOrder: ["card"],
+              layout: "accordion",
+              defaultCollapsed: false,
               wallets: { applePay: "never", googlePay: "never" },
+              fields: {
+                billingDetails: {
+                  email: "never",
+                  phone: "never",
+                  address: "never",
+                  name: "auto",
+                },
+              },
             }}
           />
         </div>

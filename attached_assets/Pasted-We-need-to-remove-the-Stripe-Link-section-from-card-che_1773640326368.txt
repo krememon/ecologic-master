@@ -1,0 +1,75 @@
+We need to remove the Stripe Link section from card checkout so customers only see and enter card information.
+
+GOAL
+During card payment, do NOT show the Stripe Link “Save my information for faster checkout” section.
+I only want normal card entry fields to be accepted/displayed.
+
+REMOVE / DISABLE
+Get rid of:
+- the “Save my information for faster checkout” box
+- email field inside the Link block
+- phone number field inside the Link block
+- any Link branding / opt-in UI
+- any accelerated checkout prompt tied to Link
+
+EXPECTED RESULT
+When paying by card, the customer should only see the normal card payment form:
+- card number
+- expiration
+- CVC
+- billing details only if required
+No Link enrollment / save-info prompt should appear.
+
+IMPORTANT
+- Do NOT break Stripe card payments
+- Do NOT break Apple Pay / Google Pay if they are intentionally enabled elsewhere, unless they depend on this exact Link block
+- Do NOT break successful payment confirmation
+- Do NOT break payment method creation or Stripe compliance requirements
+- Keep the checkout UI clean and simple
+
+WHAT TO CHECK
+
+1) TRACE THE STRIPE PAYMENT ELEMENT SETUP
+Find the exact frontend component where Stripe Elements / PaymentElement is configured for card checkout.
+
+Check for:
+- PaymentElement options
+- fields configuration
+- wallets config
+- link config
+- defaultValues
+- appearance/options passed into Stripe Elements
+
+2) DISABLE LINK PROPERLY
+Update the Stripe setup so Link is not shown in checkout.
+
+Likely this means disabling Link in the PaymentElement config / payment method order / supported payment methods so only card input appears.
+
+3) KEEP CARD-ONLY EXPERIENCE
+If needed, switch to the Stripe element/configuration that gives the cleanest card-only experience while preserving the current payment flow.
+
+4) VERIFY ALL CARD CHECKOUT FLOWS
+Test:
+- normal invoice card checkout
+- public/send-invoice card checkout
+- any subcontract card checkout if it shares the same Stripe form
+
+5) ADD TARGETED LOGS ONLY IF NEEDED
+Only if helpful:
+- which Stripe element/config is being used
+- whether Link is enabled/disabled in the final config
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact Stripe config/component that was causing Link to appear
+3. what was changed to remove Link
+4. confirmation that card checkout now shows only card entry fields
+5. confirmation that card payments still work normally
+
+SUCCESS CRITERIA
+- Stripe Link no longer appears during card checkout
+- customer only sees normal card entry UI
+- card payments still process successfully
