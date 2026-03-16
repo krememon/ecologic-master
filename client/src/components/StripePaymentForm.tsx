@@ -71,12 +71,12 @@ function CheckoutForm({
     <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Card payment</p>
-          <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">Enter card details to collect the remaining balance.</p>
+          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Payment method</p>
+          <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">Choose how to pay the remaining balance.</p>
           <PaymentElement
             options={{
               layout: "tabs",
-              wallets: { applePay: "never", googlePay: "never" },
+              wallets: { applePay: "auto", googlePay: "never" },
               fields: {
                 billingDetails: {
                   email: "never",

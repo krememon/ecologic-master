@@ -15227,6 +15227,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Apple Pay domain verification file — required by Apple/Stripe for web Apple Pay
+  app.get('/.well-known/apple-developer-merchantid-domain-association', async (_req, res) => {
+    try {
+      const fetch = (await import('node-fetch')).default;
+      const stripeFileUrl = 'https://stripe.com/files/apple-pay/apple-developer-merchantid-domain-association';
+      const response = await fetch(stripeFileUrl);
+      if (!response.ok) {
+        console.error('[ApplePay] Failed to fetch domain association file from Stripe:', response.status);
+        return res.status(502).send('Failed to retrieve Apple Pay domain association file');
+      }
+      const fileContent = await response.buffer();
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Length', fileContent.length.toString());
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      console.log('[ApplePay] Served domain association file, size:', fileContent.length);
+      res.end(fileContent);
+    } catch (err) {
+      console.error('[ApplePay] Error serving domain association file:', err);
+      res.status(500).send('Internal server error');
+    }
+  });
+
   app.get('/.well-known/apple-app-site-association', (_req, res) => {
     const aasa = {
       applinks: {

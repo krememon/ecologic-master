@@ -1,0 +1,122 @@
+We need to integrate APPLE PAY into EcoLogic as a checkout payment method using Stripe.
+
+GOAL
+Allow customers to pay invoices with Apple Pay wherever Stripe supports it, while keeping existing card and other payment methods working.
+
+IMPORTANT
+This task is for Apple Pay as an online checkout wallet/payment option inside EcoLogic.
+This is NOT the separate “Tap to Pay on iPhone” card-reader style in-person product unless the current architecture already explicitly uses that.
+
+DO NOT BREAK
+- existing Stripe card payments
+- existing Klarna / other intended Stripe payment methods
+- public/send-invoice checkout
+- normal invoice checkout
+- subcontract checkout if it shares Stripe flow
+- successful payment confirmation
+- QuickBooks sync after successful payment
+- refunds
+
+GOAL UX
+When a compatible Apple device/browser/app context is available:
+- customer should see an Apple Pay option
+- tapping it should complete payment quickly
+- payment should flow through Stripe and mark the invoice paid exactly like card payments do
+
+When Apple Pay is NOT available:
+- checkout should gracefully fall back to normal payment methods
+- no broken buttons / dead UI
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE EXACT STRIPE CHECKOUT IMPLEMENTATION
+Find the exact components/config used for invoice payment checkout:
+- normal invoice checkout
+- public/send-invoice checkout
+- subcontract checkout if shared
+
+Identify whether we currently use:
+- Stripe PaymentElement
+- Express Checkout Element
+- PaymentRequestButton
+- custom card element flow
+- confirmPayment / confirmCardPayment flow
+- wallet/payment method ordering config
+
+2) CHOOSE THE CORRECT APPLE PAY INTEGRATION PATH
+Implement Apple Pay using the best Stripe-supported approach for the current architecture.
+
+Preferred outcome:
+- add Apple Pay in the cleanest way that works with the existing Stripe setup
+- keep other intended methods intact
+- do not force a full rewrite unless truly necessary
+
+3) VERIFY STRIPE + DOMAIN REQUIREMENTS
+Check and document what is required for Apple Pay to work:
+- Stripe wallet config
+- HTTPS/public domain requirement
+- Apple Pay domain verification if needed
+- any web/native differences
+- whether Replit preview/dev URLs are insufficient and deployment/custom domain is required
+
+Do not fake availability in unsupported environments.
+
+4) IMPLEMENT APPLE PAY BUTTON / WALLET DISPLAY
+Requirements:
+- show Apple Pay only when available/supported
+- keep checkout clean and polished
+- preserve normal card fields and other payment methods
+- do not break existing layout
+
+5) PAYMENT SUCCESS PATH
+After Apple Pay succeeds:
+- EcoLogic payment record should be created correctly
+- invoice should mark paid
+- payments list/history should update correctly
+- QuickBooks sync should run exactly like successful Stripe card payments
+- no duplicate payment records
+
+6) VERIFY PUBLIC + INTERNAL FLOWS
+Test Apple Pay in:
+- internal invoice checkout
+- public/send-invoice checkout
+- any shared mobile/native checkout path if supported
+
+7) HANDLE UNSUPPORTED CASES CLEANLY
+If Apple Pay is unavailable because of:
+- browser/device unsupported
+- domain not verified
+- non-HTTPS/dev environment
+- simulator limitation
+
+Then:
+- do not show a broken Apple Pay option
+- fall back cleanly to normal methods
+- document exactly what production requirements remain
+
+8) ADD TARGETED LOGS
+Add concise logs only where useful:
+- checkout config resolved
+- Apple Pay available or not
+- reason unavailable if detectable
+- Stripe confirm path entered
+- payment success/failure
+- invoice/payment sync result
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact Stripe element/config chosen for Apple Pay
+3. whether Apple Pay now appears in supported environments
+4. any required domain verification / production setup steps still needed
+5. confirmation that successful Apple Pay payments mark invoices paid and flow through existing payment sync logic
+6. short test plan for supported vs unsupported environments
+
+SUCCESS CRITERIA
+- Apple Pay appears as a payment option where supported
+- customers can successfully pay invoices with Apple Pay
+- existing payment methods still work
+- payment/invoice/history/QuickBooks flows remain correct
+- unsupported environments fall back gracefully
