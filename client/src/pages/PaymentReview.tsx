@@ -300,6 +300,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     setStripePublishableKey(null);
     setStripeAmountCents(0);
     setStripePaymentIntentId(null);
+    // Refresh invoice data so frontend balance matches the real DB state
+    // (important if a prior card attempt with discount mutated any state)
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
   };
 
   const invalidateAll = () => {

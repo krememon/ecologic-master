@@ -11016,6 +11016,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (matchedPayment.status === 'processing') {
         await db.update(payments).set({ status: 'succeeded', paidDate: new Date() }).where(eq(payments.id, matchedPayment.id));
         console.log(`[StripeConfirm] paymentId=${matchedPayment.id} upgraded processing→succeeded`);
+
+        // Apply discount to invoice NOW (deferred from create-intent to avoid stale DB state on cancel)
+        const paymentDiscountMeta = (matchedPayment as any).meta?.discount;
+        if (paymentDiscountMeta?.enabled && paymentDiscountMeta.amountCents > 0) {
+          const [invForDiscount] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+          if (invForDiscount) {
+            const discCents = Math.min(paymentDiscountMeta.amountCents, invForDiscount.totalCents);
+            if (discCents > 0) {
+              const newTotalCents = Math.max(0, invForDiscount.totalCents - discCents);
+              const paidSoFar = invForDiscount.paidAmountCents || 0;
+              await db.update(invoices).set({
+                totalCents: newTotalCents,
+                balanceDueCents: Math.max(0, newTotalCents - paidSoFar),
+                amount: (newTotalCents / 100).toFixed(2),
+                updatedAt: new Date(),
+              }).where(eq(invoices.id, invoiceId));
+              console.log(`[StripeConfirm] Discount applied: invoiceId=${invoiceId} totalCents ${invForDiscount.totalCents}→${newTotalCents} discCents=${discCents}`);
+            }
+          }
+        }
+
         await persistRecomputedTotals(invoiceId);
         matchedPayment = { ...matchedPayment, status: 'succeeded' };
 
@@ -15386,15 +15407,10 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
             amountCents: discCents,
             reason: discount.reason || null,
           };
-          const newTotalCents = Math.max(0, invoiceTotalCents - discCents);
-          const currentPaidCents = computed.paidCents;
-          await db.update(invoices).set({
-            totalCents: newTotalCents,
-            balanceDueCents: Math.max(0, newTotalCents - currentPaidCents),
-            amount: (newTotalCents / 100).toFixed(2),
-            updatedAt: new Date(),
-          }).where(eq(invoices.id, invoice.id));
-          console.log(`[Stripe] Invoice ${invoiceId} totalCents adjusted for discount: ${invoiceTotalCents} → ${newTotalCents} (discount=${discCents})`);
+          // NOTE: Do NOT update invoice.totalCents here — the invoice is only mutated once the
+          // Stripe payment actually succeeds (in /api/payments/stripe/confirm). This prevents
+          // stale/discounted invoice totals when the card form is cancelled before payment completes.
+          console.log(`[Stripe] Discount recorded in payment meta: invoiceId=${invoiceId} discountCents=${discCents} (invoice totalCents NOT mutated yet)`);
         }
       }
 

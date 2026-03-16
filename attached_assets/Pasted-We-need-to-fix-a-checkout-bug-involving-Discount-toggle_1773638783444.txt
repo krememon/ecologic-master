@@ -1,0 +1,102 @@
+We need to fix a checkout bug involving Discount toggle state.
+
+BUG
+I was testing the Discount toggle by turning it on and off, then tried to pay WITHOUT the discount applied, and I got this error:
+
+400: {"message":"Payment amount cannot exceed balance due"}
+
+This looks like a state/balance recalculation bug — likely the discount value or balance-due logic is not resetting correctly after toggling discount off.
+
+GOAL
+If the user turns Discount on, then turns it back off, checkout should return to the normal full-balance amount cleanly and payment should proceed without any false “amount exceeds balance due” error.
+
+IMPORTANT
+This is likely a frontend/backend amount-sync bug, not a real payment rule problem.
+Do NOT just hide the error.
+We need to fix the actual amount/balance logic.
+
+DO NOT BREAK
+- normal invoice payments
+- partial payment logic
+- discount logic when actually enabled
+- cash/check/card flows
+- QuickBooks sync
+- subcontract discount behavior rules that already exist
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE CHECKOUT AMOUNT FLOW
+Find the full amount calculation path for checkout:
+- invoice total
+- displayed total
+- balance due
+- partial payment amount
+- discount amount/percent
+- final payment amount submitted to backend
+- backend validation comparing submitted amount vs balance due
+
+2) REPRO THE EXACT TOGGLE BUG
+Test this exact sequence:
+- open invoice checkout
+- toggle Discount ON
+- enter/select a discount if needed
+- toggle Discount OFF
+- attempt to pay full amount normally
+
+We need to identify what stale value is not resetting.
+
+3) FIND THE STALE STATE
+Likely causes:
+- discount amount remains in form state after toggle off
+- displayed total resets but submitted payment amount does not
+- backend balanceDue uses discounted amount while frontend submits full amount
+- frontend payload still includes discount fields when toggle is off
+- invoice/balance summary recomputes visually but not in submit payload
+- partial/discount state interaction leaves stale derived value
+- validation compares against mutated balance due from previous toggle state
+
+4) FIX DISCOUNT OFF BEHAVIOR
+When Discount is turned OFF:
+- clear all discount-related form state
+- clear any derived discounted total
+- restore balance due to the true invoice balance
+- restore submitted payment amount to the correct full amount
+- ensure payload does not include stale discount fields/amounts
+- ensure backend validation sees the same amount the UI shows
+
+5) VERIFY PARTIAL PAYMENT INTERACTION
+Also test:
+- partial OFF / discount ON / discount OFF
+- partial ON / discount ON / discount OFF
+- discount ON then change amount then OFF
+Make sure no stale derived amounts remain.
+
+6) FIX ERROR HANDLING
+If backend still rejects, make sure the frontend shows a cleaner message than raw JSON.
+But only after the actual amount bug is fixed.
+
+7) ADD TARGETED LOGS
+Add concise temporary logs for:
+- invoice total
+- balance due
+- discount enabled/disabled
+- discount value
+- computed payable amount
+- submitted payment payload
+- backend validation values
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact root cause of the false “amount cannot exceed balance due” error
+3. whether the stale bug was frontend state, backend validation, or both
+4. confirmation that toggling Discount on then off no longer breaks payment
+5. confirmation that normal discount + partial flows still work
+
+SUCCESS CRITERIA
+- user can toggle Discount on and then off without breaking checkout
+- paying the normal full amount works afterward
+- no false “Payment amount cannot exceed balance due” appears
+- discount and partial payment features still behave correctly
