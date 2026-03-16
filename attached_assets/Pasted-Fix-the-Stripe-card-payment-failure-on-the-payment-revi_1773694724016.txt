@@ -1,0 +1,70 @@
+Fix the Stripe card payment failure on the payment review / checkout flow.
+
+Root cause from logs:
+Stripe is throwing:
+"You specified 'never' for fields.billing_details.email when creating the payment Element, but did not pass confirmParams.payment_method_data.billing_details.email when calling stripe.confirmPayment()."
+
+What to do:
+1. Find the frontend code where the Stripe Payment Element is created and where stripe.confirmPayment() is called.
+2. Keep the current UI behavior if we want the billing email hidden, BUT when calling stripe.confirmPayment(), always pass:
+   confirmParams: {
+     payment_method_data: {
+       billing_details: {
+         email: <customer email>
+       }
+     }
+   }
+3. Use the best available email source in this order:
+   - invoice customer email
+   - job/client email
+   - authenticated user email
+4. Add a defensive fallback so billing_details.email is never blank when card payment is submitted.
+5. Add targeted console logs right before confirmPayment:
+   [stripe-pay] invoiceId=...
+   [stripe-pay] billingEmail=...
+   [stripe-pay] paymentElementEmailMode=never
+6. If the current code sets fields.billing_details.email = 'never', preserve that only if confirmPayment is now supplying the email correctly.
+7. If there is any path where we cannot guarantee a billing email, switch the Payment Element config for email from 'never' to 'auto' so Stripe can collect it instead.
+8. Do not change any backend payment routing logic unless needed.
+9. Do not touch Tap to Pay / Terminal logic. This fix is only for the web/native Stripe Elements checkout flow.
+
+Also:
+- Find the Apple Pay / wallet button logic.
+- If Apple Pay is shown on Replit preview domains, add a guard so Apple Pay is hidden/disabled unless the current hostname is an approved registered domain.
+- Log:
+  [apple-pay] hostname=...
+  [apple-pay] allowed=true/false
+
+Deliverables:
+- frontend fix for confirmPayment
+- safe billing email fallback
+- Apple Pay hostname guard
+- concise summary of files changed
+
+And the exact coding shape the agent should end up with is basically this:
+
+const billingEmail =
+  invoice?.customerEmail ||
+  job?.clientEmail ||
+  user?.email ||
+  '';
+
+const result = await stripe.confirmPayment({
+  elements,
+  confirmParams: {
+    payment_method_data: {
+      billing_details: {
+        email: billingEmail,
+      },
+    },
+    return_url: returnUrl,
+  },
+});
+
+If billingEmail can ever be empty, then the safer fix is to stop suppressing email collection in the Payment Element and let Stripe collect it directly. Stripe supports both approaches, but the current setup is invalid because it hides email without supplying it on confirm.
+
+So in plain English:
+card payments are failing because your checkout hid the billing email field but forgot to send the email manually at confirmation time.
+Apple Pay is also not valid on that Replit preview domain.
+
+Paste me the payment component after the agent changes it, and I’ll check it line by line.

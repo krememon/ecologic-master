@@ -13,16 +13,31 @@ interface StripePaymentFormProps {
   publishableKey: string;
   amountCents: number;
   invoiceId: number;
+  billingEmail?: string;
   onSuccess: (paymentIntentId: string) => void;
   onCancel: () => void;
 }
 
+// Apple Pay is only valid on domains registered with Apple via Stripe.
+// Replit preview URLs (picard.replit.dev) and localhost are never registered.
+function isApplePayAllowed(): boolean {
+  const hostname = window.location.hostname;
+  const allowed =
+    hostname === "eco-logic-pjpell077.replit.app" ||
+    hostname === "ecologicc.com" ||
+    hostname.endsWith(".ecologicc.com");
+  console.log(`[apple-pay] hostname=${hostname} allowed=${allowed}`);
+  return allowed;
+}
+
 function CheckoutForm({
   amountCents,
+  billingEmail,
   onSuccess,
   onCancel,
 }: {
   amountCents: number;
+  billingEmail: string;
   onSuccess: (paymentIntentId: string) => void;
   onCancel: () => void;
 }) {
@@ -30,6 +45,8 @@ function CheckoutForm({
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const hasEmail = billingEmail.trim().length > 0;
 
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat("en-US", {
@@ -45,11 +62,24 @@ function CheckoutForm({
     setIsProcessing(true);
     setErrorMessage(null);
 
+    console.log(`[stripe-pay] paymentElementEmailMode=${hasEmail ? "never" : "auto"}`);
+    console.log(`[stripe-pay] billingEmail=${hasEmail ? billingEmail : "(none — Stripe will collect)"}`);
+
+    const confirmParams: any = {
+      return_url: window.location.origin + "/jobs",
+    };
+
+    if (hasEmail) {
+      confirmParams.payment_method_data = {
+        billing_details: {
+          email: billingEmail,
+        },
+      };
+    }
+
     const result = await stripe.confirmPayment({
       elements,
-      confirmParams: {
-        return_url: window.location.origin + "/jobs",
-      },
+      confirmParams,
       redirect: "if_required",
     });
 
@@ -76,10 +106,15 @@ function CheckoutForm({
           <PaymentElement
             options={{
               layout: "tabs",
-              wallets: { applePay: "auto", googlePay: "never" },
+              wallets: {
+                applePay: isApplePayAllowed() ? "auto" : "never",
+                googlePay: "never",
+              },
               fields: {
                 billingDetails: {
-                  email: "never",
+                  // If we have an email to supply manually, hide the field.
+                  // If we don't, let Stripe collect it so confirmPayment never fails.
+                  email: hasEmail ? "never" : "auto",
                   phone: "never",
                 },
               },
@@ -140,6 +175,7 @@ export default function StripePaymentForm({
   publishableKey,
   amountCents,
   invoiceId,
+  billingEmail = "",
   onSuccess,
   onCancel,
 }: StripePaymentFormProps) {
@@ -180,6 +216,7 @@ export default function StripePaymentForm({
     >
       <CheckoutForm
         amountCents={amountCents}
+        billingEmail={billingEmail}
         onSuccess={onSuccess}
         onCancel={onCancel}
       />

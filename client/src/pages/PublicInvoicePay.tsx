@@ -641,6 +641,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                 publishableKey={publishableKey}
                 amountCents={intentAmountCents}
                 invoiceId={invoice.id}
+                billingEmail={invoice.customer?.email || invoice.company?.email || ''}
                 onSuccess={handlePaymentSuccess}
                 onCancel={handlePaymentCancel}
               />

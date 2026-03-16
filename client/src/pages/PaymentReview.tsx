@@ -119,6 +119,10 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   });
   const qboConnected = canSyncQbo && qboStatus?.connected === true;
 
+  const { data: authUser } = useQuery<{ email?: string }>({
+    queryKey: ['/api/auth/user'],
+  });
+
   const { data: invoiceData, isLoading: invoiceLoading, error: invoiceError } = useQuery<{ invoice: Invoice | null }>({
     queryKey: ['/api/jobs', numericJobId, 'invoice'],
     queryFn: async () => {
@@ -926,6 +930,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               publishableKey={stripePublishableKey}
               amountCents={stripeAmountCents}
               invoiceId={numericInvoiceId}
+              billingEmail={authUser?.email || ''}
               onSuccess={handleCardPaymentSuccess}
               onCancel={handleCardPaymentCancel}
             />

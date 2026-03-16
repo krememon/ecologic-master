@@ -225,6 +225,10 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const canRefund = REFUND_ROLES.has(userRole);
   const canCollect = data?.canRecordManualPayment ?? false;
 
+  const { data: authUser } = useQuery<{ email?: string }>({
+    queryKey: ["/api/auth/user"],
+  });
+
   const {
     isModalOpen: sigModalOpen,
     pendingPayment: sigPendingPayment,
@@ -608,6 +612,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
               publishableKey={stripeData.publishableKey}
               amountCents={stripeData.amountCents}
               invoiceId={parseInt(invoiceId)}
+              billingEmail={authUser?.email || ''}
               onSuccess={handleCardPaymentSuccess}
               onCancel={handleCardPaymentCancel}
             />
