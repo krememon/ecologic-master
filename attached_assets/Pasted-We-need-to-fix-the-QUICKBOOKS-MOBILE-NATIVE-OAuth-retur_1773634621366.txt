@@ -1,0 +1,110 @@
+We need to fix the QUICKBOOKS MOBILE/NATIVE OAuth return flow.
+
+CURRENT STATUS
+This improved partially:
+- tapping Connect QuickBooks now opens Safari to the QuickBooks sign-in page
+
+But it is STILL broken because after signing in:
+1. it sends me to EcoLogic on the WEB instead of returning cleanly to the native app
+2. it does NOT successfully complete/sign in/connect QuickBooks
+
+GOAL
+On native/mobile, QuickBooks connect should work end to end:
+- user taps Connect in EcoLogic
+- QuickBooks opens for auth
+- after successful auth, the flow returns to the NATIVE EcoLogic app
+- QuickBooks connection completes successfully
+- app state updates to show QuickBooks connected
+
+IMPORTANT
+This is specifically the MOBILE/NATIVE OAuth callback/handoff flow.
+Do NOT break the web QuickBooks flow if it already works.
+
+MOST LIKELY ISSUE
+The OAuth callback/redirect URI is probably returning to a normal web URL instead of a native deep link / app-safe return path, or the callback completes in web without restoring the authenticated native context.
+
+WHAT TO INVESTIGATE
+
+1) TRACE THE FULL MOBILE QUICKBOOKS FLOW
+Find the exact sequence for native:
+- Connect button tap handler
+- route used to start QuickBooks OAuth
+- state/nonce/session values used
+- redirect URI sent to QuickBooks
+- backend callback route
+- final redirect after callback success/failure
+
+2) IDENTIFY WHY IT RETURNS TO WEB
+Determine exactly why after QuickBooks auth it lands on web EcoLogic instead of back in the native app.
+Check for:
+- redirect_uri configured only for web
+- backend callback always redirecting to web URL
+- no native deep link / custom scheme / app URL handling
+- Capacitor Browser not being closed with an app handoff
+- missing mobile-specific callback completion page
+
+3) FIX MOBILE RETURN-TO-APP FLOW
+Implement a correct native return path.
+Possible valid patterns:
+- callback finishes on backend, then redirects to an app deep link / Capacitor app URL
+- callback redirects to a tiny completion page that hands control back to the native app
+- app listens for callback URL and closes Safari/Browser correctly
+
+Do NOT leave the user stranded on the web app after QuickBooks auth.
+
+4) FIX CONNECTION COMPLETION
+After auth success, make sure the QuickBooks account is actually connected.
+Verify:
+- tokens are stored correctly
+- company/user mapping is saved correctly
+- auth state for the initiating user/company is resolved correctly
+- connection status updates in EcoLogic
+
+5) PRESERVE USER AUTH CONTEXT
+A likely problem is that callback finishes in a browser context that does not share the native app’s auth/session.
+Fix this so the initiating authenticated native user/company is reliably linked to the QuickBooks connection.
+
+6) HANDLE SUCCESS / FAILURE CLEANLY
+After success on mobile:
+- user should return to native EcoLogic
+- user should see QuickBooks connected
+- no silent failure
+- no landing on generic web app page
+
+After failure:
+- user should return cleanly with an understandable error
+- never raw JSON / blank page
+
+7) CHECK CONFIG
+Verify all QuickBooks OAuth config values involved:
+- redirect URIs
+- app callback URLs
+- native deep link/custom scheme if used
+- web vs mobile return URL branching
+
+8) ADD TARGETED LOGS
+Add concise logs only where useful:
+- mobile QuickBooks connect started
+- platform detected
+- redirect URI sent to QuickBooks
+- callback hit
+- user/company resolved
+- tokens stored
+- final redirect target
+- native handoff success/failure
+
+Avoid noisy logs.
+
+DELIVERABLES
+Return:
+1. exact files changed
+2. exact root cause of why QuickBooks auth returned to web
+3. exact root cause of why the connection did not complete successfully
+4. what was changed for native callback/return flow
+5. confirmation that after QuickBooks auth, the user now returns to the native EcoLogic app and sees QuickBooks connected
+
+SUCCESS CRITERIA
+- Connect QuickBooks on native opens QuickBooks auth
+- after sign-in, flow returns to the native EcoLogic app, not web
+- QuickBooks connection actually completes successfully
+- app reflects connected state
