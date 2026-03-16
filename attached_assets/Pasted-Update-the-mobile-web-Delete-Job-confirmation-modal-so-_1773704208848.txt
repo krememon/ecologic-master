@@ -1,0 +1,50 @@
+Update the mobile/web Delete Job confirmation modal so it matches the 2nd reference image much more closely.
+
+Goal:
+The current delete modal looks too tall, too plain, and not as polished as the reference. I want the same overall content/actions, but styled like the 2nd screenshot:
+- tighter, cleaner modal
+- better proportions
+- more rounded corners
+- stronger visual hierarchy
+- centered layout
+- correct spacing between title, message, and buttons
+- red primary Delete button
+- light secondary Cancel button
+- more premium iPhone-style confirmation dialog
+
+What to change:
+1. Find the Delete Job confirmation modal component.
+2. Update only the modal styling/layout — do not change delete functionality.
+3. Match this structure:
+   - centered modal card
+   - white background
+   - large rounded corners
+   - subtle shadow
+   - title centered: “Delete Job”
+   - body text centered and constrained in width
+   - first button: solid red, full width, rounded
+   - second button: light/neutral background, full width, rounded
+4. Reduce excess vertical height/padding so it feels tighter like the reference.
+5. Make sure the text wraps nicely like:
+   “Are you sure you want to delete "Job for James Doherty"? This action cannot be undone.”
+6. Add slightly more horizontal padding inside the modal and cleaner spacing between:
+   - title and message
+   - message and Delete button
+   - Delete and Cancel buttons
+7. Buttons should be the same width and aligned perfectly.
+8. Keep the destructive emphasis on Delete, but make the overall modal feel more polished and less bulky.
+9. Mobile-first: it should look especially good on iPhone-sized screens.
+10. Do not change any other job page layout outside this modal.
+
+Visual target:
+- modal width similar to reference
+- rounded card corners around 24–28px
+- red delete button with white text
+- pale gray cancel button with dark text
+- balanced vertical spacing
+- clean Apple-style confirmation feel
+
+Deliverables:
+- updated Delete Job modal UI
+- no logic changes
+- concise summary of file(s) changed
