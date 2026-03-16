@@ -2504,11 +2504,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       console.log('[QB] Connection saved successfully');
-      res.redirect('/customize/quickbooks?connected=true');
+      // Redirect to a lightweight bridge page instead of the full SPA so that
+      // on native the user sees a simple "Connected!" screen in Safari while
+      // the native WebView's poll detects the connection and closes the browser.
+      res.redirect('/quickbooks-success');
     } catch (error: any) {
       console.error('[QB] Error in callback:', error);
-      res.redirect('/customize/quickbooks?error=unknown');
+      res.redirect('/quickbooks-error');
     }
+  });
+
+  // Lightweight bridge pages for QuickBooks OAuth return — no auth required.
+  // These are served before the SPA catch-all so they load as plain HTML.
+  const QB_BRIDGE_CSS = `
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;color:#111827;text-align:center;padding:24px;box-sizing:border-box;}
+    .icon{font-size:72px;margin-bottom:20px;line-height:1;}
+    h1{font-size:22px;font-weight:700;margin:0 0 10px;}
+    p{font-size:15px;color:#6b7280;margin:0 0 6px;max-width:300px;}
+    .sub{font-size:13px;color:#9ca3af;margin-top:12px;}
+  `;
+  app.get('/quickbooks-success', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // On native: the native WebView poll detects connected and closes Safari within ~500ms.
+    // On web: the meta-refresh returns the user to the QuickBooks settings page after 2s.
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2; url=/customize/quickbooks"><title>QuickBooks Connected</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">✅</div><h1>QuickBooks Connected!</h1><p>Your QuickBooks account has been linked to EcoLogic.</p><p class="sub">Returning to the app…</p></body></html>`);
+  });
+  app.get('/quickbooks-error', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="3; url=/customize/quickbooks"><title>Connection Failed</title><style>${QB_BRIDGE_CSS}</style></head><body><div class="icon">❌</div><h1>Connection Failed</h1><p>Could not connect your QuickBooks account.</p><p class="sub">Please close this window and try again in EcoLogic.</p></body></html>`);
   });
 
   // POST /api/integrations/quickbooks/test - Test QuickBooks connection

@@ -99,81 +99,131 @@ export default function QuickBooksSettings() {
       if (!data?.url) throw new Error('No OAuth URL returned');
       console.log('[QB] OAuth URL received');
 
-      if (isNativePlatform()) {
-        // Native: open QuickBooks OAuth in the system browser (Safari on iOS),
-        // then poll the status endpoint until the connection completes.
-        // The callback stores tokens in the DB keyed by companyId embedded in
-        // the signed state token — no native session context needed in the browser.
-        const { Browser } = await import('@capacitor/browser');
-        const baseUrl = getApiBaseUrl();
-
-        let pollInterval: ReturnType<typeof setInterval> | null = null;
-        let pollTimeout: ReturnType<typeof setTimeout> | null = null;
-        let done = false;
-        let finishedListener: any = null;
-
-        const cleanup = async (closeBrowser: boolean) => {
-          if (done) return;
-          done = true;
-          if (pollInterval) clearInterval(pollInterval);
-          if (pollTimeout) clearTimeout(pollTimeout);
-          if (finishedListener) { try { finishedListener.remove(); } catch {} }
-          if (closeBrowser) { try { await Browser.close(); } catch {} }
-          setIsConnecting(false);
-        };
-
-        // Stop polling if the user manually closes Safari before completing auth
-        finishedListener = await Browser.addListener('browserFinished', () => {
-          console.log('[QB] native: browser closed by user');
-          cleanup(false);
-        });
-
-        console.log('[QB] native: opening OAuth in system browser');
-        await Browser.open({ url: data.url, presentationStyle: 'fullscreen' });
-
-        // Poll status every 2 s — callback stores tokens server-side, so when
-        // connected flips to true the native app can close the browser and update.
-        pollInterval = setInterval(async () => {
-          if (done) return;
-          try {
-            const nativeSid = localStorage.getItem('nativeSessionId');
-            const headers: Record<string, string> = nativeSid
-              ? { Authorization: `Bearer ${nativeSid}` }
-              : {};
-            const statusRes = await fetch(
-              `${baseUrl}/api/integrations/quickbooks/status`,
-              { credentials: 'include', headers },
-            );
-            const status = await statusRes.json();
-            console.log('[QB] poll — connected:', status.connected);
-            if (status.connected) {
-              await cleanup(true);
-              queryClient.invalidateQueries({ queryKey: ['/api/integrations/quickbooks/status'] });
-              toast({
-                title: 'QuickBooks Connected',
-                description: 'Your QuickBooks account has been connected successfully.',
-              });
-            }
-          } catch (err) {
-            console.error('[QB] poll error:', err);
-          }
-        }, 2000);
-
-        // 5-minute hard timeout
-        pollTimeout = setTimeout(async () => {
-          await cleanup(true);
-          toast({
-            title: 'Connection Timed Out',
-            description: 'QuickBooks connection did not complete. Please try again.',
-            variant: 'destructive',
-          });
-        }, 5 * 60 * 1000);
-
-      } else {
-        // Web: navigate directly — session cookie is present so the backend
-        // redirect flow completes normally and lands on ?connected=true.
+      if (!isNativePlatform()) {
+        // Web: session cookie is present — redirect flows normally through the
+        // backend callback and the /quickbooks-success bridge page.
         window.location.href = data.url;
+        return;
       }
+
+      // ── Native flow ────────────────────────────────────────────────────────
+      // 1. Open QuickBooks OAuth in the system browser (Safari on iOS).
+      // 2. Poll /status every 500ms.  The callback stores tokens server-side
+      //    (authenticated via the signed state token — no Safari session needed).
+      // 3. When connected, close Safari and refresh the UI.
+      // 4. On browser close (user dismissal): run 6 recovery polls at 500ms
+      //    before giving up, catching connections that finished just before
+      //    the browser was closed.
+      const { Browser } = await import('@capacitor/browser');
+      const baseUrl = getApiBaseUrl();
+
+      let done = false;
+      let mainPoll: ReturnType<typeof setInterval> | null = null;
+      let hardTimeout: ReturnType<typeof setTimeout> | null = null;
+      let finishedListener: any = null;
+
+      const checkStatus = async (): Promise<boolean> => {
+        const nativeSid = localStorage.getItem('nativeSessionId');
+        const headers: Record<string, string> = nativeSid
+          ? { Authorization: `Bearer ${nativeSid}` }
+          : {};
+        const r = await fetch(`${baseUrl}/api/integrations/quickbooks/status`, {
+          credentials: 'include',
+          headers,
+        });
+        const s = await r.json();
+        return !!s.connected;
+      };
+
+      const onSuccess = async (closeBrowser: boolean) => {
+        if (done) return;
+        done = true;
+        if (mainPoll) { clearInterval(mainPoll); mainPoll = null; }
+        if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+        if (finishedListener) { try { finishedListener.remove(); } catch {} }
+        if (closeBrowser) { try { await Browser.close(); } catch {} }
+        setIsConnecting(false);
+        queryClient.invalidateQueries({ queryKey: ['/api/integrations/quickbooks/status'] });
+        toast({
+          title: 'QuickBooks Connected',
+          description: 'Your QuickBooks account has been connected successfully.',
+        });
+      };
+
+      const onCancelled = () => {
+        if (done) return;
+        done = true;
+        if (mainPoll) { clearInterval(mainPoll); mainPoll = null; }
+        if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+        if (finishedListener) { try { finishedListener.remove(); } catch {} }
+        setIsConnecting(false);
+      };
+
+      // When Safari closes (user dismissal OR our Browser.close() call):
+      // - If done=true already, it means our poll triggered the close — ignore.
+      // - Otherwise run up to 6 recovery polls at 500ms (3 s total) to catch
+      //   connections that completed just before the user dismissed the bridge page.
+      finishedListener = await Browser.addListener('browserFinished', () => {
+        console.log('[QB] native: browser closed');
+        if (done) return;
+        if (mainPoll) { clearInterval(mainPoll); mainPoll = null; }
+        if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+
+        let recoveries = 0;
+        const recoveryPoll = setInterval(async () => {
+          if (done) { clearInterval(recoveryPoll); return; }
+          recoveries++;
+          try {
+            const connected = await checkStatus();
+            console.log('[QB] recovery poll', recoveries, '— connected:', connected);
+            if (connected) {
+              clearInterval(recoveryPoll);
+              onSuccess(false);
+              return;
+            }
+          } catch {}
+          if (recoveries >= 6) {
+            clearInterval(recoveryPoll);
+            onCancelled();
+          }
+        }, 500);
+      });
+
+      console.log('[QB] native: opening QB OAuth in system browser');
+      await Browser.open({ url: data.url, presentationStyle: 'fullscreen' });
+
+      // Main poll at 500ms — fast enough to close Safari before the user
+      // sees the /quickbooks-success bridge page.
+      mainPoll = setInterval(async () => {
+        if (done) return;
+        try {
+          const connected = await checkStatus();
+          console.log('[QB] poll — connected:', connected);
+          if (connected) {
+            clearInterval(mainPoll!);
+            mainPoll = null;
+            onSuccess(true);
+          }
+        } catch (err) {
+          console.error('[QB] poll error:', err);
+        }
+      }, 500);
+
+      // 5-minute hard timeout
+      hardTimeout = setTimeout(async () => {
+        if (done) return;
+        done = true;
+        if (mainPoll) clearInterval(mainPoll);
+        if (finishedListener) { try { finishedListener.remove(); } catch {} }
+        try { await Browser.close(); } catch {}
+        setIsConnecting(false);
+        toast({
+          title: 'Connection Timed Out',
+          description: 'QuickBooks connection did not complete. Please try again.',
+          variant: 'destructive',
+        });
+      }, 5 * 60 * 1000);
+
     } catch (error: any) {
       console.error('[QB] Failed to start QuickBooks connect:', error);
       setIsConnecting(false);
