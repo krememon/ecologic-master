@@ -1,0 +1,63 @@
+Update the Developer Tools Billing companies list so it only shows ACTIVE companies by default.
+
+GOAL
+Right now the Billing tab company list is showing blocked/inactive companies too. I only want ACTIVE companies shown in the default list.
+
+WHAT TO CHANGE
+
+1) DEFAULT FILTER
+Change the Billing tab companies query/list so the default view only includes companies where access is active / allowed.
+
+That means:
+- hide blocked companies from the default list
+- hide inactive/paused companies from the default list unless they still count as active access in your billing model
+- only show companies currently considered active in the app
+
+Use the same effective billing/access resolver already created, so the definition of “active” is consistent.
+
+2) SEARCH BEHAVIOR
+When I search by email:
+- search only within active companies by default
+- do not show blocked companies in normal search results
+
+3) OPTIONAL FILTER SUPPORT
+Add support for an optional filter internally, so later we can toggle:
+- active
+- blocked
+- all
+
+But for now:
+- default UI should only show active
+- no need to expose the blocked/all toggle yet unless it’s easy
+
+4) HEADER COUNT
+Update the header count so it reflects only active companies, not total companies in the database.
+
+Example:
+- “Companies · 142 Active”
+instead of total all-company count
+
+5) ROW STATUS
+For the active-only list:
+- keep status badges if useful
+- but rows in this default view should all be active/allowed companies
+
+6) BACKEND
+Update the dev billing companies endpoint so it can support:
+- activeOnly=true by default
+or equivalent default server-side filtering
+
+Make sure filtering uses the actual effective access logic, not just a random raw field.
+
+7) IMPORTANT
+- Keep this dev-only
+- Do not break company selection
+- Do not remove search by email
+- Do not remove the ability to later inspect blocked companies if we add a toggle later
+- Just make the normal default list active companies only
+
+DELIVERABLES
+- Billing companies list only shows active companies by default
+- Header count reflects active companies only
+- Email search searches active companies only by default
+- Backend supports active-only filtering cleanly

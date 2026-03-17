@@ -19262,6 +19262,9 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         }
 
         const { getEffectiveBillingAccess } = await import('./billingResolver');
+        // activeOnly defaults to true; pass ?activeOnly=false to include blocked companies
+        const activeOnly = req.query.activeOnly !== 'false';
+
         const enriched = allRows.map((r: any) => {
           const billing = getEffectiveBillingAccess(r);
           return {
@@ -19282,7 +19285,10 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           };
         });
 
-        res.json({ ok: true, companies: enriched, total: enriched.length });
+        const activeCount = enriched.filter((c: any) => c.accessAllowed).length;
+        const filtered = activeOnly ? enriched.filter((c: any) => c.accessAllowed) : enriched;
+
+        res.json({ ok: true, companies: filtered, total: filtered.length, activeCount, totalAll: enriched.length });
       } catch (e: any) {
         console.error('[dev-admin] billing/companies error:', e);
         res.status(500).json({ ok: false, error: e.message });

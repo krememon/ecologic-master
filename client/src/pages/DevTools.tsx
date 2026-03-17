@@ -928,6 +928,7 @@ function BillingTab() {
   });
   const allCompanies: any[] = (listData as any)?.companies || [];
   const totalCount: number = (listData as any)?.total || 0;
+  const activeCount: number = (listData as any)?.activeCount ?? totalCount;
 
   // Client-side filter: email-first search
   const filterLower = emailFilter.trim().toLowerCase();
@@ -996,7 +997,7 @@ function BillingTab() {
     <div className="space-y-5">
 
       {/* ── Company list panel ─────────────────────────────────────────── */}
-      <DevCard title={`Companies ${totalCount > 0 ? `· ${totalCount} total` : ''}`} icon={Building2}>
+      <DevCard title={`Companies ${activeCount > 0 ? `· ${activeCount} Active` : ''}`} icon={Building2}>
         {/* Search input */}
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
@@ -1054,8 +1055,8 @@ function BillingTab() {
             })}
           </div>
         )}
-        {!listLoading && filterLower && filtered.length > 0 && (
-          <p className="text-xs text-slate-600 mt-2">{filtered.length} of {totalCount} shown</p>
+        {!listLoading && filterLower && (
+          <p className="text-xs text-slate-600 mt-2">{filtered.length} of {activeCount} active match</p>
         )}
       </DevCard>
 
