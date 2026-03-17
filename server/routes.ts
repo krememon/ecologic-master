@@ -4359,17 +4359,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!company) {
         return res.json({ active: false, status: 'no_company' });
       }
+      const { getEffectiveBillingAccess } = await import('./billingResolver');
+      const billing = getEffectiveBillingAccess(company);
       const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
-      const expired = periodEnd ? new Date(periodEnd) < new Date() : false;
-      const statusInDb = company.subscriptionStatus || 'inactive';
-      const isActiveInDb = statusInDb === 'active' || statusInDb === 'trialing';
-      const active = isActiveInDb && !expired;
       res.json({
-        active,
-        status: active ? statusInDb : 'inactive',
-        planKey: company.subscriptionPlan || null,
-        userLimit: company.maxUsers || 1,
+        active: billing.allowed,
+        status: billing.source,
+        planKey: billing.effectivePlan,
+        userLimit: billing.seatLimit,
         currentPeriodEnd: periodEnd,
+        billingSource: billing.source,
+        notes: billing.notes,
       });
     } catch (error) {
       console.error('[subscriptions/status] Error:', error);
@@ -19209,6 +19209,352 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         });
       } catch (e: any) {
         console.error('[dev-tools] integrations error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // ── ADMIN ROUTES ─────────────────────────────────────────────────────
+    async function writeAdminAuditLog(opts: {
+      actorEmail: string;
+      targetType: string;
+      targetId: string;
+      targetName?: string;
+      action: string;
+      beforeValue?: any;
+      afterValue?: any;
+      note?: string;
+    }) {
+      const { adminAuditLogs } = await import('@shared/schema');
+      await db.insert(adminAuditLogs).values({
+        actorEmail: opts.actorEmail,
+        targetType: opts.targetType,
+        targetId: opts.targetId,
+        targetName: opts.targetName ?? null,
+        action: opts.action,
+        beforeValue: opts.beforeValue ?? null,
+        afterValue: opts.afterValue ?? null,
+        note: opts.note ?? null,
+      });
+    }
+
+    // GET /api/dev/admin/company/search?q=
+    app.get('/api/dev/admin/company/search', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const q = (req.query.q as string || '').trim().toLowerCase();
+        const { ilike, or } = await import('drizzle-orm');
+        let rows: any[];
+        if (!q) {
+          rows = await db.select({
+            id: companies.id, name: companies.name, email: companies.email,
+            ownerId: companies.ownerId, subscriptionStatus: companies.subscriptionStatus,
+            subscriptionPlan: companies.subscriptionPlan, maxUsers: companies.maxUsers,
+            adminFreeAccess: companies.adminFreeAccess, adminBypassSubscription: companies.adminBypassSubscription,
+            adminPaused: companies.adminPaused, adminIsDemo: companies.adminIsDemo,
+            createdAt: companies.createdAt,
+          }).from(companies).limit(50);
+        } else {
+          rows = await db.select({
+            id: companies.id, name: companies.name, email: companies.email,
+            ownerId: companies.ownerId, subscriptionStatus: companies.subscriptionStatus,
+            subscriptionPlan: companies.subscriptionPlan, maxUsers: companies.maxUsers,
+            adminFreeAccess: companies.adminFreeAccess, adminBypassSubscription: companies.adminBypassSubscription,
+            adminPaused: companies.adminPaused, adminIsDemo: companies.adminIsDemo,
+            createdAt: companies.createdAt,
+          }).from(companies).where(
+            or(
+              ilike(companies.name, `%${q}%`),
+              ilike(companies.email, `%${q}%`),
+            )
+          ).limit(50);
+        }
+        // Annotate with owner email
+        const ownerIds = [...new Set(rows.map((r: any) => r.ownerId).filter(Boolean))];
+        let ownerMap: Record<string, string> = {};
+        if (ownerIds.length > 0) {
+          const { inArray } = await import('drizzle-orm');
+          const ownerRows = await db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, ownerIds));
+          ownerRows.forEach((u: any) => { ownerMap[u.id] = u.email || ''; });
+        }
+        const enriched = rows.map((r: any) => ({ ...r, ownerEmail: ownerMap[r.ownerId] || null }));
+        res.json({ ok: true, companies: enriched });
+      } catch (e: any) {
+        console.error('[dev-admin] company/search error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/company/:companyId
+    app.get('/api/dev/admin/company/:companyId', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId);
+        if (isNaN(companyId)) return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+        const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+        if (!company) return res.status(404).json({ ok: false, error: 'Company not found' });
+        const [owner] = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
+          .from(users).where(eq(users.id, company.ownerId));
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, companyId));
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const billing = getEffectiveBillingAccess(company);
+        res.json({ ok: true, company, owner: owner || null, memberCount: memberRows.length, billing });
+      } catch (e: any) {
+        console.error('[dev-admin] company/:id error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/billing/:companyId
+    app.get('/api/dev/admin/billing/:companyId', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const companyId = parseInt(req.params.companyId);
+        if (isNaN(companyId)) return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+        const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+        if (!company) return res.status(404).json({ ok: false, error: 'Company not found' });
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const billing = getEffectiveBillingAccess(company);
+        res.json({
+          ok: true,
+          companyId: company.id,
+          companyName: company.name,
+          subscriptionStatus: company.subscriptionStatus,
+          subscriptionPlan: company.subscriptionPlan,
+          maxUsers: company.maxUsers,
+          trialEndsAt: company.trialEndsAt,
+          currentPeriodEnd: company.currentPeriodEnd,
+          stripeSubscriptionId: company.stripeSubscriptionId ? `...${company.stripeSubscriptionId.slice(-6)}` : null,
+          hasStripeSubscription: !!company.stripeSubscriptionId,
+          adminFreeAccess: company.adminFreeAccess,
+          adminBypassSubscription: company.adminBypassSubscription,
+          adminPlanOverride: company.adminPlanOverride,
+          adminSeatLimitOverride: company.adminSeatLimitOverride,
+          adminUnlimitedSeats: company.adminUnlimitedSeats,
+          adminOverrideReason: company.adminOverrideReason,
+          adminOverrideExpiresAt: company.adminOverrideExpiresAt,
+          adminOverrideUpdatedByEmail: company.adminOverrideUpdatedByEmail,
+          adminOverrideUpdatedAt: company.adminOverrideUpdatedAt,
+          effectiveBilling: billing,
+        });
+      } catch (e: any) {
+        console.error('[dev-admin] billing/:id error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/dev/admin/billing/override
+    app.post('/api/dev/admin/billing/override', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const { companyId, type, value, reason, expiresAt, planOverride, seatLimit, unlimitedSeats } = req.body;
+        if (!companyId || !type) return res.status(400).json({ ok: false, error: 'companyId and type required' });
+        const actorEmail = req.user?.email || 'unknown';
+        const [before] = await db.select().from(companies).where(eq(companies.id, companyId));
+        if (!before) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+        const updates: Record<string, any> = {
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: reason || null,
+          adminOverrideExpiresAt: expiresAt ? new Date(expiresAt) : null,
+        };
+
+        if (type === 'free_access') {
+          updates.adminFreeAccess = !!value;
+          if (value && planOverride) updates.adminPlanOverride = planOverride;
+          if (value && unlimitedSeats !== undefined) updates.adminUnlimitedSeats = !!unlimitedSeats;
+          if (value && seatLimit !== undefined) updates.adminSeatLimitOverride = seatLimit;
+        } else if (type === 'bypass_subscription') {
+          updates.adminBypassSubscription = !!value;
+        } else if (type === 'plan_override') {
+          updates.adminPlanOverride = planOverride || null;
+          if (seatLimit !== undefined) updates.adminSeatLimitOverride = seatLimit;
+          if (unlimitedSeats !== undefined) updates.adminUnlimitedSeats = !!unlimitedSeats;
+        } else if (type === 'seat_override') {
+          updates.adminSeatLimitOverride = seatLimit !== undefined ? seatLimit : null;
+          updates.adminUnlimitedSeats = !!unlimitedSeats;
+        } else if (type === 'trial_extend') {
+          const days = parseInt(req.body.days) || 0;
+          const base = before.trialEndsAt ? new Date(before.trialEndsAt) : new Date();
+          const newEnd = new Date(base);
+          newEnd.setDate(newEnd.getDate() + days);
+          await db.execute(sql`UPDATE companies SET trial_ends_at = ${newEnd}, subscription_status = 'trialing' WHERE id = ${companyId}`);
+          await writeAdminAuditLog({
+            actorEmail, targetType: 'billing', targetId: String(companyId), targetName: before.name,
+            action: 'trial_extend', beforeValue: { trialEndsAt: before.trialEndsAt }, afterValue: { trialEndsAt: newEnd, days }, note: reason,
+          });
+          console.log(`[dev-tools] trial_extend companyId=${companyId} by=${actorEmail} newEnd=${newEnd.toISOString()}`);
+          return res.json({ ok: true, newTrialEnd: newEnd });
+        } else {
+          return res.status(400).json({ ok: false, error: `Unknown override type: ${type}` });
+        }
+
+        await db.update(companies).set(updates).where(eq(companies.id, companyId));
+        const [after] = await db.select().from(companies).where(eq(companies.id, companyId));
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(companyId), targetName: before.name,
+          action: `billing_override_${type}`, beforeValue: { type, value: (before as any)[Object.keys(updates)[0]] }, afterValue: { type, value, reason },
+          note: reason,
+        });
+        console.log(`[dev-tools] billing/override type=${type} companyId=${companyId} by=${actorEmail}`);
+        res.json({ ok: true, effectiveBilling: getEffectiveBillingAccess(after) });
+      } catch (e: any) {
+        console.error('[dev-admin] billing/override error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/dev/admin/billing/restore-default
+    app.post('/api/dev/admin/billing/restore-default', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const { companyId } = req.body;
+        if (!companyId) return res.status(400).json({ ok: false, error: 'companyId required' });
+        const actorEmail = req.user?.email || 'unknown';
+        const [before] = await db.select().from(companies).where(eq(companies.id, companyId));
+        if (!before) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+        await db.update(companies).set({
+          adminFreeAccess: false,
+          adminBypassSubscription: false,
+          adminPlanOverride: null,
+          adminSeatLimitOverride: null,
+          adminUnlimitedSeats: false,
+          adminOverrideReason: null,
+          adminOverrideExpiresAt: null,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+        }).where(eq(companies.id, companyId));
+
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(companyId), targetName: before.name,
+          action: 'billing_restore_default',
+          beforeValue: { adminFreeAccess: before.adminFreeAccess, adminBypassSubscription: before.adminBypassSubscription, adminPlanOverride: before.adminPlanOverride },
+          afterValue: { restored: true },
+          note: 'Restored to default Stripe-driven billing',
+        });
+        console.log(`[dev-tools] billing/restore-default companyId=${companyId} by=${actorEmail}`);
+        res.json({ ok: true });
+      } catch (e: any) {
+        console.error('[dev-admin] billing/restore-default error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/dev/admin/company/status
+    app.post('/api/dev/admin/company/status', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const { companyId, paused, isDemo, note } = req.body;
+        if (!companyId) return res.status(400).json({ ok: false, error: 'companyId required' });
+        const actorEmail = req.user?.email || 'unknown';
+        const [before] = await db.select().from(companies).where(eq(companies.id, companyId));
+        if (!before) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+        const updates: Record<string, any> = {};
+        if (paused !== undefined) updates.adminPaused = !!paused;
+        if (isDemo !== undefined) updates.adminIsDemo = !!isDemo;
+        if (note !== undefined) updates.adminNote = note;
+
+        await db.update(companies).set(updates).where(eq(companies.id, companyId));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'company', targetId: String(companyId), targetName: before.name,
+          action: 'company_status_update', beforeValue: { adminPaused: before.adminPaused, adminIsDemo: before.adminIsDemo, adminNote: before.adminNote },
+          afterValue: updates, note,
+        });
+        console.log(`[dev-tools] company/status companyId=${companyId} by=${actorEmail}`);
+        res.json({ ok: true });
+      } catch (e: any) {
+        console.error('[dev-admin] company/status error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/user/search?q=&companyId=
+    app.get('/api/dev/admin/user/search', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const q = (req.query.q as string || '').trim().toLowerCase();
+        const companyIdFilter = req.query.companyId ? parseInt(req.query.companyId as string) : null;
+        const { ilike, or, inArray } = await import('drizzle-orm');
+
+        let userRows: any[];
+        if (companyIdFilter) {
+          const members = await db.select({ userId: companyMembers.userId, role: companyMembers.role, companyId: companyMembers.companyId })
+            .from(companyMembers).where(eq(companyMembers.companyId, companyIdFilter));
+          const ids = members.map((m: any) => m.userId);
+          if (ids.length === 0) return res.json({ ok: true, users: [] });
+          const roleMap: Record<string, string> = {};
+          members.forEach((m: any) => { roleMap[m.userId] = m.role; });
+          userRows = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName,
+            status: users.status, lastLoginAt: users.lastLoginAt, createdAt: users.createdAt, subscriptionBypass: users.subscriptionBypass })
+            .from(users).where(inArray(users.id, ids));
+          userRows = userRows.map((u: any) => ({ ...u, role: roleMap[u.id] || null, companyId: companyIdFilter }));
+        } else if (q) {
+          userRows = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName,
+            status: users.status, lastLoginAt: users.lastLoginAt, createdAt: users.createdAt, subscriptionBypass: users.subscriptionBypass })
+            .from(users).where(or(ilike(users.email, `%${q}%`), ilike(users.firstName, `%${q}%`), ilike(users.lastName, `%${q}%`))).limit(30);
+          // Enrich with company info
+          const enriched = await Promise.all(userRows.map(async (u: any) => {
+            const member = await db.select({ companyId: companyMembers.companyId, role: companyMembers.role })
+              .from(companyMembers).where(eq(companyMembers.userId, u.id)).limit(1);
+            return { ...u, companyId: member[0]?.companyId || null, role: member[0]?.role || null };
+          }));
+          userRows = enriched;
+        } else {
+          userRows = [];
+        }
+        res.json({ ok: true, users: userRows });
+      } catch (e: any) {
+        console.error('[dev-admin] user/search error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/dev/admin/user/update
+    app.post('/api/dev/admin/user/update', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const { userId, status, role, companyId, subscriptionBypass, resetOnboarding } = req.body;
+        if (!userId) return res.status(400).json({ ok: false, error: 'userId required' });
+        const actorEmail = req.user?.email || 'unknown';
+        const [userBefore] = await db.select().from(users).where(eq(users.id, userId));
+        if (!userBefore) return res.status(404).json({ ok: false, error: 'User not found' });
+
+        const userUpdates: Record<string, any> = {};
+        if (status !== undefined) userUpdates.status = status;
+        if (subscriptionBypass !== undefined) userUpdates.subscriptionBypass = !!subscriptionBypass;
+        if (resetOnboarding) userUpdates.onboardingChoice = null;
+
+        if (Object.keys(userUpdates).length > 0) {
+          await db.update(users).set(userUpdates).where(eq(users.id, userId));
+        }
+
+        if (role && companyId) {
+          const { roleEnum } = await import('@shared/schema');
+          await db.update(companyMembers).set({ role: role as any }).where(
+            and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, parseInt(companyId)))
+          );
+        }
+
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'user', targetId: userId, targetName: userBefore.email || userId,
+          action: 'user_update',
+          beforeValue: { status: userBefore.status, subscriptionBypass: userBefore.subscriptionBypass, onboardingChoice: userBefore.onboardingChoice },
+          afterValue: { ...userUpdates, role },
+        });
+        console.log(`[dev-tools] user/update userId=${userId} by=${actorEmail}`);
+        res.json({ ok: true });
+      } catch (e: any) {
+        console.error('[dev-admin] user/update error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/audit-logs
+    app.get('/api/dev/admin/audit-logs', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const { adminAuditLogs } = await import('@shared/schema');
+        const { desc } = await import('drizzle-orm');
+        const limit = Math.min(parseInt(req.query.limit as string) || 100, 200);
+        const rows = await db.select().from(adminAuditLogs).orderBy(desc(adminAuditLogs.createdAt)).limit(limit);
+        res.json({ ok: true, logs: rows });
+      } catch (e: any) {
+        console.error('[dev-admin] audit-logs error:', e);
         res.status(500).json({ ok: false, error: e.message });
       }
     });

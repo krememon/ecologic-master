@@ -163,6 +163,19 @@ export const companies = pgTable("companies", {
   stripeConnectDetailsSubmitted: boolean("stripe_connect_details_submitted").default(false),
   stripeConnectOnboardedAt: timestamp("stripe_connect_onboarded_at"),
   stripeConnectLastCheckedAt: timestamp("stripe_connect_last_checked_at"),
+  // Internal admin overrides (dev-tools only, never exposed to users)
+  adminFreeAccess: boolean("admin_free_access").default(false),
+  adminBypassSubscription: boolean("admin_bypass_subscription").default(false),
+  adminPlanOverride: varchar("admin_plan_override"),
+  adminSeatLimitOverride: integer("admin_seat_limit_override"),
+  adminUnlimitedSeats: boolean("admin_unlimited_seats").default(false),
+  adminOverrideReason: text("admin_override_reason"),
+  adminOverrideExpiresAt: timestamp("admin_override_expires_at"),
+  adminOverrideUpdatedByEmail: varchar("admin_override_updated_by_email"),
+  adminOverrideUpdatedAt: timestamp("admin_override_updated_at"),
+  adminPaused: boolean("admin_paused").default(false),
+  adminIsDemo: boolean("admin_is_demo").default(false),
+  adminNote: text("admin_note"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1173,6 +1186,24 @@ export const subscriptions = pgTable("subscriptions", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Admin audit log table — records all dev-tools internal admin actions
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: serial("id").primaryKey(),
+  actorEmail: varchar("actor_email").notNull(),
+  targetType: varchar("target_type").notNull(), // 'company' | 'user' | 'billing' | 'flag'
+  targetId: varchar("target_id").notNull(),
+  targetName: varchar("target_name"),
+  action: varchar("action").notNull(),
+  beforeValue: jsonb("before_value"),
+  afterValue: jsonb("after_value"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs).omit({ id: true, createdAt: true });
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
 
 // Insert schemas
 export const insertCompanySchema = createInsertSchema(companies).omit({

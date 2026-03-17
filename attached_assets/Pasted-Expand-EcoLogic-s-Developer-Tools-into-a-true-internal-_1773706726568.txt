@@ -1,0 +1,365 @@
+Expand EcoLogic’s Developer Tools into a true internal Admin Console for my dev account only, with powerful company/account controls including subscription overrides, billing bypasses, feature access controls, and safe internal management tools.
+
+GOAL
+Turn /dev-tools into a private owner-only internal control center so I can manage companies, users, billing access, permissions, and internal testing without touching the normal user experience.
+
+CRITICAL ACCESS RULES
+- ONLY my dev account can access this:
+  - pjpell077@gmail.com
+- Keep support for future allowlisted internal dev/admin emails
+- No normal user should ever see any of this
+- Protect both frontend and backend
+- Follow EcoLogic’s “hidden not disabled” style
+- Every sensitive admin action must be logged with:
+  - acting dev email
+  - target company/user
+  - action type
+  - before value
+  - after value
+  - timestamp
+
+IMPORTANT SAFETY
+- Never expose secrets or raw tokens
+- Any dangerous action must require a confirmation modal
+- For the most sensitive actions, require typing CONFIRM
+- Add an audit log section in Dev Tools
+- Build this cleanly so it can later be restricted by permission tiers like:
+  - dev_superadmin
+  - support_admin
+  - finance_admin
+
+CORE FEATURE TO ADD
+
+1) BILLING / SUBSCRIPTION ADMIN PANEL
+Add a full Billing Admin tab/section inside /dev-tools.
+
+Allow me to search by:
+- company ID
+- company name
+- owner email
+- user email
+
+Show current billing state:
+- company id
+- company name
+- current plan
+- active/inactive
+- trial status
+- trial end
+- stripe customer present?
+- stripe subscription present?
+- subscription status
+- current seat count
+- plan limits
+- billing access source
+
+Add INTERNAL OVERRIDE CONTROLS:
+A. Free Access Override
+- Toggle: Allow this company to use EcoLogic for free
+- When enabled, company keeps full app access even with no active Stripe subscription
+- Store reason/note
+- Store who enabled it
+- Store enabled timestamp
+- Optional expiration date
+- Label source clearly as:
+  - billingOverride = free_access
+
+B. Subscription Bypass
+- Toggle: Bypass subscription enforcement for this company
+- This should bypass paywall/subscription checks in the app
+- Keep this separate from Stripe state so I can test edge cases
+- Label source clearly as:
+  - billingOverride = bypass_subscription_gate
+
+C. Manual Plan Override
+- Dropdown to manually assign effective plan without changing Stripe:
+  - starter
+  - team
+  - pro
+  - scale
+  - enterprise
+- This becomes the app’s effective entitlement plan when override is active
+- Store note + audit log
+
+D. Seat Limit Override
+- Allow custom seat cap override
+- Example: let a company use 15 seats while on a lower plan
+- Optional unlimited seats toggle
+
+E. Trial Extension
+- Extend trial by X days
+- Or set exact trial end date
+- Audit everything
+
+F. Restore Default Billing
+- Remove all internal overrides
+- Revert company back to normal Stripe-driven billing behavior
+- Require strong confirmation
+
+2) BILLING ENFORCEMENT SOURCE OF TRUTH
+Refactor billing checks so app access is determined by one clean resolver function, something like:
+- getEffectiveBillingAccess(company)
+
+Priority order:
+1. hard internal override from dev tools
+2. active Stripe subscription / normal billing
+3. active trial
+4. blocked / paywall
+
+Return structured output like:
+- allowed: boolean
+- source: 'override_free_access' | 'override_bypass' | 'override_plan' | 'stripe' | 'trial' | 'blocked'
+- effectivePlan
+- seatLimit
+- notes
+
+Use this single resolver everywhere billing gates are enforced.
+
+3) COMPANY ADMIN PANEL
+Add a Company Admin section in Dev Tools.
+
+Search/select company and show:
+- company id
+- company name
+- owner
+- created date
+- plan / effective plan
+- active users
+- subscription status
+- QuickBooks connected?
+- Stripe connected?
+- native app enabled?
+- storage configured?
+- email configured?
+
+Add controls:
+- mark company active/inactive
+- pause company access
+- restore company access
+- set company note/internal note
+- toggle onboarding complete
+- toggle demo/test company
+- copy company debug snapshot
+
+4) USER ADMIN PANEL
+Add a User Admin section.
+
+Search by:
+- user id
+- name
+- email
+- company
+
+Show:
+- user id
+- email
+- name
+- company
+- role
+- status
+- invited/active
+- last seen if available
+
+Add controls:
+- change role
+- activate/deactivate user
+- reset onboarding flag
+- force password reset flag if applicable
+- mark as internal tester
+- grant/revoke special feature flag access
+- move user to another company ONLY if system already supports this safely
+- add internal note
+
+Do NOT break RBAC. These are admin-only internal tools.
+
+5) FEATURE ACCESS / FLAGS PANEL
+Create a section to manage feature flags at:
+- global level
+- company level
+- user level
+
+Example flags:
+- enableQuickBooks
+- enableAdvancedPayments
+- enableBetaScheduling
+- enableDocumentsApprovals
+- enableDevAIFeatures
+- bypassSubscriptionGate
+- enableUnlimitedUploads
+- showExperimentalUI
+
+Need:
+- searchable list of flags
+- toggle UI
+- scope indicator (global/company/user)
+- override precedence display
+- audit log entries
+- note field
+
+6) PAYWALL / ENTITLEMENT TEST PANEL
+Add a dedicated testing section so I can simulate access scenarios.
+
+For a selected company, show:
+- raw Stripe billing status
+- raw trial status
+- raw overrides
+- effective entitlement result
+- why access is allowed or blocked
+
+Add test buttons:
+- simulate blocked company
+- simulate expired trial
+- simulate active paid plan
+- simulate free override
+- clear simulation
+These should be clearly labeled as test/admin-only.
+
+7) ADMIN ACTIONS PANEL
+Add a controlled set of internal actions:
+- trigger re-sync company billing state
+- refresh Stripe customer/subscription snapshot
+- recalculate effective plan
+- recalculate seat limits
+- rebuild permissions cache if applicable
+- send test email to company owner
+- trigger test push notification
+- create demo data pack for company
+- archive demo/test company
+All with confirmations and toast feedback.
+
+8) AUDIT LOG PANEL
+Add a tab for Audit Logs inside Dev Tools.
+
+Show recent internal admin actions with filters:
+- action type
+- company
+- user
+- actor
+- date
+- billing-related only toggle
+
+Each log entry should include:
+- action
+- actor email
+- target type
+- target id
+- before summary
+- after summary
+- note/reason
+- timestamp
+
+If no audit log table exists yet, create one.
+Keep entries structured and queryable.
+
+9) BACKEND ENDPOINTS
+Create protected internal endpoints under /api/dev/admin/*
+
+Examples:
+- GET /api/dev/admin/company/search
+- GET /api/dev/admin/company/:companyId
+- GET /api/dev/admin/user/:userId
+- GET /api/dev/admin/billing/:companyId
+- POST /api/dev/admin/billing/free-access
+- POST /api/dev/admin/billing/bypass-subscription
+- POST /api/dev/admin/billing/plan-override
+- POST /api/dev/admin/billing/seat-override
+- POST /api/dev/admin/billing/trial-extend
+- POST /api/dev/admin/billing/restore-default
+- POST /api/dev/admin/company/status
+- POST /api/dev/admin/user/update-role
+- POST /api/dev/admin/feature-flag/set
+- GET /api/dev/admin/audit-logs
+
+Rules:
+- protect every route with requireDev
+- validate payloads strictly
+- log all mutations with [dev-tools]
+- never expose secrets
+- return safe structured JSON only
+
+10) DATA MODEL / STORAGE
+Implement a clean internal override model.
+
+If best, add DB support for company-level admin overrides, such as fields/table for:
+- companyId
+- freeAccessOverride:boolean
+- subscriptionBypass:boolean
+- planOverride:string|null
+- seatLimitOverride:number|null
+- unlimitedSeats:boolean
+- overrideReason:text|null
+- overrideExpiresAt:datetime|null
+- updatedByUserId
+- updatedByEmail
+- updatedAt
+
+Also create audit log table if needed.
+
+Do not mix this logic sloppily into random Stripe fields.
+Keep internal overrides clearly separated from external billing data.
+
+11) UI / UX
+Inside /dev-tools add tabs/cards such as:
+- Session
+- Companies
+- Users
+- Billing
+- Feature Flags
+- Entitlements
+- Actions
+- Audit Logs
+- Integrations
+
+Style:
+- same dark internal admin look already started
+- clean cards
+- searchable selectors
+- mobile-friendly
+- readable pills/badges
+- confirmation modals for risky actions
+- JSON viewer for raw snapshots
+- copy buttons for debug payloads
+
+12) HIGH PRIORITY FIRST PASS
+Build this first:
+1. Company search/select
+2. Billing admin panel
+3. Free access override toggle
+4. Subscription bypass toggle
+5. Manual plan override
+6. Trial extension
+7. Restore default billing
+8. Audit log recording
+9. Effective billing resolver
+10. Company status panel
+
+13) IMPORTANT BUSINESS RULES
+- Internal override must allow specific buddy companies to use the app for free without needing Stripe
+- Normal companies should still follow normal subscription enforcement
+- Overrides must be easy for me to remove later
+- Always show clearly whether access comes from:
+  - Stripe
+  - trial
+  - dev override
+  - blocked
+
+14) DELIVERABLES
+- Expanded /dev-tools internal admin console
+- Company admin tools
+- User admin tools
+- Billing override tools
+- Free access / subscription bypass controls
+- Manual plan override
+- Seat override
+- Trial extension tools
+- Effective billing resolver
+- Audit log system
+- Protected backend admin endpoints
+- Confirmation modals and safe UX
+- All only visible and accessible to my dev allowlisted account
+
+IMPORTANT
+Do not break existing RBAC.
+Do not change normal customer-facing flows except to read from the new effective billing resolver.
+Do not expose internal admin tools to any non-dev user.
+Keep route protection and hidden navigation behavior intact.
