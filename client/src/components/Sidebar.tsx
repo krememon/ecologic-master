@@ -115,7 +115,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      <nav className="flex-1 overflow-y-auto min-h-0 px-4 py-6 space-y-1">
         {filteredNavigation.map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;

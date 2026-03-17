@@ -1,0 +1,126 @@
+The nav item is still not rendering in the actual UI, so do a real diagnosis and fix instead of assuming the array change worked.
+
+I need you to TRACE why “Developer Tools” is not visibly appearing in the mobile drawer/sidebar for my account, even though you say filteredNav count increased.
+
+PROBLEM
+You reported:
+- filteredNav count: 13
+- Developer Tools was added to Sidebar.tsx and MobileNav.tsx
+- filtering uses DEV_ALLOWLIST
+But in the actual rendered drawer, the item is still not visible.
+
+That means one of these is happening:
+- wrong user object is being used at render time
+- email check is failing
+- item is being added but cut off / hidden by layout
+- wrong nav component is actually rendering
+- stale component/state/HMR issue
+- another filter/map/slice/sort is removing it later
+- icon/import/render error is silently failing
+- scroll container height is clipping the last item
+- the preview is using a different authenticated user than expected
+
+TASK
+Do a full end-to-end diagnosis and fix. Do not stop at logs that say the array contains 13 items. I need the item to visibly appear in the real drawer UI.
+
+WHAT TO CHECK
+
+1) CONFIRM ACTUAL LOGGED-IN USER AT RENDER
+In the exact component that renders the visible mobile drawer nav:
+- console.log the full safe user identity at render:
+  - email
+  - id
+  - role
+  - whether isDevAccount(user) is true
+- log the exact rendered nav item names AFTER all filtering/mapping is complete
+Example:
+- [dev-tools] mobile render user email: ...
+- [dev-tools] mobile rendered items: ['Home', 'Schedule', ...]
+
+Do the same for desktop sidebar too.
+
+2) VERIFY THE REAL COMPONENT PATH
+Find which component is ACTUALLY rendering the sidebar shown in this screenshot.
+Do not assume MobileNav.tsx is the final rendered component.
+Trace from the page layout down to the visible drawer component and verify the real path.
+
+3) CHECK FOR SECONDARY FILTERS / SLICES
+Search for any logic after getNavigation() that may be doing:
+- slice(...)
+- grouped sections
+- topItems / bottomItems split
+- role filtering
+- mobile-specific exclusion
+- hidden item filtering
+- map that skips unknown icons/routes
+Log before and after each stage until the missing item is found.
+
+4) CHECK LAYOUT / OVERFLOW
+It may be rendering below “Customize” but outside the visible area.
+Inspect:
+- scroll container height
+- overflow-y behavior
+- bottom padding
+- footer overlap near Sign Out
+- whether the last item is hidden under the footer
+Temporarily add a bright dev-only test style to the item just to confirm whether it exists off-screen.
+If it is clipped, fix the layout properly.
+
+5) CHECK ICON / RENDER ISSUES
+Temporarily change the Developer Tools icon to the same icon as Settings or Customize to rule out any icon import/render issue.
+If that makes it appear, fix the icon problem cleanly.
+
+6) CHECK DEV ALLOWLIST MATCH
+Log the exact comparison:
+- raw user.email
+- normalized email
+- normalized DEV_ALLOWLIST
+Use a shared helper:
+- normalize lowercase
+- trim whitespace
+Then check includes()
+Do not rely on exact casing or hidden whitespace.
+
+7) CHECK STALE STATE / PREVIEW AUTH
+Verify the preview is actually authenticated as:
+- pjpell077@gmail.com
+If not, fix the session/user source and report it.
+Also hard refresh/rebuild if needed.
+
+8) ADD TEMP DEBUG OUTPUT IN UI
+For my account only, temporarily render a tiny debug line inside the drawer header:
+- dev=true/false
+- email=current email
+- navCount=#
+This is temporary only for diagnosis.
+Once fixed, remove it.
+
+9) FORCE A KNOWN-GOOD TEST
+Temporarily inject “Developer Tools” directly into the rendered JSX in the visible nav component with no filtering, just to prove whether the UI can show it.
+If it appears, then the issue is data/filter path.
+If it still does not appear, then the issue is layout/render path.
+Use this to isolate the bug.
+
+10) FINAL FIX
+Once root cause is found:
+- keep Developer Tools in the main nav list area
+- visible only for pjpell077@gmail.com
+- hidden for everyone else
+- works in mobile drawer and desktop sidebar
+- no debug text left behind
+- no footer placement
+- no layout clipping
+
+OUTPUT I WANT
+Do not just say “count is 13”.
+Tell me:
+1. the exact root cause
+2. the exact file(s) where it was happening
+3. the exact fix made
+4. proof from final rendered item names log
+5. proof that the item is visibly rendered in the drawer
+
+IMPORTANT
+Keep route protection in place.
+Do not expose it to non-dev users.
+Do not stop until the item is actually visible in the real UI.

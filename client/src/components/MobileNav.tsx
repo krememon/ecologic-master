@@ -372,7 +372,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         
         {/* Sidebar */}
         <div className={cn(
-          "ecologic-drawer fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out",
+          "ecologic-drawer fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
@@ -393,7 +393,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 p-4">
+            <nav className="flex-1 overflow-y-auto min-h-0 p-4">
               <div className="space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
