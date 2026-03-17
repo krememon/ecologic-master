@@ -1,0 +1,277 @@
+Rework the entire EcoLogic Developer Tools system so it is centered around a single Company ID lookup flow instead of the current tab menu.
+
+GOAL
+I want Dev Tools to become one simple internal admin console:
+- I enter a Company ID
+- EcoLogic loads that exact company
+- I can then see everything about that company in one place
+- I can manage billing/subscription access there
+- I can see all employees/users in that company
+- I can inspect all major company data from that one screen
+
+This should replace the current multi-tab dev tool layout.
+
+IMPORTANT
+- Keep this dev-only for my allowlisted account only
+- Do not expose any of this to normal users
+- Keep backend protection in place
+- Do not break existing company ID system
+- Use the new 6-character Company ID as the main lookup key, not the raw DB numeric company id
+
+NEW DEV TOOLS FLOW
+
+1) REMOVE THE CURRENT TAB-FIRST UX
+Replace the current tab menu:
+- Billing
+- Companies
+- Users
+- Audit Logs
+- Session
+- Jobs
+- Payments
+- Integrations
+- Inspector
+
+with a new primary flow:
+
+A. Company ID Lookup
+B. Company Overview Console
+
+The page should feel like:
+- enter Company ID
+- load company
+- manage everything from that company screen
+
+2) TOP SECTION = COMPANY ID INPUT
+At the top of /dev-tools, add a clean lookup card with:
+
+- heading: Company Lookup
+- input label: Company ID
+- placeholder: Enter 6-character Company ID
+- button: Load Company
+
+Rules:
+- input should normalize to uppercase
+- exactly 6 characters
+- allow letters/numbers only
+- show friendly error if not found:
+  - No company found for that Company ID
+- support pressing Enter to search
+- optional paste support
+- optional small example helper text:
+  - Example: A7K2Q9
+
+3) AFTER LOOKUP, LOAD ONE UNIFIED COMPANY CONSOLE
+When a valid Company ID is entered, load a single full-company admin page below the lookup.
+
+This company console should include these sections/cards:
+
+A. COMPANY SUMMARY
+Show:
+- company name
+- Company ID
+- numeric DB company id (small/internal only)
+- company email
+- owner name if available
+- created date
+- company status
+- whether active or blocked
+- current access reason
+- current plan
+- user limit
+- trial end date
+- Stripe subscription status
+- QuickBooks connected or not
+- any manual billing override status
+
+B. BILLING / ACCESS CONTROLS
+This is where I manage subscription behavior for that company.
+
+Include:
+- current access status
+- why access is allowed or blocked
+- current plan
+- current user limit
+- trial info
+- Stripe info
+
+Controls:
+- Let This Company Use EcoLogic for Free
+- Ignore Subscription Check
+- Force a Plan
+- Force User Limit
+- Allow Unlimited Users
+- Extend Trial
+- Remove Manual Billing Changes
+- Refresh Billing Info
+
+Each control needs:
+- plain English labels
+- helper text
+- confirmation modal for risky changes
+- audit logging
+
+C. PEOPLE / EMPLOYEES IN THIS COMPANY
+Show a full list of all users/people tied to that company.
+
+For each person show:
+- name
+- email
+- role
+- status
+- invited/active
+- internal tester if applicable
+- last seen if available
+
+Actions if already supported safely:
+- change role
+- activate/deactivate user
+- add note
+- inspect user details
+
+This section should be easy for me to understand.
+Heading should be something like:
+- Company Team
+or
+- People in This Company
+
+D. JOBS FOR THIS COMPANY
+Show company jobs in a simple list:
+- job id
+- title
+- status
+- client/customer
+- invoice status if available
+
+Add:
+- search jobs
+- open job details
+- quick inspect button
+
+E. PAYMENTS / BILLING RECORDS
+Show:
+- invoices
+- payments
+- payment status
+- referral/subcontract payout info if relevant
+- billing-related records tied to this company
+
+F. COMPANY DATA SNAPSHOT
+A simple internal debug section showing safe raw summaries:
+- company object summary
+- billing resolver result
+- feature flags for that company
+- integrations state
+- last admin actions if useful
+
+Use readable cards and expandable JSON only where needed.
+
+4) PAGE STRUCTURE
+New /dev-tools layout should be:
+
+- Company Lookup card
+- If no company loaded: show simple empty state
+  - Enter a Company ID to load a company
+- If company loaded: show full company admin console with stacked sections
+
+This should feel like one focused internal dashboard, not a tab maze.
+
+5) SEARCH / SWITCH COMPANIES FAST
+Once a company is loaded:
+- keep the Company ID input visible at the top
+- allow me to quickly load another company
+- add a small “Clear” button to reset current selection
+
+6) BACKEND ENDPOINTS
+Create or update dev-only endpoints based around Company ID.
+
+Examples:
+- GET /api/dev/company/by-code/:companyCode
+- GET /api/dev/company/:companyCode/overview
+- GET /api/dev/company/:companyCode/users
+- GET /api/dev/company/:companyCode/jobs
+- GET /api/dev/company/:companyCode/payments
+- GET /api/dev/company/:companyCode/billing
+- POST /api/dev/company/:companyCode/billing/free-access
+- POST /api/dev/company/:companyCode/billing/bypass-subscription
+- POST /api/dev/company/:companyCode/billing/plan-override
+- POST /api/dev/company/:companyCode/billing/seat-override
+- POST /api/dev/company/:companyCode/billing/trial-extend
+- POST /api/dev/company/:companyCode/billing/restore-default
+
+Rules:
+- requireDev on every route
+- use companyCode as the main route key
+- safely resolve companyCode -> internal company record
+- never expose secrets/tokens
+- return structured JSON
+- log all mutations with [dev-tools]
+
+7) COMPANY CODE LOOKUP RULES
+The dev tools should use the unique 6-character Company ID as the first-class identifier.
+
+Requirements:
+- case-insensitive input from UI, normalized to uppercase
+- lookup must resolve exact company
+- if duplicate somehow exists, treat as critical error and report
+- never use raw numeric company id as the main lookup input in UI
+
+8) REMOVE OLD NAV COMPLEXITY
+You can remove the current top tab switcher from the Dev Tools page if it is no longer needed.
+
+If some internal code still uses the old sections:
+- keep the reusable components if helpful
+- but reorganize them under the new single-company flow
+
+9) UX COPY
+Everything should be very easy to understand for a non-technical owner.
+
+Examples:
+- Company Lookup
+- Billing Access
+- People in This Company
+- Jobs
+- Payments
+- Internal Company Snapshot
+
+Avoid overly technical words unless small helper text explains them.
+
+10) DESIGN
+Keep the same modern dark Dev Tools style, but cleaner and more focused.
+
+Design goals:
+- one lookup at top
+- company header card once loaded
+- stacked management cards below
+- mobile-friendly
+- clear buttons
+- readable statuses
+- no clutter
+
+11) HIGH PRIORITY FIRST PASS
+Build this first:
+1. remove/replace tab-first UI
+2. Company ID lookup input
+3. load company by Company ID
+4. company summary card
+5. billing/access controls card
+6. people/employees list
+7. jobs list
+8. payments summary
+9. clear/reset + load another company flow
+
+12) DELIVERABLES
+- Dev Tools reworked around Company ID lookup
+- single Company ID input at top
+- loads one exact company by 6-character Company ID
+- full company summary screen
+- billing/subscription management for that company
+- employee/user list for that company
+- jobs list for that company
+- payments/billing records section
+- dev-only protected backend routes using companyCode
+- old tab maze removed or hidden
+
+IMPORTANT
+This should become the main internal admin workflow:
+look up a company by Company ID -> manage everything about that company from one place.

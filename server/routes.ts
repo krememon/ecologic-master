@@ -19365,6 +19365,91 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
     });
 
+    // GET /api/dev/admin/company/by-code/:code — lookup by 6-char company code (MUST be before /:companyId)
+    app.get('/api/dev/admin/company/by-code/:code', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { eq } = await import('drizzle-orm');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found for that Company ID' });
+        const [owner] = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
+          .from(users).where(eq(users.id, company.ownerId));
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, company.id));
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const billing = getEffectiveBillingAccess(company);
+        res.json({ ok: true, company, owner: owner || null, memberCount: memberRows.length, billing });
+      } catch (e: any) {
+        console.error('[dev-admin] company/by-code error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/company/by-code/:code/users
+    app.get('/api/dev/admin/company/by-code/:code/users', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { eq, inArray } = await import('drizzle-orm');
+        const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const members = await db.select({ userId: companyMembers.userId, role: companyMembers.role })
+          .from(companyMembers).where(eq(companyMembers.companyId, company.id));
+        if (members.length === 0) return res.json({ ok: true, users: [] });
+        const roleMap: Record<string, string> = {};
+        members.forEach((m: any) => { roleMap[m.userId] = m.role; });
+        const ids = members.map((m: any) => m.userId);
+        const userRows = await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName,
+          status: users.status, lastLoginAt: users.lastLoginAt, createdAt: users.createdAt, subscriptionBypass: users.subscriptionBypass })
+          .from(users).where(inArray(users.id, ids));
+        const enriched = userRows.map((u: any) => ({ ...u, role: roleMap[u.id] || null, companyId: company.id }));
+        res.json({ ok: true, users: enriched });
+      } catch (e: any) {
+        console.error('[dev-admin] company/by-code/users error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/company/by-code/:code/jobs
+    app.get('/api/dev/admin/company/by-code/:code/jobs', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { eq, desc } = await import('drizzle-orm');
+        const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const jobRows = await db.select({ id: jobs.id, title: jobs.title, status: jobs.status, scheduledDate: jobs.scheduledDate,
+          customerId: jobs.customerId, assignedTo: jobs.assignedTo, createdAt: jobs.createdAt })
+          .from(jobs).where(eq(jobs.companyId, company.id)).orderBy(desc(jobs.createdAt)).limit(50);
+        res.json({ ok: true, jobs: jobRows, companyId: company.id });
+      } catch (e: any) {
+        console.error('[dev-admin] company/by-code/jobs error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/dev/admin/company/by-code/:code/payments
+    app.get('/api/dev/admin/company/by-code/:code/payments', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { eq, desc } = await import('drizzle-orm');
+        const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const invoiceRows = await db.select({ id: invoices.id, status: invoices.status, totalAmount: invoices.totalAmount,
+          paidAmount: invoices.paidAmount, balanceDue: invoices.balanceDue, jobId: invoices.jobId, createdAt: invoices.createdAt })
+          .from(invoices).where(eq(invoices.companyId, company.id)).orderBy(desc(invoices.createdAt)).limit(30);
+        const invoiceIds = invoiceRows.map((i: any) => i.id);
+        let paymentRows: any[] = [];
+        if (invoiceIds.length > 0) {
+          const { inArray } = await import('drizzle-orm');
+          paymentRows = await db.select({ id: payments.id, invoiceId: payments.invoiceId, amount: payments.amount,
+            paymentMethod: payments.paymentMethod, status: payments.status, createdAt: payments.createdAt })
+            .from(payments).where(inArray(payments.invoiceId, invoiceIds)).orderBy(desc(payments.createdAt)).limit(60);
+        }
+        res.json({ ok: true, invoices: invoiceRows, payments: paymentRows, companyId: company.id });
+      } catch (e: any) {
+        console.error('[dev-admin] company/by-code/payments error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
     // GET /api/dev/admin/company/:companyId
     app.get('/api/dev/admin/company/:companyId', isAuthenticated, requireDev, async (req: any, res) => {
       try {
