@@ -1,0 +1,244 @@
+Rewrite the entire Developer Tools Billing UI copy into plain, human, easy-to-understand language for me.
+
+GOAL
+Right now the Billing/Admin text feels too technical. I want the entire Billing area in Dev Tools to be rewritten so it is crystal clear to a non-technical owner using the app.
+
+IMPORTANT
+Do NOT change the actual logic or controls yet.
+This task is mainly a UX/copy cleanup:
+- rename labels
+- add helper text
+- add short explanations
+- make button wording obvious
+- make statuses easy to understand
+- keep the same dark UI
+- keep everything dev-only
+
+STYLE RULES
+- Use plain English
+- Assume the user is not technical
+- Every label should explain itself
+- Avoid jargon like “DB”, “effective source”, “override” unless paired with a simple explanation
+- Make it obvious what will happen when I press something
+- Keep text short, clean, and owner-friendly
+- Still look polished and professional
+
+SPECIFIC COPY CHANGES
+
+1) CURRENT BILLING STATE CARD
+Rewrite labels like this:
+
+Current Billing State
+-> Change heading to:
+- Billing Access Summary
+
+COMPANY
+-> change to:
+- Company
+
+EFFECTIVE SOURCE
+-> change to:
+- Why Access Is Allowed or Blocked
+
+If blocked, show plain wording like:
+- Blocked — no active subscription or free access
+If allowed by override:
+- Allowed — free access was turned on manually
+If allowed by Stripe:
+- Allowed — active paid subscription
+If allowed by trial:
+- Allowed — trial is still active
+
+EFFECTIVE PLAN
+-> change to:
+- Current Access Plan
+
+SEAT LIMIT
+-> change to:
+- User Limit
+
+DB STATUS
+-> change to:
+- Company Status in System
+
+DB PLAN
+-> change to:
+- Saved Plan in Database
+
+MAX USERS (DB)
+-> change to:
+- Saved User Limit
+
+TRIAL ENDS
+-> change to:
+- Trial End Date
+
+PERIOD END
+-> change to:
+- Subscription Renewal / End Date
+
+HAS STRIPE SUB
+-> change to:
+- Stripe Subscription
+
+If Stripe is missing, use plain text like:
+- Not connected to Stripe
+not:
+- Stripe: not configured
+
+2) ADD HELPER TEXT UNDER FIELDS
+For tricky fields, add tiny muted helper text, for example:
+
+Why Access Is Allowed or Blocked
+- This tells you the real reason this company can or cannot use EcoLogic right now.
+
+Current Access Plan
+- This is the plan the app is currently treating this company as being on.
+
+Company Status in System
+- This is the company’s saved internal status.
+
+Saved Plan in Database
+- This is the raw plan saved on the company record.
+
+3) OVERRIDE CONTROLS CARD
+Rename this section:
+- Access Controls
+or
+- Billing Access Controls
+
+Add a short description under the header:
+- Use these settings to manually give access, remove billing restrictions, or change what plan this company should use inside EcoLogic.
+
+4) FIELD LABEL REWRITE
+REASON / NOTE
+-> change to:
+- Why are you making this change?
+helper:
+- Optional note for your records. This is saved in the audit log.
+
+PLAN OVERRIDE
+-> change to:
+- Force a Plan
+helper:
+- Temporarily make this company use a different EcoLogic plan.
+
+SEAT CAP OVERRIDE
+-> change to:
+- Force User Limit
+helper:
+- Set a custom user limit for this company.
+
+If there is an unlimited seats toggle, rename to:
+- Allow Unlimited Users
+
+5) TOGGLE / BUTTON COPY
+Rewrite all buttons/toggles to be obvious.
+
+Examples:
+
+Free Access Override
+-> change to:
+- Let This Company Use EcoLogic for Free
+
+Subscription Bypass
+-> change to:
+- Ignore Subscription Check
+
+Restore Default Billing
+-> change to:
+- Remove Manual Changes and Go Back to Normal Billing
+
+Trial Extension
+-> change to:
+- Extend Trial
+
+Recalculate / Refresh actions:
+- Refresh Billing Info
+- Recheck Subscription Status
+- Update Access Rules
+
+6) CONFIRMATION MODALS
+Rewrite confirmation modals in plain English.
+
+Example:
+Instead of:
+- Apply override?
+Use:
+- Are you sure you want to manually change this company’s access?
+
+For free access:
+- This will let this company use EcoLogic without paying through Stripe until you remove this setting.
+
+For bypass:
+- This will ignore the normal subscription lock for this company.
+
+For restore default:
+- This will remove all manual billing changes and make the company follow normal billing rules again.
+
+7) STATUS BADGES
+Replace technical badges with plain ones:
+
+Blocked -> Blocked
+stripe -> Paid Plan
+trial -> Trial
+override_free_access -> Free Access
+override_bypass -> Manual Bypass
+blocked_company_inactive -> Company Disabled
+no_active_subscription -> No Active Billing
+
+8) SEARCH / LIST COPY
+Search placeholder:
+- Search by company email
+
+If searching can also match user email:
+- Search by owner or user email
+
+Empty state:
+- No companies match this search
+
+Header:
+- Companies
+If count shown:
+- Companies · 24 shown
+
+9) TOOLTIPS / INFO TEXT
+For anything still technical, add a tiny info icon or muted line of copy.
+Especially for:
+- plan override
+- seat override
+- free access
+- bypass subscription
+- saved plan vs current plan
+- trial vs paid plan
+
+10) DO A FULL COPY PASS
+Review the entire Billing tab and rewrite all visible text into plain language, including:
+- section headers
+- badges
+- field labels
+- placeholder text
+- button labels
+- modal copy
+- empty states
+- success toasts
+- error toasts
+
+11) KEEP THE UI CLEAN
+Do not make the screen wordy or cluttered.
+Use:
+- simple labels
+- one-line helper text
+- plain buttons
+- clear statuses
+
+12) OUTPUT I WANT
+After updating, tell me:
+1. which labels were renamed
+2. which helper texts were added
+3. which buttons were rewritten
+4. whether any technical text still remains that should be cleaned later
+
+IMPORTANT
+Do not change the actual backend logic in this task unless needed for wording support.
+This is a UX language cleanup so I can actually understand and use the Billing admin tools myself.

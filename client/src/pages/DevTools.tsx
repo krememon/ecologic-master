@@ -708,10 +708,10 @@ function ConfirmTypedModal({
 // ─── SOURCE BADGE ────────────────────────────────────────────────────────────
 function SourceBadge({ source }: { source: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    override_free_access: { label: '✦ Free Access Override', cls: 'bg-violet-900 text-violet-300 border-violet-700' },
-    override_bypass: { label: '⚡ Bypass Override', cls: 'bg-amber-900 text-amber-300 border-amber-700' },
-    stripe: { label: '✓ Stripe Active', cls: 'bg-emerald-900 text-emerald-300 border-emerald-700' },
-    trial: { label: '◷ Trial', cls: 'bg-blue-900 text-blue-300 border-blue-700' },
+    override_free_access: { label: '✦ Free Access', cls: 'bg-violet-900 text-violet-300 border-violet-700' },
+    override_bypass: { label: '⚡ Manual Bypass', cls: 'bg-amber-900 text-amber-300 border-amber-700' },
+    stripe: { label: '✓ Paid Plan', cls: 'bg-emerald-900 text-emerald-300 border-emerald-700' },
+    trial: { label: '◷ Trial Active', cls: 'bg-blue-900 text-blue-300 border-blue-700' },
     blocked: { label: '✕ Blocked', cls: 'bg-red-900 text-red-300 border-red-700' },
   };
   const cfg = map[source] || { label: source, cls: 'bg-slate-800 text-slate-400 border-slate-600' };
@@ -893,8 +893,8 @@ function BillingSourceChip({ source, allowed }: { source: string; allowed: boole
     blocked: 'bg-red-900 text-red-300',
   };
   const labels: Record<string, string> = {
-    override_free_access: 'Free', override_bypass: 'Bypass',
-    stripe: 'Stripe', trial: 'Trial', blocked: 'Blocked',
+    override_free_access: 'Free Access', override_bypass: 'Manual Bypass',
+    stripe: 'Paid Plan', trial: 'Trial', blocked: 'Blocked',
   };
   return (
     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${map[source] || 'bg-slate-700 text-slate-400'}`}>
@@ -965,7 +965,7 @@ function BillingTab() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: 'Override applied', description: 'Billing state updated' });
+      toast({ title: 'Changes Saved', description: 'Billing access has been updated' });
       refetchDetail();
       refetchList();
     },
@@ -980,7 +980,7 @@ function BillingTab() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: 'Restored', description: 'Billing reset to Stripe default' });
+      toast({ title: 'Billing Reset', description: 'All manual changes removed — normal billing is active again' });
       refetchDetail();
       refetchList();
     },
@@ -1009,7 +1009,7 @@ function BillingTab() {
             <input
               value={emailFilter}
               onChange={e => setEmailFilter(e.target.value)}
-              placeholder="Search by email, name, or ID…"
+              placeholder="Search by company name, owner email, or ID…"
               className="w-full bg-slate-800 border border-slate-600 rounded pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500"
             />
           </div>
@@ -1035,9 +1035,9 @@ function BillingTab() {
         {!listLoading && filtered.length === 0 && (
           <p className="text-sm text-slate-500 italic py-4 text-center">
             {emailFilter
-              ? 'No companies match that search'
+              ? 'No companies match your search'
               : showActiveOnly
-                ? `No active companies — ${totalAll} total in DB (all blocked)`
+                ? `No companies with active billing found — ${totalAll} total (all currently blocked)`
                 : 'No companies found'}
           </p>
         )}
@@ -1062,8 +1062,8 @@ function BillingTab() {
                     {/* Diagnostic source sublabel */}
                     <p className="text-[10px] text-slate-600 font-mono mt-0.5">
                       {c.accessAllowed
-                        ? `source: ${c.billingSource}`
-                        : `blocked: ${c.blockReason || 'no_active_subscription'}`}
+                        ? `Access via: ${c.billingSource === 'override_free_access' ? 'free access (manual)' : c.billingSource === 'override_bypass' ? 'bypass (subscription skipped)' : c.billingSource === 'stripe' ? 'paid subscription' : c.billingSource === 'trial' ? 'trial period' : c.billingSource}`
+                        : `Blocked — ${!c.blockReason || c.blockReason === 'no_active_subscription' ? 'no active billing' : c.blockReason === 'admin_paused' ? 'account paused' : c.blockReason}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -1071,7 +1071,7 @@ function BillingTab() {
                     {c.accessAllowed
                       ? <BillingSourceChip source={c.billingSource} allowed={true} />
                       : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-900 text-red-300">Blocked</span>}
-                    {c.hasOverride && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-900 text-violet-400">OVR</span>}
+                    {c.hasOverride && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-900 text-violet-400">Override</span>}
                     {c.adminPaused && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-600 text-slate-300">Paused</span>}
                   </div>
                 </button>
@@ -1090,51 +1090,53 @@ function BillingTab() {
           {detailLoading && <p className="text-sm text-slate-400 animate-pulse py-4">Loading billing details…</p>}
           {d && (
             <>
-              <DevCard title="Current Billing State" icon={CreditCard}>
+              <DevCard title="Billing Access Summary" icon={CreditCard}>
                 <div className="space-y-0 mb-4">
                   <Field label="Company" value={`${d.companyName} (ID: ${d.companyId})`} />
-                  <Field label="Effective Source" value={d.effectiveBilling && <SourceBadge source={d.effectiveBilling.source} />} />
-                  <Field label="Effective Plan" value={d.effectiveBilling?.effectivePlan || '—'} mono />
-                  <Field label="Seat Limit" value={d.effectiveBilling?.seatLimit} />
-                  <Field label="DB Status" value={<Badge variant="outline" className="border-slate-600 text-slate-300">{d.subscriptionStatus || 'inactive'}</Badge>} />
-                  <Field label="DB Plan" value={d.subscriptionPlan || '—'} mono />
-                  <Field label="Max Users (DB)" value={d.maxUsers} />
-                  <Field label="Trial Ends" value={d.trialEndsAt ? new Date(d.trialEndsAt).toLocaleString() : '—'} />
-                  <Field label="Period End" value={d.currentPeriodEnd ? new Date(d.currentPeriodEnd).toLocaleString() : '—'} />
-                  <Field label="Has Stripe Sub" value={<StatusBadge ok={d.hasStripeSubscription} label="Stripe" />} />
+                  <Field label="Why Access Is Allowed or Blocked" value={d.effectiveBilling && <SourceBadge source={d.effectiveBilling.source} />} />
+                  <Field label="Current Access Plan" value={d.effectiveBilling?.effectivePlan || '—'} mono />
+                  <Field label="User Limit" value={d.effectiveBilling?.seatLimit} />
+                  <Field label="Company Status in System" value={<Badge variant="outline" className="border-slate-600 text-slate-300">{d.subscriptionStatus || 'inactive'}</Badge>} />
+                  <Field label="Saved Plan in Database" value={d.subscriptionPlan || '—'} mono />
+                  <Field label="Saved User Limit" value={d.maxUsers} />
+                  <Field label="Trial End Date" value={d.trialEndsAt ? new Date(d.trialEndsAt).toLocaleString() : '—'} />
+                  <Field label="Subscription Renewal / End Date" value={d.currentPeriodEnd ? new Date(d.currentPeriodEnd).toLocaleString() : '—'} />
+                  <Field label="Stripe Subscription" value={<StatusBadge ok={d.hasStripeSubscription} label={d.hasStripeSubscription ? 'Connected to Stripe' : 'Not connected to Stripe'} />} />
                 </div>
                 {(d.adminFreeAccess || d.adminBypassSubscription || d.adminPlanOverride || d.adminSeatLimitOverride || d.adminUnlimitedSeats) && (
                   <div className="rounded-lg border border-violet-700 bg-violet-950/20 p-3 space-y-1 mt-2">
-                    <p className="text-xs font-semibold text-violet-400 uppercase tracking-wide mb-2">Active Overrides</p>
-                    {d.adminFreeAccess && <p className="text-xs text-violet-300">✦ Free Access Override ON</p>}
-                    {d.adminBypassSubscription && <p className="text-xs text-amber-300">⚡ Subscription Bypass ON</p>}
-                    {d.adminPlanOverride && <p className="text-xs text-slate-300">Plan override → <span className="font-mono">{d.adminPlanOverride}</span></p>}
-                    {d.adminSeatLimitOverride && <p className="text-xs text-slate-300">Seat limit → {d.adminSeatLimitOverride}</p>}
-                    {d.adminUnlimitedSeats && <p className="text-xs text-slate-300">Unlimited seats ON</p>}
-                    {d.adminOverrideReason && <p className="text-xs text-slate-500 italic">Reason: {d.adminOverrideReason}</p>}
+                    <p className="text-xs font-semibold text-violet-400 uppercase tracking-wide mb-2">Manual Changes Active</p>
+                    {d.adminFreeAccess && <p className="text-xs text-violet-300">✦ Free access has been turned on manually</p>}
+                    {d.adminBypassSubscription && <p className="text-xs text-amber-300">⚡ Subscription check is being skipped</p>}
+                    {d.adminPlanOverride && <p className="text-xs text-slate-300">Forced plan: <span className="font-mono">{d.adminPlanOverride}</span></p>}
+                    {d.adminSeatLimitOverride && <p className="text-xs text-slate-300">Forced user limit: {d.adminSeatLimitOverride}</p>}
+                    {d.adminUnlimitedSeats && <p className="text-xs text-slate-300">Unlimited users is turned on</p>}
+                    {d.adminOverrideReason && <p className="text-xs text-slate-500 italic">Note: {d.adminOverrideReason}</p>}
                     {d.adminOverrideExpiresAt && <p className="text-xs text-slate-500">Expires: {new Date(d.adminOverrideExpiresAt).toLocaleString()}</p>}
                     {d.adminOverrideUpdatedByEmail && <p className="text-xs text-slate-500">Set by: {d.adminOverrideUpdatedByEmail}</p>}
                   </div>
                 )}
               </DevCard>
 
-              <DevCard title="Override Controls" icon={Shield}>
+              <DevCard title="Billing Access Controls" icon={Shield}>
+                <p className="text-xs text-slate-500 mb-4">Use these settings to manually give access, remove billing restrictions, or change what plan this company uses inside EcoLogic.</p>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-3">
                     <div>
-                      <Label className="text-xs text-slate-400 uppercase tracking-wide">Reason / Note</Label>
-                      <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Optional reason for audit log…"
+                      <Label className="text-xs text-slate-400 uppercase tracking-wide">Why are you making this change?</Label>
+                      <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Optional — this gets saved to the audit log"
                         className="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs text-slate-400 uppercase tracking-wide">Plan Override</Label>
+                        <Label className="text-xs text-slate-400 uppercase tracking-wide">Force a Plan</Label>
+                        <p className="text-[10px] text-slate-600 mb-1">Temporarily make this company use a different plan.</p>
                         <Select value={planOverride || "none"} onValueChange={v => setPlanOverride(v === "none" ? "" : v)}>
-                          <SelectTrigger className="mt-1 bg-slate-800 border-slate-600 text-slate-200 h-9">
+                          <SelectTrigger className="bg-slate-800 border-slate-600 text-slate-200 h-9">
                             <SelectValue placeholder="— no override —" />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-800 border-slate-700">
-                            <SelectItem value="none">— no override —</SelectItem>
+                            <SelectItem value="none">— no change —</SelectItem>
                             <SelectItem value="starter">starter</SelectItem>
                             <SelectItem value="team">team</SelectItem>
                             <SelectItem value="pro">pro</SelectItem>
@@ -1144,51 +1146,52 @@ function BillingTab() {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-xs text-slate-400 uppercase tracking-wide">Seat Cap Override</Label>
+                        <Label className="text-xs text-slate-400 uppercase tracking-wide">Force User Limit</Label>
+                        <p className="text-[10px] text-slate-600 mb-1">Set a custom user limit for this company.</p>
                         <input value={seatLimit} onChange={e => setSeatLimit(e.target.value)} placeholder="e.g. 25"
-                          className="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
+                          className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Switch checked={unlimitedSeats} onCheckedChange={setUnlimitedSeats} className="data-[state=checked]:bg-violet-600" />
-                      <Label className="text-sm text-slate-300">Unlimited seats</Label>
+                      <Label className="text-sm text-slate-300">Allow Unlimited Users</Label>
                     </div>
                     <div>
-                      <Label className="text-xs text-slate-400 uppercase tracking-wide">Override Expiry (optional)</Label>
+                      <Label className="text-xs text-slate-400 uppercase tracking-wide">Changes Expire On (optional)</Label>
                       <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
                         className="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-teal-500" />
                     </div>
                   </div>
 
                   <div className="pt-3 border-t border-slate-700">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Apply Override</p>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Apply Changes</p>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" onClick={() => applyOverride('free_access', !d.adminFreeAccess)}
                         disabled={overrideMutation.isPending}
                         className={d.adminFreeAccess ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-violet-700 hover:bg-violet-600 text-white'}>
                         {d.adminFreeAccess ? <ToggleRight className="w-3.5 h-3.5 mr-1.5" /> : <ToggleLeft className="w-3.5 h-3.5 mr-1.5" />}
-                        {d.adminFreeAccess ? 'Disable Free Access' : 'Enable Free Access'}
+                        {d.adminFreeAccess ? 'Remove Free Access' : 'Let This Company Use EcoLogic for Free'}
                       </Button>
                       <Button size="sm" onClick={() => applyOverride('bypass_subscription', !d.adminBypassSubscription)}
                         disabled={overrideMutation.isPending}
                         className={d.adminBypassSubscription ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-amber-700 hover:bg-amber-600 text-white'}>
-                        {d.adminBypassSubscription ? 'Disable Bypass' : 'Enable Sub Bypass'}
+                        {d.adminBypassSubscription ? 'Remove Subscription Skip' : 'Ignore Subscription Check'}
                       </Button>
                       <Button size="sm" onClick={() => applyOverride('plan_override', true)}
                         disabled={overrideMutation.isPending || !planOverride}
                         variant="outline" className="border-teal-700 text-teal-300 hover:bg-teal-950">
-                        Apply Plan Override
+                        Save Forced Plan
                       </Button>
                       <Button size="sm" onClick={() => applyOverride('seat_override', true)}
                         disabled={overrideMutation.isPending}
                         variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800">
-                        Apply Seat Override
+                        Save User Limit
                       </Button>
                     </div>
                   </div>
 
                   <div className="pt-3 border-t border-slate-700">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Trial Extension</p>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Extend Trial Period</p>
                     <div className="flex items-center gap-2">
                       <input value={trialDays} onChange={e => setTrialDays(e.target.value)} placeholder="Days to add…"
                         className="w-32 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
@@ -1204,9 +1207,9 @@ function BillingTab() {
                     <Button size="sm" onClick={() => setConfirmRestore(true)}
                       disabled={restoreMutation.isPending}
                       className="bg-red-900 hover:bg-red-800 text-red-200 border border-red-700">
-                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Restore Default Billing
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Remove Manual Changes & Resume Normal Billing
                     </Button>
-                    <p className="text-xs text-slate-600 mt-1.5">Removes all internal overrides. Stripe-driven billing resumes.</p>
+                    <p className="text-xs text-slate-600 mt-1.5">This removes all manual changes. The company will go back to following normal subscription rules.</p>
                   </div>
                 </div>
               </DevCard>
@@ -1219,8 +1222,8 @@ function BillingTab() {
 
       <ConfirmTypedModal
         open={confirmRestore}
-        title="Restore Default Billing"
-        description={`All internal billing overrides for ${selected?.name} will be cleared. The company will revert to normal Stripe-driven billing enforcement.`}
+        title="Remove All Manual Billing Changes?"
+        description={`This will remove all manual billing changes for ${selected?.name}. They will go back to following normal subscription rules. This cannot be undone.`}
         confirmWord="CONFIRM"
         onConfirm={() => { setConfirmRestore(false); restoreMutation.mutate(); }}
         onCancel={() => setConfirmRestore(false)}
