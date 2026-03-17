@@ -125,6 +125,7 @@ export const companies = pgTable("companies", {
   state: varchar("state"),
   postalCode: varchar("postal_code"),
   country: varchar("country").default("US"),
+  companyCode: varchar("company_code", { length: 6 }).unique(),
   inviteCode: varchar("invite_code", { length: 20 }).notNull().unique(),
   inviteCodeVersion: integer("invite_code_version").default(0).notNull(),
   inviteCodeRotatedAt: timestamp("invite_code_rotated_at").defaultNow(),

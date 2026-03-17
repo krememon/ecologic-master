@@ -149,6 +149,17 @@ function generatePairKey(companyId: number, userId1: string, userId2: string): s
   return crypto.createHash('sha256').update(str).digest('hex');
 }
 
+async function generateUniqueCompanyCode(): Promise<string> {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
+    if (!existing) return code;
+  }
+  throw new Error('Failed to generate unique company code after 50 attempts');
+}
+
 // Interface for storage operations
 export interface IStorage {
   // User operations (IMPORTANT) these user operations are mandatory for Replit Auth.
@@ -918,7 +929,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCompany(companyData: InsertCompany): Promise<Company> {
-    const [company] = await db.insert(companies).values(companyData).returning();
+    const companyCode = companyData.companyCode || await generateUniqueCompanyCode();
+    const [company] = await db.insert(companies).values({ ...companyData, companyCode }).returning();
     
     // Create company membership for the owner with OWNER role
     await db.insert(companyMembers).values({

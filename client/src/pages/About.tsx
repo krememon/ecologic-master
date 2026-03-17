@@ -1,8 +1,10 @@
 import { Link } from "wouter";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Copy, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { isNativePlatform, getPlatform } from "@/lib/capacitor";
+import { useToast } from "@/hooks/use-toast";
 
 function getDeviceInfo(): string {
   const ua = navigator.userAgent;
@@ -63,18 +65,54 @@ function getTimezoneInfo(): { timezone: string; dateTime: string } {
 
 export default function About() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [timeInfo, setTimeInfo] = useState(getTimezoneInfo);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setTimeInfo(getTimezoneInfo()), 30000);
     return () => clearInterval(interval);
   }, []);
 
+  const { data: company } = useQuery<{ companyCode?: string }>({
+    queryKey: ['/api/company'],
+    retry: false,
+  });
+
   const device = getDeviceInfo();
   const appVersion = "1.0.0";
+  const companyCode = company?.companyCode || null;
 
-  const fields = [
+  const handleCopyCode = () => {
+    if (!companyCode) return;
+    navigator.clipboard.writeText(companyCode).then(() => {
+      setCopied(true);
+      toast({ title: "Company ID copied", description: companyCode });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const fields: { label: string; value: React.ReactNode }[] = [
     { label: "App Version", value: appVersion },
+    {
+      label: "Company ID",
+      value: companyCode ? (
+        <div className="flex items-center gap-2">
+          <span className="font-mono font-semibold tracking-widest text-slate-900 dark:text-slate-100">
+            {companyCode}
+          </span>
+          <button
+            onClick={handleCopyCode}
+            className="flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            title="Copy Company ID"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      ) : (
+        <span className="text-slate-400 italic text-sm">—</span>
+      ),
+    },
     { label: "Email Address", value: user?.email || "—" },
     { label: "Timezone", value: timeInfo.timezone },
     { label: "Local Time", value: timeInfo.dateTime },
@@ -105,7 +143,9 @@ export default function About() {
             }`}
           >
             <span className="text-sm text-slate-500 dark:text-slate-400">{field.label}</span>
-            <span className="text-sm font-medium text-slate-900 dark:text-slate-100 text-right max-w-[60%] truncate">{field.value}</span>
+            <span className="text-sm font-medium text-slate-900 dark:text-slate-100 text-right max-w-[60%]">
+              {field.value}
+            </span>
           </div>
         ))}
       </div>

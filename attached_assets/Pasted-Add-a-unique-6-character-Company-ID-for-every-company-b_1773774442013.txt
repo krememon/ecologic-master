@@ -1,0 +1,113 @@
+Add a unique 6-character Company ID for every company/business in EcoLogic and display it in Settings → About.
+
+GOAL
+Every company in EcoLogic should have its own permanent unique Company ID made of 6 letters and/or numbers.
+This should be easy for humans to read and use, and no two companies should ever share the same Company ID.
+
+WHAT TO BUILD
+
+1) NEW COMPANY ID FIELD
+Add a dedicated company identifier field to the companies table, for example:
+- companyCode
+or
+- publicCompanyId
+
+Requirements:
+- exactly 6 characters
+- uppercase letters and numbers only
+- unique across all companies
+- permanent once assigned
+- not based on database numeric ID
+- safe to show in the UI
+
+Example format:
+- A7K2Q9
+- EC4L2G
+- Z1P8M3
+
+2) ID GENERATION RULES
+Create a generator that:
+- produces a random 6-character uppercase alphanumeric code
+- checks DB uniqueness before saving
+- retries until a unique value is found
+- is used automatically whenever a new company is created
+
+Character set:
+- A-Z
+- 0-9
+
+Length:
+- 6 exactly
+
+3) BACKFILL EXISTING COMPANIES
+Write a safe backfill for all existing companies that do not already have a Company ID.
+
+Rules:
+- assign a unique 6-character code to every existing company missing one
+- do not overwrite any existing companyCode if already present
+- log how many were updated
+- verify uniqueness after migration/backfill
+
+4) DB SAFETY
+Add proper DB protections:
+- unique index/constraint on companyCode
+- not-null after backfill is complete, if safe
+- validation in create/update flow so invalid values cannot be stored
+
+5) DISPLAY IN SETTINGS → ABOUT
+In the About page under Settings, add a new row:
+
+- Company ID
+
+It should display the current company’s unique 6-character Company ID.
+
+Placement:
+- inside the existing EcoLogic Information card
+- near Email Address / App Version / Timezone area
+- make it look native to the current settings layout
+
+Suggested order:
+- App Version
+- Company ID
+- Email Address
+- Timezone
+- Local Time
+- Device
+
+6) FRONTEND DATA FLOW
+Make sure the About/settings page has access to the current company’s Company ID from the same source as the current company/user data.
+
+If needed:
+- extend the existing company/user/settings API response to include companyCode
+- do not create unnecessary duplicate fetches if the data already exists elsewhere
+
+7) OPTIONAL NICE UX
+Add a small copy button next to Company ID if easy.
+Behavior:
+- tap/click copies the Company ID
+- show toast:
+  - “Company ID copied”
+
+Only add this if it fits cleanly.
+
+8) VALIDATION / EDGE CASES
+Make sure:
+- every company gets a different Company ID
+- no duplicates can be created even under concurrent company creation
+- old companies are backfilled
+- new companies automatically get one
+- if generation somehow collides, retry automatically
+- UI handles missing value gracefully during migration, but once done it should always exist
+
+9) DELIVERABLES
+- new unique 6-character Company ID field for companies
+- generator for new companies
+- backfill for existing companies
+- uniqueness enforcement in DB
+- Company ID shown in Settings → About
+- optional copy button if clean
+
+10) IMPORTANT
+Do not use the raw database numeric company ID as the displayed Company ID.
+This must be a true unique business/company code that is safe to show publicly in the UI.
+Make sure each company/business has a different one.
