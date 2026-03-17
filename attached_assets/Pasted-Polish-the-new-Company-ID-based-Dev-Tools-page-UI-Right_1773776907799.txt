@@ -1,0 +1,156 @@
+Polish the new Company ID–based Dev Tools page UI. Right now it looks cramped and awkward on mobile. Fix the layout so it feels clean, premium, and easy to use.
+
+GOAL
+Make the Dev Tools landing screen look properly designed on mobile:
+- better spacing
+- cleaner hierarchy
+- better button sizing
+- cleaner Company Lookup card
+- better hint code layout
+- better Internal Dev Tools button layout
+- overall less cramped and more polished
+
+PROBLEMS TO FIX
+From the current screen:
+- the Company Lookup card feels too tight
+- the description text is cramped
+- the input and button row feels squeezed
+- the “Look Up” button is too narrow/awkward
+- the hint company codes at the bottom are messy and hard to scan
+- the Internal Dev Tools buttons feel too small and crowded
+- there is too much empty dark space below without a strong empty-state treatment
+- the whole page needs better vertical rhythm
+
+WHAT TO CHANGE
+
+1) PAGE SPACING
+- Increase top-to-bottom spacing between major cards
+- Add more comfortable padding inside each card
+- Make the page feel less compressed
+- Keep it mobile-first
+
+2) COMPANY LOOKUP CARD
+Clean up this card heavily:
+- Make the heading row look stronger
+- Keep the icon but align it better with the title
+- Increase space between title, description, input row, and hint codes
+- Make the body text slightly easier to read
+- Keep line length clean on mobile
+
+3) INPUT + BUTTON ROW
+The current input/button row looks cramped.
+
+Fix it like this:
+- On mobile, either:
+  A) stack input and button vertically
+  or
+  B) keep them on one row only if it actually fits comfortably
+- Prefer stacked layout on narrow widths
+- Make the button full-width if stacked
+- Make the input taller and easier to tap
+- Make the button label fully readable
+- Improve radius/padding so it feels premium
+
+4) LOOKUP INPUT
+- Make placeholder easier to read
+- Keep text vertically centered
+- Make the input width feel balanced
+- Add slightly stronger border/focus treatment
+- Keep uppercase formatting behavior if already implemented
+
+5) HINT COMPANY CODES
+The small company code hints currently look messy.
+
+Redesign them into a cleaner mini section:
+- Add a tiny label like:
+  - Quick Load
+  or
+  - Saved Companies
+- Show EcoLogic and ZSL as small tappable pills/cards
+- Each pill should show:
+  - company name
+  - optional small DB id in muted text
+  - company code in stronger highlight text
+- Space them nicely
+- Make them easy to tap on mobile
+- Do not leave them as loose inline text
+
+6) INTERNAL DEV TOOLS CARD
+The 4 footer buttons need a cleaner layout.
+
+Improve them by:
+- making the buttons larger
+- increasing padding
+- improving spacing between them
+- ensuring icons and text are aligned nicely
+- using a proper 2x2 grid that breathes
+- making the text fully readable
+- keeping a subtle arrow/chevron if helpful
+
+Buttons:
+- My Session
+- Audit Log
+- Integrations
+- Inspector
+
+These should feel like intentional admin shortcuts, not tiny pills squeezed together.
+
+7) EMPTY STATE
+There is too much blank space below.
+When no company is loaded, add a better empty-state section below the cards.
+
+Example:
+- icon/illustration style block
+- heading: “Load a company to view its full admin console”
+- short supporting text:
+  - “Use a 6-character Company ID to open billing, team, jobs, payments, and internal company details.”
+
+Keep it subtle and on-brand.
+This will make the page feel complete instead of unfinished.
+
+8) HEADER CARD POLISH
+The top Dev Tools header is mostly fine, but polish:
+- spacing around the icon/text/badge
+- ensure the “DEV ONLY” badge doesn’t feel cramped
+- keep email readable
+- tighten alignment for a more premium look
+
+9) VISUAL HIERARCHY
+Strengthen hierarchy across the page:
+- larger section headings
+- clearer muted supporting text
+- consistent card padding
+- consistent corner radius
+- better spacing between card header and body
+- cleaner divider usage
+
+10) MOBILE-FIRST RULES
+This page must look good on narrow screens first.
+Check:
+- no squeezed horizontal layouts
+- no clipped button text
+- no tiny tap targets
+- no awkward line wraps
+- no elements jammed against card edges
+
+11) KEEP EXISTING FUNCTIONALITY
+Do not remove the current functionality:
+- Company ID lookup
+- quick load company codes
+- internal dev tool shortcuts
+- dev-only behavior
+
+This is a UI polish/layout pass, not a logic rewrite.
+
+12) DELIVERABLES
+- cleaner Company Lookup card
+- better input/button layout on mobile
+- redesigned quick-load company code section
+- improved Internal Dev Tools button grid
+- polished spacing across the page
+- proper empty-state section when no company is loaded
+- overall cleaner premium mobile UI
+
+IMPORTANT
+Make it feel like a polished internal admin tool, not a rough debug page.
+Focus especially on spacing, stacking, readability, and touch-friendly layout on mobile.

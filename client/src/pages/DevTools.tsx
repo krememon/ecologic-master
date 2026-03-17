@@ -1158,52 +1158,79 @@ export default function DevTools() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
       <div className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-20">
-        <div className="max-w-3xl mx-auto px-5 py-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-teal-900/60 border border-teal-700/40">
+        <div className="max-w-3xl mx-auto px-5 py-3.5 flex items-center gap-3.5">
+          <div className="p-2.5 rounded-xl bg-teal-900/60 border border-teal-700/40 shrink-0">
             <Shield className="w-5 h-5 text-teal-400" />
           </div>
-          <div>
-            <h1 className="text-base font-bold text-white tracking-wide">DEVELOPER TOOLS</h1>
-            <p className="text-xs text-slate-500">EcoLogic Internal Console · {email}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm font-bold text-white tracking-widest uppercase">Developer Tools</h1>
+            <p className="text-[11px] text-slate-500 truncate mt-0.5">{email}</p>
           </div>
-          <Badge className="ml-auto bg-violet-900/50 text-violet-300 border-violet-700 text-xs">DEV ONLY</Badge>
+          <Badge className="shrink-0 bg-violet-900/60 text-violet-300 border-violet-700/60 text-[10px] font-bold tracking-widest px-2.5 py-1">
+            DEV ONLY
+          </Badge>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-3xl mx-auto px-5 py-6 space-y-5">
+      <div className="max-w-3xl mx-auto px-4 py-7 space-y-6">
 
         {/* Company Lookup */}
-        <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
-          <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-700 bg-slate-800/60">
-            <Search className="w-4 h-4 text-teal-400" />
-            <h3 className="text-sm font-semibold text-slate-200 tracking-wide uppercase">Company Lookup</h3>
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden shadow-xl shadow-black/20">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700/80 bg-slate-800/60">
+            <div className="p-1.5 rounded-lg bg-teal-900/50 border border-teal-700/30 shrink-0">
+              <Search className="w-4 h-4 text-teal-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-white tracking-wide uppercase">Company Lookup</h3>
           </div>
-          <div className="p-5">
-            <p className="text-xs text-slate-500 mb-3">Enter a 6-character Company ID to open the full company console. Find the code on any company's About page.</p>
-            <div className="flex gap-2">
+          <div className="px-5 py-5 space-y-5">
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Enter a 6-character Company ID to open the full admin console — billing, team, jobs, payments, and more.
+            </p>
+
+            {/* Input + Button — stacked for clean mobile layout */}
+            <div className="flex flex-col gap-3">
               <input
                 value={codeInput}
                 onChange={e => setCodeInput(e.target.value.toUpperCase().slice(0, 6))}
                 onKeyDown={e => e.key === 'Enter' && handleLookup()}
                 placeholder="e.g. YKUUC7"
                 maxLength={6}
-                className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm font-mono text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500 tracking-widest uppercase"
+                className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-3.5 text-lg font-mono font-semibold text-white placeholder-slate-600 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 tracking-[0.35em] uppercase transition-colors"
               />
               <Button onClick={handleLookup} disabled={isLookingUp || codeInput.length < 4}
-                className="bg-teal-600 hover:bg-teal-700 gap-1.5 shrink-0">
-                {isLookingUp ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading…</> : <><Search className="w-3.5 h-3.5" /> Look Up</>}
+                className="w-full h-12 bg-teal-600 hover:bg-teal-700 text-sm font-semibold gap-2 rounded-xl">
+                {isLookingUp
+                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Looking up…</>
+                  : <><Search className="w-4 h-4" /> Look Up Company</>}
               </Button>
             </div>
+
             {lookupError && (
-              <p className="mt-2 text-sm text-red-400 flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {lookupError}
-              </p>
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-950/50 border border-red-800/50">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <p className="text-sm text-red-300">{lookupError}</p>
+              </div>
             )}
+
+            {/* Quick Load pills */}
             {!consoleData && !lookupError && (
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                <span>EcoLogic (415): <span className="font-mono text-teal-700">YKUUC7</span></span>
-                <span>ZSL (533): <span className="font-mono text-teal-700">EHGYWQ</span></span>
+              <div>
+                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-3">Quick Load</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { name: 'EcoLogic', id: 415, code: 'YKUUC7' },
+                    { name: 'ZSL', id: 533, code: 'EHGYWQ' },
+                  ].map(c => (
+                    <button key={c.code}
+                      onClick={() => setCodeInput(c.code)}
+                      className="flex flex-col items-start px-4 py-3.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-teal-700/60 hover:bg-slate-800 active:scale-[0.98] transition-all text-left">
+                      <span className="text-sm font-semibold text-slate-200">{c.name}</span>
+                      <span className="text-[10px] text-slate-600 mt-0.5">ID {c.id}</span>
+                      <span className="text-sm font-mono font-bold text-teal-400 mt-2 tracking-widest">{c.code}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1218,28 +1245,49 @@ export default function DevTools() {
           />
         )}
 
-        {/* Developer Tools Footer */}
-        <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-700/50 bg-slate-800/30">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Internal Dev Tools</p>
+        {/* Empty State — shown when no company is loaded */}
+        {!consoleData && (
+          <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+            <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700/40 mb-5">
+              <Building2 className="w-9 h-9 text-slate-600" />
+            </div>
+            <h3 className="text-base font-semibold text-slate-400 mb-2">Load a company to view its admin console</h3>
+            <p className="text-sm text-slate-600 max-w-xs leading-relaxed">
+              Use a 6-character Company ID above to open billing controls, team members, jobs, payments, and internal company details.
+            </p>
           </div>
-          <div className="p-5 space-y-3">
-            <div className="flex flex-wrap gap-2">
+        )}
+
+        {/* Internal Dev Tools */}
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-700/50 bg-slate-800/30">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Internal Dev Tools</p>
+            <p className="text-xs text-slate-600 mt-0.5">Session, audit log, integrations, and API inspector</p>
+          </div>
+          <div className="p-5 space-y-5">
+            <div className="grid grid-cols-2 gap-3">
               {[
-                { key: 'session', label: 'My Session', icon: User },
-                { key: 'audit', label: 'Audit Log', icon: ClipboardList },
-                { key: 'integrations', label: 'Integrations', icon: Wifi },
-                { key: 'inspector', label: 'Inspector', icon: Terminal },
-              ].map(({ key, label, icon: Icon }) => (
+                { key: 'session', label: 'My Session', icon: User, desc: 'Auth & feature flags' },
+                { key: 'audit', label: 'Audit Log', icon: ClipboardList, desc: 'Admin actions history' },
+                { key: 'integrations', label: 'Integrations', icon: Wifi, desc: 'Third-party status' },
+                { key: 'inspector', label: 'Inspector', icon: Terminal, desc: 'API log & dev notes' },
+              ].map(({ key, label, icon: Icon, desc }) => (
                 <button key={key} onClick={() => toggleTool(key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`flex flex-col items-start px-4 py-4 rounded-xl border transition-all active:scale-[0.98] text-left ${
                     activeTools.includes(key)
-                      ? 'bg-teal-900/50 border-teal-700 text-teal-300'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
+                      ? 'bg-teal-900/30 border-teal-700 text-teal-200'
+                      : 'bg-slate-800 border-slate-700 hover:border-slate-600 hover:bg-slate-800/80'
                   }`}>
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                  {activeTools.includes(key) ? <ChevronDown className="w-3 h-3 ml-0.5" /> : <ChevronRight className="w-3 h-3 ml-0.5" />}
+                  <div className="flex items-center justify-between w-full mb-2.5">
+                    <div className={`p-1.5 rounded-lg ${activeTools.includes(key) ? 'bg-teal-900/60' : 'bg-slate-700/60'}`}>
+                      <Icon className={`w-4 h-4 ${activeTools.includes(key) ? 'text-teal-400' : 'text-slate-400'}`} />
+                    </div>
+                    {activeTools.includes(key)
+                      ? <ChevronDown className="w-4 h-4 text-teal-500" />
+                      : <ChevronRight className="w-4 h-4 text-slate-600" />}
+                  </div>
+                  <p className={`text-sm font-semibold leading-tight ${activeTools.includes(key) ? 'text-teal-200' : 'text-slate-200'}`}>{label}</p>
+                  <p className={`text-xs mt-1 leading-tight ${activeTools.includes(key) ? 'text-teal-500/80' : 'text-slate-500'}`}>{desc}</p>
                 </button>
               ))}
             </div>
