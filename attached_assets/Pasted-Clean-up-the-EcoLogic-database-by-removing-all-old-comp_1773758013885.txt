@@ -1,0 +1,124 @@
+Clean up the EcoLogic database by removing all old companies except the two companies tied to these emails:
+
+KEEP ONLY THESE COMPANIES
+1. pjpell077@gmail.com
+2. ppellegrino@ecologicc.com
+
+GOAL
+I want to clear out the old/test/duplicate companies in EcoLogic and keep only:
+- my personal company tied to pjpell077@gmail.com
+- the ZSL company tied to ppellegrino@ecologicc.com
+
+IMPORTANT
+Do this SAFELY.
+I do NOT want accidental deletion of the two companies above.
+If there are multiple duplicate companies for either kept email, stop and report them before deleting anything.
+Prefer safe deletion flow:
+- first identify exactly which company IDs belong to those two kept emails
+- then identify every other company
+- then remove/archive everything else
+- then clean up orphaned related records
+
+STEP 1 — FIND THE TWO COMPANIES TO KEEP
+Find the exact company/company IDs associated with:
+- pjpell077@gmail.com
+- ppellegrino@ecologicc.com
+
+Check through:
+- users table
+- memberships/company_users table
+- company owner field if applicable
+- any related ownership/membership joins
+
+Return a short confirmation before destructive cleanup:
+- keep company #...
+- keep company #...
+
+If either email belongs to multiple companies, do NOT proceed blindly.
+Report all matching company IDs and ask me which one(s) to keep.
+
+STEP 2 — DRY RUN REPORT
+Before deleting anything, generate a dry-run report showing:
+- total companies in DB
+- companies to keep
+- companies to remove
+- counts of related records that would be affected:
+  - users/memberships
+  - jobs
+  - invoices
+  - payments
+  - documents
+  - messages
+  - schedules
+  - leads
+  - timesheets
+  - any other major company-linked records
+
+STEP 3 — SAFE CLEANUP MODE
+Unless there is already a proven safe hard-delete cascade, prefer this order:
+
+A. First create a simple backup/export or at minimum log the IDs of all companies being removed.
+
+B. Then delete/archive every company EXCEPT the kept company IDs.
+
+C. Clean up or reassign related records safely:
+- memberships
+- users that only belong to deleted companies
+- jobs
+- invoices
+- payments
+- documents
+- messages
+- schedules
+- leads
+- timesheets
+- settings
+- subscriptions
+- any company-linked test data
+
+D. Remove orphaned rows left behind.
+
+STEP 4 — PREFERRED BEHAVIOR
+If the app is not built for true hard deletion, use one of these safer approaches:
+- archive all unwanted companies and exclude them everywhere
+OR
+- hard delete only if relational cleanup is confirmed safe
+
+If hard delete is risky, do NOT force it.
+Instead:
+- mark unwanted companies as deleted/archived/test_removed
+- exclude them from all app/dev tools queries
+- keep only the two wanted companies visible and usable
+
+STEP 5 — DEV TOOLS BUTTON
+Inside Developer Tools add a hidden dev-only cleanup action:
+- “Archive Old Companies”
+or
+- “Delete Old Companies”
+This should:
+- only be visible to my dev account
+- require confirmation
+- require typing CONFIRM
+- show exactly which company IDs will be removed
+- never include the two protected companies above
+
+STEP 6 — PROTECTED COMPANY RULE
+Add a hard safety guard in the cleanup logic:
+- never delete/archive a company tied to pjpell077@gmail.com
+- never delete/archive a company tied to ppellegrino@ecologicc.com
+
+Even if a filter/query is wrong, these two must be protected.
+
+STEP 7 — OUTPUT I WANT
+After the dry run and cleanup, report:
+1. which exact company IDs were kept
+2. which company IDs were removed/archived
+3. whether deletion was hard delete or archive
+4. whether any duplicates were found for the protected emails
+5. whether any orphaned data was cleaned up
+6. final remaining company count
+
+IMPORTANT
+Do not accidentally remove my personal company or the ZSL company.
+If there is any ambiguity around which company belongs to either protected email, stop and report before deletion.
+Use the safest route possible.
