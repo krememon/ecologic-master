@@ -19237,6 +19237,58 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       });
     }
 
+    // GET /api/dev/admin/billing/companies — all companies with effective billing, email-searchable
+    app.get('/api/dev/admin/billing/companies', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const allRows = await db.select({
+          id: companies.id, name: companies.name, email: companies.email,
+          ownerId: companies.ownerId, subscriptionStatus: companies.subscriptionStatus,
+          subscriptionPlan: companies.subscriptionPlan, maxUsers: companies.maxUsers,
+          adminFreeAccess: companies.adminFreeAccess, adminBypassSubscription: companies.adminBypassSubscription,
+          adminPlanOverride: companies.adminPlanOverride, adminSeatLimitOverride: companies.adminSeatLimitOverride,
+          adminUnlimitedSeats: companies.adminUnlimitedSeats, adminPaused: companies.adminPaused,
+          adminOverrideExpiresAt: companies.adminOverrideExpiresAt,
+          trialEndsAt: companies.trialEndsAt, currentPeriodEnd: companies.currentPeriodEnd,
+          createdAt: companies.createdAt,
+        }).from(companies).orderBy(companies.id).limit(500);
+
+        const ownerIds = [...new Set(allRows.map((r: any) => r.ownerId).filter(Boolean))];
+        let ownerMap: Record<string, string> = {};
+        if (ownerIds.length > 0) {
+          const { inArray } = await import('drizzle-orm');
+          const ownerRows = await db.select({ id: users.id, email: users.email })
+            .from(users).where(inArray(users.id, ownerIds));
+          ownerRows.forEach((u: any) => { ownerMap[u.id] = u.email || ''; });
+        }
+
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const enriched = allRows.map((r: any) => {
+          const billing = getEffectiveBillingAccess(r);
+          return {
+            id: r.id, name: r.name, email: r.email,
+            ownerEmail: ownerMap[r.ownerId] || null,
+            subscriptionStatus: r.subscriptionStatus,
+            subscriptionPlan: r.subscriptionPlan,
+            maxUsers: r.maxUsers,
+            adminFreeAccess: r.adminFreeAccess,
+            adminBypassSubscription: r.adminBypassSubscription,
+            adminPaused: r.adminPaused,
+            hasOverride: !!(r.adminFreeAccess || r.adminBypassSubscription || r.adminPlanOverride || r.adminSeatLimitOverride || r.adminUnlimitedSeats),
+            effectivePlan: billing.effectivePlan,
+            billingSource: billing.source,
+            accessAllowed: billing.allowed,
+            seatLimit: billing.seatLimit,
+            createdAt: r.createdAt,
+          };
+        });
+
+        res.json({ ok: true, companies: enriched, total: enriched.length });
+      } catch (e: any) {
+        console.error('[dev-admin] billing/companies error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
     // GET /api/dev/admin/company/search?q=
     app.get('/api/dev/admin/company/search', isAuthenticated, requireDev, async (req: any, res) => {
       try {

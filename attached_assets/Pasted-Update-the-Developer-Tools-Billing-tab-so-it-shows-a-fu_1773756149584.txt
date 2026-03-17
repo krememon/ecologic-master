@@ -1,0 +1,110 @@
+Update the Developer Tools Billing tab so it shows a full visible list of companies by default, and make the search primarily work by owner/user email.
+
+GOAL
+Right now the Billing tab only shows a search box. I want it to behave like a real admin billing panel:
+- show a full list of companies immediately
+- let me scroll/select from that list
+- search should work by email
+- keep everything dev-only
+
+WHAT TO CHANGE
+
+1) BILLING TAB DEFAULT LIST
+In the Billing tab, load and display a full list of companies automatically on page load.
+Do not require a search before showing results.
+
+For each company row/card, show at minimum:
+- company id
+- company name
+- owner email or primary billing email
+- current effective plan
+- billing/subscription status
+- active/inactive access state
+- whether a dev billing override exists
+- seat count if available
+
+Make the list:
+- scrollable
+- mobile-friendly
+- easy to tap/select
+- styled to match the current dark Developer Tools UI
+
+2) EMAIL-BASED SEARCH
+Change the Billing tab search so it primarily searches by email.
+Supported search behavior:
+- owner email
+- user email within that company if possible
+- partial email match
+- exact email match
+- case-insensitive
+- trimmed/normalized input
+
+If the current backend search is name/company-focused, expand it so email search works reliably.
+
+Placeholder text should be updated to something simple like:
+- Search by email
+or
+- Search by owner/user email
+
+3) LIST + SEARCH TOGETHER
+Behavior should be:
+- page loads -> all companies list appears
+- typing in search filters the list
+- clearing search returns full list
+Do not make search a separate disconnected flow.
+
+4) COMPANY SELECTION
+When I tap/click a company from the list:
+- open/load that company’s billing details in the Billing panel
+- show the existing billing controls for that selected company
+- keep the selected company visually highlighted
+
+5) BACKEND SUPPORT
+Create or update a dev-only endpoint for billing company listing/search, such as:
+- GET /api/dev/admin/billing/companies
+or equivalent
+
+Requirements:
+- protected by requireDev
+- returns all companies in a safe structured format
+- supports optional email query param
+- email matching should be case-insensitive
+- include only safe fields needed for the billing admin list
+- do not expose secrets/tokens
+
+6) DISPLAY FIELDS
+For the initial list response, include enough data for each company row:
+- companyId
+- companyName
+- ownerEmail / primaryEmail
+- effectivePlan
+- billingSource
+- subscriptionStatus
+- accessAllowed
+- hasOverride
+- seatCount if available
+
+7) UX DETAILS
+- Keep the search input at the top
+- Put the full company list directly below it
+- If there are many companies, add internal scrolling to the list area
+- Add empty state for no matches:
+  - “No companies found”
+- Add loading state
+- Add simple result count if easy:
+  - “24 companies”
+- Keep all of this inside the Billing tab only
+
+8) IMPORTANT
+- This is still dev-only for my account only
+- Do not break any of the existing billing override controls
+- Do not remove current company billing details view; just make company discovery much better
+- Search should focus on email first, not company name first
+
+DELIVERABLES
+- Billing tab shows all companies by default
+- Search filters by email
+- Clearing search restores full list
+- Selecting a company loads its billing controls/details
+- Backend dev endpoint supports company listing + email filtering
+- Mobile-friendly scrollable admin list

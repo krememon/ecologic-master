@@ -883,9 +883,30 @@ function CompaniesTab() {
   );
 }
 
+// ─── BILLING SOURCE MINI BADGE (compact, for list rows) ─────────────────────
+function BillingSourceChip({ source, allowed }: { source: string; allowed: boolean }) {
+  const map: Record<string, string> = {
+    override_free_access: 'bg-violet-900 text-violet-300',
+    override_bypass: 'bg-amber-900 text-amber-300',
+    stripe: 'bg-emerald-900 text-emerald-300',
+    trial: 'bg-blue-900 text-blue-300',
+    blocked: 'bg-red-900 text-red-300',
+  };
+  const labels: Record<string, string> = {
+    override_free_access: 'Free', override_bypass: 'Bypass',
+    stripe: 'Stripe', trial: 'Trial', blocked: 'Blocked',
+  };
+  return (
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${map[source] || 'bg-slate-700 text-slate-400'}`}>
+      {labels[source] || source}
+    </span>
+  );
+}
+
 // ─── BILLING TAB ─────────────────────────────────────────────────────────────
 function BillingTab() {
   const [selected, setSelected] = useState<any>(null);
+  const [emailFilter, setEmailFilter] = useState('');
   const [reason, setReason] = useState('');
   const [planOverride, setPlanOverride] = useState('');
   const [seatLimit, setSeatLimit] = useState('');
@@ -895,7 +916,32 @@ function BillingTab() {
   const [confirmRestore, setConfirmRestore] = useState(false);
   const { toast } = useToast();
 
-  const { data, isLoading, refetch } = useQuery({
+  // ── All companies list (loads on mount) ──────────────────────────────────
+  const { data: listData, isLoading: listLoading, refetch: refetchList } = useQuery({
+    queryKey: ['/api/dev/admin/billing/companies'],
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch('/api/dev/admin/billing/companies', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load companies');
+      return res.json();
+    },
+  });
+  const allCompanies: any[] = (listData as any)?.companies || [];
+  const totalCount: number = (listData as any)?.total || 0;
+
+  // Client-side filter: email-first search
+  const filterLower = emailFilter.trim().toLowerCase();
+  const filtered = filterLower
+    ? allCompanies.filter((c: any) =>
+        (c.ownerEmail?.toLowerCase().includes(filterLower)) ||
+        (c.email?.toLowerCase().includes(filterLower)) ||
+        (c.name?.toLowerCase().includes(filterLower)) ||
+        String(c.id).includes(filterLower)
+      )
+    : allCompanies;
+
+  // ── Selected company billing detail ─────────────────────────────────────
+  const { data: detailData, isLoading: detailLoading, refetch: refetchDetail } = useQuery({
     queryKey: ['/api/dev/admin/billing', selected?.id],
     enabled: !!selected?.id,
     retry: false,
@@ -913,7 +959,11 @@ function BillingTab() {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed');
       return res.json();
     },
-    onSuccess: () => { toast({ title: 'Override applied', description: 'Billing state updated' }); refetch(); },
+    onSuccess: () => {
+      toast({ title: 'Override applied', description: 'Billing state updated' });
+      refetchDetail();
+      refetchList();
+    },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
@@ -924,11 +974,15 @@ function BillingTab() {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed');
       return res.json();
     },
-    onSuccess: () => { toast({ title: 'Restored', description: 'Billing reset to Stripe default' }); refetch(); },
+    onSuccess: () => {
+      toast({ title: 'Restored', description: 'Billing reset to Stripe default' });
+      refetchDetail();
+      refetchList();
+    },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  const d = data as any;
+  const d = detailData as any;
 
   const applyOverride = (type: string, value: any) => {
     overrideMutation.mutate({
@@ -940,13 +994,75 @@ function BillingTab() {
 
   return (
     <div className="space-y-5">
-      <DevCard title="Company Search" icon={Building2}>
-        <CompanySelector onSelect={(c) => { setSelected(c); }} />
+
+      {/* ── Company list panel ─────────────────────────────────────────── */}
+      <DevCard title={`Companies ${totalCount > 0 ? `· ${totalCount} total` : ''}`} icon={Building2}>
+        {/* Search input */}
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+          <input
+            value={emailFilter}
+            onChange={e => setEmailFilter(e.target.value)}
+            placeholder="Search by owner or user email…"
+            className="w-full bg-slate-800 border border-slate-600 rounded pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500"
+          />
+          {emailFilter && (
+            <button onClick={() => setEmailFilter('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs px-1">✕</button>
+          )}
+        </div>
+
+        {/* List */}
+        {listLoading && (
+          <div className="flex items-center gap-2 py-4 text-slate-500 text-sm animate-pulse">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Loading companies…
+          </div>
+        )}
+        {!listLoading && filtered.length === 0 && (
+          <p className="text-sm text-slate-500 italic py-4 text-center">
+            {emailFilter ? 'No companies match that email' : 'No companies found'}
+          </p>
+        )}
+        {!listLoading && filtered.length > 0 && (
+          <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
+            {filtered.map((c: any) => {
+              const isSelected = selected?.id === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setSelected(c)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+                    isSelected
+                      ? 'bg-teal-950 border-teal-600'
+                      : 'bg-slate-800 border-slate-700 hover:bg-slate-750 hover:border-slate-600'
+                  }`}
+                >
+                  <Building2 className={`w-4 h-4 shrink-0 ${isSelected ? 'text-teal-400' : 'text-slate-500'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${isSelected ? 'text-teal-200' : 'text-slate-200'}`}>{c.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{c.ownerEmail || c.email || '—'} · ID {c.id}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {c.accessAllowed
+                      ? <BillingSourceChip source={c.billingSource} allowed={c.accessAllowed} />
+                      : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-900 text-red-300">Blocked</span>}
+                    {c.hasOverride && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-900 text-violet-400">OVR</span>}
+                    {c.adminPaused && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-600 text-slate-300">Paused</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!listLoading && filterLower && filtered.length > 0 && (
+          <p className="text-xs text-slate-600 mt-2">{filtered.length} of {totalCount} shown</p>
+        )}
       </DevCard>
 
+      {/* ── Selected company billing detail ────────────────────────────── */}
       {selected && (
         <>
-          {isLoading && <p className="text-sm text-slate-400 animate-pulse py-4">Loading billing…</p>}
+          {detailLoading && <p className="text-sm text-slate-400 animate-pulse py-4">Loading billing details…</p>}
           {d && (
             <>
               <DevCard title="Current Billing State" icon={CreditCard}>
