@@ -917,18 +917,22 @@ function BillingTab() {
   const { toast } = useToast();
 
   // ── All companies list (loads on mount) ──────────────────────────────────
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
   const { data: listData, isLoading: listLoading, refetch: refetchList } = useQuery({
-    queryKey: ['/api/dev/admin/billing/companies'],
+    queryKey: ['/api/dev/admin/billing/companies', showActiveOnly],
     retry: false,
     queryFn: async () => {
-      const res = await fetch('/api/dev/admin/billing/companies', { credentials: 'include' });
+      const url = showActiveOnly
+        ? '/api/dev/admin/billing/companies?activeOnly=true'
+        : '/api/dev/admin/billing/companies';
+      const res = await fetch(url, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load companies');
       return res.json();
     },
   });
   const allCompanies: any[] = (listData as any)?.companies || [];
-  const totalCount: number = (listData as any)?.total || 0;
-  const activeCount: number = (listData as any)?.activeCount ?? totalCount;
+  const totalAll: number = (listData as any)?.totalAll || 0;
+  const activeCount: number = (listData as any)?.activeCount ?? 0;
 
   // Client-side filter: email-first search
   const filterLower = emailFilter.trim().toLowerCase();
@@ -997,20 +1001,29 @@ function BillingTab() {
     <div className="space-y-5">
 
       {/* ── Company list panel ─────────────────────────────────────────── */}
-      <DevCard title={`Companies ${activeCount > 0 ? `· ${activeCount} Active` : ''}`} icon={Building2}>
-        {/* Search input */}
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-          <input
-            value={emailFilter}
-            onChange={e => setEmailFilter(e.target.value)}
-            placeholder="Search by owner or user email…"
-            className="w-full bg-slate-800 border border-slate-600 rounded pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500"
-          />
-          {emailFilter && (
-            <button onClick={() => setEmailFilter('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs px-1">✕</button>
-          )}
+      <DevCard title={`Companies · ${activeCount} Active / ${totalAll} Total`} icon={Building2}>
+        {/* Search + Active-only toggle */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              value={emailFilter}
+              onChange={e => setEmailFilter(e.target.value)}
+              placeholder="Search by email, name, or ID…"
+              className="w-full bg-slate-800 border border-slate-600 rounded pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500"
+            />
+          </div>
+          <button
+            onClick={() => setShowActiveOnly(v => !v)}
+            className={`shrink-0 px-3 py-2 rounded text-xs font-semibold border transition-colors ${
+              showActiveOnly
+                ? 'bg-teal-800 border-teal-600 text-teal-200'
+                : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
+            }`}
+            title="Toggle active-only filter"
+          >
+            {showActiveOnly ? 'Active Only' : 'Show All'}
+          </button>
         </div>
 
         {/* List */}
@@ -1021,7 +1034,11 @@ function BillingTab() {
         )}
         {!listLoading && filtered.length === 0 && (
           <p className="text-sm text-slate-500 italic py-4 text-center">
-            {emailFilter ? 'No companies match that email' : 'No companies found'}
+            {emailFilter
+              ? 'No companies match that search'
+              : showActiveOnly
+                ? `No active companies — ${totalAll} total in DB (all blocked)`
+                : 'No companies found'}
           </p>
         )}
         {!listLoading && filtered.length > 0 && (
@@ -1063,7 +1080,7 @@ function BillingTab() {
           </div>
         )}
         {!listLoading && filterLower && (
-          <p className="text-xs text-slate-600 mt-2">{filtered.length} of {activeCount} active match</p>
+          <p className="text-xs text-slate-600 mt-2">{filtered.length} of {allCompanies.length} match</p>
         )}
       </DevCard>
 

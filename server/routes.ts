@@ -19262,8 +19262,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         }
 
         const { getEffectiveBillingAccess } = await import('./billingResolver');
-        // activeOnly defaults to true; pass ?activeOnly=false to include blocked companies
-        const activeOnly = req.query.activeOnly !== 'false';
+        // activeOnly defaults to FALSE — show all companies by default; pass ?activeOnly=true to restrict
+        const activeOnly = req.query.activeOnly === 'true';
         const now = new Date();
 
         const enriched = allRows.map((r: any) => {

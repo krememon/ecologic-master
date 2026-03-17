@@ -1,0 +1,123 @@
+The new filtering is over-restricting and now returning zero companies. Fix it with a proper diagnosis and fallback behavior.
+
+PROBLEM
+The Billing tab now says “No companies found.” That means the active-only logic is filtering everything out, or the endpoint/search is no longer returning usable rows.
+
+I do NOT want the Billing tab to go empty.
+
+TASK
+Diagnose exactly why the Billing companies list is returning zero, then fix it so the Billing tab reliably shows companies again.
+
+WHAT TO CHECK
+
+1) TRACE THE ENDPOINT RESPONSE
+Inspect the actual response from:
+- /api/dev/admin/billing/companies
+
+Log:
+- total companies before filtering
+- total after search filter
+- total after active-only filter
+- sample 5 returned rows
+- whether activeOnly is being passed as true/false
+- search query value
+- whether search is being applied even when empty
+
+Example logs:
+- [dev-tools][billing-list] totalBefore=...
+- [dev-tools][billing-list] afterSearch=...
+- [dev-tools][billing-list] afterActiveOnly=...
+- [dev-tools][billing-list] q="..."
+- [dev-tools][billing-list] activeOnly=...
+
+2) CHECK FOR BAD DEFAULT SEARCH FILTER
+Make sure an empty search input is NOT filtering out all rows.
+Verify things like:
+- q = ""
+- q = undefined
+- q = null
+do not cause `.includes()` or exact-match logic to exclude everything.
+
+If search is empty:
+- return the default company list
+- do not apply email filtering
+
+3) CHECK ACTIVE-ONLY LOGIC
+The active-only logic may now be too strict.
+
+I want this behavior:
+- If activeOnly=true, show companies where the effective billing resolver says allowed=true
+- But if that results in zero rows because resolver data is incomplete or temporarily broken, do not leave the page useless
+
+Add safe fallback behavior:
+- first try strict activeOnly using effective resolver
+- if result count is 0, log it
+- temporarily fall back to returning all companies with their accessAllowed/source fields populated
+- frontend can still display status badges
+This keeps the tool usable while debugging
+
+4) DO NOT HIDE EVERYTHING
+Even if active filtering is imperfect, the Billing tab should still show companies.
+I would rather see rows with accurate blocked badges than a blank admin page.
+
+5) RESPONSE SHAPE
+Make sure each row still includes:
+- companyId
+- companyName
+- ownerEmail
+- accessAllowed
+- accessSource
+- companyStatus
+- stripeStatus
+- hasActiveTrial
+- hasOverride
+- overrideType
+
+6) FRONTEND EMPTY-STATE BUG CHECK
+Verify the frontend is actually using the returned array correctly.
+Check:
+- correct field name from API response
+- no extra client-side `.filter()` wiping rows out
+- no search state initialized to a space or invalid string
+- no activeOnly client filter after server already filtered
+- no mismatch between `companies`, `rows`, `results`, etc.
+
+Log in the Billing tab:
+- raw response length
+- displayed rows length
+- current search string
+
+7) TEMP SAFE UX
+Until the access logic is fully perfect, use this rule:
+- never show an empty list unless the database query itself truly returned zero companies
+- if search is blank and strict activeOnly produced zero, automatically show all companies and display a small dev-only note:
+  - “Active filter returned 0, showing all companies for debugging”
+
+8) HEADER
+Update header logic so it does not misleadingly say active count if fallback is being used.
+Examples:
+- “Companies · 0 Active (showing all for debug)”
+or
+- “Companies · 287 Loaded”
+
+9) FINAL BEHAVIOR I WANT
+- Billing tab always shows companies again
+- empty search shows a populated list
+- search by email still works
+- active-only can still exist, but it must not wipe out the entire page
+- blocked companies can appear if fallback is triggered
+- tool remains usable while resolver logic is being debugged
+
+10) OUTPUT I WANT
+After fixing, tell me:
+1. exact root cause of the zero rows
+2. exact file(s) fixed
+3. whether the bug was backend filter, frontend filter, or both
+4. what fallback behavior was added
+5. proof from logs showing row counts before/after filtering
+6. proof the Billing tab is populated again
+
+IMPORTANT
+Do not hand-wave this.
+Do not leave the Billing tab blank.
+Make the tool usable again first, then keep the status/access data visible so we can continue refining the active logic.
