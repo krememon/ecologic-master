@@ -1,0 +1,141 @@
+The “active” logic is still wrong. Do a real diagnosis and fix it.
+
+PROBLEM
+The Billing tab is labeling companies as active even when they are not actually active in the app.
+
+You said the endpoint now uses getEffectiveBillingAccess(), but the output is still incorrect in the real UI. That means one of these is happening:
+- getEffectiveBillingAccess() is wrong
+- the endpoint is passing the wrong company/user data into it
+- the resolver is treating missing Stripe/trial data as allowed
+- dev/subscription bypass logic is leaking globally
+- a fallback is defaulting to allowed=true
+- the UI badge is not actually using the same access result as the filter
+- company list data is duplicated/stale/wrongly joined
+
+TASK
+Do a full end-to-end diagnosis and fix so the Billing list only marks companies active when they truly have app access.
+
+WHAT TO CHECK
+
+1) TRACE THE EXACT ACTIVE DECISION
+For a few companies that are currently showing as active but should not be:
+- log company id
+- company name
+- owner/user email
+- raw Stripe subscription state
+- raw trial state
+- raw override state
+- paused/inactive company state
+- final getEffectiveBillingAccess() output
+
+Example log format:
+[dev-tools][billing-active-debug] companyId=...
+stripeStatus=...
+trialEnd=...
+override=...
+companyPaused=...
+allowed=...
+source=...
+
+Do this for at least 5 suspicious rows.
+
+2) AUDIT getEffectiveBillingAccess()
+Open the resolver and verify all branches.
+I want exact answers to:
+- what causes allowed=true
+- what is the default when no subscription/trial/override exists
+- whether dev override fields can accidentally apply to all companies
+- whether missing/undefined values are treated as truthy
+- whether company inactive/paused status overrides billing allowed
+- whether expired trials are still being treated as active
+
+3) VERIFY THE REAL DATA INPUTS
+Make sure the billing companies endpoint is passing the correct records into the resolver:
+- correct company record
+- correct subscription record
+- correct trial fields
+- correct override fields
+- correct seat/plan data
+- correct company status fields
+
+Check for bad joins or duplicated rows.
+The screenshot earlier showed repeated companies with same email and different IDs, so verify whether duplicate/legacy test companies are affecting the logic.
+
+4) HARD RULES TO ENFORCE
+A company should ONLY count as active if at least one of these is true:
+- valid internal override explicitly allows access
+- valid active Stripe subscription allows access
+- valid non-expired trial allows access
+
+A company should NOT count as active if:
+- no subscription
+- expired trial
+- blocked/paused/inactive company status
+- no valid override
+- bad/missing billing data
+
+Make these rules explicit in code.
+
+5) COMPANY STATUS MUST WIN
+If a company is marked paused / inactive / blocked at the company level,
+that should force:
+- allowed = false
+unless there is an intentionally named super override field that explicitly bypasses company suspension
+
+Do not let “billing active” incorrectly show active for a company that is operationally disabled.
+
+6) FIX THE RESPONSE SHAPE
+For each company row returned by /api/dev/admin/billing/companies include:
+- companyId
+- companyName
+- ownerEmail
+- accessAllowed
+- accessSource
+- blockReason
+- companyStatus
+- stripeStatus
+- hasActiveTrial
+- hasOverride
+- overrideType
+
+This way the UI can display the truth and debugging becomes obvious.
+
+7) UI BADGE MUST USE accessAllowed
+In the frontend list:
+- the “Active” / “Blocked” badge must come directly from accessAllowed
+- do not compute a separate status in the UI
+- if accessAllowed is false, badge must never say active
+
+8) ADD TEMP DEV DEBUG LABEL
+For my dev account only, temporarily show a tiny sublabel in each row like:
+- source: stripe
+- source: trial
+- source: override_free_access
+- source: blocked_no_subscription
+- source: blocked_company_inactive
+
+This is temporary for diagnosis. Remove or tone it down once the logic is confirmed correct.
+
+9) TEST CASES
+Explicitly test and report results for:
+- company with active paid Stripe subscription
+- company with active trial only
+- company with expired trial and no subscription
+- company with free-access dev override
+- company with bypass-subscription override
+- company with company-level inactive/paused status
+- company with no billing data at all
+
+10) OUTPUT I WANT
+After fixing, tell me:
+1. exact root cause
+2. exact file(s) fixed
+3. exact logic change made
+4. one example company that now correctly shows blocked
+5. one example company that correctly shows active
+6. proof the UI badge now comes from accessAllowed
+
+IMPORTANT
+Do not hand-wave this.
+Do not say “it should be fixed.”
+Actually trace why false companies were being marked active and correct the resolver/endpoint/UI so the Billing tab reflects real access only.

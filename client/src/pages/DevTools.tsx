@@ -1042,10 +1042,17 @@ function BillingTab() {
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium truncate ${isSelected ? 'text-teal-200' : 'text-slate-200'}`}>{c.name}</p>
                     <p className="text-xs text-slate-500 truncate">{c.ownerEmail || c.email || '—'} · ID {c.id}</p>
+                    {/* Diagnostic source sublabel */}
+                    <p className="text-[10px] text-slate-600 font-mono mt-0.5">
+                      {c.accessAllowed
+                        ? `source: ${c.billingSource}`
+                        : `blocked: ${c.blockReason || 'no_active_subscription'}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* Badge strictly from accessAllowed — never computed in UI */}
                     {c.accessAllowed
-                      ? <BillingSourceChip source={c.billingSource} allowed={c.accessAllowed} />
+                      ? <BillingSourceChip source={c.billingSource} allowed={true} />
                       : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-900 text-red-300">Blocked</span>}
                     {c.hasOverride && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-900 text-violet-400">OVR</span>}
                     {c.adminPaused && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-600 text-slate-300">Paused</span>}

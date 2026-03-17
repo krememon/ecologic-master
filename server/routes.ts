@@ -19264,23 +19264,47 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const { getEffectiveBillingAccess } = await import('./billingResolver');
         // activeOnly defaults to true; pass ?activeOnly=false to include blocked companies
         const activeOnly = req.query.activeOnly !== 'false';
+        const now = new Date();
 
         const enriched = allRows.map((r: any) => {
           const billing = getEffectiveBillingAccess(r);
+          const hasOverride = !!(r.adminFreeAccess || r.adminBypassSubscription || r.adminPlanOverride || r.adminSeatLimitOverride || r.adminUnlimitedSeats);
+          const overrideType = r.adminFreeAccess ? 'free_access'
+            : r.adminBypassSubscription ? 'bypass'
+            : r.adminPlanOverride ? 'plan_override'
+            : r.adminSeatLimitOverride ? 'seat_override'
+            : null;
+          const periodEnd = r.currentPeriodEnd ? new Date(r.currentPeriodEnd) : null;
+          const trialEnd = r.trialEndsAt ? new Date(r.trialEndsAt) : null;
+          const hasActiveTrial = !!(trialEnd && trialEnd > now);
+          const companyStatus = r.adminPaused ? 'paused' : 'active';
+
           return {
-            id: r.id, name: r.name, email: r.email,
+            id: r.id,
+            name: r.name,
+            email: r.email,
             ownerEmail: ownerMap[r.ownerId] || null,
-            subscriptionStatus: r.subscriptionStatus,
+            // raw billing fields
+            stripeStatus: r.subscriptionStatus || 'inactive',
             subscriptionPlan: r.subscriptionPlan,
             maxUsers: r.maxUsers,
+            periodEnd: r.currentPeriodEnd,
+            trialEnd: r.trialEndsAt,
+            hasActiveTrial,
+            // overrides
             adminFreeAccess: r.adminFreeAccess,
             adminBypassSubscription: r.adminBypassSubscription,
             adminPaused: r.adminPaused,
-            hasOverride: !!(r.adminFreeAccess || r.adminBypassSubscription || r.adminPlanOverride || r.adminSeatLimitOverride || r.adminUnlimitedSeats),
-            effectivePlan: billing.effectivePlan,
-            billingSource: billing.source,
+            hasOverride,
+            overrideType,
+            // company operational status
+            companyStatus,
+            // resolved billing (source of truth)
             accessAllowed: billing.allowed,
+            billingSource: billing.source,
+            effectivePlan: billing.effectivePlan,
             seatLimit: billing.seatLimit,
+            blockReason: billing.blockReason,
             createdAt: r.createdAt,
           };
         });
