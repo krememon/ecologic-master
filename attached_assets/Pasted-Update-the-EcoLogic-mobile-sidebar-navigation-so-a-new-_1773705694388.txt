@@ -1,0 +1,104 @@
+Update the EcoLogic mobile/sidebar navigation so a new menu item called “Developer Tools” appears directly in the selection list area shown in the sidebar/drawer, but ONLY for my dev account and never for any other user.
+
+GOAL
+Place “Developer Tools” inside the main navigation selection area of the sidebar/drawer so it looks like a normal internal menu item, but it must be completely hidden for everyone except me.
+
+IMPORTANT ACCESS RULE
+- Only show this nav item for my exact email: pjpell077@gmail.com
+- Also structure it so future dev accounts can be added via a simple allowlist
+- No normal user should ever see the menu item, route, or any hint that it exists
+- Follow EcoLogic’s “hidden not disabled” permission style
+
+WHAT TO CHANGE
+
+1) DEV ACCOUNT HELPER
+Create or reuse a shared helper like:
+- isDevAccount(user)
+Return true only when:
+- user.email is in a dev allowlist
+Start allowlist with:
+- pjpell077@gmail.com
+
+2) SIDEBAR / DRAWER NAV
+In the exact sidebar navigation list area where items like:
+- Home
+- Schedule
+- Timesheets
+- Jobs
+- Leads
+- Subcontractors
+- Clients
+- Invoicing
+- Payments
+- Documents
+- Messages
+- Employees
+- Settings
+- Customize
+
+are rendered, add:
+- Developer Tools
+
+PLACEMENT
+- Put “Developer Tools” in the main selection area, not hidden in footer/signout area
+- Best placement: below “Customize” or just above “Settings/Customize” depending on current nav grouping
+- It should visually match the other nav items exactly
+- Use an appropriate icon such as wrench, terminal, shield, or tools
+- It should navigate to:
+  - /dev-tools
+
+3) STRICT CONDITIONAL RENDERING
+Render the Developer Tools nav item only if:
+- current user exists
+- isDevAccount(currentUser) === true
+
+For all other users:
+- do not render placeholder spacing
+- do not render disabled item
+- do not render hidden text
+- do not render any route hint
+
+4) ACTIVE STATE
+When on /dev-tools:
+- highlight the Developer Tools nav item the same way other active nav items are highlighted
+- keep exact same selected pill/button behavior as existing sidebar items
+
+5) MOBILE + DESKTOP
+Make sure this works in:
+- mobile drawer/sidebar
+- desktop sidebar if separate component exists
+If there are two nav render paths, update both so behavior stays consistent
+
+6) ROUTE PROTECTION
+Even though the nav item is hidden, also protect the actual page/route:
+- /dev-tools must 403 or redirect away for non-dev accounts
+- do not rely on frontend hiding alone
+
+7) DESIGN
+Match existing EcoLogic sidebar style exactly:
+- same typography
+- same spacing
+- same icon sizing
+- same row height
+- same hover/active behavior
+- no special badge unless I explicitly ask later
+Keep it looking like a native part of the app
+
+8) CLEAN IMPLEMENTATION
+- Do not duplicate nav config if avoidable
+- Prefer adding a conditional nav item through the existing nav items array/config
+- Keep code maintainable for future allowlisted dev users
+
+DELIVERABLES
+- “Developer Tools” menu item added into the sidebar selection area
+- visible only for pjpell077@gmail.com
+- hidden completely for everyone else
+- active-state styling working
+- mobile + desktop nav both covered
+- /dev-tools route still protected
+
+IMPORTANT
+Do not break existing RBAC or sidebar rendering.
+Do not expose dev tools to any non-dev user.
+Do not place Developer Tools near Sign Out.
+It should appear as a real sidebar selection item only for my account.

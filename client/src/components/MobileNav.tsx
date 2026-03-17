@@ -3,7 +3,7 @@ import {
   Menu, X, Bell, Filter, Megaphone, AlertTriangle, ClipboardCheck, 
   Calendar, RefreshCw, UserMinus, Timer,
   Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign,
-  FolderOpen, MessageSquare, Settings, LogOut, Brain, UsersIcon, Wrench, Target, Clock
+  FolderOpen, MessageSquare, Settings, LogOut, Brain, UsersIcon, Wrench, Target, Clock, Terminal
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -113,6 +113,8 @@ const getNotificationIcon = (type: string) => {
 };
 
 // Navigation items with permission requirements - must match Sidebar.tsx
+const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
+
 const getNavigation = (role: string | undefined) => [
   { href: "/", icon: LayoutDashboard, label: "Home", permission: null },
   { href: "/schedule", icon: Brain, label: "Schedule", permission: "schedule.view" as Permission },
@@ -127,6 +129,7 @@ const getNavigation = (role: string | undefined) => [
   { href: "/messages", icon: MessageSquare, label: "Messages", permission: null },
   { href: "/employees", icon: UsersIcon, label: "Employees", permission: "users.view" as Permission },
   { href: "/settings", icon: Settings, label: "Settings", permission: null },
+  { href: "/dev-tools", icon: Terminal, label: "Developer Tools", permission: null, devOnly: true },
 ];
 
 interface MobileNavProps {
@@ -287,10 +290,12 @@ export default function MobileNav({ user, company }: MobileNavProps) {
     
     // If no role yet, show base items without permissions or excludeRoles
     if (!effectiveRole) {
-      return navigation.filter(item => !item.permission && !(item as any).excludeRoles);
+      return navigation.filter(item => !item.permission && !(item as any).excludeRoles && !(item as any).devOnly);
     }
     
     return navigation.filter(item => {
+      // devOnly items only show for allowlisted dev accounts
+      if ((item as any).devOnly) return DEV_ALLOWLIST.includes(user?.email);
       // If item has excludeRoles and current role is excluded, hide the item
       if ((item as any).excludeRoles && (item as any).excludeRoles.includes(effectiveRole)) {
         return false;
@@ -302,7 +307,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       // Otherwise, check the single permission (or allow if no permission required)
       return !item.permission || can(item.permission);
     });
-  }, [effectiveRole, can, canAny]);
+  }, [effectiveRole, can, canAny, user?.email]);
 
   const handleToggle = () => {
     toggleSidebar();

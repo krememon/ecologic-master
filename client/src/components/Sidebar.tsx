@@ -7,6 +7,8 @@ import EcoLogicLogo from "./EcoLogicLogo";
 import { useCan } from "@/hooks/useCan";
 import type { Permission } from "@shared/permissions";
 
+const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
+
 const getNavigation = (role: string | undefined) => [
   { name: "Home", href: "/", icon: LayoutDashboard, permission: null },
   { name: "Schedule", href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
@@ -20,6 +22,7 @@ const getNavigation = (role: string | undefined) => [
   { name: "Documents", href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
   { name: "Messages", href: "/messages", icon: MessageSquare, permission: null },
   { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
+  { name: "Developer Tools", href: "/dev-tools", icon: Terminal, permission: null, devOnly: true },
 ];
 
 interface SidebarProps {
@@ -48,10 +51,12 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
     
     // If no role yet (auth loading), show base navigation items that don't require permissions
     if (!role) {
-      return navigation.filter(item => !item.permission && !(item as any).excludeRoles);
+      return navigation.filter(item => !item.permission && !(item as any).excludeRoles && !(item as any).devOnly);
     }
     
     return navigation.filter(item => {
+      // devOnly items only show for allowlisted dev accounts
+      if ((item as any).devOnly) return DEV_ALLOWLIST.includes(user?.email);
       // If item has excludeRoles and current role is excluded, hide the item
       if ((item as any).excludeRoles && (item as any).excludeRoles.includes(role)) {
         return false;
@@ -63,7 +68,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       // Otherwise, check the single permission (or allow if no permission required)
       return !item.permission || can(item.permission);
     });
-  }, [role, can, canAny]);
+  }, [role, can, canAny, user?.email]);
 
   // Debug logging
   useEffect(() => {
@@ -175,21 +180,6 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             )}>
               <Wrench className="w-4 h-4" />
               <span>Customize</span>
-            </button>
-          </Link>
-        )}
-
-        {/* Developer Tools — hidden, only for dev allowlist */}
-        {user?.email === 'pjpell077@gmail.com' && (
-          <Link href="/dev-tools">
-            <button className={cn(
-              "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mt-1",
-              location === "/dev-tools"
-                ? "bg-violet-900 text-violet-300"
-                : "text-violet-500 dark:text-violet-500 hover:bg-violet-950 hover:text-violet-300"
-            )}>
-              <Terminal className="w-4 h-4" />
-              <span>Developer Tools</span>
             </button>
           </Link>
         )}
