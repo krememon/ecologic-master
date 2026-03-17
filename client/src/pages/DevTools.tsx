@@ -988,12 +988,12 @@ function BillingTab() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs text-slate-400 uppercase tracking-wide">Plan Override</Label>
-                        <Select value={planOverride} onValueChange={setPlanOverride}>
+                        <Select value={planOverride || "none"} onValueChange={v => setPlanOverride(v === "none" ? "" : v)}>
                           <SelectTrigger className="mt-1 bg-slate-800 border-slate-600 text-slate-200 h-9">
                             <SelectValue placeholder="— no override —" />
                           </SelectTrigger>
                           <SelectContent className="bg-slate-800 border-slate-700">
-                            <SelectItem value="">— no override —</SelectItem>
+                            <SelectItem value="none">— no override —</SelectItem>
                             <SelectItem value="starter">starter</SelectItem>
                             <SelectItem value="team">team</SelectItem>
                             <SelectItem value="pro">pro</SelectItem>
