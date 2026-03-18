@@ -19521,7 +19521,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const code = (req.params.code as string).toUpperCase().trim();
         const { value, note } = req.body;
         const actorEmail = (req as any).user?.email || 'unknown';
-        const { eq } = await import('drizzle-orm');
+        const { eq, inArray } = await import('drizzle-orm');
         const { getEffectiveBillingAccess } = await import('./billingResolver');
         const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
@@ -19538,7 +19538,21 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           beforeValue: before, afterValue: { adminBypassSubscription: !!value }, note,
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
-        res.json({ ok: true, adminBypassSubscription: updated.adminBypassSubscription, effectiveBilling: getEffectiveBillingAccess(updated) });
+        const effectiveBilling = getEffectiveBillingAccess(updated);
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
+        const memberIds = memberRows.map((m: any) => m.userId);
+        let userBypasses: string[] = [];
+        if (memberIds.length > 0) {
+          const allMembers = await db.select({ email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+        }
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active — all companies bypass subscription checks in this environment', effectivePlan: 'dev', seatLimit: 999 }
+          : userBypasses.length > 0
+          ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+        res.json({ ok: true, adminBypassSubscription: updated.adminBypassSubscription, effectiveBilling, appEffectiveBilling, globalDevBypass, userBypasses });
       } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
     });
 
@@ -19548,7 +19562,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const code = (req.params.code as string).toUpperCase().trim();
         const { value, note } = req.body;
         const actorEmail = (req as any).user?.email || 'unknown';
-        const { eq } = await import('drizzle-orm');
+        const { eq, inArray } = await import('drizzle-orm');
         const { getEffectiveBillingAccess } = await import('./billingResolver');
         const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
@@ -19565,7 +19579,21 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           beforeValue: before, afterValue: { adminFreeAccess: !!value }, note,
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
-        res.json({ ok: true, adminFreeAccess: updated.adminFreeAccess, effectiveBilling: getEffectiveBillingAccess(updated) });
+        const effectiveBilling = getEffectiveBillingAccess(updated);
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
+        const memberIds = memberRows.map((m: any) => m.userId);
+        let userBypasses: string[] = [];
+        if (memberIds.length > 0) {
+          const allMembers = await db.select({ email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+        }
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active', effectivePlan: 'dev', seatLimit: 999 }
+          : userBypasses.length > 0
+          ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+        res.json({ ok: true, adminFreeAccess: updated.adminFreeAccess, effectiveBilling, appEffectiveBilling, globalDevBypass, userBypasses });
       } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
     });
 
@@ -19688,7 +19716,12 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           beforeValue: before, afterValue: { allManualOverridesCleared: true }, note,
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
-        res.json({ ok: true, effectiveBilling: getEffectiveBillingAccess(updated) });
+        const effectiveBilling = getEffectiveBillingAccess(updated);
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active', effectivePlan: 'dev', seatLimit: 999 }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+        res.json({ ok: true, effectiveBilling, appEffectiveBilling, globalDevBypass });
       } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
     });
 

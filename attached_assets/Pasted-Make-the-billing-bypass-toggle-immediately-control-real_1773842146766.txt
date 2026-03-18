@@ -1,0 +1,122 @@
+Make the billing bypass toggle immediately control real app access. If I turn OFF “Subscription Lock Is Bypassed,” and the company has no other valid access source, that user/company should be sent to the paywall screen automatically.
+
+GOAL
+Right now the bypass control exists, but I want it tied directly to real enforcement.
+
+EXPECTED BEHAVIOR
+If bypass is ON:
+- company can access the app even without an active subscription
+
+If bypass is turned OFF:
+- re-evaluate the company using the real shared billing/access resolver
+- if the company has:
+  - no active Stripe subscription
+  - no active trial
+  - no free-access override
+  - no other valid manual allow rule
+then:
+- company should immediately lose normal app access
+- company should be routed to the paywall/subscription screen
+
+If bypass is turned OFF but the company still has another valid access source:
+- keep access
+- do not send them to paywall
+
+MAIN RULE
+Turning off bypass should not blindly force paywall.
+It should force a real re-check of access.
+If accessAllowed becomes false, send them to paywall.
+
+WHAT TO IMPLEMENT
+
+1) USE THE SHARED ACCESS RESOLVER
+Use the same single source of truth function that determines company access, something like:
+- getEffectiveBillingAccess(...)
+or the current shared resolver
+
+After bypass is toggled OFF:
+- recalculate access immediately
+- return:
+  - allowed
+  - source
+  - blockReason
+  - effectivePlan
+  - seatLimit
+
+2) ENFORCEMENT IN THE REAL APP
+Wherever the app currently protects paid access, make sure it reads from that same resolver.
+
+If resolver returns blocked:
+- redirect user to paywall screen
+- block access to the normal app shell/pages
+- do not let them keep browsing as if nothing changed
+
+3) IMMEDIATE EFFECT
+When I turn OFF bypass in Dev Tools:
+- refresh billing/access state right away
+- if the currently affected company is blocked after recalculation, their next app check should push them to paywall
+- if possible, make it near-immediate for active sessions too
+
+Preferred behavior:
+- protected app bootstrap / auth-user / company-access check should fail on next refresh/navigation/API gate
+- if easy, force refresh/invalidation for that company’s access state
+
+4) ACTIVE SESSION HANDLING
+If a user from that company is currently logged in and bypass gets turned off:
+- on next page load, route change, or protected API call, the app should detect blocked status
+- redirect them to paywall
+- do not require manual DB cleanup or sign-out to trigger it
+
+If you already have a central auth/bootstrap endpoint, hook the access check there.
+
+5) PAYWALL ROUTING
+When blocked:
+- send them to the existing paywall/subscription page
+- preserve normal logged-in session if that is how the app works
+- just block product access and show paywall
+
+6) DEV TOOLS FEEDBACK
+After turning bypass OFF in Dev Tools:
+- show a success toast with the recalculated result
+
+Examples:
+- “Bypass removed. This company is now blocked and should see the paywall.”
+or
+- “Bypass removed. This company still has access through trial.”
+or
+- “Bypass removed. This company still has access through free access override.”
+
+7) UI STATE UPDATE
+After toggle:
+- Billing Access Summary should refresh immediately
+- status pill should update
+- plain-English explanation should update
+- block reason / access source should update
+
+8) TEST CASES
+Explicitly verify these cases:
+
+A. bypass OFF + no subscription/trial/free access
+=> redirected to paywall
+
+B. bypass OFF + free access ON
+=> still allowed
+
+C. bypass OFF + active trial
+=> still allowed
+
+D. bypass OFF + active paid subscription
+=> still allowed
+
+9) OUTPUT I WANT
+After fixing, report:
+1. exact file(s) where enforcement was connected
+2. exact file(s) where bypass toggle now triggers recalculation
+3. whether active sessions are rechecked on refresh/navigation/API
+4. proof that blocked companies now go to paywall after bypass is turned off
+5. proof that allowed companies stay in
+
+IMPORTANT
+Do not create separate logic for Dev Tools.
+Use the same real access resolver and real app enforcement path.
+Turning off bypass should make the company follow normal billing rules immediately.

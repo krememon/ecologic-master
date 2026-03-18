@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -362,7 +362,32 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
-      toast({ title: successTitle, description: successDesc });
+
+      // Smart toast for access-changing actions (bypass off / free-access off / restore)
+      const aeb = json.appEffectiveBilling;
+      const turningOff = body.value === false;
+      const isAccessToggle = (endpoint === 'bypass' || endpoint === 'free-access') && turningOff;
+      const isRestore = endpoint === 'restore';
+      if (aeb && (isAccessToggle || isRestore)) {
+        const sourceLabel: Record<string, string> = {
+          dev_env_bypass: 'development environment bypass (BYPASS_SUBSCRIPTION env var)',
+          user_subscription_bypass: 'personal user bypass',
+          override_free_access: 'free access override',
+          override_bypass: 'manual subscription bypass',
+          stripe: 'active paid Stripe subscription',
+          trial: 'active trial',
+        };
+        const label = sourceLabel[aeb.source] ?? aeb.source;
+        const desc = aeb.allowed
+          ? `Still has access — through ${label}.`
+          : `Now blocked — no active subscription, trial, or access grant. Users will see the paywall on next load.`;
+        toast({ title: successTitle, description: desc });
+      } else {
+        toast({ title: successTitle, description: successDesc });
+      }
+
+      // Invalidate the subscription gate cache so active sessions re-check on their next render/focus
+      queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
       refetchBilling();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
