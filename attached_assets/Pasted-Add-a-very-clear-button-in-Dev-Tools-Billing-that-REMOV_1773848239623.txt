@@ -1,0 +1,160 @@
+Add a very clear button in Dev Tools Billing that REMOVES the company’s subscription access.
+
+GOAL
+I need one obvious admin button that takes away the company’s subscription access so they stop being treated as subscribed.
+
+IMPORTANT
+This is dev-only for my allowlisted account only.
+Use plain English.
+Do not expose this to normal users.
+Require confirmation before applying it.
+
+WHAT THIS BUTTON SHOULD DO
+Create a button called:
+
+- Remove Subscription Access
+
+Meaning:
+- remove/clear the company’s active subscription entitlement
+- remove any manual billing access that is making them count as subscribed, if that is the action I choose
+- force the company to re-evaluate against the real billing resolver
+- if they have no remaining valid access source, they should become blocked and hit the paywall
+
+VERY IMPORTANT
+I need this to be clear and separated into the right actions, because “subscription access” can mean different things.
+
+BUILD IT AS 2 CLEAR OPTIONS:
+
+1) REMOVE PAID SUBSCRIPTION STATUS
+Button:
+- Remove Paid Subscription Status
+
+Use this when I want to strip the company of being treated like it has an active paid plan.
+
+This should:
+- clear any internal/manual plan override that is making them look paid
+- clear subscription-related manual access if appropriate
+- refresh billing state
+- re-run the real resolver
+
+If they still have:
+- free access
+- bypass
+- active trial
+then they can still remain allowed
+
+2) FULLY REMOVE BILLING ACCESS
+Button:
+- Remove All Billing Access
+
+This is the stronger button.
+
+This should:
+- turn off subscription bypass
+- turn off free access
+- remove manual plan override
+- remove manual user limit override if tied to billing override logic
+- leave real Stripe/trial truth alone unless you are intentionally simulating removal
+- re-run the billing resolver immediately
+
+If after recalculation there is:
+- no real active Stripe subscription
+- no active trial
+- no free access
+- no bypass
+then:
+- company becomes blocked
+- company should go to paywall on next access check
+
+UI REQUIREMENTS
+
+1) BUTTON SECTION
+In Billing Access Controls add a new section:
+
+- Remove Access
+
+With buttons:
+- Remove Paid Subscription Status
+- Remove All Billing Access
+
+Style them as destructive/admin actions, but still clean and readable.
+
+2) HELPER TEXT
+Under Remove Paid Subscription Status:
+- Use this if you want to stop treating this company like it has an active paid plan.
+
+Under Remove All Billing Access:
+- Use this if you want to remove all manual billing access and make the company follow normal billing rules.
+
+3) CONFIRMATION MODALS
+For Remove Paid Subscription Status:
+- This will remove the company’s paid subscription status inside EcoLogic and recheck access. Continue?
+
+For Remove All Billing Access:
+- This will remove all manual billing access for this company. If they do not have a real subscription or active trial, they will be blocked and sent to the paywall. Continue?
+
+Require typing CONFIRM for:
+- Remove All Billing Access
+
+4) BACKEND ACTIONS
+Add protected dev-only actions/endpoints using company code.
+
+Examples:
+- POST /api/dev/admin/company/by-code/:code/billing/remove-paid-access
+- POST /api/dev/admin/company/by-code/:code/billing/remove-all-access
+
+Each action should:
+- use requireDev
+- resolve company by companyCode
+- update the right manual billing fields
+- re-run access calculation
+- return:
+  - allowed
+  - source
+  - blockReason
+  - effectivePlan
+  - seatLimit
+
+5) DO NOT FAKE STRIPE
+Do not pretend to delete real Stripe history unless that is already part of the system.
+This is about EcoLogic’s internal access state.
+
+So:
+- do not delete Stripe records
+- do not destroy billing history
+- do not remove past invoices/payments
+Just remove the company’s current entitlement/access state inside EcoLogic.
+
+6) IMMEDIATE REFRESH
+After I press either button:
+- refresh the Billing Access Summary immediately
+- update the badges/status
+- update the plain English explanation
+- show a toast with the result
+
+Example toasts:
+- “Paid subscription status removed. This company is now blocked.”
+- “Paid subscription status removed. This company still has access through trial.”
+- “All manual billing access removed. This company is now blocked.”
+- “All manual billing access removed. This company still has access through paid Stripe subscription.”
+
+7) AUDIT LOG
+Log:
+- actor email
+- company id
+- company code
+- action type
+- before state
+- after state
+- timestamp
+- note if provided
+
+8) DELIVERABLES
+- new Remove Access section in Billing controls
+- Remove Paid Subscription Status button
+- Remove All Billing Access button
+- confirmation modals
+- shared resolver recalculation after action
+- billing summary refreshes immediately
+- audit logs recorded
+- dev-only protection stays intact

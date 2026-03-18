@@ -26,7 +26,7 @@ import {
   Copy, RefreshCw, ExternalLink, CheckCircle, XCircle, AlertCircle,
   ChevronDown, ChevronRight, Trash2, Download, Bell, Search,
   Building2, Users, ClipboardList, ToggleLeft, ToggleRight, Lock, Unlock,
-  RotateCcw, Calendar, AlertTriangle, DollarSign
+  RotateCcw, Calendar, AlertTriangle, DollarSign, ShieldOff
 } from "lucide-react";
 
 // ─── DEV ALLOWLIST ──────────────────────────────────────────────────────────
@@ -296,6 +296,9 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
   const [trialCustomDate, setTrialCustomDate] = useState('');
   const [billingNote, setBillingNote] = useState('');
   const [billingPending, setBillingPending] = useState<string | null>(null);
+  const [confirmRemovePaid, setConfirmRemovePaid] = useState(false);
+  const [confirmRemoveAll, setConfirmRemoveAll] = useState(false);
+  const [confirmAllText, setConfirmAllText] = useState('');
   const [confirmPause, setConfirmPause] = useState<'pause' | 'unpause' | null>(null);
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState(company.adminNote || '');
@@ -367,8 +370,8 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
       const aeb = json.appEffectiveBilling;
       const turningOff = body.value === false;
       const isAccessToggle = (endpoint === 'bypass' || endpoint === 'free-access') && turningOff;
-      const isRestore = endpoint === 'restore';
-      if (aeb && (isAccessToggle || isRestore)) {
+      const isRemoveAction = endpoint === 'remove-paid-access' || endpoint === 'remove-all-access' || endpoint === 'restore';
+      if (aeb && (isAccessToggle || isRemoveAction)) {
         const sourceLabel: Record<string, string> = {
           dev_env_bypass: 'development environment bypass (BYPASS_SUBSCRIPTION env var)',
           user_subscription_bypass: 'personal user bypass',
@@ -827,6 +830,82 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
                     <Calendar className="w-4 h-4 mr-1.5" /> Set Date
                   </Button>
                 </div>
+              </div>
+
+              {/* ── REMOVE ACCESS ───────────────────────────────── */}
+              <div className="space-y-3 pt-4 border-t border-slate-800">
+                <div>
+                  <p className="text-[10px] font-bold text-red-500/80 uppercase tracking-widest">Remove Access</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Strip this company's current billing entitlement. Does not delete Stripe history.</p>
+                </div>
+
+                {/* Remove Paid Subscription Status */}
+                {confirmRemovePaid ? (
+                  <div className="rounded-xl border border-orange-800/70 bg-orange-950/30 px-4 py-3.5">
+                    <p className="text-sm text-orange-200 font-medium mb-1">This will remove the company's paid subscription status inside EcoLogic and recheck access. Continue?</p>
+                    <p className="text-xs text-orange-400/80 mb-3">Plan override and subscription bypass will be cleared. Free access and trial are left unchanged.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm"
+                        onClick={() => {
+                          callBilling('remove-paid-access', { note: billingNote }, 'Paid Subscription Status Removed');
+                          setConfirmRemovePaid(false);
+                        }}
+                        disabled={billingPending === 'remove-paid-access'}
+                        className="bg-orange-700 hover:bg-orange-600 h-9 text-xs">
+                        {billingPending === 'remove-paid-access' ? 'Removing…' : 'Yes, Remove Paid Status'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmRemovePaid(false)} className="border-slate-600 text-slate-400 h-9 text-xs">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmRemovePaid(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-orange-900/60 bg-orange-950/10 hover:bg-orange-950/30 hover:border-orange-800/60 active:scale-[0.99] transition-all text-left">
+                    <div className="p-1.5 rounded-lg bg-orange-900/50 shrink-0"><XCircle className="w-4 h-4 text-orange-400" /></div>
+                    <div>
+                      <p className="text-sm font-semibold text-orange-200">Remove Paid Subscription Status</p>
+                      <p className="text-xs text-orange-500/80 mt-0.5">Use this if you want to stop treating this company like it has an active paid plan.</p>
+                    </div>
+                  </button>
+                )}
+
+                {/* Remove All Billing Access */}
+                {confirmRemoveAll ? (
+                  <div className="rounded-xl border border-red-800/80 bg-red-950/30 px-4 py-3.5 space-y-2.5">
+                    <p className="text-sm text-red-200 font-medium">This will remove all manual billing access for this company. If they do not have a real subscription or active trial, they will be blocked and sent to the paywall. Continue?</p>
+                    <p className="text-xs text-red-400/80">Bypass, free access, forced plan, and custom seat limits will all be cleared.</p>
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">Type <span className="font-mono font-bold text-red-300">CONFIRM</span> to proceed</p>
+                      <input
+                        value={confirmAllText}
+                        onChange={e => setConfirmAllText(e.target.value)}
+                        placeholder="Type CONFIRM"
+                        className="w-full bg-slate-800 border border-red-800/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-red-500 transition-colors"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm"
+                        onClick={() => {
+                          callBilling('remove-all-access', { note: billingNote }, 'All Billing Access Removed');
+                          setConfirmRemoveAll(false);
+                          setConfirmAllText('');
+                        }}
+                        disabled={confirmAllText !== 'CONFIRM' || billingPending === 'remove-all-access'}
+                        className="bg-red-700 hover:bg-red-600 h-9 text-xs disabled:opacity-40">
+                        {billingPending === 'remove-all-access' ? 'Removing…' : 'Yes, Remove All Access'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setConfirmRemoveAll(false); setConfirmAllText(''); }} className="border-slate-600 text-slate-400 h-9 text-xs">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmRemoveAll(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-red-900/60 bg-red-950/10 hover:bg-red-950/30 hover:border-red-800/60 active:scale-[0.99] transition-all text-left">
+                    <div className="p-1.5 rounded-lg bg-red-900/50 shrink-0"><ShieldOff className="w-4 h-4 text-red-400" /></div>
+                    <div>
+                      <p className="text-sm font-semibold text-red-300">Remove All Billing Access</p>
+                      <p className="text-xs text-red-500/80 mt-0.5">Use this if you want to remove all manual billing access and make the company follow normal billing rules.</p>
+                    </div>
+                  </button>
+                )}
               </div>
 
               {/* ── RETURN TO NORMAL ────────────────────────────── */}

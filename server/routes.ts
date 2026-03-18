@@ -19704,6 +19704,101 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
     });
 
+    // POST /api/dev/admin/company/by-code/:code/billing/remove-paid-access
+    app.post('/api/dev/admin/company/by-code/:code/billing/remove-paid-access', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq, inArray } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const { isDevAccount } = await import('./devAuth');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { adminPlanOverride: company.adminPlanOverride, adminBypassSubscription: company.adminBypassSubscription };
+        // Remove paid subscription status: clear plan override and bypass (which simulates a paid subscription)
+        await db.update(companies).set({
+          adminPlanOverride: null,
+          adminBypassSubscription: false,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_remove_paid_access',
+          beforeValue: before, afterValue: { adminPlanOverride: null, adminBypassSubscription: false }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        const effectiveBilling = getEffectiveBillingAccess(updated);
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
+        const memberIds = memberRows.map((m: any) => m.userId);
+        let hasDevAllowlistedMember = false;
+        let userBypasses: string[] = [];
+        if (memberIds.length > 0) {
+          const allMembers = await db.select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          hasDevAllowlistedMember = allMembers.some((u: any) => isDevAccount(u));
+          userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+        }
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1' && hasDevAllowlistedMember;
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
+          : userBypasses.length > 0
+          ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+        res.json({ ok: true, effectiveBilling, appEffectiveBilling, globalDevBypass, userBypasses });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/remove-all-access
+    app.post('/api/dev/admin/company/by-code/:code/billing/remove-all-access', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq, inArray } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const { isDevAccount } = await import('./devAuth');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = {
+          adminBypassSubscription: company.adminBypassSubscription, adminFreeAccess: company.adminFreeAccess,
+          adminPlanOverride: company.adminPlanOverride, adminSeatLimitOverride: company.adminSeatLimitOverride,
+          adminUnlimitedSeats: company.adminUnlimitedSeats,
+        };
+        await db.update(companies).set({
+          adminBypassSubscription: false, adminFreeAccess: false,
+          adminPlanOverride: null, adminSeatLimitOverride: null, adminUnlimitedSeats: false,
+          adminOverrideReason: note || null,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_remove_all_access',
+          beforeValue: before, afterValue: { allManualAccessCleared: true }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        const effectiveBilling = getEffectiveBillingAccess(updated);
+        const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
+        const memberIds = memberRows.map((m: any) => m.userId);
+        let hasDevAllowlistedMember = false;
+        let userBypasses: string[] = [];
+        if (memberIds.length > 0) {
+          const allMembers = await db.select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          hasDevAllowlistedMember = allMembers.some((u: any) => isDevAccount(u));
+          userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+        }
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1' && hasDevAllowlistedMember;
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
+          : userBypasses.length > 0
+          ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+        res.json({ ok: true, effectiveBilling, appEffectiveBilling, globalDevBypass, userBypasses });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
     // POST /api/dev/admin/company/by-code/:code/billing/restore
     app.post('/api/dev/admin/company/by-code/:code/billing/restore', isAuthenticated, requireDev, async (req: any, res) => {
       try {
