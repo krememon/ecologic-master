@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRef, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface SubscriptionStatus {
   active: boolean;
@@ -21,6 +21,15 @@ function getNativeBearerHeader(): Record<string, string> {
   return {};
 }
 
+function isNativePlatform(): boolean {
+  try {
+    const cap = (window as any).Capacitor;
+    return !!cap?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
+}
+
 export function useSubscriptionGate({
   authed,
   loadingAuth,
@@ -33,6 +42,8 @@ export function useSubscriptionGate({
   userId?: string;
 }) {
   const loggedRef = useRef(false);
+  const queryClient = useQueryClient();
+  const native = isNativePlatform();
 
   const shouldFetch = !loadingAuth && authed && hasCompany && !!userId;
 
@@ -41,45 +52,78 @@ export function useSubscriptionGate({
     isLoading: loadingSub,
     isError,
     isFetched,
+    refetch,
   } = useQuery<SubscriptionStatus | null>({
     queryKey: ["/api/subscriptions/status", userId || ""],
     queryFn: async () => {
-      console.log("[sub-gate] checking subscription for user", userId);
+      const platform = native ? "native" : "web";
+      console.log(`[sub-gate] checking billing — platform=${platform} userId=${userId}`);
       const res = await fetch("/api/subscriptions/status", {
         credentials: "include",
         cache: "no-store",
         headers: getNativeBearerHeader(),
       });
       if (res.status === 401) {
-        console.warn("[sub-gate] 401 from subscriptions/status — treating as resolved");
+        console.warn("[sub-gate] 401 — session expired or not authenticated");
         return null;
       }
       if (!res.ok) {
         throw new Error(`${res.status}: ${res.statusText}`);
       }
-      const json = await res.json();
-      console.log("[sub-gate] status result", json);
-      return json as SubscriptionStatus;
+      const json = await res.json() as SubscriptionStatus;
+      if (json.active) {
+        console.log(`[sub-gate] ACCESS GRANTED — platform=${platform} status=${json.status} plan=${json.planKey ?? "none"} bypass=${json.bypass ?? false}`);
+      } else {
+        console.log(`[sub-gate] ACCESS DENIED — platform=${platform} status=${json.status} → routing to paywall`);
+      }
+      return json;
     },
     enabled: shouldFetch,
     retry: 1,
-    staleTime: 0,           // Always fetch fresh — never use cached billing state
+    staleTime: 0,           // Always fetch fresh — never trust cached billing state
     refetchOnMount: true,   // Re-check on every app entry / session restore
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: true, // Web: re-check on window focus (tab switch / browser return)
   });
+
+  // Native app: Capacitor `appStateChange` fires when the app comes to the foreground.
+  // `refetchOnWindowFocus` doesn't fire reliably in a WebView on iOS/Android, so we add
+  // an explicit listener that forces a fresh billing check every time the user resumes.
+  useEffect(() => {
+    if (!native || !shouldFetch) return;
+
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      try {
+        const { App: CapApp } = await import("@capacitor/app");
+        const listener = await CapApp.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) {
+            console.log("[sub-gate] native app resumed — forcing fresh billing check");
+            // Reset logged flag so we log the result of this re-check
+            loggedRef.current = false;
+            queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+          }
+        });
+        cleanup = () => listener.remove();
+      } catch {
+        // Capacitor not available (e.g. web dev build) — safe to ignore
+      }
+    })();
+
+    return () => { cleanup?.(); };
+  }, [native, shouldFetch, queryClient]);
 
   const gotValidResponse = isFetched && subStatus != null;
   const active = gotValidResponse && subStatus!.active === true && !isError;
 
-  // FIX: Only "loading" while the query is actively in-flight and hasn't fetched yet.
+  // Only "loading" while the query is actively in-flight and hasn't fetched yet.
   // Once isFetched=true (even if response was null/401), we are done loading.
-  // Previously the formula used !gotValidResponse which stayed true when 401
-  // returned null, causing an infinite loading screen.
   const stillLoading = loadingAuth || !authed || !hasCompany || (shouldFetch && !isFetched);
 
   if (!loggedRef.current && isFetched) {
     loggedRef.current = true;
-    console.log("[sub-gate] resolved", { active, stillLoading, gotValidResponse, isError, status: subStatus?.status });
+    const platform = native ? "native" : "web";
+    console.log(`[sub-gate] resolved — platform=${platform} active=${active} source=${subStatus?.status ?? "none"} stillLoading=${stillLoading}`);
   }
 
   return {

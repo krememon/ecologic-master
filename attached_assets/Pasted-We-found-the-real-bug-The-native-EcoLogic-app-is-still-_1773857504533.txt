@@ -1,0 +1,107 @@
+We found the real bug.
+
+The native EcoLogic app is still letting ppellegrino@ecologicc.com stay inside the app instead of sending it back to the subscription/paywall screen.
+
+That means the real native app-entry billing gate is NOT being enforced correctly.
+
+THIS IS THE PRIORITY NOW.
+
+GOAL
+Make the native app immediately respect billing access on app open, app resume, and session restore.
+
+PROBLEM TO FIX
+I opened the native EcoLogic app while logged into ppellegrino@ecologicc.com and it did NOT send me back to the subscription/paywall screen.
+
+So one of these is happening:
+- the native app is using stale auth/user/billing state
+- the app is not re-checking billing on resume/open
+- the paywall gate only runs on first login
+- the native wrapper keeps old access state alive
+- the backend billing check is correct but the frontend/native app is not reacting to it
+- the company/user being checked is not the one actually logged in
+- a user-level override is still granting access
+- some old bypass path is still letting the account through
+
+FIND THE REAL CAUSE AND FIX IT.
+
+WHAT I NEED
+
+1. TRACE THE CURRENT BILLING GATE FLOW
+Find exactly where the app decides whether the user can enter the main app vs see the subscription/paywall screen.
+
+Check:
+- auth bootstrap
+- session restore
+- /api/auth/user usage
+- /api/subscriptions/status usage
+- protected routes/layout
+- native app resume / app state handlers
+- any cached user/company state
+- any user-level subscriptionBypass logic
+- any company-level adminFreeAccess/adminBypassSubscription logic
+
+2. ENFORCE BILLING CHECK ON:
+- initial login
+- app open
+- app resume from background
+- app refresh / reload
+- session restore
+
+On every one of those, the app must fetch fresh effective access from the backend and decide whether to keep the user in the app or send them to the paywall.
+
+3. NATIVE APP MUST NOT TRUST STALE STATE
+If the native app has old cached state that says the user had access before, that must not be enough.
+It needs a fresh backend truth check.
+
+4. IF ACCESS IS INVALID:
+- immediately route them to the subscription/paywall screen
+- do not let them continue using the protected app
+- this must work even if they were previously inside the app
+
+5. PRESERVE VALID ACCESS
+Do not break normal users who actually have:
+- free access override
+- active paid plan
+- active trial
+- valid intentional user-level override if supported
+
+6. ADD TARGETED LOGGING
+I need clear logs to verify the flow.
+
+Add targeted logs for:
+- user id/email
+- company id/code
+- native/web platform if available
+- billing status response
+- effective access result
+- why access was granted or denied
+- whether redirect to paywall happened
+- when the check runs: login / open / resume / restore
+
+Keep logs focused and readable.
+
+7. VERIFY USER-LEVEL OVERRIDE POSSIBILITY
+The billing snapshot logic mentioned:
+- Full Access (User Override) if a user at the company has subscriptionBypass = true
+
+Check whether ppellegrino@ecologicc.com currently has a user-level override still active.
+If so, surface that clearly in logs and in Dev Tools billing status.
+If that is why access is still allowed, explain it clearly instead of making the UI misleading.
+
+8. DEV TOOLS SHOULD MATCH REALITY
+Once fixed, Dev Tools billing status should correctly explain WHY access is allowed:
+Examples:
+- Full Access (User Override)
+- Full Access (Free Access)
+- Full Access (Paid Plan)
+- Trial Access
+- Paywall Active
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. the exact root cause
+3. where the billing gate now runs in the native app
+4. whether stale state was involved
+5. whether ppellegrino@ecologicc.com had a user-level override or other bypass
+6. how to test that invalid-access users now get kicked to the paywall on app open/resume
