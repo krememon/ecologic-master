@@ -63,7 +63,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Job Offer Deep Links**: Universal Links (iOS) and App Links (Android) for job offer paths, with fallback landing pages.
 - **Legal Pages**: Settings hub with Terms of Service and Privacy Policy.
 - **Support System**: Settings hub for contacting support, reporting bugs, requesting features, and FAQs.
-- **Developer Tools**: Private admin console at `/dev-tools` for `pjpell077@gmail.com` only. Tabs: Billing Admin (free-access override, bypass subscription, plan override, seat limit, trial extension, restore default), Companies (search, status, notes, pause/demo toggle), Users (search, role change, activate/deactivate, onboarding reset, sub bypass), Audit Logs (all admin actions with before/after values), Session, Jobs, Payments, Integrations, Inspector. Backend: `server/devAuth.ts` allowlist + `requireDev` middleware on all `/api/dev/*` routes. Billing resolver at `server/billingResolver.ts` — `getEffectiveBillingAccess(company)` — priority: override_free_access → override_bypass → stripe → trial → blocked. Admin override columns stored directly on companies table (`admin_free_access`, `admin_bypass_subscription`, etc). Audit log table `admin_audit_logs`.
+- **Admin Tools**: Previous Dev Tools implementation fully removed. Shared infrastructure kept: `server/devAuth.ts` (`isDevAccount` used by subscription bypass), `server/billingResolver.ts` (`getEffectiveBillingAccess` used by `/api/subscriptions/status`). Admin override columns on companies table and `admin_audit_logs` table remain in DB schema. Rebuild pending.
 
 **Mobile App (React Native + Expo)**:
 - Native iOS/Android app with `expo-secure-store` for session management.

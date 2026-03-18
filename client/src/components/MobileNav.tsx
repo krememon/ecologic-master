@@ -3,7 +3,7 @@ import {
   Menu, X, Bell, Filter, Megaphone, AlertTriangle, ClipboardCheck, 
   Calendar, RefreshCw, UserMinus, Timer,
   Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign,
-  FolderOpen, MessageSquare, Settings, LogOut, Brain, UsersIcon, Wrench, Target, Clock, Terminal
+  FolderOpen, MessageSquare, Settings, LogOut, Brain, UsersIcon, Wrench, Target, Clock
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -129,7 +129,6 @@ const getNavigation = (role: string | undefined) => [
   { href: "/messages", icon: MessageSquare, label: "Messages", permission: null },
   { href: "/employees", icon: UsersIcon, label: "Employees", permission: "users.view" as Permission },
   { href: "/settings", icon: Settings, label: "Settings", permission: null },
-  { href: "/dev-tools", icon: Terminal, label: "Developer Tools", permission: null, devOnly: true },
 ];
 
 interface MobileNavProps {

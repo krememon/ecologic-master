@@ -72,7 +72,6 @@ import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
-import DevTools from "@/pages/DevTools";
 import OnboardingCompany from "@/pages/OnboardingCompany";
 import OnboardingSubscription from "@/pages/OnboardingSubscription";
 import Paywall from "@/pages/Paywall";
@@ -526,7 +525,6 @@ function AuthenticatedRouter() {
         <Route path="/jobs/:jobId/pay/:invoiceId">
           {(params) => <PaymentReview jobId={params.jobId} invoiceId={params.invoiceId} />}
         </Route>
-        <Route path="/dev-tools" component={DevTools} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>
