@@ -68,7 +68,7 @@ interface BillingSnapshot {
   hasTrial: boolean;
   subscriptionStatus: string | null;
   subscriptionPlan: string | null;
-  subscriptionPlatform: string | null;  // 'apple' | 'stripe' | null (null = legacy Stripe record)
+  subscriptionPlatform: string | null;  // 'apple' | 'google_play' | 'stripe' | null (null = legacy Stripe record)
   isPaused: boolean;
   currentPeriodEnd: string | null;
   trialEndsAt: string | null;
@@ -556,7 +556,11 @@ export default function DevTools() {
                   <FactItem
                     label="Paid Plan"
                     value={billing.hasActivePaid
-                      ? `Active (${billing.subscriptionPlan ?? "plan"}) · ${billing.subscriptionPlatform === 'apple' ? 'Apple' : 'Stripe'}`
+                      ? `Active (${billing.subscriptionPlan ?? "plan"}) · ${
+                          billing.subscriptionPlatform === 'apple' ? 'Apple' :
+                          billing.subscriptionPlatform === 'google_play' ? 'Google Play' :
+                          'Stripe'
+                        }`
                       : "None"}
                     positive={billing.hasActivePaid}
                   />

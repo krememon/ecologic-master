@@ -4,6 +4,7 @@ export interface SubscriptionPlan {
   userLimit: number;
   productId: string;
   appleProductId: string;
+  googlePlayProductId: string;
 }
 
 export const subscriptionPlans: Record<string, SubscriptionPlan> = {
@@ -13,6 +14,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     userLimit: 1,
     productId: "ecologic_starter",
     appleProductId: "com.ecologic.app.starter.monthly",
+    googlePlayProductId: "ecologic_starter_monthly",
   },
   team: {
     label: "Team",
@@ -20,6 +22,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     userLimit: 5,
     productId: "ecologic_team",
     appleProductId: "com.ecologic.app.team.monthly",
+    googlePlayProductId: "ecologic_team_monthly",
   },
   pro: {
     label: "Pro",
@@ -27,6 +30,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     userLimit: 10,
     productId: "ecologic_pro",
     appleProductId: "com.ecologic.app.pro.monthly",
+    googlePlayProductId: "ecologic_pro_monthly",
   },
   scale: {
     label: "Scale",
@@ -34,15 +38,20 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     userLimit: 15,
     productId: "ecologic_scale",
     appleProductId: "com.ecologic.app.scale.monthly",
+    googlePlayProductId: "ecologic_scale_monthly",
   },
 };
 
 export type PlanKey = keyof typeof subscriptionPlans;
 
 // Reverse lookup: Apple product ID → EcoLogic plan key
-// Used by backend validation and webhook handlers.
 export const appleProductIdToPlanKey: Record<string, string> = Object.fromEntries(
   Object.entries(subscriptionPlans).map(([key, plan]) => [plan.appleProductId, key])
+);
+
+// Reverse lookup: Google Play product ID → EcoLogic plan key
+export const googlePlayProductIdToPlanKey: Record<string, string> = Object.fromEntries(
+  Object.entries(subscriptionPlans).map(([key, plan]) => [plan.googlePlayProductId, key])
 );
 
 const teamSizeToPlan: Record<string, PlanKey> = {

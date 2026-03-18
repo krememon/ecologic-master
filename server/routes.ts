@@ -57,6 +57,7 @@ import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
 import { verifyAppleTransaction, verifyAppleNotification, APPLE_BUNDLE_ID } from "./appleIap";
+import { verifyGooglePlayPurchase, decodeGooglePlayNotification, GOOGLE_PLAY_NOTIFICATION_TYPES } from "./googlePlayIap";
 
 // Initialize Stripe only if secret key is available and valid
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
@@ -4436,89 +4437,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * POST /api/subscriptions/validate
    *
-   * Validates an Apple in-app purchase for the authenticated user's company.
-   * The native app (StoreKit 2) sends the signed JWS transaction token.
+   * Unified native subscription validation endpoint for Apple (iOS) and
+   * Google Play (Android).
    *
-   * Expected body:
-   *   {
-   *     platform: "apple",
-   *     jwsTransaction: string   // StoreKit 2 jwsRepresentation from verificationResult
-   *   }
+   * Apple body:
+   *   { platform: "apple", jwsTransaction: string }
+   *   jwsTransaction = StoreKit 2 jwsRepresentation from verificationResult
+   *
+   * Google Play body:
+   *   { platform: "google_play", purchaseToken: string, productId: string }
+   *   purchaseToken = from BillingClient.launchBillingFlow() result
+   *   productId     = Google Play subscription product ID (e.g. "ecologic_team_monthly")
    *
    * On success, writes subscriptionStatus/Plan/Platform/currentPeriodEnd/
-   * originalTransactionId to the company record and returns the updated
-   * subscription summary.
+   * originalTransactionId (holds Apple originalTransactionId OR Google purchaseToken)
+   * to the company record and returns a clean billing summary.
    */
   app.post('/api/subscriptions/validate', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const { platform, jwsTransaction } = req.body;
+      const { platform } = req.body;
 
-      console.log(`[apple-validate] request received — userId=${userId} platform=${platform ?? '(none)'}`);
+      console.log(`[iap-validate] request — userId=${userId} platform=${platform ?? '(none)'}`);
 
       const company = await storage.getUserCompany(userId);
       if (!company) {
-        console.warn('[apple-validate] no company found for userId', userId);
+        console.warn('[iap-validate] no company found for userId', userId);
         return res.status(400).json({ ok: false, message: 'No company found for this account' });
       }
 
-      console.log(`[apple-validate] company=${company.id} (${company.name})`);
+      console.log(`[iap-validate] company=${company.id} (${company.name})`);
 
-      if (platform !== 'apple') {
-        return res.status(400).json({
-          ok: false,
-          message: `Unsupported platform: "${platform}". Only "apple" is accepted by this endpoint.`,
+      // ── Apple (iOS) ──────────────────────────────────────────────────────
+      if (platform === 'apple') {
+        const { jwsTransaction } = req.body;
+
+        if (!jwsTransaction || typeof jwsTransaction !== 'string') {
+          return res.status(400).json({
+            ok: false,
+            message: 'Missing or invalid jwsTransaction — send the StoreKit 2 jwsRepresentation string',
+          });
+        }
+
+        let txInfo;
+        try {
+          txInfo = await verifyAppleTransaction(jwsTransaction);
+        } catch (err: any) {
+          console.error('[iap-validate] Apple JWS verification failed:', err.message);
+          return res.status(422).json({ ok: false, message: `Apple verification failed: ${err.message}` });
+        }
+
+        console.log(
+          `[iap-validate] Apple verified — productId=${txInfo.productId} plan=${txInfo.planKey} ` +
+          `originalTxId=${txInfo.originalTransactionId} expires=${txInfo.expiresDate.toISOString()} ` +
+          `env=${txInfo.environment}`
+        );
+
+        await storage.updateCompany(company.id, {
+          subscriptionStatus: 'active',
+          subscriptionPlan: txInfo.planKey,
+          maxUsers: txInfo.userLimit,
+          subscriptionPlatform: 'apple',
+          originalTransactionId: txInfo.originalTransactionId,
+          currentPeriodEnd: txInfo.expiresDate,
+          onboardingCompleted: true,
+        });
+
+        console.log(`[iap-validate] Apple — written to company=${company.id} status=active plan=${txInfo.planKey}`);
+
+        return res.json({
+          ok: true,
+          active: true,
+          status: 'active',
+          platform: 'apple',
+          planKey: txInfo.planKey,
+          userLimit: txInfo.userLimit,
+          currentPeriodEnd: txInfo.expiresDate,
+          originalTransactionId: txInfo.originalTransactionId,
         });
       }
 
-      if (!jwsTransaction || typeof jwsTransaction !== 'string') {
-        return res.status(400).json({
-          ok: false,
-          message: 'Missing or invalid jwsTransaction — send the StoreKit 2 jwsRepresentation string',
+      // ── Google Play (Android) ────────────────────────────────────────────
+      if (platform === 'google_play') {
+        const { purchaseToken, productId } = req.body;
+
+        if (!purchaseToken || typeof purchaseToken !== 'string') {
+          return res.status(400).json({
+            ok: false,
+            message: 'Missing or invalid purchaseToken — send the Google Play purchase token string',
+          });
+        }
+        if (!productId || typeof productId !== 'string') {
+          return res.status(400).json({
+            ok: false,
+            message: 'Missing productId — send the Google Play subscription product ID',
+          });
+        }
+
+        let txInfo;
+        try {
+          txInfo = await verifyGooglePlayPurchase(purchaseToken, productId);
+        } catch (err: any) {
+          console.error('[iap-validate] Google Play verification failed:', err.message);
+          return res.status(422).json({ ok: false, message: `Google Play verification failed: ${err.message}` });
+        }
+
+        // paymentState: 0=pending, 1=received, 2=free trial, 3=pending deferred
+        // Only grant 'active' access for paymentState 1 or 2 (received/trial)
+        const validPayment = txInfo.paymentState === 1 || txInfo.paymentState === 2;
+        if (!validPayment) {
+          console.warn(`[iap-validate] Google Play — paymentState=${txInfo.paymentState} — not granting access`);
+          return res.status(422).json({
+            ok: false,
+            message: `Payment not yet confirmed by Google Play (paymentState=${txInfo.paymentState})`,
+          });
+        }
+
+        console.log(
+          `[iap-validate] Google Play verified — productId=${txInfo.productId} plan=${txInfo.planKey} ` +
+          `orderId=${txInfo.orderId} expires=${txInfo.expiresDate.toISOString()} ` +
+          `paymentState=${txInfo.paymentState} autoRenewing=${txInfo.autoRenewing}`
+        );
+
+        // Store the purchaseToken in originalTransactionId (same column, different semantic context)
+        await storage.updateCompany(company.id, {
+          subscriptionStatus: 'active',
+          subscriptionPlan: txInfo.planKey,
+          maxUsers: txInfo.userLimit,
+          subscriptionPlatform: 'google_play',
+          originalTransactionId: txInfo.purchaseToken,
+          currentPeriodEnd: txInfo.expiresDate,
+          onboardingCompleted: true,
+        });
+
+        console.log(`[iap-validate] Google Play — written to company=${company.id} status=active plan=${txInfo.planKey}`);
+
+        return res.json({
+          ok: true,
+          active: true,
+          status: 'active',
+          platform: 'google_play',
+          planKey: txInfo.planKey,
+          userLimit: txInfo.userLimit,
+          currentPeriodEnd: txInfo.expiresDate,
+          purchaseToken: txInfo.purchaseToken,
         });
       }
 
-      // Verify the JWS token and extract subscription details
-      let txInfo;
-      try {
-        txInfo = await verifyAppleTransaction(jwsTransaction);
-      } catch (err: any) {
-        console.error('[apple-validate] JWS verification failed:', err.message);
-        return res.status(422).json({ ok: false, message: `Apple verification failed: ${err.message}` });
-      }
-
-      console.log(
-        `[apple-validate] verified — productId=${txInfo.productId} planKey=${txInfo.planKey} ` +
-        `originalTxId=${txInfo.originalTransactionId} expiresDate=${txInfo.expiresDate.toISOString()} ` +
-        `env=${txInfo.environment}`
-      );
-
-      // Write subscription details to the company record
-      await storage.updateCompany(company.id, {
-        subscriptionStatus: 'active',
-        subscriptionPlan: txInfo.planKey,
-        maxUsers: txInfo.userLimit,
-        subscriptionPlatform: 'apple',
-        originalTransactionId: txInfo.originalTransactionId,
-        currentPeriodEnd: txInfo.expiresDate,
-        onboardingCompleted: true,
-      });
-
-      console.log(`[apple-validate] subscription written — company=${company.id} status=active plan=${txInfo.planKey}`);
-
-      return res.json({
-        ok: true,
-        active: true,
-        status: 'active',
-        planKey: txInfo.planKey,
-        userLimit: txInfo.userLimit,
-        currentPeriodEnd: txInfo.expiresDate,
-        originalTransactionId: txInfo.originalTransactionId,
+      // ── Unknown platform ─────────────────────────────────────────────────
+      return res.status(400).json({
+        ok: false,
+        message: `Unsupported platform: "${platform ?? '(none)'}". Use "apple" or "google_play".`,
       });
 
     } catch (error: any) {
-      console.error('[apple-validate] Unexpected error:', error);
-      return res.status(500).json({ ok: false, message: 'Failed to validate Apple purchase' });
+      console.error('[iap-validate] Unexpected error:', error);
+      return res.status(500).json({ ok: false, message: 'Failed to validate purchase' });
     }
   });
 
@@ -4703,6 +4777,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (err: any) {
         console.error('[apple-notify] Failed to update company:', err.message);
         return res.status(500).json({ ok: false, message: 'Failed to update subscription' });
+      }
+    }
+
+    return res.json({ ok: true });
+  });
+
+  /**
+   * POST /api/google/notifications
+   *
+   * Google Play Real-time Developer Notifications (RTDN) webhook via Pub/Sub.
+   * Configure this URL in Google Play Console → Monetize → Subscriptions → Real-time notifications.
+   *
+   * Google Cloud Pub/Sub pushes JSON to this endpoint:
+   *   { "message": { "data": "<base64 encoded DeveloperNotification>", "messageId": "...", ... } }
+   *
+   * This endpoint:
+   *   1. Decodes the Pub/Sub message
+   *   2. Looks up the company by purchaseToken (stored in originalTransactionId)
+   *   3. Updates subscription status based on notificationType
+   *   4. For renewal events, re-verifies via Google Play API to get fresh expiry
+   *
+   * No authentication required — Google Cloud Pub/Sub delivers this server-to-server.
+   * Always responds 200 to acknowledge receipt; errors are logged internally.
+   */
+  app.post('/api/google/notifications', async (req, res) => {
+    let notification;
+    try {
+      notification = decodeGooglePlayNotification(req.body);
+    } catch (err: any) {
+      console.error('[google-notify] Failed to decode Pub/Sub payload:', err.message);
+      // Return 200 so Pub/Sub doesn't retry an unparseable message
+      return res.json({ ok: true, note: 'invalid payload, acknowledged without action' });
+    }
+
+    const { notificationType, notificationTypeName, purchaseToken, subscriptionId, packageName } = notification;
+    console.log(
+      `[google-notify] received — type=${notificationType} (${notificationTypeName}) ` +
+      `pkg=${packageName} productId=${subscriptionId} ` +
+      `token=${purchaseToken.substring(0, 20)}...`
+    );
+
+    if (!purchaseToken) {
+      console.warn('[google-notify] No purchaseToken in notification — ignoring');
+      return res.json({ ok: true, note: 'no purchaseToken, acknowledged' });
+    }
+
+    // Find company by purchaseToken (stored in originalTransactionId for Google Play)
+    let company = null;
+    try {
+      const rows = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.originalTransactionId, purchaseToken))
+        .limit(1);
+      company = rows[0] ?? null;
+    } catch (err: any) {
+      console.error('[google-notify] DB lookup failed:', err.message);
+      return res.json({ ok: true, note: 'db error, acknowledged' });
+    }
+
+    if (!company) {
+      console.warn(
+        `[google-notify] No company found for purchaseToken=${purchaseToken.substring(0, 20)}...` +
+        ` — type=${notificationTypeName} acknowledged without action`
+      );
+      return res.json({ ok: true, note: 'company not found, acknowledged' });
+    }
+
+    console.log(`[google-notify] matched company=${company.id} (${company.name})`);
+
+    const updates: Record<string, unknown> = {};
+
+    switch (notificationType) {
+      case 4: // SUBSCRIPTION_PURCHASED
+      case 1: // SUBSCRIPTION_RECOVERED (from account hold)
+      case 2: // SUBSCRIPTION_RENEWED
+      case 7: // SUBSCRIPTION_RESTARTED
+        // Subscription is (back to) active — re-verify via API to get fresh expiry
+        try {
+          const txInfo = await verifyGooglePlayPurchase(purchaseToken, subscriptionId);
+          updates.subscriptionStatus = 'active';
+          updates.subscriptionPlatform = 'google_play';
+          updates.subscriptionPlan = txInfo.planKey;
+          updates.maxUsers = txInfo.userLimit;
+          updates.currentPeriodEnd = txInfo.expiresDate;
+          updates.originalTransactionId = purchaseToken; // keep in sync (same value)
+          console.log(
+            `[google-notify] re-verified — plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()}`
+          );
+        } catch (err: any) {
+          console.error('[google-notify] Re-verification via Play API failed:', err.message);
+          // Still mark active based on notification signal; expiry may be slightly stale
+          updates.subscriptionStatus = 'active';
+          updates.subscriptionPlatform = 'google_play';
+        }
+        break;
+
+      case 3: // SUBSCRIPTION_CANCELED
+        // User voluntarily canceled — subscription remains active until currentPeriodEnd
+        // Don't revoke access yet; EXPIRED event will fire when period ends
+        console.log(`[google-notify] CANCELED (user-initiated) — access continues until period end`);
+        break;
+
+      case 13: // SUBSCRIPTION_EXPIRED
+      case 12: // SUBSCRIPTION_REVOKED (refund or policy revocation)
+        updates.subscriptionStatus = 'canceled';
+        console.log(`[google-notify] applying ${notificationTypeName} → status=canceled`);
+        break;
+
+      case 5: // SUBSCRIPTION_ON_HOLD
+      case 6: // SUBSCRIPTION_IN_GRACE_PERIOD
+        // Billing problem — mark past_due, keep access during grace period
+        updates.subscriptionStatus = 'past_due';
+        console.log(`[google-notify] applying ${notificationTypeName} → status=past_due`);
+        break;
+
+      case 10: // SUBSCRIPTION_PAUSED
+        updates.subscriptionStatus = 'canceled';
+        console.log(`[google-notify] PAUSED → treating as canceled`);
+        break;
+
+      default:
+        // PRICE_CHANGE_CONFIRMED (8), DEFERRED (9), PAUSE_SCHEDULE_CHANGED (11), etc.
+        console.log(`[google-notify] notificationType=${notificationType} requires no DB action`);
+        return res.json({ ok: true, note: `type ${notificationType} acknowledged` });
+    }
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        await storage.updateCompany(company.id, updates as any);
+        console.log(
+          `[google-notify] DB updated — company=${company.id} ` +
+          `status=${updates.subscriptionStatus ?? '(unchanged)'}`
+        );
+      } catch (err: any) {
+        console.error('[google-notify] Failed to update company:', err.message);
+        // Still return 200 — Pub/Sub shouldn't retry for DB errors
       }
     }
 
@@ -19547,6 +19758,14 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           : 'unknown date';
         effectiveLabel = 'Full Access (Apple Subscription)';
         rawBillingState = `Active ${plan} subscription via Apple · renews ${end}`;
+        allowed = true;
+      } else if (billing.source === 'google_play') {
+        const plan = c.subscriptionPlan ?? 'Unknown';
+        const end = c.currentPeriodEnd
+          ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'unknown date';
+        effectiveLabel = 'Full Access (Google Play Subscription)';
+        rawBillingState = `Active ${plan} subscription via Google Play · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'stripe') {
         const plan = c.subscriptionPlan ?? 'Unknown';

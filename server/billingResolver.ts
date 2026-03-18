@@ -1,6 +1,6 @@
 export interface BillingAccess {
   allowed: boolean;
-  source: 'free_access' | 'apple' | 'stripe' | 'trial' | 'blocked';
+  source: 'free_access' | 'apple' | 'google_play' | 'stripe' | 'trial' | 'blocked';
   effectivePlan: string | null;
   seatLimit: number;
   notes: string[];
@@ -39,18 +39,26 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
     };
   }
 
-  // ── 2. Active paid subscription (Apple or Stripe) ─────────────────────────
+  // ── 2. Active paid subscription (Apple, Google Play, or Stripe) ───────────
   //   Requires subscriptionStatus = 'active' AND a valid, future currentPeriodEnd.
   //   Missing currentPeriodEnd is treated as EXPIRED (not as "infinite").
-  //   Source label is driven by subscriptionPlatform — defaults to 'stripe' for
-  //   legacy records that pre-date the platform field.
+  //   Source label is driven by subscriptionPlatform:
+  //     'apple'        → Apple App Store subscription (iOS native)
+  //     'google_play'  → Google Play subscription (Android native)
+  //     'stripe'       → Stripe web subscription
+  //     null / other   → Legacy record, defaults to 'stripe' for backward compatibility
   if (company.subscriptionStatus === 'active') {
     const periodEnd = company.currentPeriodEnd ? new Date(company.currentPeriodEnd) : null;
     if (periodEnd && periodEnd > now) {
-      const platform = (company.subscriptionPlatform as string | null | undefined);
+      const platform = (company.subscriptionPlatform as string | null | undefined) ?? null;
+      let source: BillingAccess['source'];
+      if (platform === 'apple') source = 'apple';
+      else if (platform === 'google_play') source = 'google_play';
+      else source = 'stripe'; // 'stripe' explicitly, or legacy null records
+
       return {
         allowed: true,
-        source: platform === 'apple' ? 'apple' : 'stripe',
+        source,
         effectivePlan: company.subscriptionPlan || null,
         seatLimit: company.maxUsers || 1,
         notes: [],
