@@ -215,8 +215,12 @@ export default function DevTools() {
           <div className="flex gap-2">
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setSearchQuery(searchMode === "code" ? raw.toUpperCase().slice(0, 6) : raw);
+              }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              maxLength={searchMode === "code" ? 6 : undefined}
               placeholder={
                 searchMode === "code" ? "Enter company ID..." :
                 searchMode === "email" ? "owner@company.com" :
