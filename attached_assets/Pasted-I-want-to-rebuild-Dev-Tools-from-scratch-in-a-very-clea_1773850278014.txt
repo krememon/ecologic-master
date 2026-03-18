@@ -1,0 +1,123 @@
+I want to rebuild Dev Tools from scratch in a very clean, user-friendly, admin-focused way.
+
+This is ONLY the shell/layout step.
+Do NOT wire up destructive actions yet.
+Do NOT add real mutation logic yet.
+For now, build the new page structure, visual layout, frontend route, and placeholder state so we can approve the UX first.
+
+GOAL
+Create a brand new Dev Tools page that feels modern, simple, and easy to manage.
+This should be a clean internal admin dashboard for me to control companies/accounts later.
+
+IMPORTANT RULES
+- This is step 1 of the rebuild UI, not the full logic step
+- Do NOT add dangerous backend mutations yet
+- You may add safe read-only fetch scaffolding if needed, but placeholders/mock sections are fine for now
+- Focus on layout, usability, spacing, mobile responsiveness, and clarity
+- Make it feel polished and admin-friendly
+- Keep it consistent with the EcoLogic app design system
+- Make it easy to scan quickly on both desktop and mobile
+- Use clear labels, cards, sections, badges, and action grouping
+- The page should feel much simpler and cleaner than the old Dev Tools page
+
+PAGE REQUIREMENTS
+
+1) Add the Dev Tools page back into the app with a clean new route:
+- frontend page component
+- route wiring
+- sidebar/mobile nav access only if appropriate for dev accounts/admin access
+- no old shortcut logic unless it is re-added intentionally and cleanly
+
+2) Build a clean page layout with these sections:
+
+A. HEADER
+- Title: Dev Tools
+- Subtitle: Internal admin controls
+- Small dev-only badge/pill
+- Clean spacing and hierarchy
+
+B. LOOKUP SECTION
+A single clean “Find Company” card with:
+- search input
+- search mode selector or tabs for:
+  - company code
+  - company email
+  - company name
+- search button
+- clean empty state
+
+C. COMPANY OVERVIEW SECTION
+A card that shows placeholders for:
+- company name
+- company code
+- owner email
+- current subscription plan
+- billing/subscription status
+- blocked status
+- dev bypass status
+- created date if available
+Use nice pills/badges for statuses.
+
+D. ADMIN ACTIONS SECTION
+A separate card with buttons for:
+- Remove Subscription
+- Force Paywall
+- Toggle Dev Bypass
+- Block Company
+- Unblock Company
+For now:
+- buttons should be present visually
+- buttons can be disabled or show placeholder toast/message like “Action not wired yet”
+- style these clearly and safely so destructive actions are visually distinct
+
+E. USERS SECTION
+A card/table/list for company users with placeholders for:
+- name
+- email
+- role
+- status
+- last login if available
+
+F. RECENT JOBS SECTION
+A card/list for recent jobs
+
+G. RECENT PAYMENTS / INVOICES SECTION
+A card/list for recent payments and/or invoices
+
+UI/UX REQUIREMENTS
+- Must be very easy to understand at a glance
+- Must be mobile-friendly
+- Avoid clutter
+- Use card sections with consistent spacing
+- Use badges for status values
+- Use action grouping so dangerous actions don’t feel chaotic
+- Include good loading, empty, and “no company selected” states
+- Include a polished placeholder state before search is used
+- Make sure the page feels significantly more organized than the old one
+
+ACCESS CONTROL
+- Only show/access this page for appropriate dev/admin accounts
+- Reuse existing safe dev-account gating patterns where appropriate
+- Do not expose the page to normal users
+
+DATA / LOGIC FOR THIS STEP
+- You may add lightweight read-only scaffolding if needed
+- But this step is mainly about the page shell and UX
+- No real destructive backend actions yet
+- No old messy dev routes restored yet unless absolutely needed for safe read-only data display
+
+DELIVERABLES
+1. New Dev Tools page component
+2. Route wired back in cleanly
+3. Nav access wired cleanly if appropriate
+4. Clean modern layout with all sections above
+5. Placeholder buttons/toasts for actions
+6. Good empty/loading states
+7. Mobile-friendly styling
+8. Summary of exact files changed
+
+When finished, tell me:
+- what the new layout includes
+- which files were created/changed
+- whether any backend read-only scaffolding was added
+- what is still intentionally not wired yet

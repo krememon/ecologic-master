@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target, Clock } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target, Clock, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const getNavigation = (role: string | undefined) => [
   { name: "Documents", href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
   { name: "Messages", href: "/messages", icon: MessageSquare, permission: null },
   { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
+  { name: "Dev Tools", href: "/dev-tools", icon: Terminal, permission: null, devOnly: true },
 ];
 
 interface SidebarProps {
