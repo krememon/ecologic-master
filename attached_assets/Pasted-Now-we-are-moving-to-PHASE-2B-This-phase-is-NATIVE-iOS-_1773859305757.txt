@@ -1,0 +1,111 @@
+Now we are moving to PHASE 2B.
+
+This phase is NATIVE iOS PURCHASE FLOW ONLY.
+Do NOT break the existing web billing flow.
+Do NOT remove Stripe/web support.
+Do NOT rewrite unrelated paywall UI.
+
+GOAL
+Wire the native EcoLogic iPhone app so subscription purchase + restore flows go through Apple IAP and then sync to our backend using the new /api/subscriptions/validate endpoint.
+
+IMPORTANT
+- This is for the native iOS app flow
+- Web can keep using the current web/Stripe flow for now
+- Native iOS should use Apple purchase/restore flow
+- Keep the UI simple and easy to test
+- Use the backend Apple validation we just built
+- Do not add fake/dev activate behavior for native purchase anymore
+
+WHAT TO BUILD
+
+1. DETECT NATIVE IOS VS WEB
+On the subscription/paywall flow, detect whether the app is running:
+- in native iOS
+- or normal web
+
+Behavior:
+- native iOS → use Apple IAP flow
+- web → leave current web/dev flow unchanged for now
+
+2. ONBOARDINGSUBSCRIPTION SCREEN — APPLE PURCHASE FLOW
+Update the native iOS version of the subscription screen so it:
+
+- loads the Apple subscription products
+- displays the real Apple pricing if available
+- lets the user tap to subscribe
+- completes the Apple purchase
+- gets the StoreKit 2 JWS transaction string
+- POSTs it to /api/subscriptions/validate
+- refreshes billing/subscription state after success
+- routes the user into the app if access is now valid
+
+Keep it simple and polished.
+
+3. PAYWALL SCREEN — RESTORE PURCHASES
+Add a clean “Restore Purchases” flow for native iOS:
+
+- user taps Restore Purchases
+- native IAP plugin restores current entitlements/purchases
+- app gets the valid Apple transaction/JWS
+- POST it to /api/subscriptions/validate or /api/subscriptions/restore as appropriate
+- refresh billing state
+- if valid subscription exists, let them back into the app
+
+4. PRODUCT MAPPING
+Use the Apple product IDs already mapped in shared/subscriptionPlans.ts.
+Do not hardcode plan logic in multiple places.
+
+5. UI / UX REQUIREMENTS
+Keep the native flow easy to understand:
+- loading state while products load
+- clear purchase button state
+- clear restore purchases button
+- success message after purchase/restore
+- clear error message if validation fails
+- disable buttons while request is running
+
+6. LOGGING
+Add targeted logs for native purchase flow:
+- native products loaded
+- purchase started
+- purchase succeeded
+- JWS sent to backend
+- backend validation success/failure
+- restore started
+- restore result
+- access refreshed after purchase/restore
+
+Keep logs clean and test-friendly.
+
+7. IMPORTANT RULES
+- Do not break web billing
+- Do not break the existing paywall routing
+- Do not remove the backend billing gate
+- Do not leave native iOS using the old dev-activate shortcut as the real purchase path
+- Keep fallback behavior safe if Apple products fail to load
+
+8. IF A PLUGIN IS NEEDED
+If the project does not already have the needed native purchase plugin, install/configure the cleanest Capacitor-compatible option and wire only what is needed for iOS.
+Use a solution that works with StoreKit 2 and can provide the JWS transaction string needed by our backend.
+
+9. TESTING PATH
+Make this easy to test on device.
+After implementation, I want to be able to:
+- open native paywall
+- buy a subscription
+- see backend validate it
+- re-run billing gate
+- enter app
+and also:
+- restore purchases on another install/device/session
+- regain access
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what plugin/package was used for native purchases
+3. how native iOS vs web is detected
+4. how purchase works step by step
+5. how restore works step by step
+6. whether the old native dev-activate path is fully removed from the real purchase flow
+7. how I should test it on my iPhone

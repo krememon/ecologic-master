@@ -23,6 +23,7 @@
     "@capacitor/local-notifications": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
+    "@capgo/native-purchases": "^8.2.3",
     "@googlemaps/js-api-loader": "^2.0.1",
     "@googlemaps/markerclusterer": "^2.6.2",
     "@hookform/resolvers": "^3.10.0",

@@ -1,0 +1,115 @@
+We are locking in the final billing architecture for EcoLogic.
+
+FINAL BILLING SETUP
+- iPhone native app = Apple subscriptions only
+- Android native app = Google Play subscriptions only
+- Web = Stripe subscriptions only
+
+GOAL
+Refactor the billing model so the backend supports all 3 billing sources cleanly, while keeping one single effective access gate for the app.
+
+IMPORTANT
+- Do NOT remove Apple work already done
+- Do NOT break Stripe web billing
+- Add Google Play support cleanly
+- Keep one source of truth for app access
+- Keep Dev Tools easy to understand
+- Paid access should depend on the platform-specific subscription authority
+- Free Access override can still exist
+- Trial can still exist if intentionally supported
+
+WHAT TO BUILD / CHANGE
+
+1. BILLING SOURCE MODEL
+Expand the billing model so the backend can treat paid access as coming from:
+- apple
+- google_play
+- stripe
+
+The effective access source values should become:
+- free_access
+- apple
+- google_play
+- stripe
+- trial
+- blocked
+- user_bypass only if intentionally still supported
+
+2. BILLING RESOLVER
+Update the resolver so active paid access is granted when:
+- subscriptionStatus is active
+- currentPeriodEnd is valid
+- subscriptionPlatform matches the platform authority
+
+Supported paid platforms:
+- apple
+- google_play
+- stripe
+
+Keep free access / trial / blocked logic working too.
+
+3. DATA MODEL / DB
+Audit the current schema and update only if needed.
+If subscriptionPlatform already exists, use values:
+- apple
+- google_play
+- stripe
+
+If needed, add any minimal fields required for Google Play purchase tracking similar to Apple’s originalTransactionId pattern.
+Do this cleanly and explain any migration clearly.
+
+4. GOOGLE PLAY BACKEND FOUNDATION
+Build the backend foundation for Google Play subscriptions similar to Apple:
+- validation endpoint support for Google Play purchase data
+- webhook / notification endpoint for Google Play subscription lifecycle updates
+- sync currentPeriodEnd / status / plan / platform into the DB
+- map Google Play product IDs to EcoLogic plan keys
+
+Do not guess — use the correct Google Play subscription lifecycle model.
+
+5. KEEP APPLE BACKEND SUPPORT
+Preserve the Apple validation + webhook flow already implemented.
+Apple should continue writing:
+- subscriptionPlatform = 'apple'
+
+6. KEEP STRIPE WEB SUPPORT
+Preserve Stripe for web only.
+Stripe should still be a valid paid source in the resolver, but only as:
+- subscriptionPlatform = 'stripe'
+
+7. DEV TOOLS / BILLING UI
+Update Dev Tools billing display so it clearly shows:
+- Full Access (Apple Plan)
+- Full Access (Google Play Plan)
+- Full Access (Web Plan)
+- Full Access (Free Access)
+- Trial Access
+- Paywall Active
+
+Also show smaller raw billing detail if helpful.
+
+8. PLATFORM BEHAVIOR TARGET
+The intended behavior is:
+- iOS native purchase/restore uses Apple
+- Android native purchase/restore uses Google Play
+- Web purchase/manage uses Stripe
+
+Do not fully implement all frontend purchase flows yet unless needed for this phase.
+First focus on backend architecture and source-of-truth clarity.
+
+9. LOGGING
+Add/adjust logs so access decisions clearly say:
+- source
+- company id/code
+- user
+- allowed/blocked reason
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. final effective access priority order
+3. what platforms are now supported as paid authorities
+4. whether any DB migration was needed
+5. how Google Play products map to plan keys
+6. what new Google Play endpoints were added
+7. what still remains for frontend purchase flow on iOS / Android / web
