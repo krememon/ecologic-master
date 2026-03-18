@@ -1,0 +1,145 @@
+We are moving onto STEP 3 for Dev Tools.
+
+Current status:
+- Company lookup by 6-char code exists
+- Overview/users/jobs/payments endpoints exist
+- Payments/transactions view now only shows real transaction records from `payments` where status = 'paid' or 'refunded'
+- Refunded payments remain visible with refunded styling
+- Revenue header shows net collected after refunds
+
+Now build STEP 3:
+I need full subscription controls directly inside Dev Tools so I can manually control billing/access for a company from one place.
+
+GOAL
+Add a “Billing Controls” section on the company detail view that lets me:
+1. Grant Dev Bypass
+2. Remove Dev Bypass
+3. Force Paywall immediately
+4. Restore normal paid access if subscription is active
+5. Remove paid subscription access manually
+6. Clearly show the company’s CURRENT effective access state in plain English
+
+VERY IMPORTANT RULES
+- The app must use EFFECTIVE ACCESS, not just Stripe status text
+- If a company has dev bypass ON, they should have full app access no matter what Stripe says
+- If dev bypass is OFF and there is no valid paid subscription/trial, the company should hit the paywall
+- If I manually remove paid access from Dev Tools, that company should immediately be treated as blocked/paywalled
+- The company detail page must never say “blocked” if the effective access still allows them in
+- Plain English labels only — no internal jargon in the UI
+- Preserve existing admin/dev protections
+- Do not break the existing dev tools pages
+
+WHAT I NEED BUILT
+
+1) BACKEND — BILLING/AUTHORITY LOGIC
+Add/update admin dev endpoints so I can control:
+- dev bypass on/off
+- paid subscription access on/off
+- force paywall / remove access immediately
+
+If there is already existing company billing/subscription state in the DB, reuse it.
+If there is an existing helper that computes access/paywall status, centralize around it instead of duplicating logic.
+
+Create one clear source of truth helper, something like:
+`getCompanyEffectiveAccess(company)` or equivalent
+
+That helper should return something like:
+- hasDevBypass
+- hasActiveSubscription
+- hasTrialAccess
+- shouldShowPaywall
+- effectiveAccessLabel
+
+Plain English effective labels examples:
+- "Full Access (Dev Bypass)"
+- "Full Access (Paid Plan)"
+- "Trial Access"
+- "Paywall Active"
+- "Access Removed"
+
+Do NOT rely on one raw field alone if the real app auth/paywall logic uses multiple conditions.
+
+2) BACKEND — ACTION ENDPOINTS
+Add safe admin dev mutation endpoints for:
+- enable dev bypass
+- disable dev bypass
+- remove paid subscription access
+- restore paid access only if there is actually a valid subscription/trial to restore
+- force paywall now
+
+If useful, you may combine some of these into a single action endpoint, but the frontend actions must stay simple and explicit.
+
+For each action:
+- validate admin/dev access
+- log the action with company id + company code + action name
+- return the updated effective access snapshot
+
+3) FRONTEND — BILLING CONTROLS CARD
+On `client/src/pages/DevTools.tsx`, add a clean “Billing Controls” card in the company detail panel.
+
+Show:
+- Effective Access: big bold plain-English status
+- Dev Bypass: On / Off
+- Paid Plan: Active / Inactive
+- Trial: Active / Inactive if available
+- Paywall: Showing / Hidden
+
+Buttons:
+- Grant Free Access
+- Remove Free Access
+- Show Paywall
+- Remove Paid Plan
+- Refresh Status
+
+Button behavior:
+- disable buttons while request is running
+- optimistic feel is okay, but always refetch after mutation
+- show a success toast/banner after each action
+- show a clear error if action fails
+
+4) VERY IMPORTANT UX LOGIC
+Buttons should make sense for the current state:
+- If dev bypass is already ON, hide or disable “Grant Free Access”
+- If dev bypass is OFF, hide or disable “Remove Free Access”
+- If company is already effectively paywalled, “Show Paywall” should be disabled or relabeled
+- If no paid plan exists, “Remove Paid Plan” should be disabled
+- The card should immediately reflect the new status after each action
+
+5) FIX THE CONFUSING STATUS BUG
+There was a prior issue where an account looked “blocked” in Dev Tools but still logged in fine.
+Fix this by making the UI show BOTH:
+- Effective Access
+- Raw Billing State (smaller secondary text)
+
+Example:
+Effective Access: Full Access (Dev Bypass)
+Raw Billing State: No active subscription on Stripe
+
+That way the Dev Tools page reflects reality and avoids confusion.
+
+6) PAYWALL ENFORCEMENT CHECK
+After these changes, make sure the actual app gating matches the Dev Tools actions:
+- turning OFF dev bypass for a company with no active paid access should make them hit the paywall
+- removing paid plan access should make them hit the paywall unless dev bypass remains ON
+- leaving dev bypass ON should continue to allow entry even if paid plan is removed
+
+Do not just update UI labels — wire this to the real access logic.
+
+7) KEEP IT CLEAN
+UI style:
+- same modern card style as current Dev Tools
+- plain English
+- no clutter
+- no duplicated buttons
+- no raw booleans exposed as the main label
+- mobile-friendly stacking
+
+DELIVERABLES
+When done, tell me:
+1. exactly what files changed
+2. what the new effective access logic is
+3. what each button does
+4. whether “Remove Paid Plan” now truly forces paywall when bypass is off
+5. any assumptions you had to make about the billing schema
+
+Please implement it now.
