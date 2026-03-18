@@ -56,6 +56,7 @@ import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEve
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
+import { verifyAppleTransaction, verifyAppleNotification, APPLE_BUNDLE_ID } from "./appleIap";
 
 // Initialize Stripe only if secret key is available and valid
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
@@ -4432,60 +4433,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // TODO: Replace this stub with real Apple/Google receipt validation.
-  // When mobile builds are ready:
-  //   - For Apple: verify receipt via App Store Server API (verifyReceipt or App Store Server Notifications v2)
-  //   - For Google: verify purchase token via Google Play Developer API (purchases.subscriptions.get)
-  //   - Parse the validated response for expiresDate, autoRenewStatus, etc.
-  //   - Set currentPeriodEnd from the store's expiration date
-  //   - Store originalTransactionId for deduplication and renewal tracking
+  /**
+   * POST /api/subscriptions/validate
+   *
+   * Validates an Apple in-app purchase for the authenticated user's company.
+   * The native app (StoreKit 2) sends the signed JWS transaction token.
+   *
+   * Expected body:
+   *   {
+   *     platform: "apple",
+   *     jwsTransaction: string   // StoreKit 2 jwsRepresentation from verificationResult
+   *   }
+   *
+   * On success, writes subscriptionStatus/Plan/Platform/currentPeriodEnd/
+   * originalTransactionId to the company record and returns the updated
+   * subscription summary.
+   */
   app.post('/api/subscriptions/validate', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const { receipt, platform, planKey } = req.body;
+      const { platform, jwsTransaction } = req.body;
+
+      console.log(`[apple-validate] request received — userId=${userId} platform=${platform ?? '(none)'}`);
 
       const company = await storage.getUserCompany(userId);
       if (!company) {
-        return res.status(400).json({ message: 'No company found' });
+        console.warn('[apple-validate] no company found for userId', userId);
+        return res.status(400).json({ ok: false, message: 'No company found for this account' });
       }
 
-      if (!receipt || !platform || !planKey) {
-        return res.status(400).json({ message: 'Missing receipt, platform, or planKey' });
+      console.log(`[apple-validate] company=${company.id} (${company.name})`);
+
+      if (platform !== 'apple') {
+        return res.status(400).json({
+          ok: false,
+          message: `Unsupported platform: "${platform}". Only "apple" is accepted by this endpoint.`,
+        });
       }
 
-      const { subscriptionPlans } = await import("@shared/subscriptionPlans");
-      const plan = subscriptionPlans[planKey];
-      if (!plan) {
-        return res.status(400).json({ message: 'Invalid plan key' });
+      if (!jwsTransaction || typeof jwsTransaction !== 'string') {
+        return res.status(400).json({
+          ok: false,
+          message: 'Missing or invalid jwsTransaction — send the StoreKit 2 jwsRepresentation string',
+        });
       }
 
-      // TODO: Call Apple/Google server API here to validate the receipt
-      // and extract the real currentPeriodEnd, originalTransactionId, etc.
-      console.log('[validate] STUB: receipt validation for company', company.id, 'platform:', platform, 'plan:', planKey);
-      console.log('[validate] TODO: Replace with real Apple/Google receipt validation');
+      // Verify the JWS token and extract subscription details
+      let txInfo;
+      try {
+        txInfo = await verifyAppleTransaction(jwsTransaction);
+      } catch (err: any) {
+        console.error('[apple-validate] JWS verification failed:', err.message);
+        return res.status(422).json({ ok: false, message: `Apple verification failed: ${err.message}` });
+      }
 
-      const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      console.log(
+        `[apple-validate] verified — productId=${txInfo.productId} planKey=${txInfo.planKey} ` +
+        `originalTxId=${txInfo.originalTransactionId} expiresDate=${txInfo.expiresDate.toISOString()} ` +
+        `env=${txInfo.environment}`
+      );
 
+      // Write subscription details to the company record
       await storage.updateCompany(company.id, {
         subscriptionStatus: 'active',
-        subscriptionPlan: planKey,
-        maxUsers: plan.userLimit,
-        subscriptionPlatform: platform,
-        originalTransactionId: receipt,
-        currentPeriodEnd,
+        subscriptionPlan: txInfo.planKey,
+        maxUsers: txInfo.userLimit,
+        subscriptionPlatform: 'apple',
+        originalTransactionId: txInfo.originalTransactionId,
+        currentPeriodEnd: txInfo.expiresDate,
         onboardingCompleted: true,
       });
 
-      res.json({
+      console.log(`[apple-validate] subscription written — company=${company.id} status=active plan=${txInfo.planKey}`);
+
+      return res.json({
+        ok: true,
         active: true,
         status: 'active',
-        planKey,
-        userLimit: plan.userLimit,
-        currentPeriodEnd,
+        planKey: txInfo.planKey,
+        userLimit: txInfo.userLimit,
+        currentPeriodEnd: txInfo.expiresDate,
+        originalTransactionId: txInfo.originalTransactionId,
       });
+
     } catch (error: any) {
-      console.error('[validate] Error:', error);
-      res.status(500).json({ message: 'Failed to validate receipt' });
+      console.error('[apple-validate] Unexpected error:', error);
+      return res.status(500).json({ ok: false, message: 'Failed to validate Apple purchase' });
     }
   });
 
@@ -4521,6 +4554,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('[restore] Error:', error);
       res.status(500).json({ message: 'Failed to restore purchases' });
     }
+  });
+
+  /**
+   * POST /api/apple/notifications
+   *
+   * Apple App Store Server Notifications v2 webhook.
+   * Configure this URL in App Store Connect → App Information → App Store Server Notifications.
+   *
+   * Apple POSTs a JSON body: { "signedPayload": "<jws string>" }
+   * This endpoint:
+   *   1. Verifies the outer JWS (notification envelope)
+   *   2. Verifies the inner signedTransactionInfo JWS (transaction details)
+   *   3. Looks up the company by originalTransactionId
+   *   4. Updates subscription status based on notificationType
+   *
+   * No authentication required — Apple sends this server-to-server.
+   * The JWS signature itself is the authentication.
+   */
+  app.post('/api/apple/notifications', async (req, res) => {
+    const { signedPayload } = req.body ?? {};
+
+    if (!signedPayload || typeof signedPayload !== 'string') {
+      console.warn('[apple-notify] Missing or invalid signedPayload in request body');
+      return res.status(400).json({ ok: false, message: 'Missing signedPayload' });
+    }
+
+    let notification;
+    try {
+      notification = await verifyAppleNotification(signedPayload);
+    } catch (err: any) {
+      console.error('[apple-notify] Failed to verify notification JWS:', err.message);
+      return res.status(422).json({ ok: false, message: 'Notification verification failed' });
+    }
+
+    const { notificationType, subtype, notificationUUID, signedTransactionInfo } = notification;
+    console.log(
+      `[apple-notify] received — type=${notificationType} subtype=${subtype ?? 'none'} ` +
+      `uuid=${notificationUUID} env=${notification.environment}`
+    );
+
+    // Decode inner transaction JWS if present
+    let txInfo: Awaited<ReturnType<typeof verifyAppleTransaction>> | null = null;
+    if (signedTransactionInfo) {
+      try {
+        txInfo = await verifyAppleTransaction(signedTransactionInfo);
+        console.log(
+          `[apple-notify] transaction decoded — originalTxId=${txInfo.originalTransactionId} ` +
+          `productId=${txInfo.productId} planKey=${txInfo.planKey} ` +
+          `expiresDate=${txInfo.expiresDate.toISOString()}`
+        );
+      } catch (err: any) {
+        console.error('[apple-notify] Failed to decode inner signedTransactionInfo:', err.message);
+        // Non-fatal — we can still process some notification types without tx details
+      }
+    }
+
+    // Find the company by originalTransactionId
+    let company = null;
+    if (txInfo?.originalTransactionId) {
+      try {
+        const rows = await db
+          .select()
+          .from(companies)
+          .where(eq(companies.originalTransactionId, txInfo.originalTransactionId))
+          .limit(1);
+        company = rows[0] ?? null;
+      } catch (err: any) {
+        console.error('[apple-notify] DB lookup by originalTransactionId failed:', err.message);
+      }
+    }
+
+    if (!company) {
+      console.warn(
+        `[apple-notify] No company found for originalTransactionId=${txInfo?.originalTransactionId ?? '(unknown)'}` +
+        ` — notification type=${notificationType} will be ignored`
+      );
+      // Return 200 to prevent Apple from retrying unknown transaction IDs
+      return res.json({ ok: true, note: 'company not found, notification acknowledged' });
+    }
+
+    console.log(`[apple-notify] matched company=${company.id} (${company.name})`);
+
+    // Apply subscription state changes based on notification type
+    const now = new Date();
+    const updates: Record<string, unknown> = {};
+
+    switch (notificationType) {
+      case 'SUBSCRIBED':
+      case 'DID_RENEW':
+        // Successful new subscription or renewal — mark active
+        updates.subscriptionStatus = 'active';
+        updates.subscriptionPlatform = 'apple';
+        if (txInfo) {
+          updates.subscriptionPlan = txInfo.planKey;
+          updates.maxUsers = txInfo.userLimit;
+          updates.currentPeriodEnd = txInfo.expiresDate;
+          updates.originalTransactionId = txInfo.originalTransactionId;
+        }
+        console.log(`[apple-notify] applying active renewal — company=${company.id}`);
+        break;
+
+      case 'EXPIRED':
+      case 'GRACE_PERIOD_EXPIRED':
+        // Subscription has expired (billing failed or user cancelled and period ended)
+        updates.subscriptionStatus = 'canceled';
+        console.log(`[apple-notify] applying expiration — company=${company.id}`);
+        break;
+
+      case 'DID_FAIL_TO_RENEW':
+        // Billing retry in progress — Apple will keep retrying for up to 60 days
+        // Mark as past_due but don't revoke access yet (grace period still active)
+        updates.subscriptionStatus = 'past_due';
+        console.log(`[apple-notify] applying past_due (failed renewal) — company=${company.id}`);
+        break;
+
+      case 'REVOKED':
+        // Subscription was refunded or revoked by Apple (e.g. family sharing removed)
+        updates.subscriptionStatus = 'canceled';
+        console.log(`[apple-notify] applying revocation — company=${company.id}`);
+        break;
+
+      case 'REFUND':
+        // A refund was issued — revoke access
+        updates.subscriptionStatus = 'canceled';
+        console.log(`[apple-notify] applying refund cancellation — company=${company.id}`);
+        break;
+
+      case 'TEST':
+        // Apple sends this when you click "Send Test Notification" in App Store Connect
+        console.log(`[apple-notify] TEST notification received — no DB changes applied`);
+        return res.json({ ok: true, note: 'TEST notification acknowledged' });
+
+      default:
+        // PRICE_INCREASE, RENEWAL_EXTENDED, CONSUMPTION_REQUEST, etc.
+        // These do not change subscription status, just acknowledge them.
+        console.log(`[apple-notify] notification type="${notificationType}" requires no DB action`);
+        return res.json({ ok: true, note: `notification type ${notificationType} acknowledged` });
+    }
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        await storage.updateCompany(company.id, updates as any);
+        console.log(
+          `[apple-notify] DB updated — company=${company.id} ` +
+          `status=${updates.subscriptionStatus ?? '(unchanged)'}`
+        );
+      } catch (err: any) {
+        console.error('[apple-notify] Failed to update company:', err.message);
+        return res.status(500).json({ ok: false, message: 'Failed to update subscription' });
+      }
+    }
+
+    return res.json({ ok: true });
   });
 
   // Client routes

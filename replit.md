@@ -31,6 +31,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Employee Management**: Manages employee status and contact information.
 - **Onboarding**: Invite code system for company onboarding, including owner registration, member joining, and industry-specific Price Book seeding.
 - **Subscription Management**: Team size-based plan auto-selection and subscription gating.
+- **Apple IAP Backend (Phase 2A)**: StoreKit 2 JWS transaction verification via `jose` x5c chain. `POST /api/subscriptions/validate` accepts `{ platform: "apple", jwsTransaction }`. `POST /api/apple/notifications` handles App Store Server Notifications v2 (renewal, expiration, revocation). Product ID mapping in `shared/subscriptionPlans.ts` (`appleProductId` + `appleProductIdToPlanKey`). Verification module at `server/appleIap.ts`.
 - **Estimates System**: Job-scoped estimate creation with line item editor, unique numbering, and RBAC.
 - **Customer Management**: Manages customer data for estimate recipients.
 - **Price Book (Service Catalog)**: Owner-only customizable reusable line item templates with full CRUD operations and RBAC.

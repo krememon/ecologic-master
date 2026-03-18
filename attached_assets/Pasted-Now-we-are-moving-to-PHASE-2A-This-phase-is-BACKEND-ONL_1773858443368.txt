@@ -1,0 +1,119 @@
+Now we are moving to PHASE 2A.
+
+This phase is BACKEND ONLY.
+Do NOT change the purchase UI yet.
+Do NOT change the native onboarding/paywall screens yet.
+First build the backend Apple subscription foundation correctly.
+
+GOAL
+Implement the backend support for Apple IAP validation and Apple renewal/cancellation syncing so the app can eventually use Apple as the billing authority for native iOS subscriptions.
+
+IMPORTANT
+- Keep the current app working
+- Do not break existing Stripe subscribers
+- Do not remove Stripe support
+- This phase should ADD Apple support, not replace everything at once
+- Keep backward compatibility for current users
+- Use clean code and plain-English logs
+
+WHAT TO BUILD
+
+1. REPLACE THE /api/subscriptions/validate STUB
+Right now this is just a stub/TODO.
+Replace it with a real backend validation flow for Apple subscriptions.
+
+The endpoint should:
+- accept Apple purchase data from the native app
+- validate/verify it properly
+- extract the real subscription details
+- write the correct fields to the company record
+- return a clean success/failure response
+
+The important fields to write/update are:
+- subscriptionStatus
+- subscriptionPlan
+- currentPeriodEnd
+- subscriptionPlatform = 'apple'
+- originalTransactionId
+- any other existing local billing fields that need to stay in sync
+
+2. USE A CLEAN APPLE VALIDATION APPROACH
+Use the modern Apple approach, not random guesswork.
+If the app will send a StoreKit 2 signed transaction / JWS token, validate that properly.
+If a receipt-based flow is required, implement the correct Apple server-side validation path.
+
+Be explicit in the final summary about:
+- what payload the native app must send
+- what verification method was implemented
+- what npm package or verification strategy was used
+
+3. ADD APPLE SERVER NOTIFICATIONS WEBHOOK
+Add a new backend webhook endpoint for Apple subscription lifecycle events.
+
+Example path:
+- POST /api/apple/notifications
+
+This webhook should handle renewal/cancellation/lapse changes and keep the DB in sync.
+
+At minimum, make sure the backend updates company subscription fields when Apple notifies about:
+- successful renewal
+- expiration/lapse
+- cancellation/revocation if available
+- billing retry / grace period if you support it
+
+You do not need to overcomplicate this, but the webhook must be structured cleanly and be ready for real Apple notifications.
+
+4. MAP APPLE PRODUCT IDS TO ECOLOGIC PLAN KEYS
+Create a clean mapping layer so Apple products map into your internal plans.
+
+Example style:
+- com.ecologic.app.starter.monthly → starter
+- com.ecologic.app.team.monthly → team
+- com.ecologic.app.pro.monthly → pro
+- com.ecologic.app.scale.monthly → scale
+
+Use the real EcoLogic plan keys already used in the app if they exist.
+Put this mapping somewhere clean and reusable.
+
+5. KEEP BILLING RESOLVER COMPATIBLE
+The existing billing resolver should continue working:
+- Apple subscriptions should result in source = 'apple'
+- Stripe subscriptions should continue to result in source = 'stripe'
+- free access / trial / blocked should still work as before
+
+6. LOGGING
+Add targeted logs for Apple billing flows:
+- validate request received
+- product ID received
+- company id/code
+- verification success/failure
+- subscription status written
+- webhook event received
+- webhook event applied
+Keep logs clean and useful.
+
+7. ERROR HANDLING
+Return clear errors for:
+- invalid Apple payload
+- verification failure
+- unknown product ID
+- missing company/user context
+- webhook parse failure
+
+IMPORTANT SAFETY RULES
+- Do not break /api/subscriptions/status
+- Do not remove existing Stripe/local logic
+- Do not force Apple behavior on web users
+- Do not change frontend purchase flow yet
+- Keep this phase backend-only
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. exact new/updated endpoints
+3. what payload the native app will need to send to /api/subscriptions/validate
+4. how Apple verification is being done
+5. how product IDs map to EcoLogic plan keys
+6. how webhook renewal/expiration updates are applied
+7. any env vars / secrets I will need to configure
+8. confirm that Stripe support still works unchanged
