@@ -282,26 +282,32 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  // ── State for billing controls ─────────────────────────────────────────
-  const [reason, setReason] = useState('');
-  const [planOverride, setPlanOverride] = useState('');
-  const [seatLimit, setSeatLimit] = useState('');
-  const [unlimitedSeats, setUnlimitedSeats] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
-  const [trialDays, setTrialDays] = useState('');
+  // ── State ──────────────────────────────────────────────────────────────
+  const [confirmBypassOn, setConfirmBypassOn] = useState(false);
+  const [confirmBypassOff, setConfirmBypassOff] = useState(false);
+  const [confirmFreeOn, setConfirmFreeOn] = useState(false);
+  const [confirmFreeOff, setConfirmFreeOff] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [confirmPlanChange, setConfirmPlanChange] = useState(false);
+  const [confirmLimitChange, setConfirmLimitChange] = useState(false);
+  const [planChoice, setPlanChoice] = useState('');
+  const [seatInput, setSeatInput] = useState('');
+  const [unlimitedToggle, setUnlimitedToggle] = useState(false);
+  const [trialCustomDate, setTrialCustomDate] = useState('');
+  const [billingNote, setBillingNote] = useState('');
+  const [billingPending, setBillingPending] = useState<string | null>(null);
   const [confirmPause, setConfirmPause] = useState<'pause' | 'unpause' | null>(null);
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState(company.adminNote || '');
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newRole, setNewRole] = useState('');
 
-  // ── Billing detail query (for override controls) ───────────────────────
-  const { data: billingDetail, refetch: refetchBilling } = useQuery({
-    queryKey: ['/api/dev/admin/billing', company.id],
+  // ── Billing detail query ──────────────────────────────────────────────
+  const { data: billingDetail, refetch: refetchBilling, isFetching: billingFetching } = useQuery({
+    queryKey: ['/api/dev/admin/company/by-code/billing', companyCode],
     retry: false,
     queryFn: async () => {
-      const res = await fetch(`/api/dev/admin/billing/${company.id}`, { credentials: 'include' });
+      const res = await fetch(`/api/dev/admin/company/by-code/${companyCode}/billing`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -346,35 +352,26 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
   const companyInvoices: any[] = (paymentsData as any)?.invoices || [];
   const companyPayments: any[] = (paymentsData as any)?.payments || [];
 
-  // ── Mutations ─────────────────────────────────────────────────────────
-  const overrideMutation = useMutation({
-    mutationFn: async (body: any) => {
-      const res = await fetch('/api/dev/admin/billing/override', { method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: 'Changes Saved', description: 'Billing access has been updated' });
+  // ── Billing action helper ─────────────────────────────────────────────
+  const callBilling = async (endpoint: string, body: any, successTitle: string, successDesc?: string) => {
+    setBillingPending(endpoint);
+    try {
+      const res = await fetch(`/api/dev/admin/company/by-code/${companyCode}/billing/${endpoint}`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      toast({ title: successTitle, description: successDesc });
       refetchBilling();
-    },
-    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setBillingPending(null);
+    }
+  };
 
-  const restoreMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/dev/admin/billing/restore-default', { method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: company.id }) });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: 'Billing Reset', description: 'All manual changes removed — normal billing is active again' });
-      refetchBilling();
-    },
-    onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
-
+  // ── Other mutations ───────────────────────────────────────────────────
   const statusMutation = useMutation({
     mutationFn: async (body: any) => {
       const res = await fetch('/api/dev/admin/company/status', { method: 'POST', credentials: 'include',
@@ -402,14 +399,6 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
     },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
-
-  const applyOverride = (type: string, value: any) => {
-    overrideMutation.mutate({
-      companyId: company.id, type, value, reason: reason || undefined,
-      planOverride: planOverride || undefined, seatLimit: seatLimit ? parseInt(seatLimit) : undefined,
-      unlimitedSeats, expiresAt: expiresAt || undefined,
-    });
-  };
 
   const statusColor: Record<string, string> = {
     PENDING: 'bg-slate-700 text-slate-300',
@@ -502,131 +491,311 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
         </div>
       </DevCard>
 
-      {/* ── Billing Access Summary ─────────────────────────────────────────── */}
-      {d && (
-        <DevCard title="Billing Access Summary" icon={CreditCard}>
-          <div className="space-y-0 mb-4">
-            <Field label="Why Allowed / Blocked" value={<SourceBadge source={d.effectiveBilling?.source} />} />
-            <Field label="Effective Plan" value={d.effectiveBilling?.effectivePlan || '—'} mono />
-            <Field label="User Limit" value={d.effectiveBilling?.seatLimit} />
-            <Field label="Stripe Status" value={<Badge variant="outline" className="border-slate-600 text-slate-300">{d.subscriptionStatus || 'inactive'}</Badge>} />
-            <Field label="DB Plan" value={d.subscriptionPlan || '—'} mono />
-            <Field label="DB Seat Limit" value={d.maxUsers} />
-            <Field label="Trial End" value={d.trialEndsAt ? new Date(d.trialEndsAt).toLocaleString() : '—'} />
-            <Field label="Period End" value={d.currentPeriodEnd ? new Date(d.currentPeriodEnd).toLocaleString() : '—'} />
-            <Field label="Stripe Sub" value={<StatusBadge ok={d.hasStripeSubscription} label={d.hasStripeSubscription ? 'Connected' : 'Not connected'} />} />
-          </div>
-          {(d.adminFreeAccess || d.adminBypassSubscription || d.adminPlanOverride || d.adminSeatLimitOverride || d.adminUnlimitedSeats) && (
-            <div className="rounded-lg border border-violet-700 bg-violet-950/20 p-3 space-y-1">
-              <p className="text-xs font-semibold text-violet-400 uppercase tracking-wide mb-2">Manual Changes Active</p>
-              {d.adminFreeAccess && <p className="text-xs text-violet-300">✦ Free access has been turned on manually</p>}
-              {d.adminBypassSubscription && <p className="text-xs text-amber-300">⚡ Subscription check is being skipped</p>}
-              {d.adminPlanOverride && <p className="text-xs text-slate-300">Forced plan: <span className="font-mono">{d.adminPlanOverride}</span></p>}
-              {d.adminSeatLimitOverride && <p className="text-xs text-slate-300">Forced user limit: {d.adminSeatLimitOverride}</p>}
-              {d.adminUnlimitedSeats && <p className="text-xs text-slate-300">Unlimited users is turned on</p>}
-              {d.adminOverrideReason && <p className="text-xs text-slate-500 italic">Note: {d.adminOverrideReason}</p>}
-              {d.adminOverrideExpiresAt && <p className="text-xs text-slate-500">Expires: {new Date(d.adminOverrideExpiresAt).toLocaleString()}</p>}
-              {d.adminOverrideUpdatedByEmail && <p className="text-xs text-slate-500">Set by: {d.adminOverrideUpdatedByEmail}</p>}
-            </div>
-          )}
-        </DevCard>
-      )}
+      {/* ── Billing Access ─────────────────────────────────────────────────── */}
+      <DevCard title="Billing Access" icon={CreditCard}>
+        {!d ? (
+          <p className="text-sm text-slate-500 italic">{billingFetching ? 'Loading billing data…' : 'Billing data unavailable'}</p>
+        ) : (() => {
+          const eb = d.effectiveBilling;
+          const hasManualChanges = d.adminFreeAccess || d.adminBypassSubscription || d.adminPlanOverride || d.adminSeatLimitOverride || d.adminUnlimitedSeats;
 
-      {/* ── Billing Access Controls ────────────────────────────────────────── */}
-      {d && (
-        <DevCard title="Billing Access Controls" icon={Shield} collapsible>
-          <p className="text-xs text-slate-500 mb-4">Use these settings to manually give access, remove billing restrictions, or change what plan this company uses.</p>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs text-slate-400 uppercase tracking-wide">Why are you making this change?</Label>
-              <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Optional — saved to audit log"
-                className="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          const statusSentence = (() => {
+            if (d.adminPaused) return { text: 'This company is paused by an admin and cannot access EcoLogic.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
+            switch (eb?.source) {
+              case 'override_free_access': return { text: 'This company currently has free access turned on manually.', cls: 'bg-violet-950/60 border-violet-700 text-violet-300' };
+              case 'override_bypass': return { text: 'This company is allowed in because subscription bypass is active.', cls: 'bg-amber-950/60 border-amber-800 text-amber-300' };
+              case 'stripe': return { text: 'This company is allowed in through its paid Stripe subscription.', cls: 'bg-emerald-950/60 border-emerald-800 text-emerald-300' };
+              case 'trial': return { text: 'This company is allowed in through an active trial.', cls: 'bg-blue-950/60 border-blue-800 text-blue-300' };
+              default: return { text: 'This company is currently blocked — it does not have an active subscription.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
+            }
+          })();
+
+          return (
+            <div className="space-y-5">
+              {/* Status banner */}
+              <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border ${statusSentence.cls}`}>
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p className="text-sm font-medium leading-snug">{statusSentence.text}</p>
+              </div>
+
+              {/* Quick facts */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { label: 'Access Source', val: <SourceBadge source={eb?.source} /> },
+                  { label: 'Effective Plan', val: <span className="font-mono text-slate-200">{eb?.effectivePlan || '—'}</span> },
+                  { label: 'User Limit', val: <span className="text-slate-200">{d.adminUnlimitedSeats ? 'Unlimited' : (eb?.seatLimit ?? '—')}</span> },
+                  { label: 'Stripe Status', val: <Badge variant="outline" className="border-slate-600 text-slate-300 text-[10px]">{d.subscriptionStatus || 'inactive'}</Badge> },
+                  { label: 'Trial End', val: <span className="text-slate-300">{d.trialEndsAt ? new Date(d.trialEndsAt).toLocaleDateString() : '—'}</span> },
+                  { label: 'Stripe Connected', val: <StatusBadge ok={d.hasStripeSubscription} label={d.hasStripeSubscription ? 'Yes' : 'No'} /> },
+                ].map(({ label, val }) => (
+                  <div key={label} className="flex flex-col gap-0.5 bg-slate-800/60 rounded-lg px-3 py-2.5">
+                    <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">{label}</span>
+                    <span className="text-sm">{val}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Manual changes notice */}
+              {hasManualChanges && (
+                <div className="rounded-xl border border-violet-700/60 bg-violet-950/20 px-4 py-3 space-y-1.5">
+                  <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-2">Manual Overrides Active</p>
+                  {d.adminFreeAccess && <p className="text-xs text-violet-300">✦ Free access is turned on</p>}
+                  {d.adminBypassSubscription && <p className="text-xs text-amber-300">⚡ Subscription check is bypassed</p>}
+                  {d.adminPlanOverride && <p className="text-xs text-slate-300">Forced plan: <span className="font-mono font-bold">{d.adminPlanOverride}</span></p>}
+                  {d.adminSeatLimitOverride && <p className="text-xs text-slate-300">Forced user limit: {d.adminSeatLimitOverride}</p>}
+                  {d.adminUnlimitedSeats && <p className="text-xs text-slate-300">Unlimited users is on</p>}
+                  {d.adminOverrideUpdatedByEmail && <p className="text-xs text-slate-500 mt-1">Last changed by: {d.adminOverrideUpdatedByEmail}</p>}
+                </div>
+              )}
+
+              {/* Optional note input */}
               <div>
-                <Label className="text-xs text-slate-400 uppercase tracking-wide">Force a Plan</Label>
-                <p className="text-[10px] text-slate-600 mb-1">Temporarily make this company use a different plan.</p>
-                <Select value={planOverride || "none"} onValueChange={v => setPlanOverride(v === "none" ? "" : v)}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-slate-200 h-9">
-                    <SelectValue placeholder="— no override —" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="none">— no change —</SelectItem>
-                    <SelectItem value="starter">starter</SelectItem>
-                    <SelectItem value="team">team</SelectItem>
-                    <SelectItem value="pro">pro</SelectItem>
-                    <SelectItem value="scale">scale</SelectItem>
-                    <SelectItem value="enterprise">enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Reason / Note (optional — saved to audit log)</Label>
+                <input value={billingNote} onChange={e => setBillingNote(e.target.value)} placeholder="e.g. Trial extension for sales demo"
+                  className="w-full mt-1.5 bg-slate-800 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500 transition-colors" />
               </div>
-              <div>
-                <Label className="text-xs text-slate-400 uppercase tracking-wide">Force User Limit</Label>
-                <p className="text-[10px] text-slate-600 mb-1">Set a custom user limit for this company.</p>
-                <input value={seatLimit} onChange={e => setSeatLimit(e.target.value)} placeholder="e.g. 25"
-                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={unlimitedSeats} onCheckedChange={setUnlimitedSeats} className="data-[state=checked]:bg-violet-600" />
-              <Label className="text-sm text-slate-300">Allow Unlimited Users</Label>
-            </div>
-            <div>
-              <Label className="text-xs text-slate-400 uppercase tracking-wide">Changes Expire On (optional)</Label>
-              <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
-                className="w-full mt-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-teal-500" />
-            </div>
 
-            <div className="pt-3 border-t border-slate-700">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Apply Changes</p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => applyOverride('free_access', !d.adminFreeAccess)}
-                  disabled={overrideMutation.isPending}
-                  className={d.adminFreeAccess ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-violet-700 hover:bg-violet-600 text-white'}>
-                  {d.adminFreeAccess ? <ToggleRight className="w-3.5 h-3.5 mr-1.5" /> : <ToggleLeft className="w-3.5 h-3.5 mr-1.5" />}
-                  {d.adminFreeAccess ? 'Remove Free Access' : 'Let This Company Use EcoLogic for Free'}
+              {/* ── PRIMARY ACTIONS ─────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Access Controls</p>
+
+                {/* Bypass button */}
+                {d.adminBypassSubscription ? (
+                  <div className="rounded-xl border border-amber-700 bg-amber-950/30 px-4 py-3.5 flex items-center gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-200">Subscription Lock Is Bypassed</p>
+                      <p className="text-xs text-amber-500 mt-0.5">This company can use EcoLogic without a subscription.</p>
+                    </div>
+                    {confirmBypassOff ? (
+                      <div className="flex gap-2 shrink-0">
+                        <Button size="sm" onClick={() => { callBilling('bypass', { value: false, note: billingNote }, 'Bypass Removed', 'Subscription lock is back on'); setConfirmBypassOff(false); }}
+                          disabled={billingPending === 'bypass'} className="bg-amber-700 hover:bg-amber-600 h-8 text-xs">
+                          {billingPending === 'bypass' ? 'Removing…' : 'Confirm — Turn Off'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmBypassOff(false)} className="border-slate-600 text-slate-400 h-8 text-xs">Cancel</Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setConfirmBypassOff(true)}
+                        className="border-amber-700 text-amber-300 hover:bg-amber-950 shrink-0 h-8 text-xs">
+                        Turn Off Bypass
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  confirmBypassOn ? (
+                    <div className="rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-3.5">
+                      <p className="text-sm text-slate-200 mb-1 font-medium">This will let this company use EcoLogic even without an active subscription. Continue?</p>
+                      <div className="flex gap-2 mt-3">
+                        <Button size="sm" onClick={() => { callBilling('bypass', { value: true, note: billingNote }, 'Bypass Active', 'Subscription lock is now skipped'); setConfirmBypassOn(false); }}
+                          disabled={billingPending === 'bypass'} className="bg-amber-600 hover:bg-amber-700 h-9">
+                          {billingPending === 'bypass' ? 'Saving…' : 'Yes, Bypass Subscription Lock'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmBypassOn(false)} className="border-slate-600 text-slate-400 h-9">Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmBypassOn(true)}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-slate-600 bg-slate-800 hover:border-amber-700/60 hover:bg-amber-950/20 active:scale-[0.99] transition-all text-left">
+                      <div className="p-1.5 rounded-lg bg-amber-900/40 shrink-0"><AlertTriangle className="w-4 h-4 text-amber-400" /></div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-200">Bypass Subscription Lock</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Let this company in even without an active subscription</p>
+                      </div>
+                    </button>
+                  )
+                )}
+
+                {/* Free Access button */}
+                {d.adminFreeAccess ? (
+                  <div className="rounded-xl border border-violet-700 bg-violet-950/30 px-4 py-3.5 flex items-center gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-violet-200">Free Access Is On</p>
+                      <p className="text-xs text-violet-500 mt-0.5">This company is using EcoLogic for free.</p>
+                    </div>
+                    {confirmFreeOff ? (
+                      <div className="flex gap-2 shrink-0">
+                        <Button size="sm" onClick={() => { callBilling('free-access', { value: false, note: billingNote }, 'Free Access Removed'); setConfirmFreeOff(false); }}
+                          disabled={billingPending === 'free-access'} className="bg-violet-700 hover:bg-violet-600 h-8 text-xs">
+                          {billingPending === 'free-access' ? 'Removing…' : 'Confirm — Turn Off'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmFreeOff(false)} className="border-slate-600 text-slate-400 h-8 text-xs">Cancel</Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setConfirmFreeOff(true)}
+                        className="border-violet-700 text-violet-300 hover:bg-violet-950 shrink-0 h-8 text-xs">
+                        Turn Off Free Access
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  confirmFreeOn ? (
+                    <div className="rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-3.5">
+                      <p className="text-sm text-slate-200 mb-1 font-medium">This will give this company free access to EcoLogic until you turn it off. Continue?</p>
+                      <div className="flex gap-2 mt-3">
+                        <Button size="sm" onClick={() => { callBilling('free-access', { value: true, note: billingNote }, 'Free Access On', 'Company can now use EcoLogic for free'); setConfirmFreeOn(false); }}
+                          disabled={billingPending === 'free-access'} className="bg-violet-600 hover:bg-violet-700 h-9">
+                          {billingPending === 'free-access' ? 'Saving…' : 'Yes, Give Free Access'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmFreeOn(false)} className="border-slate-600 text-slate-400 h-9">Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmFreeOn(true)}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-slate-600 bg-slate-800 hover:border-violet-700/60 hover:bg-violet-950/20 active:scale-[0.99] transition-all text-left">
+                      <div className="p-1.5 rounded-lg bg-violet-900/40 shrink-0"><DollarSign className="w-4 h-4 text-violet-400" /></div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-200">Give Free Access</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Manually allow this company to use EcoLogic for free</p>
+                      </div>
+                    </button>
+                  )
+                )}
+
+                {/* Refresh */}
+                <button onClick={() => refetchBilling()}
+                  disabled={billingFetching}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 hover:bg-slate-800 active:scale-[0.99] transition-all text-left">
+                  <RefreshCw className={`w-4 h-4 text-slate-500 shrink-0 ${billingFetching ? 'animate-spin' : ''}`} />
+                  <p className="text-sm text-slate-400">{billingFetching ? 'Refreshing billing info…' : 'Refresh Billing Info'}</p>
+                </button>
+              </div>
+
+              {/* ── CHANGE PLAN ────────────────────────────────── */}
+              <div className="space-y-2.5 pt-4 border-t border-slate-800">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Change Company Plan</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Choose what EcoLogic plan this company should use right now.</p>
+                </div>
+                {d.adminPlanOverride && (
+                  <p className="text-xs text-teal-500 font-medium">Currently forced to: <span className="font-mono">{d.adminPlanOverride}</span></p>
+                )}
+                <div className="flex gap-2.5">
+                  <Select value={planChoice || 'none'} onValueChange={v => setPlanChoice(v === 'none' ? '' : v)}>
+                    <SelectTrigger className="flex-1 bg-slate-800 border-slate-600 text-slate-200 h-10">
+                      <SelectValue placeholder="— select plan —" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="none">— no override —</SelectItem>
+                      <SelectItem value="starter">Starter</SelectItem>
+                      <SelectItem value="team">Team</SelectItem>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="scale">Scale</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => setConfirmPlanChange(true)} disabled={!planChoice || billingPending === 'plan'}
+                    className="bg-teal-700 hover:bg-teal-600 h-10 px-4 shrink-0">
+                    Apply Plan Change
+                  </Button>
+                </div>
+                {confirmPlanChange && (
+                  <div className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3">
+                    <p className="text-sm text-slate-200 mb-3 font-medium">This will manually change the company's current plan inside EcoLogic to <span className="font-mono text-teal-300">{planChoice}</span>. Continue?</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => { callBilling('plan', { plan: planChoice, note: billingNote }, 'Plan Changed', `Plan is now ${planChoice}`); setConfirmPlanChange(false); setPlanChoice(''); }}
+                        disabled={billingPending === 'plan'} className="bg-teal-600 hover:bg-teal-700 h-9">
+                        {billingPending === 'plan' ? 'Saving…' : 'Yes, Apply Plan'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmPlanChange(false)} className="border-slate-600 text-slate-400 h-9">Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── CHANGE USER LIMIT ──────────────────────────── */}
+              <div className="space-y-2.5 pt-4 border-t border-slate-800">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Change User Limit</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Control how many people this company can have in the app.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch checked={unlimitedToggle} onCheckedChange={setUnlimitedToggle} className="data-[state=checked]:bg-violet-600" />
+                  <Label className="text-sm text-slate-300">Unlimited Users</Label>
+                </div>
+                {!unlimitedToggle && (
+                  <input value={seatInput} onChange={e => setSeatInput(e.target.value)} placeholder="e.g. 25"
+                    type="number" min={1}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500 transition-colors" />
+                )}
+                <Button onClick={() => setConfirmLimitChange(true)}
+                  disabled={billingPending === 'user-limit' || (!unlimitedToggle && !seatInput)}
+                  className="w-full h-10 bg-slate-700 hover:bg-slate-600 text-slate-200">
+                  Apply User Limit
                 </Button>
-                <Button size="sm" onClick={() => applyOverride('bypass_subscription', !d.adminBypassSubscription)}
-                  disabled={overrideMutation.isPending}
-                  className={d.adminBypassSubscription ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-amber-700 hover:bg-amber-600 text-white'}>
-                  {d.adminBypassSubscription ? 'Remove Subscription Skip' : 'Ignore Subscription Check'}
-                </Button>
-                <Button size="sm" onClick={() => applyOverride('plan_override', true)}
-                  disabled={overrideMutation.isPending || !planOverride}
-                  variant="outline" className="border-teal-700 text-teal-300 hover:bg-teal-950">
-                  Save Forced Plan
-                </Button>
-                <Button size="sm" onClick={() => applyOverride('seat_override', true)}
-                  disabled={overrideMutation.isPending}
-                  variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800">
-                  Save User Limit
-                </Button>
+                {confirmLimitChange && (
+                  <div className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3">
+                    <p className="text-sm text-slate-200 mb-3 font-medium">
+                      This will set the user limit to {unlimitedToggle ? 'unlimited' : seatInput}. Continue?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => { callBilling('user-limit', { limit: unlimitedToggle ? null : parseInt(seatInput), unlimited: unlimitedToggle, note: billingNote }, 'User Limit Updated'); setConfirmLimitChange(false); }}
+                        disabled={billingPending === 'user-limit'} className="bg-teal-600 hover:bg-teal-700 h-9">
+                        {billingPending === 'user-limit' ? 'Saving…' : 'Yes, Apply Limit'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmLimitChange(false)} className="border-slate-600 text-slate-400 h-9">Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── TRIAL ACCESS ───────────────────────────────── */}
+              <div className="space-y-2.5 pt-4 border-t border-slate-800">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trial Access</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Extend or update this company's trial period.{d.trialEndsAt ? ` Currently ends ${new Date(d.trialEndsAt).toLocaleDateString()}.` : ''}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={() => callBilling('trial', { days: 7, note: billingNote }, 'Trial Extended', 'Added 7 days to trial')}
+                    disabled={billingPending === 'trial'}
+                    variant="outline" className="flex-1 border-blue-800 text-blue-300 hover:bg-blue-950 h-10">
+                    {billingPending === 'trial' ? '…' : '+ 7 Days'}
+                  </Button>
+                  <Button onClick={() => callBilling('trial', { days: 30, note: billingNote }, 'Trial Extended', 'Added 30 days to trial')}
+                    disabled={billingPending === 'trial'}
+                    variant="outline" className="flex-1 border-blue-800 text-blue-300 hover:bg-blue-950 h-10">
+                    {billingPending === 'trial' ? '…' : '+ 30 Days'}
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <input type="date" value={trialCustomDate} onChange={e => setTrialCustomDate(e.target.value)}
+                    className="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors" />
+                  <Button onClick={() => { if (trialCustomDate) { callBilling('trial', { endDate: trialCustomDate, note: billingNote }, 'Trial Updated', `Trial end set to ${trialCustomDate}`); setTrialCustomDate(''); }}}
+                    disabled={!trialCustomDate || billingPending === 'trial'}
+                    variant="outline" className="border-blue-800 text-blue-300 hover:bg-blue-950 h-10 px-4 shrink-0">
+                    <Calendar className="w-4 h-4 mr-1.5" /> Set Date
+                  </Button>
+                </div>
+              </div>
+
+              {/* ── RETURN TO NORMAL ────────────────────────────── */}
+              <div className="pt-4 border-t border-slate-800">
+                {confirmRestore ? (
+                  <div className="rounded-xl border border-red-800/60 bg-red-950/30 px-4 py-3.5">
+                    <p className="text-sm text-red-200 font-medium mb-1">This will remove all manual billing changes and make this company follow normal billing rules again. Continue?</p>
+                    <p className="text-xs text-red-400 mb-3">Bypass, free access, forced plan, and custom seat limits will all be cleared.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => { callBilling('restore', { note: billingNote }, 'Billing Reset', 'All manual overrides removed'); setConfirmRestore(false); }}
+                        disabled={billingPending === 'restore'} className="bg-red-700 hover:bg-red-600 h-9">
+                        {billingPending === 'restore' ? 'Resetting…' : 'Yes, Return to Normal Billing'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmRestore(false)} className="border-slate-600 text-slate-400 h-9">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmRestore(true)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-red-900/60 bg-red-950/20 hover:bg-red-950/40 hover:border-red-800 active:scale-[0.99] transition-all text-left">
+                    <RotateCcw className="w-4 h-4 text-red-400 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-300">Return to Normal Billing</p>
+                      <p className="text-xs text-red-500/80 mt-0.5">Remove all manual overrides — company follows normal subscription rules</p>
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
-
-            <div className="pt-3 border-t border-slate-700">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Extend Trial Period</p>
-              <div className="flex items-center gap-2">
-                <input value={trialDays} onChange={e => setTrialDays(e.target.value)} placeholder="Days to add…"
-                  className="w-32 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500" />
-                <Button size="sm" onClick={() => overrideMutation.mutate({ companyId: company.id, type: 'trial_extend', days: parseInt(trialDays) || 0, reason })}
-                  disabled={overrideMutation.isPending || !trialDays}
-                  variant="outline" className="border-blue-700 text-blue-300 hover:bg-blue-950">
-                  <Calendar className="w-3.5 h-3.5 mr-1.5" /> Extend Trial
-                </Button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-700">
-              <Button size="sm" onClick={() => setConfirmRestore(true)} disabled={restoreMutation.isPending}
-                className="bg-red-900 hover:bg-red-800 text-red-200 border border-red-700">
-                <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Remove Manual Changes & Resume Normal Billing
-              </Button>
-              <p className="text-xs text-slate-600 mt-1.5">Removes all manual changes — company goes back to normal subscription rules.</p>
-            </div>
-          </div>
-        </DevCard>
-      )}
+          );
+        })()}
+      </DevCard>
 
       {/* ── People ────────────────────────────────────────────────────────── */}
       <DevCard title={`People · ${companyUsers.length} member${companyUsers.length !== 1 ? 's' : ''}`} icon={Users}>
@@ -786,14 +955,6 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
         onCancel={() => setConfirmPause(null)}
       />
 
-      <ConfirmTypedModal
-        open={confirmRestore}
-        title="Remove All Manual Billing Changes?"
-        description={`This will remove all manual billing changes for ${company.name}. They will go back to following normal subscription rules.`}
-        confirmWord="CONFIRM"
-        onConfirm={() => { setConfirmRestore(false); restoreMutation.mutate(); }}
-        onCancel={() => setConfirmRestore(false)}
-      />
 
       {showNoteEditor && (
         <AlertDialog open>

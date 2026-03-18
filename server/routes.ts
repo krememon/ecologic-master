@@ -19450,6 +19450,213 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
     });
 
+    // ── Billing routes by company code ──────────────────────────────────
+
+    // GET /api/dev/admin/company/by-code/:code/billing
+    app.get('/api/dev/admin/company/by-code/:code/billing', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const effectiveBilling = getEffectiveBillingAccess(company);
+        res.json({
+          ok: true, companyId: company.id, companyName: company.name,
+          subscriptionStatus: company.subscriptionStatus, subscriptionPlan: company.subscriptionPlan,
+          maxUsers: company.maxUsers, trialEndsAt: company.trialEndsAt, currentPeriodEnd: company.currentPeriodEnd,
+          hasStripeSubscription: !!(company as any).stripeSubscriptionId,
+          adminFreeAccess: company.adminFreeAccess, adminBypassSubscription: company.adminBypassSubscription,
+          adminPlanOverride: company.adminPlanOverride, adminSeatLimitOverride: company.adminSeatLimitOverride,
+          adminUnlimitedSeats: company.adminUnlimitedSeats, adminOverrideReason: company.adminOverrideReason,
+          adminOverrideExpiresAt: company.adminOverrideExpiresAt,
+          adminOverrideUpdatedByEmail: company.adminOverrideUpdatedByEmail,
+          adminOverrideUpdatedAt: company.adminOverrideUpdatedAt,
+          adminPaused: company.adminPaused,
+          effectiveBilling,
+        });
+      } catch (e: any) {
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/bypass
+    app.post('/api/dev/admin/company/by-code/:code/billing/bypass', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { value, note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { adminBypassSubscription: company.adminBypassSubscription };
+        await db.update(companies).set({
+          adminBypassSubscription: !!value,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: value ? 'billing_bypass_on' : 'billing_bypass_off',
+          beforeValue: before, afterValue: { adminBypassSubscription: !!value }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, adminBypassSubscription: updated.adminBypassSubscription, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/free-access
+    app.post('/api/dev/admin/company/by-code/:code/billing/free-access', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { value, note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { adminFreeAccess: company.adminFreeAccess };
+        await db.update(companies).set({
+          adminFreeAccess: !!value,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: value ? 'billing_free_access_on' : 'billing_free_access_off',
+          beforeValue: before, afterValue: { adminFreeAccess: !!value }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, adminFreeAccess: updated.adminFreeAccess, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/plan
+    app.post('/api/dev/admin/company/by-code/:code/billing/plan', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { plan, note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { adminPlanOverride: company.adminPlanOverride };
+        await db.update(companies).set({
+          adminPlanOverride: plan || null,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_plan_override_changed',
+          beforeValue: before, afterValue: { adminPlanOverride: plan || null }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, adminPlanOverride: updated.adminPlanOverride, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/user-limit
+    app.post('/api/dev/admin/company/by-code/:code/billing/user-limit', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { limit: limitVal, unlimited, note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { adminSeatLimitOverride: company.adminSeatLimitOverride, adminUnlimitedSeats: company.adminUnlimitedSeats };
+        await db.update(companies).set({
+          adminSeatLimitOverride: unlimited ? null : (limitVal ?? null),
+          adminUnlimitedSeats: !!unlimited,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_user_limit_changed',
+          beforeValue: before, afterValue: { adminSeatLimitOverride: limitVal, adminUnlimitedSeats: !!unlimited }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, adminSeatLimitOverride: updated.adminSeatLimitOverride, adminUnlimitedSeats: updated.adminUnlimitedSeats, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/trial
+    app.post('/api/dev/admin/company/by-code/:code/billing/trial', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { days, endDate, note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = { trialEndsAt: company.trialEndsAt };
+        let newTrialEnd: Date;
+        if (endDate) {
+          newTrialEnd = new Date(endDate);
+        } else {
+          const base = company.trialEndsAt && new Date(company.trialEndsAt) > new Date() ? new Date(company.trialEndsAt) : new Date();
+          base.setDate(base.getDate() + (parseInt(days) || 7));
+          newTrialEnd = base;
+        }
+        await db.update(companies).set({
+          trialEndsAt: newTrialEnd,
+          subscriptionStatus: 'trialing',
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+          adminOverrideReason: note || company.adminOverrideReason || null,
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_trial_extended',
+          beforeValue: before, afterValue: { trialEndsAt: newTrialEnd.toISOString() }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, trialEndsAt: updated.trialEndsAt, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
+    // POST /api/dev/admin/company/by-code/:code/billing/restore
+    app.post('/api/dev/admin/company/by-code/:code/billing/restore', isAuthenticated, requireDev, async (req: any, res) => {
+      try {
+        const code = (req.params.code as string).toUpperCase().trim();
+        const { note } = req.body;
+        const actorEmail = (req as any).user?.email || 'unknown';
+        const { eq } = await import('drizzle-orm');
+        const { getEffectiveBillingAccess } = await import('./billingResolver');
+        const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
+        if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+        const before = {
+          adminFreeAccess: company.adminFreeAccess, adminBypassSubscription: company.adminBypassSubscription,
+          adminPlanOverride: company.adminPlanOverride, adminSeatLimitOverride: company.adminSeatLimitOverride,
+          adminUnlimitedSeats: company.adminUnlimitedSeats,
+        };
+        await db.update(companies).set({
+          adminFreeAccess: false, adminBypassSubscription: false,
+          adminPlanOverride: null, adminSeatLimitOverride: null, adminUnlimitedSeats: false,
+          adminOverrideReason: null, adminOverrideExpiresAt: null,
+          adminOverrideUpdatedByEmail: actorEmail,
+          adminOverrideUpdatedAt: new Date(),
+        }).where(eq(companies.id, company.id));
+        await writeAdminAuditLog({
+          actorEmail, targetType: 'billing', targetId: String(company.id), targetName: company.name,
+          action: 'billing_restore_normal',
+          beforeValue: before, afterValue: { allManualOverridesCleared: true }, note,
+        });
+        const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
+        res.json({ ok: true, effectiveBilling: getEffectiveBillingAccess(updated) });
+      } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
+    });
+
     // GET /api/dev/admin/company/:companyId
     app.get('/api/dev/admin/company/:companyId', isAuthenticated, requireDev, async (req: any, res) => {
       try {

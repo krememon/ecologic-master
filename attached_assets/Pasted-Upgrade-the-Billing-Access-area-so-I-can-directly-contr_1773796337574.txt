@@ -1,0 +1,222 @@
+Upgrade the Billing Access area so I can directly control a company’s subscription from this screen, including a very obvious bypass button.
+
+GOAL
+I want the Billing Access section to become the main place where I can:
+- see the current subscription situation
+- change the company’s effective subscription/plan
+- bypass subscription enforcement
+- give free access if I want
+- remove manual changes later
+
+Right now I can mostly view billing state. I want stronger controls directly in this section.
+
+IMPORTANT
+- Dev-only only for my allowlisted account
+- Keep audit logs for every change
+- Require confirmation for risky actions
+- Use plain English labels so I understand exactly what each control does
+- Do not expose this to normal users
+
+WHAT TO ADD
+
+1) MAIN BILLING ACTION BUTTONS
+Inside the Billing Access Summary / Billing Access Controls area, add a clear action section with large obvious buttons.
+
+Add these buttons:
+
+A. Bypass Subscription
+Meaning:
+- ignore the normal subscription lock for this company
+- company can use the app even if Stripe is inactive
+Label:
+- Bypass Subscription Lock
+
+B. Give Free Access
+Meaning:
+- manually allow this company to use EcoLogic for free
+Label:
+- Give Free Access
+
+C. Remove Manual Billing Changes
+Meaning:
+- remove bypass/free/forced plan/manual seat changes
+- return company to normal billing rules
+Label:
+- Return to Normal Billing
+
+D. Refresh Billing Info
+Meaning:
+- recheck Stripe/trial/manual changes and refresh this panel
+Label:
+- Refresh Billing Info
+
+2) SUBSCRIPTION / PLAN CHANGER
+Add a very clear plan changer directly in this billing area.
+
+Section title:
+- Change Company Plan
+
+Controls:
+- dropdown for plan:
+  - starter
+  - team
+  - pro
+  - scale
+  - enterprise
+- save/apply button:
+  - Apply Plan Change
+
+Behavior:
+- this should set the company’s effective plan override for app access
+- make it very clear this is a manual internal plan change
+Helper text:
+- Choose what EcoLogic plan this company should use right now.
+
+3) USER LIMIT CONTROL
+Add a simple user limit control in this same area.
+
+Section title:
+- Change User Limit
+
+Controls:
+- number input for user limit
+- toggle for:
+  - Unlimited Users
+- save/apply button:
+  - Apply User Limit
+
+Helper text:
+- Control how many people this company can have in the app.
+
+4) TRIAL CONTROL
+Add a simple trial section.
+
+Section title:
+- Trial Access
+
+Controls:
+- button:
+  - Add 7 Days
+- button:
+  - Add 30 Days
+- optional custom date field if already easy
+- button:
+  - Set Trial End Date
+
+Helper text:
+- Extend or update this company’s trial period.
+
+5) CLEAR STATUS BOX
+At the top of the billing area, show a very simple summary in plain English:
+
+Examples:
+- This company is currently blocked because it does not have an active subscription.
+- This company currently has free access turned on manually.
+- This company is allowed in because subscription bypass is active.
+- This company is allowed in through its paid Stripe subscription.
+- This company is allowed in through an active trial.
+
+Make this the most understandable line in the section.
+
+6) VERY OBVIOUS BYPASS BUTTON
+The bypass button should be prominent and easy to understand.
+
+Requirements:
+- put it near the top of the billing controls
+- strong visual treatment
+- if bypass is already on, show:
+  - Subscription Lock Is Bypassed
+  and allow:
+  - Turn Off Bypass
+- if bypass is off, show:
+  - Bypass Subscription Lock
+
+7) FREE ACCESS BUTTON
+Do the same for free access.
+
+If off:
+- Give Free Access
+
+If on:
+- Free Access Is On
+- Turn Off Free Access
+
+8) CONFIRMATION MODALS
+Use simple wording:
+
+For bypass on:
+- This will let this company use EcoLogic even without an active subscription. Continue?
+
+For free access on:
+- This will give this company free access to EcoLogic until you turn it off. Continue?
+
+For return to normal:
+- This will remove all manual billing changes and make this company follow normal billing rules again. Continue?
+
+For plan change:
+- This will manually change the company’s current plan inside EcoLogic. Continue?
+
+9) AUDIT LOGGING
+For every action, record:
+- actor email
+- company id
+- company code
+- action type
+- before state
+- after state
+- note if provided
+- timestamp
+
+Actions to log:
+- bypass on/off
+- free access on/off
+- plan override changed
+- user limit changed
+- trial extended
+- restore normal billing
+
+10) BUTTON / LABEL COPY
+Use very plain language.
+
+Examples:
+- Billing Access
+- Why this company is allowed or blocked
+- Bypass Subscription Lock
+- Give Free Access
+- Return to Normal Billing
+- Change Company Plan
+- Change User Limit
+- Trial Access
+- Refresh Billing Info
+
+11) BACKEND
+Make sure these actions are supported cleanly by dev-only endpoints using company code:
+
+Examples:
+- POST /api/dev/admin/company/by-code/:code/billing/bypass
+- POST /api/dev/admin/company/by-code/:code/billing/free-access
+- POST /api/dev/admin/company/by-code/:code/billing/plan
+- POST /api/dev/admin/company/by-code/:code/billing/user-limit
+- POST /api/dev/admin/company/by-code/:code/billing/trial
+- POST /api/dev/admin/company/by-code/:code/billing/restore
+- POST /api/dev/admin/company/by-code/:code/billing/refresh
+
+Protect all with requireDev.
+
+12) UI/UX
+- keep the same dark admin style
+- make the controls feel clean and not cluttered
+- large enough tap targets on mobile
+- clear grouping
+- plain English helper text
+- clear success/error toasts
+
+13) DELIVERABLES
+- Billing area can directly change company plan
+- Billing area can directly change user limit
+- Billing area has a clear bypass button
+- Billing area has a clear free access button
+- Billing area can restore normal billing
+- Billing area can extend trial
+- Everything is audit logged
+- Everything is dev-only
