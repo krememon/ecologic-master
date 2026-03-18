@@ -19323,7 +19323,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       // "Free Access" in the UI = either adminFreeAccess OR adminBypassSubscription.
       // Both flags serve the same admin-override purpose and are always set/cleared together.
       const hasFreeAccess = !!(c.adminFreeAccess || c.adminBypassSubscription);
-      const hasActiveStripe =
+      const hasActivePaid =
         c.subscriptionStatus === 'active' &&
         !!(c.currentPeriodEnd && new Date(c.currentPeriodEnd) > now);
       const hasTrial =
@@ -19338,7 +19338,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       // 1. User-level bypass (subscriptionBypass on user record) — highest priority
       // 2. Company paused — blocks all access
       // 3. Company-level admin overrides (adminFreeAccess / adminBypassSubscription)
-      // 4. Stripe active subscription
+      // 4. Active paid subscription (Apple or Stripe — driven by subscriptionPlatform)
       // 5. Trial
       // 6. Blocked
 
@@ -19350,9 +19350,17 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         effectiveLabel = 'Paused by Admin';
         rawBillingState = 'All access blocked — company is suspended';
         allowed = false;
-      } else if (billing.source === 'override_free_access' || billing.source === 'override_bypass') {
+      } else if (billing.source === 'free_access') {
         effectiveLabel = 'Full Access (Free Access)';
         rawBillingState = 'Admin free access is ON — no paid subscription required';
+        allowed = true;
+      } else if (billing.source === 'apple') {
+        const plan = c.subscriptionPlan ?? 'Unknown';
+        const end = c.currentPeriodEnd
+          ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'unknown date';
+        effectiveLabel = 'Full Access (Apple Subscription)';
+        rawBillingState = `Active ${plan} subscription via Apple · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'stripe') {
         const plan = c.subscriptionPlan ?? 'Unknown';
@@ -19360,7 +19368,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'unknown date';
         effectiveLabel = 'Full Access (Paid Plan)';
-        rawBillingState = `Active ${plan} subscription · renews ${end}`;
+        rawBillingState = `Active ${plan} subscription via Stripe · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'trial') {
         const end = c.trialEndsAt
@@ -19374,8 +19382,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         allowed = false;
         const reasonMap: Record<string, string> = {
           company_paused: 'Company is suspended by admin',
-          stripe_subscription_expired: 'Paid subscription has expired',
-          stripe_active_no_period_end: 'Stripe active but renewal date is missing',
+          subscription_expired: 'Paid subscription has expired',
+          active_no_period_end: 'Subscription marked active but no renewal date on record',
           trial_expired: 'Free trial has ended',
           trialing_no_end_date: 'Trial active but no end date on record',
           no_active_subscription: 'No active paid subscription on file',
@@ -19392,10 +19400,11 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         source: hasUserBypass ? 'user_bypass' : billing.source,
         hasFreeAccess,
         hasUserBypass,
-        hasActiveStripe,
+        hasActivePaid,
         hasTrial,
         subscriptionStatus: c.subscriptionStatus,
         subscriptionPlan: c.subscriptionPlan,
+        subscriptionPlatform: c.subscriptionPlatform ?? null,
         isPaused: !!c.adminPaused,
         currentPeriodEnd: c.currentPeriodEnd,
         trialEndsAt: c.trialEndsAt,

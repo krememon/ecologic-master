@@ -1,6 +1,6 @@
 export interface BillingAccess {
   allowed: boolean;
-  source: 'override_free_access' | 'override_bypass' | 'stripe' | 'trial' | 'blocked';
+  source: 'free_access' | 'apple' | 'stripe' | 'trial' | 'blocked';
   effectivePlan: string | null;
   seatLimit: number;
   notes: string[];
@@ -25,11 +25,11 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
   const overrideExpired =
     company.adminOverrideExpiresAt && new Date(company.adminOverrideExpiresAt) < now;
 
-  // ── 1. Free access override ───────────────────────────────────────────────
-  if (company.adminFreeAccess && !overrideExpired) {
+  // ── 1. Free access override (adminFreeAccess OR adminBypassSubscription) ──
+  if ((company.adminFreeAccess || company.adminBypassSubscription) && !overrideExpired) {
     return {
       allowed: true,
-      source: 'override_free_access',
+      source: 'free_access',
       effectivePlan: company.adminPlanOverride || company.subscriptionPlan || 'pro',
       seatLimit: company.adminUnlimitedSeats
         ? 9999
@@ -39,29 +39,18 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
     };
   }
 
-  // ── 2. Bypass subscription gate override ──────────────────────────────────
-  if (company.adminBypassSubscription && !overrideExpired) {
-    return {
-      allowed: true,
-      source: 'override_bypass',
-      effectivePlan: company.adminPlanOverride || company.subscriptionPlan || null,
-      seatLimit: company.adminUnlimitedSeats
-        ? 9999
-        : company.adminSeatLimitOverride ?? company.maxUsers ?? 1,
-      notes: ['admin_bypass_subscription'],
-      blockReason: null,
-    };
-  }
-
-  // ── 3. Active Stripe subscription ────────────────────────────────────────
+  // ── 2. Active paid subscription (Apple or Stripe) ─────────────────────────
   //   Requires subscriptionStatus = 'active' AND a valid, future currentPeriodEnd.
   //   Missing currentPeriodEnd is treated as EXPIRED (not as "infinite").
+  //   Source label is driven by subscriptionPlatform — defaults to 'stripe' for
+  //   legacy records that pre-date the platform field.
   if (company.subscriptionStatus === 'active') {
     const periodEnd = company.currentPeriodEnd ? new Date(company.currentPeriodEnd) : null;
     if (periodEnd && periodEnd > now) {
+      const platform = (company.subscriptionPlatform as string | null | undefined);
       return {
         allowed: true,
-        source: 'stripe',
+        source: platform === 'apple' ? 'apple' : 'stripe',
         effectivePlan: company.subscriptionPlan || null,
         seatLimit: company.maxUsers || 1,
         notes: [],
@@ -75,11 +64,11 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
       effectivePlan: null,
       seatLimit: 0,
       notes: [],
-      blockReason: periodEnd ? 'stripe_subscription_expired' : 'stripe_active_no_period_end',
+      blockReason: periodEnd ? 'subscription_expired' : 'active_no_period_end',
     };
   }
 
-  // ── 4. Active trial ──────────────────────────────────────────────────────
+  // ── 3. Active trial ──────────────────────────────────────────────────────
   //   Requires subscriptionStatus = 'trialing' AND a valid, future trialEndsAt.
   //   Missing trialEndsAt is treated as EXPIRED.
   if (company.subscriptionStatus === 'trialing') {
@@ -104,7 +93,7 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
     };
   }
 
-  // ── 5. No valid billing → blocked ────────────────────────────────────────
+  // ── 4. No valid billing → blocked ────────────────────────────────────────
   return {
     allowed: false,
     source: 'blocked',

@@ -1,0 +1,59 @@
+We are going to do this in the safest order.
+
+START WITH PHASE 3 FIRST.
+
+GOAL
+Clean up the billing source-of-truth labels before we wire Apple IAP, so Dev Tools, logs, and gating can clearly distinguish:
+- free_access
+- apple
+- stripe
+- trial
+- blocked
+
+WHY THIS FIRST
+I want the billing/access system cleaned up before adding Apple purchase flow.
+That way, when Apple is wired in, the app and Dev Tools will clearly show whether access is coming from Apple or Stripe.
+
+TASK
+Update the billing source labeling in the backend resolver.
+
+FILE TO UPDATE
+- server/billingResolver.ts
+
+CHANGES
+Right now the resolver treats active subscriptions as source: 'stripe' by default.
+Change that so active paid access reads from company.subscriptionPlatform.
+
+RULES
+- If active subscription and subscriptionPlatform === 'apple' → source = 'apple'
+- If active subscription and subscriptionPlatform === 'stripe' → source = 'stripe'
+- If active subscription and platform is null/unknown, default safely to 'stripe' for legacy records
+- Free access override should return source = 'free_access'
+- Trial should return source = 'trial'
+- No access should return source = 'blocked'
+
+KEEP THE PRIORITY ORDER CORRECT
+The effective access order should stay:
+
+1. admin paused → blocked
+2. free access override → free_access
+3. active paid subscription → apple or stripe based on subscriptionPlatform
+4. trial → trial
+5. otherwise → blocked
+
+IMPORTANT
+- Do not change the real gating behavior yet
+- Only improve the source labeling and clarity
+- Do not break existing paid users
+- Keep backwards compatibility for old Stripe records with no platform set
+
+ALSO UPDATE
+Any response shaping / logs / billing snapshot code that currently expects the old labels should be updated so the final UI/logs remain plain English and accurate.
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. the final priority order used
+3. how legacy subscriptions with no platform are handled
+4. all possible final source values
+5. confirm that no purchase flow was changed yet

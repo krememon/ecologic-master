@@ -64,10 +64,11 @@ interface BillingSnapshot {
   source: string;
   hasFreeAccess: boolean;   // true if adminFreeAccess OR adminBypassSubscription
   hasUserBypass: boolean;   // true if any user at this company has subscriptionBypass=true
-  hasActiveStripe: boolean;
+  hasActivePaid: boolean;   // true if active paid subscription (Apple or Stripe) with valid period
   hasTrial: boolean;
   subscriptionStatus: string | null;
   subscriptionPlan: string | null;
+  subscriptionPlatform: string | null;  // 'apple' | 'stripe' | null (null = legacy Stripe record)
   isPaused: boolean;
   currentPeriodEnd: string | null;
   trialEndsAt: string | null;
@@ -554,8 +555,10 @@ export default function DevTools() {
                   />
                   <FactItem
                     label="Paid Plan"
-                    value={billing.hasActiveStripe ? `Active (${billing.subscriptionPlan ?? "plan"})` : "None"}
-                    positive={billing.hasActiveStripe}
+                    value={billing.hasActivePaid
+                      ? `Active (${billing.subscriptionPlan ?? "plan"}) · ${billing.subscriptionPlatform === 'apple' ? 'Apple' : 'Stripe'}`
+                      : "None"}
+                    positive={billing.hasActivePaid}
                   />
                   <FactItem
                     label="Trial"
@@ -628,7 +631,7 @@ export default function DevTools() {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isMutating || (!billing.hasActiveStripe && !billing.hasTrial)}
+                      disabled={isMutating || (!billing.hasActivePaid && !billing.hasTrial)}
                       onClick={() => runBillingAction("remove-paid-plan")}
                       className="disabled:opacity-40"
                     >
