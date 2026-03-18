@@ -9,9 +9,13 @@ import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
 import {
   isNativeIos,
+  isNativeAndroid,
   loadAppleProducts,
+  loadGooglePlayProducts,
   purchaseAppleSubscription,
+  purchaseGooglePlaySubscription,
   restoreApplePurchases,
+  restoreGooglePlayPurchases,
   type IapProduct,
 } from "@/lib/nativeIap";
 
@@ -23,38 +27,80 @@ export default function Paywall() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // Native iOS detection + product loading
+  // Platform detection
   const [nativeIos, setNativeIos] = useState(false);
+  const [nativeAndroid, setNativeAndroid] = useState(false);
+
+  // Store products
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
   const planKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
   const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
 
-  // Detect native iOS once on mount
+  // Detect platform once on mount
   useEffect(() => {
     const ios = isNativeIos();
+    const android = isNativeAndroid();
     setNativeIos(ios);
-    console.log("[paywall] nativeIos:", ios);
+    setNativeAndroid(android);
+    console.log("[paywall] platform — nativeIos:", ios, "nativeAndroid:", android);
   }, []);
 
-  // Load Apple products when on native iOS
+  // Load store products when on a native platform
   useEffect(() => {
-    if (!nativeIos) return;
+    if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
-    loadAppleProducts().then((loaded) => {
-      console.log("[paywall] Apple products loaded:", loaded.map(p => `${p.identifier}=${p.priceString}`).join(", "));
+
+    const loader = nativeIos ? loadAppleProducts() : loadGooglePlayProducts();
+    loader.then((loaded) => {
+      const store = nativeIos ? "Apple" : "Google Play";
+      console.log(
+        `[paywall] ${store} products loaded:`,
+        loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
+      );
       setProducts(loaded);
       setProductsLoading(false);
     });
-  }, [nativeIos]);
+  }, [nativeIos, nativeAndroid]);
 
-  // Apple product for this plan
+  // Store product for this plan
   const appleProductId = plan.appleProductId;
-  const appleProduct = products.find(p => p.identifier === appleProductId);
-  const applePrice = appleProduct?.priceString ?? `$${plan.price}`;
+  const googleProductId = plan.googlePlayProductId;
+  const storeProduct = nativeIos
+    ? products.find(p => p.identifier === appleProductId)
+    : products.find(p => p.identifier === googleProductId);
+  const storePrice = storeProduct?.priceString ?? `$${plan.price}`;
 
-  // ── Native iOS purchase flow ────────────────────────────────────────────────
+  // ── Helper: post to backend and refresh billing ─────────────────────────────
+  const finishNativePurchase = async (
+    platform: "apple" | "google_play",
+    payload: Record<string, string>,
+    logTag: string
+  ) => {
+    console.log(`[${logTag}] posting to backend — platform:`, platform);
+
+    const res = await apiRequest("POST", "/api/subscriptions/validate", {
+      platform,
+      ...payload,
+    });
+    const data = await res.json();
+    console.log(`[${logTag}] backend response:`, data);
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Subscription validation failed");
+    }
+
+    console.log(`[${logTag}] validation success — plan:`, data.planKey);
+
+    await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+
+    toast({ title: "Subscription active!", description: "Welcome back to EcoLogic." });
+    setLocation("/jobs", { replace: true });
+  };
+
+  // ── Apple purchase ──────────────────────────────────────────────────────────
   const handleApplePurchase = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -64,48 +110,20 @@ export default function Paywall() {
       let jws: string;
       try {
         jws = await purchaseAppleSubscription(appleProductId);
-        console.log("[paywall] JWS obtained, posting to backend...");
+        console.log("[paywall] Apple JWS obtained, length:", jws.length);
       } catch (err: any) {
         console.error("[paywall] Apple purchase failed:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
-
-      const res = await apiRequest("POST", "/api/subscriptions/validate", {
-        platform: "apple",
-        jwsTransaction: jws,
-      });
-
-      const data = await res.json();
-      console.log("[paywall] backend validation response:", data);
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Subscription validation failed");
-      }
-
-      console.log("[paywall] validation success — plan:", data.planKey);
-
-      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-
-      toast({
-        title: "Subscription active!",
-        description: "Welcome back to EcoLogic.",
-      });
-
-      setLocation("/jobs", { replace: true });
-
-    } catch (error: any) {
-      console.error("[paywall] Apple purchase error:", error.message);
+      await finishNativePurchase("apple", { jwsTransaction: jws }, "paywall/apple");
+    } catch (err: any) {
+      console.error("[paywall] Apple purchase error:", err.message);
       setIsLoading(false);
-      toast({
-        title: "Purchase failed",
-        description: error.message || "Could not complete the purchase. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Purchase failed", description: err.message || "Could not complete the purchase. Please try again.", variant: "destructive" });
     }
   };
 
-  // ── Native iOS restore flow ─────────────────────────────────────────────────
+  // ── Apple restore ───────────────────────────────────────────────────────────
   const handleAppleRestore = async () => {
     if (isRestoring) return;
     setIsRestoring(true);
@@ -113,54 +131,76 @@ export default function Paywall() {
 
     try {
       const jws = await restoreApplePurchases();
-      console.log("[paywall] restore JWS:", jws ? `obtained (${jws.length} chars)` : "null");
+      console.log("[paywall] Apple restore JWS:", jws ? `obtained (${jws.length} chars)` : "null");
 
       if (!jws) {
-        toast({
-          title: "Nothing to restore",
-          description: "No active EcoLogic subscription was found on this Apple ID.",
-          variant: "destructive",
-        });
+        toast({ title: "Nothing to restore", description: "No active EcoLogic subscription was found on this Apple ID.", variant: "destructive" });
         return;
       }
-
-      const res = await apiRequest("POST", "/api/subscriptions/validate", {
-        platform: "apple",
-        jwsTransaction: jws,
-      });
-
-      const data = await res.json();
-      console.log("[paywall] restore backend response:", data);
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Restore validation failed");
-      }
-
-      console.log("[paywall] restore success — plan:", data.planKey);
-
-      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-
-      toast({
-        title: "Subscription restored!",
-        description: "Your subscription has been restored successfully.",
-      });
-
-      setLocation("/jobs", { replace: true });
-
-    } catch (error: any) {
-      console.error("[paywall] restore error:", error.message);
-      toast({
-        title: "Restore failed",
-        description: error.message || "Could not restore purchases. Please try again.",
-        variant: "destructive",
-      });
+      await finishNativePurchase("apple", { jwsTransaction: jws }, "paywall/apple-restore");
+    } catch (err: any) {
+      console.error("[paywall] Apple restore error:", err.message);
+      toast({ title: "Restore failed", description: err.message || "Could not restore purchases. Please try again.", variant: "destructive" });
     } finally {
       setIsRestoring(false);
     }
   };
 
-  // ── Web flow — route to onboarding/subscription ─────────────────────────────
+  // ── Google Play purchase ────────────────────────────────────────────────────
+  const handleAndroidPurchase = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    console.log("[paywall] Google Play purchase started — productId:", googleProductId);
+
+    try {
+      let result;
+      try {
+        result = await purchaseGooglePlaySubscription(googleProductId);
+        console.log("[paywall] Google Play purchase succeeded — token length:", result.purchaseToken.length);
+      } catch (err: any) {
+        console.error("[paywall] Google Play purchase failed:", err.message);
+        throw new Error(err.message || "Purchase cancelled or failed");
+      }
+      await finishNativePurchase(
+        "google_play",
+        { purchaseToken: result.purchaseToken, productId: result.productId },
+        "paywall/google-play"
+      );
+    } catch (err: any) {
+      console.error("[paywall] Google Play purchase error:", err.message);
+      setIsLoading(false);
+      toast({ title: "Purchase failed", description: err.message || "Could not complete the purchase. Please try again.", variant: "destructive" });
+    }
+  };
+
+  // ── Google Play restore ─────────────────────────────────────────────────────
+  const handleAndroidRestore = async () => {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    console.log("[paywall] Google Play restore started");
+
+    try {
+      const result = await restoreGooglePlayPurchases();
+      console.log("[paywall] Google Play restore:", result ? `matched productId=${result.productId}` : "null");
+
+      if (!result) {
+        toast({ title: "Nothing to restore", description: "No active EcoLogic subscription was found on this Google account.", variant: "destructive" });
+        return;
+      }
+      await finishNativePurchase(
+        "google_play",
+        { purchaseToken: result.purchaseToken, productId: result.productId },
+        "paywall/google-play-restore"
+      );
+    } catch (err: any) {
+      console.error("[paywall] Google Play restore error:", err.message);
+      toast({ title: "Restore failed", description: err.message || "Could not restore purchases. Please try again.", variant: "destructive" });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // ── Web (route to onboarding/subscription — unchanged) ─────────────────────
   const handleWebSubscribe = () => {
     setLocation("/onboarding/subscription", { replace: true });
   };
@@ -171,14 +211,26 @@ export default function Paywall() {
       localStorage.removeItem("onboardingChoice");
       await queryClient.invalidateQueries();
       setLocation("/");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log out",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to log out", variant: "destructive" });
     }
   };
+
+  // ── Three-way platform dispatch ─────────────────────────────────────────────
+  const isNativeApp = nativeIos || nativeAndroid;
+  const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;
+
+  const handleSubscribe = nativeIos
+    ? handleApplePurchase
+    : nativeAndroid
+    ? handleAndroidPurchase
+    : handleWebSubscribe;
+
+  const handleRestore = nativeIos
+    ? handleAppleRestore
+    : nativeAndroid
+    ? handleAndroidRestore
+    : null;
 
   // Subscribe button label
   let subscribeBtnLabel: React.ReactNode;
@@ -189,8 +241,8 @@ export default function Paywall() {
         Processing...
       </>
     );
-  } else if (nativeIos) {
-    subscribeBtnLabel = productsLoading ? "Loading..." : `Subscribe · ${applePrice}/mo`;
+  } else if (isNativeApp) {
+    subscribeBtnLabel = productsLoading ? "Loading..." : `Subscribe · ${storePrice}/mo`;
   } else {
     subscribeBtnLabel = "Resubscribe Now";
   }
@@ -200,9 +252,7 @@ export default function Paywall() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
-              EcoLogic
-            </h1>
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">EcoLogic</h1>
             <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
           </div>
 
@@ -222,7 +272,7 @@ export default function Paywall() {
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">{plan.label}</h3>
                   <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                    {nativeIos ? `${applePrice}/mo` : `$${plan.price}/mo`}
+                    {storePrice}/mo
                   </p>
                 </div>
               </div>
@@ -238,32 +288,36 @@ export default function Paywall() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <Shield className="w-4 h-4 text-purple-500" />
-                  <span>{nativeIos ? "Billed securely via Apple" : "Secure and reliable"}</span>
+                  <span>
+                    {storeLabel ? `Billed securely via ${storeLabel}` : "Secure and reliable"}
+                  </span>
                 </div>
               </div>
             </div>
 
             <Button
               type="button"
-              onClick={nativeIos ? handleApplePurchase : handleWebSubscribe}
+              onClick={handleSubscribe}
               className="w-full"
-              disabled={isLoading || (nativeIos && productsLoading)}
+              disabled={isLoading || (isNativeApp && productsLoading)}
             >
               {subscribeBtnLabel}
             </Button>
 
-            {nativeIos && (
+            {isNativeApp && (
               <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
-                Manage anytime in App Store Settings
+                {nativeIos
+                  ? "Manage anytime in App Store Settings"
+                  : "Manage anytime in Google Play"}
               </p>
             )}
 
-            {/* Restore Purchases — shown on native iOS and also as a subtle option on web */}
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-              {nativeIos ? (
+            {/* Restore Purchases — only shown on native platforms */}
+            {handleRestore && (
+              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
                 <button
                   type="button"
-                  onClick={handleAppleRestore}
+                  onClick={handleRestore}
                   disabled={isRestoring || isLoading}
                   className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-2 disabled:opacity-50"
                 >
@@ -274,8 +328,8 @@ export default function Paywall() {
                   )}
                   {isRestoring ? "Restoring..." : "Restore Purchases"}
                 </button>
-              ) : null}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 text-center">

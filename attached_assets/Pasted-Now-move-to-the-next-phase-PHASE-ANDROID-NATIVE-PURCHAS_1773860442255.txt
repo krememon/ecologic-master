@@ -1,0 +1,84 @@
+Now move to the next phase:
+
+PHASE — ANDROID NATIVE PURCHASE FLOW
+
+GOAL
+Wire the native Android EcoLogic app so users can buy and restore their subscription through Google Play, and have the app unlock access immediately after backend validation.
+
+IMPORTANT
+- This step is Android native only
+- Do NOT break iPhone Apple flow
+- Do NOT break web Stripe flow
+- Use the Google Play backend validation already implemented
+- Keep the UI simple and easy to test
+- Do NOT use any fake dev-activate path for native Android purchases
+
+WHAT TO BUILD
+
+1. DETECT NATIVE ANDROID
+On the onboarding/paywall subscription flow, detect if the app is running in native Android mode.
+
+Behavior:
+- native Android → Google Play purchase flow
+- native iPhone → Apple flow stays as-is
+- web → current web behavior stays as-is
+
+2. LOAD GOOGLE PLAY PRODUCTS
+On the native Android subscription screen:
+- load the real Google Play subscription products
+- show real localized Google Play pricing if available
+- keep the UI clean and simple
+
+3. PURCHASE FLOW
+When the user taps subscribe:
+- start the Google Play purchase
+- receive the purchase token and product id
+- send them to POST /api/subscriptions/validate with:
+  {
+    "platform": "google_play",
+    "purchaseToken": "<...>",
+    "productId": "<...>"
+  }
+- refresh billing status after success
+- if access is now valid, route the user into the app immediately
+
+4. RESTORE PURCHASES
+Add native Android restore purchases support:
+- restore Google Play purchases/subscriptions
+- get the valid purchase token + product id
+- send them to backend validation
+- refresh billing gate
+- restore access if valid
+
+5. UI / UX
+Keep it easy to understand:
+- loading state while products load
+- disabled buttons while processing
+- clear success message
+- clear restore purchases button
+- clear error state if Google validation fails
+
+6. LOGGING
+Add targeted logs for:
+- Google Play products loaded
+- Google Play purchase started
+- Google Play purchase success/failure
+- payload posted to backend
+- backend validation success/failure
+- restore started/result
+- billing state refreshed after purchase/restore
+
+7. IMPORTANT
+- Do not break /api/subscriptions/status gating
+- Do not break native paywall routing
+- Do not break current iPhone flow
+- Keep this focused on native Android purchase/restore only
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what plugin/package was used for Android purchases
+3. how native Android is detected
+4. how purchase works step by step
+5. how restore works step by step
+6. how I should test it on an Android device

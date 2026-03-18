@@ -9,9 +9,13 @@ import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
 import {
   isNativeIos,
+  isNativeAndroid,
   loadAppleProducts,
+  loadGooglePlayProducts,
   purchaseAppleSubscription,
+  purchaseGooglePlaySubscription,
   restoreApplePurchases,
+  restoreGooglePlayPurchases,
   type IapProduct,
 } from "@/lib/nativeIap";
 
@@ -20,35 +24,45 @@ export default function OnboardingSubscription() {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
 
-  // Subscription action states
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // Native iOS detection + product loading
+  // Platform detection
   const [nativeIos, setNativeIos] = useState(false);
+  const [nativeAndroid, setNativeAndroid] = useState(false);
+
+  // Store products (Apple or Google Play depending on platform)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
   const planKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
   const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
 
-  // Detect native iOS once on mount
+  // Detect platform once on mount
   useEffect(() => {
     const ios = isNativeIos();
+    const android = isNativeAndroid();
     setNativeIos(ios);
-    console.log("[onboarding-sub] nativeIos:", ios);
+    setNativeAndroid(android);
+    console.log("[onboarding-sub] platform — nativeIos:", ios, "nativeAndroid:", android);
   }, []);
 
-  // Load Apple products when on native iOS
+  // Load store products when on a native platform
   useEffect(() => {
-    if (!nativeIos) return;
+    if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
-    loadAppleProducts().then((loaded) => {
-      console.log("[onboarding-sub] Apple products loaded:", loaded.map(p => `${p.identifier}=${p.priceString}`).join(", "));
+
+    const loader = nativeIos ? loadAppleProducts() : loadGooglePlayProducts();
+    loader.then((loaded) => {
+      const store = nativeIos ? "Apple" : "Google Play";
+      console.log(
+        `[onboarding-sub] ${store} products loaded:`,
+        loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
+      );
       setProducts(loaded);
       setProductsLoading(false);
     });
-  }, [nativeIos]);
+  }, [nativeIos, nativeAndroid]);
 
   if (authLoading) {
     return (
@@ -68,129 +82,144 @@ export default function OnboardingSubscription() {
     return null;
   }
 
-  // Find the Apple product for this plan (may be undefined if products haven't loaded yet)
+  // Find the store product for this plan
   const appleProductId = plan.appleProductId;
-  const appleProduct = products.find(p => p.identifier === appleProductId);
-  const applePrice = appleProduct?.priceString ?? `$${plan.price}`;
+  const googleProductId = plan.googlePlayProductId;
+  const storeProduct = nativeIos
+    ? products.find(p => p.identifier === appleProductId)
+    : products.find(p => p.identifier === googleProductId);
+  const storePrice = storeProduct?.priceString ?? `$${plan.price}`;
 
-  // ── Native iOS purchase flow ────────────────────────────────────────────────
+  // ── Helper: post JWS or purchaseToken to backend and enter the app ──────────
+  const finishNativePurchase = async (
+    platform: "apple" | "google_play",
+    payload: Record<string, string>,
+    logTag: string
+  ) => {
+    console.log(`[${logTag}] posting to backend — platform:`, platform, "payload keys:", Object.keys(payload).join(", "));
+
+    const res = await apiRequest("POST", "/api/subscriptions/validate", {
+      platform,
+      ...payload,
+    });
+    const data = await res.json();
+    console.log(`[${logTag}] backend response:`, data);
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message || "Subscription validation failed");
+    }
+
+    console.log(`[${logTag}] validation success — plan:`, data.planKey);
+
+    localStorage.removeItem("onboardingChoice");
+    localStorage.removeItem("onboardingIndustry");
+    await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+
+    toast({ title: "Subscription active!", description: "Welcome to EcoLogic. You're all set." });
+    setLocation("/jobs", { replace: true });
+  };
+
+  // ── Apple purchase ──────────────────────────────────────────────────────────
   const handleApplePurchase = async () => {
     if (isLoading) return;
     setIsLoading(true);
     console.log("[onboarding-sub] Apple purchase started — productId:", appleProductId);
 
     try {
-      // 1. Trigger native StoreKit 2 purchase sheet
       let jws: string;
       try {
         jws = await purchaseAppleSubscription(appleProductId);
-        console.log("[onboarding-sub] JWS obtained, posting to backend...");
       } catch (err: any) {
         console.error("[onboarding-sub] Apple purchase failed:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
-
-      // 2. Validate the JWS on the backend
-      const res = await apiRequest("POST", "/api/subscriptions/validate", {
-        platform: "apple",
-        jwsTransaction: jws,
-      });
-
-      const data = await res.json();
-      console.log("[onboarding-sub] Backend validation response:", data);
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Subscription validation failed");
-      }
-
-      console.log("[onboarding-sub] Backend validation success — plan:", data.planKey);
-
-      // 3. Refresh billing and auth state
-      localStorage.removeItem("onboardingChoice");
-      localStorage.removeItem("onboardingIndustry");
-      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-
-      toast({
-        title: "Subscription active!",
-        description: "Welcome to EcoLogic. You're all set.",
-      });
-
-      // 4. Route into the app
-      setLocation("/jobs", { replace: true });
-
-    } catch (error: any) {
-      console.error("[onboarding-sub] Apple purchase error:", error.message);
+      await finishNativePurchase("apple", { jwsTransaction: jws }, "onboarding-sub/apple");
+    } catch (err: any) {
+      console.error("[onboarding-sub] Apple purchase error:", err.message);
       setIsLoading(false);
-      toast({
-        title: "Purchase failed",
-        description: error.message || "Could not complete the purchase. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Purchase failed", description: err.message || "Could not complete the purchase. Please try again.", variant: "destructive" });
     }
   };
 
-  // ── Native iOS restore flow ─────────────────────────────────────────────────
+  // ── Apple restore ───────────────────────────────────────────────────────────
   const handleAppleRestore = async () => {
     if (isRestoring) return;
     setIsRestoring(true);
     console.log("[onboarding-sub] Apple restore started");
 
     try {
-      // 1. Ask StoreKit 2 for current entitlements
       const jws = await restoreApplePurchases();
-      console.log("[onboarding-sub] restore JWS:", jws ? `obtained (${jws.length} chars)` : "null (nothing to restore)");
+      console.log("[onboarding-sub] Apple restore JWS:", jws ? `obtained (${jws.length} chars)` : "null");
 
       if (!jws) {
-        toast({
-          title: "Nothing to restore",
-          description: "No active EcoLogic subscription was found on this Apple ID.",
-          variant: "destructive",
-        });
+        toast({ title: "Nothing to restore", description: "No active EcoLogic subscription was found on this Apple ID.", variant: "destructive" });
         return;
       }
-
-      // 2. Validate the restored JWS on the backend
-      const res = await apiRequest("POST", "/api/subscriptions/validate", {
-        platform: "apple",
-        jwsTransaction: jws,
-      });
-
-      const data = await res.json();
-      console.log("[onboarding-sub] restore backend response:", data);
-
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Restore validation failed");
-      }
-
-      console.log("[onboarding-sub] restore success — plan:", data.planKey);
-
-      // 3. Refresh billing and auth state
-      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-
-      toast({
-        title: "Subscription restored!",
-        description: "Your subscription has been restored successfully.",
-      });
-
-      localStorage.removeItem("onboardingChoice");
-      localStorage.removeItem("onboardingIndustry");
-      setLocation("/jobs", { replace: true });
-
-    } catch (error: any) {
-      console.error("[onboarding-sub] restore error:", error.message);
-      toast({
-        title: "Restore failed",
-        description: error.message || "Could not restore purchases. Please try again.",
-        variant: "destructive",
-      });
+      await finishNativePurchase("apple", { jwsTransaction: jws }, "onboarding-sub/apple-restore");
+    } catch (err: any) {
+      console.error("[onboarding-sub] Apple restore error:", err.message);
+      toast({ title: "Restore failed", description: err.message || "Could not restore purchases. Please try again.", variant: "destructive" });
     } finally {
       setIsRestoring(false);
     }
   };
 
-  // ── Web / non-iOS trial activation ─────────────────────────────────────────
+  // ── Google Play purchase ────────────────────────────────────────────────────
+  const handleAndroidPurchase = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    console.log("[onboarding-sub] Google Play purchase started — productId:", googleProductId);
+
+    try {
+      let result;
+      try {
+        result = await purchaseGooglePlaySubscription(googleProductId);
+        console.log("[onboarding-sub] Google Play purchase succeeded — token length:", result.purchaseToken.length);
+      } catch (err: any) {
+        console.error("[onboarding-sub] Google Play purchase failed:", err.message);
+        throw new Error(err.message || "Purchase cancelled or failed");
+      }
+      await finishNativePurchase(
+        "google_play",
+        { purchaseToken: result.purchaseToken, productId: result.productId },
+        "onboarding-sub/google-play"
+      );
+    } catch (err: any) {
+      console.error("[onboarding-sub] Google Play purchase error:", err.message);
+      setIsLoading(false);
+      toast({ title: "Purchase failed", description: err.message || "Could not complete the purchase. Please try again.", variant: "destructive" });
+    }
+  };
+
+  // ── Google Play restore ─────────────────────────────────────────────────────
+  const handleAndroidRestore = async () => {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    console.log("[onboarding-sub] Google Play restore started");
+
+    try {
+      const result = await restoreGooglePlayPurchases();
+      console.log("[onboarding-sub] Google Play restore:", result ? `matched productId=${result.productId}` : "null");
+
+      if (!result) {
+        toast({ title: "Nothing to restore", description: "No active EcoLogic subscription was found on this Google account.", variant: "destructive" });
+        return;
+      }
+      await finishNativePurchase(
+        "google_play",
+        { purchaseToken: result.purchaseToken, productId: result.productId },
+        "onboarding-sub/google-play-restore"
+      );
+    } catch (err: any) {
+      console.error("[onboarding-sub] Google Play restore error:", err.message);
+      toast({ title: "Restore failed", description: err.message || "Could not restore purchases. Please try again.", variant: "destructive" });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // ── Web trial activation (unchanged) ───────────────────────────────────────
   const handleStartTrial = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -200,7 +229,6 @@ export default function OnboardingSubscription() {
         const data = await res.json();
         throw new Error(data.message || "Failed to start subscription");
       }
-
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
       await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
@@ -208,15 +236,11 @@ export default function OnboardingSubscription() {
       setLocation("/jobs", { replace: true });
     } catch (error: any) {
       setIsLoading(false);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start trial. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to start trial. Please try again.", variant: "destructive" });
     }
   };
 
-  // ── Web restore stub ────────────────────────────────────────────────────────
+  // ── Web restore stub (unchanged) ────────────────────────────────────────────
   const handleWebRestore = async () => {
     if (isRestoring) return;
     setIsRestoring(true);
@@ -233,26 +257,30 @@ export default function OnboardingSubscription() {
         localStorage.removeItem("onboardingIndustry");
         setLocation("/jobs", { replace: true });
       } else {
-        toast({
-          title: "No active subscription",
-          description: "We couldn't find an active subscription for your account.",
-          variant: "destructive",
-        });
+        toast({ title: "No active subscription", description: "We couldn't find an active subscription for your account.", variant: "destructive" });
       }
     } catch (error: any) {
-      toast({
-        title: "Restore failed",
-        description: error.message || "Could not restore purchases. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Restore failed", description: error.message || "Could not restore purchases. Please try again.", variant: "destructive" });
     } finally {
       setIsRestoring(false);
     }
   };
 
-  // Route handlers based on platform
-  const handleSubscribe = nativeIos ? handleApplePurchase : handleStartTrial;
-  const handleRestore = nativeIos ? handleAppleRestore : handleWebRestore;
+  // ── Three-way platform dispatch ─────────────────────────────────────────────
+  const handleSubscribe = nativeIos
+    ? handleApplePurchase
+    : nativeAndroid
+    ? handleAndroidPurchase
+    : handleStartTrial;
+
+  const handleRestore = nativeIos
+    ? handleAppleRestore
+    : nativeAndroid
+    ? handleAndroidRestore
+    : handleWebRestore;
+
+  const isNativeApp = nativeIos || nativeAndroid;
+  const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;
 
   // Subscribe button label
   let subscribeBtnLabel: React.ReactNode;
@@ -260,13 +288,13 @@ export default function OnboardingSubscription() {
     subscribeBtnLabel = (
       <>
         <Loader2 className="w-4 h-4 animate-spin mr-2" />
-        {nativeIos ? "Processing..." : "Starting..."}
+        {isNativeApp ? "Processing..." : "Starting..."}
       </>
     );
-  } else if (nativeIos) {
+  } else if (isNativeApp) {
     subscribeBtnLabel = productsLoading
       ? "Loading..."
-      : `Subscribe · ${applePrice}/mo`;
+      : `Subscribe · ${storePrice}/mo`;
   } else {
     subscribeBtnLabel = "Start 7-Day Free Trial";
   }
@@ -277,12 +305,8 @@ export default function OnboardingSubscription() {
       localStorage.removeItem("onboardingChoice");
       await queryClient.invalidateQueries();
       setLocation("/");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log out",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to log out", variant: "destructive" });
     }
   };
 
@@ -291,22 +315,15 @@ export default function OnboardingSubscription() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
-              EcoLogic
-            </h1>
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">EcoLogic</h1>
             <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
           </div>
 
           <div className="mb-6">
             <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-600 transition-all duration-300"
-                style={{ width: "100%" }}
-              />
+              <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: "100%" }} />
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
-              Step 2 of 2
-            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">Step 2 of 2</p>
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
@@ -315,9 +332,7 @@ export default function OnboardingSubscription() {
                 <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
               <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Your plan is ready</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {user.company.name} is all set up
-              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{user.company.name} is all set up</p>
             </div>
 
             <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 mb-6">
@@ -325,15 +340,13 @@ export default function OnboardingSubscription() {
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">{plan.label}</h3>
                   <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                    {nativeIos
-                      ? `${applePrice}/mo`
+                    {isNativeApp
+                      ? `${storePrice}/mo`
                       : `7-day free trial, then $${plan.price}/mo`}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-slate-800 dark:text-white">
-                    {applePrice}
-                  </p>
+                  <p className="text-2xl font-bold text-slate-800 dark:text-white">{storePrice}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
                 </div>
               </div>
@@ -349,7 +362,11 @@ export default function OnboardingSubscription() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <Shield className="w-4 h-4 text-purple-500" />
-                  <span>{nativeIos ? "Billed securely via Apple" : "7-day free trial"}</span>
+                  <span>
+                    {storeLabel
+                      ? `Billed securely via ${storeLabel}`
+                      : "7-day free trial"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -358,7 +375,7 @@ export default function OnboardingSubscription() {
               type="button"
               onClick={handleSubscribe}
               className="w-full"
-              disabled={isLoading || (nativeIos && productsLoading)}
+              disabled={isLoading || (isNativeApp && productsLoading)}
             >
               {subscribeBtnLabel}
             </Button>
@@ -366,6 +383,8 @@ export default function OnboardingSubscription() {
             <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
               {nativeIos
                 ? "Manage anytime in App Store Settings"
+                : nativeAndroid
+                ? "Manage anytime in Google Play"
                 : "Cancel anytime in App Store / Google Play"}
             </p>
 
