@@ -1,0 +1,151 @@
+We are now moving to STEP 3 of the Dev Tools rebuild.
+
+IMPORTANT
+This step is the first REAL admin-action step.
+Keep it clean, simple, and understandable.
+Do not add extra complexity.
+Do not bring back the old messy dev tools structure.
+
+CURRENT STATE
+- Company search is working
+- Company overview is showing
+- Users are showing
+- Transactions section is showing only real completed/refunded payment records
+- Jobs and invoice clutter are gone
+
+GOAL
+Build the first real admin controls for BILLING / ACCESS inside Dev Tools so I can easily control whether a company can use the app.
+
+I need this to be very easy to understand in plain English.
+
+WHAT I NEED
+Add a clean “Billing Controls” card for the selected company.
+
+This card should let me do these actions:
+1. Grant Free Access
+2. Remove Free Access
+3. Show Paywall
+4. Remove Paid Plan
+5. Refresh Status
+
+VERY IMPORTANT
+The UI must clearly tell me what is happening.
+I do NOT want confusing technical labels.
+I want plain-English status.
+
+BACKEND LOGIC
+Create or reuse one clear source of truth for effective company access.
+
+I want the system to determine the company’s REAL current access based on things like:
+- free access / dev bypass
+- paid subscription status
+- trial access if applicable
+- paywall state
+
+The Dev Tools page should show BOTH:
+1. Effective Access (main plain-English status)
+2. Raw Billing State (smaller secondary text)
+
+Example:
+- Effective Access: Full Access (Free Access)
+- Raw Billing State: No active paid subscription
+
+Or:
+- Effective Access: Full Access (Paid Plan)
+- Raw Billing State: Active subscription
+
+Or:
+- Effective Access: Paywall Active
+- Raw Billing State: No paid plan and no free access
+
+PLAIN-ENGLISH STATUS LABELS
+Use clear labels like:
+- Full Access (Free Access)
+- Full Access (Paid Plan)
+- Trial Access
+- Paywall Active
+- Access Removed
+
+FRONTEND — BILLING CONTROLS CARD
+In the selected company detail area, add a Billing Controls card that shows:
+
+- Effective Access
+- Raw Billing State
+- Free Access: On / Off
+- Paid Plan: Active / Inactive
+- Trial: Active / Inactive if available
+- Paywall: Showing / Hidden
+
+BUTTONS
+Add these buttons:
+- Grant Free Access
+- Remove Free Access
+- Show Paywall
+- Remove Paid Plan
+- Refresh Status
+
+BUTTON BEHAVIOR
+- Disable buttons while request is running
+- Refetch after every action
+- Show a success toast after success
+- Show a clear error toast/message after failure
+
+SMART BUTTON LOGIC
+Make the buttons make sense for the current company state:
+- If Free Access is already ON, disable or hide “Grant Free Access”
+- If Free Access is OFF, disable or hide “Remove Free Access”
+- If company is already paywalled, disable “Show Paywall”
+- If there is no paid plan, disable “Remove Paid Plan”
+- Always refresh the company state after actions
+
+ACTION MEANING
+These actions should mean:
+
+1. Grant Free Access
+- Company can use the app even without a paid subscription
+
+2. Remove Free Access
+- Removes that override
+- If they do not have paid/trial access, they should hit the paywall
+
+3. Show Paywall
+- Immediately make them hit the paywall unless Free Access is still ON
+- This should reflect real gating, not just UI text
+
+4. Remove Paid Plan
+- Removes active paid subscription access from the company
+- If Free Access is OFF after that, they should hit the paywall
+
+5. Refresh Status
+- Re-fetches the latest company access/billing state
+
+IMPORTANT ACCESS RULES
+- Free Access ON should allow full app access no matter what the paid billing state says
+- Free Access OFF + no paid/trial access should mean paywall
+- Removing paid plan should actually affect access if no Free Access remains
+- Do not let the Dev Tools UI show misleading status
+- The page must reflect the same real logic the app uses
+
+BACKEND REQUIREMENTS
+Add clean mutation endpoints only for these billing/access actions.
+Do NOT bring back the old huge /api/dev block.
+Keep the backend organized and minimal.
+
+For each action:
+- validate dev/admin access
+- perform the update safely
+- log the action
+- return the updated effective access snapshot
+
+CLEANUP REQUIREMENT
+Rename anything confusing so it is easy for me to understand.
+Use “Free Access” instead of technical jargon where appropriate.
+
+DELIVERABLES
+When finished, tell me:
+1. exact files changed
+2. exact endpoints added/changed
+3. the final effective access logic used
+4. what each button now does
+5. whether “Remove Paid Plan” truly causes paywall when Free Access is off
+6. any assumptions made about the billing schema

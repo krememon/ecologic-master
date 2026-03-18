@@ -11,7 +11,8 @@ import {
   Search, Building2, Users, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle, ChevronRight, DollarSign, RotateCcw
+  AlertTriangle, ChevronRight, DollarSign, RotateCcw,
+  CheckCircle2, XCircle, Zap
 } from "lucide-react";
 
 const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
@@ -54,6 +55,25 @@ interface TransactionData {
   createdAt: string | null;
 }
 
+interface BillingSnapshot {
+  companyId: number;
+  companyCode: string | null;
+  effectiveLabel: string;
+  rawBillingState: string;
+  allowed: boolean;
+  source: string;
+  hasFreeAccess: boolean;
+  hasBypass: boolean;
+  hasDevBypass: boolean;
+  hasActiveStripe: boolean;
+  hasTrial: boolean;
+  subscriptionStatus: string | null;
+  subscriptionPlan: string | null;
+  isPaused: boolean;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function centsToDisplay(cents: number) {
@@ -85,7 +105,7 @@ function SubscriptionBadge({ status }: { status: string | null }) {
   if (status === "active") return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Active</Badge>;
   if (status === "trialing") return <Badge variant="outline">Trial</Badge>;
   if (status === "past_due") return <Badge variant="destructive">Past Due</Badge>;
-  if (status === "canceled" || status === "cancelled") return <Badge variant="destructive">Cancelled</Badge>;
+  if (status === "canceled" || status === "cancelled" || status === "inactive") return <Badge variant="destructive">Cancelled</Badge>;
   return <Badge variant="secondary">{status}</Badge>;
 }
 
@@ -104,6 +124,47 @@ function BoolBadge({ value, trueLabel, falseLabel, trueVariant = "default", fals
   falseVariant?: "default" | "destructive" | "outline" | "secondary";
 }) {
   return <Badge variant={value ? trueVariant : falseVariant}>{value ? trueLabel : falseLabel}</Badge>;
+}
+
+function EffectiveAccessBadge({ label }: { label: string }) {
+  if (label.startsWith("Full Access")) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300">
+        <CheckCircle2 className="h-4 w-4" />
+        {label}
+      </span>
+    );
+  }
+  if (label === "Trial Access") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+        <Zap className="h-4 w-4" />
+        {label}
+      </span>
+    );
+  }
+  if (label === "Paywall Active" || label === "Access Removed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
+        <XCircle className="h-4 w-4" />
+        {label}
+      </span>
+    );
+  }
+  if (label === "Paused by Admin") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        <Ban className="h-4 w-4" />
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+      <AlertTriangle className="h-4 w-4" />
+      {label}
+    </span>
+  );
 }
 
 // ── Layout helpers ────────────────────────────────────────────────────────
@@ -133,20 +194,15 @@ function InfoRow({ icon: Icon, label, value }: {
   );
 }
 
-function AdminAction({ icon: Icon, label, description, onClick, className = "" }: {
-  icon: React.ElementType;
-  label: string;
-  description: string;
-  onClick: () => void;
-  className?: string;
-}) {
+function FactItem({ label, value, positive }: { label: string; value: string; positive?: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
-      <Button variant="outline" size="sm" onClick={onClick} className={`w-fit ${className}`}>
-        <Icon className="h-3.5 w-3.5 mr-1.5" />
-        {label}
-      </Button>
-      <p className="text-xs text-slate-400 dark:text-slate-500 pl-1">{description}</p>
+    <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+      <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`text-sm font-medium ${
+        positive === true ? "text-green-600 dark:text-green-400" :
+        positive === false ? "text-slate-400 dark:text-slate-500" :
+        "text-slate-700 dark:text-slate-300"
+      }`}>{value}</span>
     </div>
   );
 }
@@ -167,19 +223,37 @@ export default function DevTools() {
   const [company, setCompany] = useState<CompanyBasic | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
   const [transactions, setTransactions] = useState<TransactionData[]>([]);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
+  const [isBillingLoading, setIsBillingLoading] = useState(false);
+  const [isBillingMutating, setIsBillingMutating] = useState<string | null>(null);
 
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;
   }
 
-  const placeholderAction = (label: string) => {
-    toast({ title: "Coming soon", description: `"${label}" will be wired in the next step.` });
-  };
-
   const clearDetail = () => {
     setCompany(null);
     setUsers([]);
     setTransactions([]);
+    setBilling(null);
+  };
+
+  const loadBilling = async (id: number) => {
+    setIsBillingLoading(true);
+    try {
+      const res = await fetch(`/api/admin/company/${id}/billing`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.ok) {
+        setBilling(data.billing);
+      } else {
+        toast({ title: "Billing load failed", description: data.error, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Error loading billing", description: e.message, variant: "destructive" });
+    } finally {
+      setIsBillingLoading(false);
+    }
   };
 
   const loadDetail = async (id: number) => {
@@ -194,6 +268,7 @@ export default function DevTools() {
         setUsers(data.users ?? []);
         setTransactions(data.transactions ?? []);
         setSearchResults([]);
+        await loadBilling(id);
       } else {
         toast({ title: "Failed to load detail", description: data.error, variant: "destructive" });
       }
@@ -201,6 +276,41 @@ export default function DevTools() {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setIsLoadingDetail(false);
+    }
+  };
+
+  const runBillingAction = async (action: string) => {
+    if (!company) return;
+    setIsBillingMutating(action);
+    try {
+      const res = await fetch(`/api/admin/company/${company.id}/billing/${action}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      setBilling(data.billing);
+      // Also refresh company overview flags
+      setCompany(prev => prev ? {
+        ...prev,
+        adminFreeAccess: data.billing.hasFreeAccess,
+        adminBypassSubscription: data.billing.hasBypass,
+        subscriptionStatus: data.billing.subscriptionStatus,
+        subscriptionPlan: data.billing.subscriptionPlan,
+      } : prev);
+
+      const actionLabels: Record<string, string> = {
+        "grant-bypass": "Free access granted",
+        "remove-bypass": "Free access removed",
+        "remove-paid-plan": "Paid plan removed",
+        "force-paywall": "Paywall enabled",
+      };
+      toast({
+        title: actionLabels[action] ?? "Done",
+        description: `Effective access is now: ${data.billing.effectiveLabel}`,
+      });
+    } catch (e: any) {
+      toast({ title: "Action failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIsBillingMutating(null);
     }
   };
 
@@ -242,10 +352,11 @@ export default function DevTools() {
   const showNoResults = hasSearched && !isSearching && !isLoadingDetail && !company && searchResults.length === 0;
   const showPicker = searchResults.length > 1 && !company;
 
-  // Total revenue across fetched transactions (paid only, excluding fully refunded)
   const totalRevenueCents = transactions
     .filter(t => t.status === "paid")
     .reduce((sum, t) => sum + Math.max(0, t.amountCents - (t.refundedAmountCents ?? 0)), 0);
+
+  const isMutating = isBillingMutating !== null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
@@ -391,9 +502,6 @@ export default function DevTools() {
               <InfoRow icon={RefreshCw} label="Free Access" value={
                 <BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />
               } />
-              <InfoRow icon={ShieldOff} label="Subscription Bypass" value={
-                <BoolBadge value={company.adminBypassSubscription} trueLabel="Bypassed" falseLabel="Off" trueVariant="outline" />
-              } />
               {company.createdAt && (
                 <InfoRow icon={Calendar} label="Created" value={formatDate(company.createdAt)} />
               )}
@@ -402,56 +510,204 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── ADMIN ACTIONS ────────────────────────────────────── */}
+      {/* ── BILLING CONTROLS ──────────────────────────────────── */}
+      {company && !isLoadingDetail && (
+        <Card className="border-blue-200 dark:border-blue-900">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-blue-500" />
+              Billing Controls
+            </CardTitle>
+            <CardDescription>Control this company's access and subscription state</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+
+            {/* Effective access status */}
+            {isBillingLoading && !billing ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading billing status…
+              </div>
+            ) : billing ? (
+              <>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Effective Access</p>
+                  <EffectiveAccessBadge label={billing.effectiveLabel} />
+                  <p className="text-xs text-slate-400 dark:text-slate-500 pl-0.5 mt-1">{billing.rawBillingState}</p>
+                </div>
+
+                <Separator />
+
+                {/* Quick facts */}
+                <div className="space-y-0.5">
+                  <FactItem
+                    label="Free Access"
+                    value={billing.hasFreeAccess ? "On" : "Off"}
+                    positive={billing.hasFreeAccess}
+                  />
+                  <FactItem
+                    label="Paid Plan"
+                    value={billing.hasActiveStripe ? `Active (${billing.subscriptionPlan ?? "plan"})` : "None"}
+                    positive={billing.hasActiveStripe}
+                  />
+                  <FactItem
+                    label="Trial"
+                    value={billing.hasTrial ? "Active" : "None"}
+                    positive={billing.hasTrial ? true : undefined}
+                  />
+                  <FactItem
+                    label="Paywall"
+                    value={billing.allowed ? "Hidden" : "Showing"}
+                    positive={billing.allowed ? undefined : false}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Action buttons */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Actions</p>
+                  <div className="flex flex-wrap gap-2">
+
+                    {/* Grant Free Access */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isMutating || billing.hasFreeAccess}
+                      onClick={() => runBillingAction("grant-bypass")}
+                      className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950 disabled:opacity-40"
+                    >
+                      {isBillingMutating === "grant-bypass" ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Grant Free Access
+                    </Button>
+
+                    {/* Remove Free Access */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isMutating || !billing.hasFreeAccess}
+                      onClick={() => runBillingAction("remove-bypass")}
+                      className="disabled:opacity-40"
+                    >
+                      {isBillingMutating === "remove-bypass" ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Remove Free Access
+                    </Button>
+
+                    {/* Show Paywall (force-paywall) */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isMutating || (!billing.allowed && !billing.hasFreeAccess)}
+                      onClick={() => runBillingAction("force-paywall")}
+                      className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 disabled:opacity-40"
+                    >
+                      {isBillingMutating === "force-paywall" ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Show Paywall
+                    </Button>
+
+                    {/* Remove Paid Plan */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isMutating || (!billing.hasActiveStripe && !billing.hasTrial)}
+                      onClick={() => runBillingAction("remove-paid-plan")}
+                      className="disabled:opacity-40"
+                    >
+                      {isBillingMutating === "remove-paid-plan" ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Remove Paid Plan
+                    </Button>
+
+                    {/* Refresh */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isMutating || isBillingLoading}
+                      onClick={() => loadBilling(company.id)}
+                      className="text-slate-500 dark:text-slate-400"
+                    >
+                      {isBillingLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Refresh Status
+                    </Button>
+
+                  </div>
+
+                  {/* Contextual hint */}
+                  {billing.hasFreeAccess && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">
+                      Free Access is ON — this company has full access regardless of their paid plan status.
+                    </p>
+                  )}
+                  {!billing.allowed && !billing.hasFreeAccess && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pt-1">
+                      This company is currently hitting the paywall. Grant Free Access or restore a subscription to let them in.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Could not load billing status.{" "}
+                <button onClick={() => loadBilling(company.id)} className="underline text-slate-500 hover:text-slate-700">Retry</button>
+              </div>
+            )}
+
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── ADMIN ACTIONS (Company Status only) ──────────────── */}
       {company && !isLoadingDetail && (
         <Card className="border-amber-200 dark:border-amber-900">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Admin Actions
+              Company Status
             </CardTitle>
-            <CardDescription>Actions will be wired in the next step — previewing labels only.</CardDescription>
+            <CardDescription>Suspend or restore this company's users — coming in next step.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Access Controls</p>
-              <AdminAction
-                icon={RefreshCw}
-                label="Grant Free Access"
-                description="Lets this company use the full app without a paid subscription."
-                onClick={() => placeholderAction("Grant Free Access")}
-              />
-              <AdminAction
-                icon={ShieldOff}
-                label="Show Paywall"
-                description="Removes free access so this company sees the billing screen."
-                onClick={() => placeholderAction("Show Paywall")}
-              />
-              <AdminAction
-                icon={CreditCard}
-                label="Remove Paid Plan"
-                description="Cancels and clears the active subscription from this company."
-                onClick={() => placeholderAction("Remove Paid Plan")}
-              />
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="border-red-300 text-red-600 dark:border-red-800 dark:text-red-400 opacity-50 cursor-not-allowed"
+              >
+                <Ban className="h-3.5 w-3.5 mr-1.5" />
+                Pause Company
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="border-green-300 text-green-700 dark:border-green-800 dark:text-green-400 opacity-50 cursor-not-allowed"
+              >
+                <Unlock className="h-3.5 w-3.5 mr-1.5" />
+                Unpause Company
+              </Button>
             </div>
-            <Separator />
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Company Status</p>
-              <AdminAction
-                icon={Ban}
-                label="Pause Company"
-                description="Blocks all users at this company from logging in."
-                onClick={() => placeholderAction("Pause Company")}
-                className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-              />
-              <AdminAction
-                icon={Unlock}
-                label="Unpause Company"
-                description="Restores normal access for this company's users."
-                onClick={() => placeholderAction("Unpause Company")}
-                className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"
-              />
-            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500">These controls will be wired in the next step.</p>
           </CardContent>
         </Card>
       )}
@@ -532,7 +788,6 @@ export default function DevTools() {
                     <div key={t.id} className="px-6 py-3.5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          {/* Amount + method */}
                           <div className="flex items-center gap-2">
                             <span className={`text-base font-semibold ${isRefunded ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
                               {centsToDisplay(t.amountCents)}
@@ -543,7 +798,6 @@ export default function DevTools() {
                               </span>
                             )}
                           </div>
-                          {/* Customer + invoice + date */}
                           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                             {[
                               t.customerName,
@@ -552,7 +806,6 @@ export default function DevTools() {
                             ].filter(Boolean).join(" · ")}
                           </p>
                         </div>
-                        {/* Right side: method badge + status */}
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           {isRefunded ? (
                             <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">

@@ -19281,6 +19281,154 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         res.status(500).json({ ok: false, error: e.message });
       }
     });
+
+    // ── ADMIN BILLING CONTROLS ────────────────────────────────────────────
+    // Single source of truth: wraps getEffectiveBillingAccess → plain-English snapshot
+
+    const buildBillingSnapshot = async (companyId: number) => {
+      const { companies } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { getEffectiveBillingAccess } = await import('./billingResolver');
+
+      const rows = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+      if (!rows.length) return null;
+      const c = rows[0];
+      const billing = getEffectiveBillingAccess(c);
+      const now = new Date();
+
+      const hasFreeAccess = !!c.adminFreeAccess;
+      const hasBypass = !!c.adminBypassSubscription;
+      const hasActiveStripe =
+        c.subscriptionStatus === 'active' &&
+        !!(c.currentPeriodEnd && new Date(c.currentPeriodEnd) > now);
+      const hasTrial =
+        c.subscriptionStatus === 'trialing' &&
+        !!(c.trialEndsAt && new Date(c.trialEndsAt) > now);
+
+      let effectiveLabel: string;
+      let rawBillingState: string;
+
+      if (c.adminPaused) {
+        effectiveLabel = 'Paused by Admin';
+        rawBillingState = 'All access blocked — company is suspended';
+      } else if (billing.source === 'override_free_access') {
+        effectiveLabel = 'Full Access (Free Access)';
+        rawBillingState = 'Free access is ON — no paid subscription required';
+      } else if (billing.source === 'override_bypass') {
+        effectiveLabel = 'Full Access (Subscription Bypass)';
+        rawBillingState = 'Subscription gate bypassed by admin';
+      } else if (billing.source === 'stripe') {
+        const plan = c.subscriptionPlan ?? 'Unknown';
+        const end = c.currentPeriodEnd
+          ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'unknown date';
+        effectiveLabel = 'Full Access (Paid Plan)';
+        rawBillingState = `Active ${plan} subscription · renews ${end}`;
+      } else if (billing.source === 'trial') {
+        const end = c.trialEndsAt
+          ? new Date(c.trialEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : 'unknown date';
+        effectiveLabel = 'Trial Access';
+        rawBillingState = `Free trial active · ends ${end}`;
+      } else {
+        effectiveLabel = 'Paywall Active';
+        const reasonMap: Record<string, string> = {
+          company_paused: 'Company is suspended by admin',
+          stripe_subscription_expired: 'Paid subscription has expired',
+          stripe_active_no_period_end: 'Stripe active but renewal date is missing',
+          trial_expired: 'Free trial has ended',
+          trialing_no_end_date: 'Trial active but no end date on record',
+          no_active_subscription: 'No active paid subscription on file',
+        };
+        rawBillingState = reasonMap[billing.blockReason ?? ''] ?? `No valid access (${billing.blockReason ?? 'unknown'})`;
+      }
+
+      return {
+        companyId: c.id,
+        companyCode: c.companyCode,
+        effectiveLabel,
+        rawBillingState,
+        allowed: billing.allowed,
+        source: billing.source,
+        hasFreeAccess,
+        hasBypass,
+        hasDevBypass: hasFreeAccess || hasBypass,
+        hasActiveStripe,
+        hasTrial,
+        subscriptionStatus: c.subscriptionStatus,
+        subscriptionPlan: c.subscriptionPlan,
+        isPaused: !!c.adminPaused,
+        currentPeriodEnd: c.currentPeriodEnd,
+        trialEndsAt: c.trialEndsAt,
+      };
+    };
+
+    // GET /api/admin/company/:id/billing — current effective access snapshot
+    app.get('/api/admin/company/:id/billing', isAuthenticated, requireDev, async (req: any, res) => {
+      const companyId = parseInt(req.params.id);
+      if (!companyId || isNaN(companyId)) return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+      try {
+        const snapshot = await buildBillingSnapshot(companyId);
+        if (!snapshot) return res.status(404).json({ ok: false, error: 'Company not found' });
+        res.json({ ok: true, billing: snapshot });
+      } catch (e: any) {
+        console.error('[admin-billing] get error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // POST /api/admin/company/:id/billing/:action — mutation endpoint
+    // Actions: grant-bypass | remove-bypass | remove-paid-plan | force-paywall
+    app.post('/api/admin/company/:id/billing/:action', isAuthenticated, requireDev, async (req: any, res) => {
+      const companyId = parseInt(req.params.id);
+      const action = req.params.action as string;
+      if (!companyId || isNaN(companyId)) return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+
+      const validActions = ['grant-bypass', 'remove-bypass', 'remove-paid-plan', 'force-paywall'];
+      if (!validActions.includes(action)) {
+        return res.status(400).json({ ok: false, error: `Unknown billing action: ${action}` });
+      }
+
+      try {
+        const { companies } = await import('@shared/schema');
+        const { eq } = await import('drizzle-orm');
+
+        let updates: Record<string, any> = {};
+
+        if (action === 'grant-bypass') {
+          // Grant free access — company can use the app with no paid subscription
+          updates = { adminFreeAccess: true, adminBypassSubscription: true };
+        } else if (action === 'remove-bypass') {
+          // Remove free access override — falls back to real subscription state
+          updates = { adminFreeAccess: false, adminBypassSubscription: false };
+        } else if (action === 'remove-paid-plan') {
+          // Clear paid subscription fields — does NOT touch bypass flags
+          // If bypass is OFF after this, company hits paywall; if ON, they keep access
+          updates = { subscriptionStatus: 'inactive', subscriptionPlan: null, currentPeriodEnd: null };
+        } else if (action === 'force-paywall') {
+          // Nuclear: remove bypass AND subscription — guarantees paywall
+          updates = {
+            adminFreeAccess: false,
+            adminBypassSubscription: false,
+            subscriptionStatus: 'inactive',
+            subscriptionPlan: null,
+            currentPeriodEnd: null,
+          };
+        }
+
+        await db.update(companies).set(updates).where(eq(companies.id, companyId));
+
+        const actingEmail = req.user?.email || req.user?.claims?.email || 'unknown';
+        const snapshot = await buildBillingSnapshot(companyId);
+        console.log(`[admin-billing] action=${action} companyId=${companyId} result="${snapshot?.effectiveLabel}" by=${actingEmail}`);
+
+        res.json({ ok: true, action, billing: snapshot });
+      } catch (e: any) {
+        console.error('[admin-billing] mutation error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
   }
   // ─────────────────────────────────────────────────────────────────────────
 
