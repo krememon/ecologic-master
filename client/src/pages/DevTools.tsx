@@ -11,7 +11,7 @@ import {
   Search, Building2, Users, Briefcase, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle, ChevronRight, LayoutGrid
+  AlertTriangle
 } from "lucide-react";
 
 const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
@@ -155,7 +155,7 @@ export default function DevTools() {
   };
 
   const searchModes: { key: SearchMode; label: string }[] = [
-    { key: "code", label: "Invite Code" },
+    { key: "code", label: "Company ID" },
     { key: "email", label: "Owner Email" },
     { key: "name", label: "Company Name" },
   ];
@@ -191,7 +191,7 @@ export default function DevTools() {
             <Search className="h-4 w-4 text-slate-500" />
             Find Company
           </CardTitle>
-          <CardDescription>Look up any company by invite code, owner email, or name</CardDescription>
+          <CardDescription>Look up any company by company ID, owner email, or name</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Search mode tabs */}
@@ -218,7 +218,7 @@ export default function DevTools() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder={
-                searchMode === "code" ? "e.g. YKUUC7" :
+                searchMode === "code" ? "Enter company ID..." :
                 searchMode === "email" ? "owner@company.com" :
                 "Company name..."
               }
@@ -241,7 +241,7 @@ export default function DevTools() {
       </Card>
 
       {/* ── COMPANY OVERVIEW ────────────────────────────────────── */}
-      {(company || (!hasSearched)) && (
+      {company && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -250,15 +250,8 @@ export default function DevTools() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!company ? (
-              <PlaceholderState
-                icon={Building2}
-                title="No company selected"
-                description="Use the search above to look up a company and see its details here."
-              />
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InfoRow icon={Building2} label="Name" value={company.name} />
                   <InfoRow icon={Hash} label="Invite Code" value={<span className="font-mono font-semibold">{company.code}</span>} />
                   <InfoRow icon={Mail} label="Owner Email" value={company.ownerEmail} />
@@ -272,7 +265,6 @@ export default function DevTools() {
                   )}
                 </div>
               </div>
-            )}
           </CardContent>
         </Card>
       )}
@@ -456,20 +448,6 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── NO COMPANY — WELCOME PLACEHOLDER ────────────────────── */}
-      {!hasSearched && (
-        <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
-          <div className="rounded-full bg-slate-100 dark:bg-slate-800 p-5">
-            <LayoutGrid className="h-9 w-9 text-slate-400" />
-          </div>
-          <div className="space-y-1.5">
-            <p className="font-medium text-slate-700 dark:text-slate-300">Search for a company to get started</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 max-w-sm">
-              Once you find a company, you'll see its billing status, users, jobs, and admin controls.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
