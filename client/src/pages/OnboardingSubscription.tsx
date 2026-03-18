@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -7,16 +7,48 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import {
+  isNativeIos,
+  loadAppleProducts,
+  purchaseAppleSubscription,
+  restoreApplePurchases,
+  type IapProduct,
+} from "@/lib/nativeIap";
 
 export default function OnboardingSubscription() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
+
+  // Subscription action states
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // Native iOS detection + product loading
+  const [nativeIos, setNativeIos] = useState(false);
+  const [products, setProducts] = useState<IapProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+
   const planKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
   const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
+
+  // Detect native iOS once on mount
+  useEffect(() => {
+    const ios = isNativeIos();
+    setNativeIos(ios);
+    console.log("[onboarding-sub] nativeIos:", ios);
+  }, []);
+
+  // Load Apple products when on native iOS
+  useEffect(() => {
+    if (!nativeIos) return;
+    setProductsLoading(true);
+    loadAppleProducts().then((loaded) => {
+      console.log("[onboarding-sub] Apple products loaded:", loaded.map(p => `${p.identifier}=${p.priceString}`).join(", "));
+      setProducts(loaded);
+      setProductsLoading(false);
+    });
+  }, [nativeIos]);
 
   if (authLoading) {
     return (
@@ -36,14 +68,134 @@ export default function OnboardingSubscription() {
     return null;
   }
 
+  // Find the Apple product for this plan (may be undefined if products haven't loaded yet)
+  const appleProductId = plan.appleProductId;
+  const appleProduct = products.find(p => p.identifier === appleProductId);
+  const applePrice = appleProduct?.priceString ?? `$${plan.price}`;
+
+  // ── Native iOS purchase flow ────────────────────────────────────────────────
+  const handleApplePurchase = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    console.log("[onboarding-sub] Apple purchase started — productId:", appleProductId);
+
+    try {
+      // 1. Trigger native StoreKit 2 purchase sheet
+      let jws: string;
+      try {
+        jws = await purchaseAppleSubscription(appleProductId);
+        console.log("[onboarding-sub] JWS obtained, posting to backend...");
+      } catch (err: any) {
+        console.error("[onboarding-sub] Apple purchase failed:", err.message);
+        throw new Error(err.message || "Purchase cancelled or failed");
+      }
+
+      // 2. Validate the JWS on the backend
+      const res = await apiRequest("POST", "/api/subscriptions/validate", {
+        platform: "apple",
+        jwsTransaction: jws,
+      });
+
+      const data = await res.json();
+      console.log("[onboarding-sub] Backend validation response:", data);
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Subscription validation failed");
+      }
+
+      console.log("[onboarding-sub] Backend validation success — plan:", data.planKey);
+
+      // 3. Refresh billing and auth state
+      localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
+      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+
+      toast({
+        title: "Subscription active!",
+        description: "Welcome to EcoLogic. You're all set.",
+      });
+
+      // 4. Route into the app
+      setLocation("/jobs", { replace: true });
+
+    } catch (error: any) {
+      console.error("[onboarding-sub] Apple purchase error:", error.message);
+      setIsLoading(false);
+      toast({
+        title: "Purchase failed",
+        description: error.message || "Could not complete the purchase. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ── Native iOS restore flow ─────────────────────────────────────────────────
+  const handleAppleRestore = async () => {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    console.log("[onboarding-sub] Apple restore started");
+
+    try {
+      // 1. Ask StoreKit 2 for current entitlements
+      const jws = await restoreApplePurchases();
+      console.log("[onboarding-sub] restore JWS:", jws ? `obtained (${jws.length} chars)` : "null (nothing to restore)");
+
+      if (!jws) {
+        toast({
+          title: "Nothing to restore",
+          description: "No active EcoLogic subscription was found on this Apple ID.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2. Validate the restored JWS on the backend
+      const res = await apiRequest("POST", "/api/subscriptions/validate", {
+        platform: "apple",
+        jwsTransaction: jws,
+      });
+
+      const data = await res.json();
+      console.log("[onboarding-sub] restore backend response:", data);
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Restore validation failed");
+      }
+
+      console.log("[onboarding-sub] restore success — plan:", data.planKey);
+
+      // 3. Refresh billing and auth state
+      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+
+      toast({
+        title: "Subscription restored!",
+        description: "Your subscription has been restored successfully.",
+      });
+
+      localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
+      setLocation("/jobs", { replace: true });
+
+    } catch (error: any) {
+      console.error("[onboarding-sub] restore error:", error.message);
+      toast({
+        title: "Restore failed",
+        description: error.message || "Could not restore purchases. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // ── Web / non-iOS trial activation ─────────────────────────────────────────
   const handleStartTrial = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      // TODO: Replace with Apple/Google in-app purchase flow for mobile builds.
-      // For now, call dev-activate to set subscription active with 7-day period.
       const res = await apiRequest("POST", "/api/subscriptions/dev-activate", {});
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "Failed to start subscription");
@@ -51,7 +203,6 @@ export default function OnboardingSubscription() {
 
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
-
       await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
       setLocation("/jobs", { replace: true });
@@ -65,19 +216,16 @@ export default function OnboardingSubscription() {
     }
   };
 
-  const handleRestorePurchases = async () => {
+  // ── Web restore stub ────────────────────────────────────────────────────────
+  const handleWebRestore = async () => {
     if (isRestoring) return;
     setIsRestoring(true);
     try {
-      // TODO: For mobile, call react-native-iap restore and then POST receipt to /api/subscriptions/validate
-      console.log("[subscription] Restoring purchases (stub)...");
       const res = await apiRequest("POST", "/api/subscriptions/restore", {});
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "No active subscription found");
       }
-
       const data = await res.json();
       if (data.active) {
         await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
@@ -101,6 +249,27 @@ export default function OnboardingSubscription() {
       setIsRestoring(false);
     }
   };
+
+  // Route handlers based on platform
+  const handleSubscribe = nativeIos ? handleApplePurchase : handleStartTrial;
+  const handleRestore = nativeIos ? handleAppleRestore : handleWebRestore;
+
+  // Subscribe button label
+  let subscribeBtnLabel: React.ReactNode;
+  if (isLoading) {
+    subscribeBtnLabel = (
+      <>
+        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        {nativeIos ? "Processing..." : "Starting..."}
+      </>
+    );
+  } else if (nativeIos) {
+    subscribeBtnLabel = productsLoading
+      ? "Loading..."
+      : `Subscribe · ${applePrice}/mo`;
+  } else {
+    subscribeBtnLabel = "Start 7-Day Free Trial";
+  }
 
   const handleLogout = async () => {
     try {
@@ -155,10 +324,16 @@ export default function OnboardingSubscription() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">{plan.label}</h3>
-                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">7-day free trial, then ${plan.price}/mo</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                    {nativeIos
+                      ? `${applePrice}/mo`
+                      : `7-day free trial, then $${plan.price}/mo`}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-slate-800 dark:text-white">${plan.price}</p>
+                  <p className="text-2xl font-bold text-slate-800 dark:text-white">
+                    {applePrice}
+                  </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
                 </div>
               </div>
@@ -174,44 +349,39 @@ export default function OnboardingSubscription() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <Shield className="w-4 h-4 text-purple-500" />
-                  <span>7-day free trial</span>
+                  <span>{nativeIos ? "Billed securely via Apple" : "7-day free trial"}</span>
                 </div>
               </div>
             </div>
 
             <Button
               type="button"
-              onClick={handleStartTrial}
+              onClick={handleSubscribe}
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || (nativeIos && productsLoading)}
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Starting...
-                </>
-              ) : (
-                "Start 7-Day Free Trial"
-              )}
+              {subscribeBtnLabel}
             </Button>
 
             <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
-              Cancel anytime in App Store / Google Play
+              {nativeIos
+                ? "Manage anytime in App Store Settings"
+                : "Cancel anytime in App Store / Google Play"}
             </p>
 
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
               <button
                 type="button"
-                onClick={handleRestorePurchases}
-                disabled={isRestoring}
-                className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-2"
+                onClick={handleRestore}
+                disabled={isRestoring || isLoading}
+                className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-2 disabled:opacity-50"
               >
                 {isRestoring ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <RotateCcw className="w-4 h-4" />
                 )}
-                Restore Purchases
+                {isRestoring ? "Restoring..." : "Restore Purchases"}
               </button>
             </div>
           </div>

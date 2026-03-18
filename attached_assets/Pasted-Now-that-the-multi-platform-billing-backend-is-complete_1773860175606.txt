@@ -1,0 +1,82 @@
+Now that the multi-platform billing backend is complete, I want to move to the next step:
+
+PHASE — iPHONE NATIVE PURCHASE FLOW
+
+GOAL
+Wire the native iPhone EcoLogic app so users can actually buy and restore their subscription through Apple, and have the app unlock access immediately after backend validation.
+
+IMPORTANT
+- This step is iPhone native only
+- Do NOT break web Stripe flow
+- Do NOT break Android work
+- Use the Apple backend validation already implemented
+- Keep the UI simple and easy to test
+- Do NOT use any fake dev-activate path for native iPhone purchases
+
+WHAT TO BUILD
+
+1. DETECT NATIVE IOS
+On the onboarding/paywall subscription flow, detect if the app is running in native iPhone mode.
+
+Behavior:
+- native iPhone → Apple IAP flow
+- anything else → leave current behavior unchanged for now
+
+2. LOAD APPLE PRODUCTS
+On the native iPhone subscription screen:
+- load the real Apple subscription products
+- show real localized Apple pricing if available
+- keep the UI clean and simple
+
+3. PURCHASE FLOW
+When the user taps subscribe:
+- start the Apple IAP purchase
+- receive the StoreKit 2 JWS transaction
+- send it to POST /api/subscriptions/validate with:
+  {
+    "platform": "apple",
+    "jwsTransaction": "<...>"
+  }
+- refresh billing status after success
+- if access is now valid, route the user into the app immediately
+
+4. RESTORE PURCHASES
+Add native iPhone restore purchases support:
+- restore Apple entitlements/purchases
+- get the valid JWS transaction
+- send it to backend validation
+- refresh billing gate
+- restore access if valid
+
+5. UI / UX
+Keep it easy to understand:
+- loading state while products load
+- disabled buttons while processing
+- clear success message
+- clear restore purchases button
+- clear error state if Apple validation fails
+
+6. LOGGING
+Add targeted logs for:
+- Apple products loaded
+- Apple purchase started
+- Apple purchase success/failure
+- JWS posted to backend
+- backend validation success/failure
+- restore started/result
+- billing state refreshed after purchase/restore
+
+7. IMPORTANT
+- Do not break /api/subscriptions/status gating
+- Do not break native paywall routing
+- Do not break current web flow
+- Keep this focused on native iPhone purchase/restore only
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what plugin/package was used
+3. how native iPhone is detected
+4. how purchase works step by step
+5. how restore works step by step
+6. how I should test it on my iPhone
