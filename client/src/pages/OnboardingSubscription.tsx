@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, CheckCircle, LogOut, RotateCcw, Shield } from "lucide-react";
+import { Loader2, Users, CheckCircle, LogOut, RotateCcw, Shield, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
@@ -19,6 +19,8 @@ import {
   type IapProduct,
 } from "@/lib/nativeIap";
 
+const PLAN_ORDER: PlanKey[] = ["starter", "team", "pro", "scale"];
+
 export default function OnboardingSubscription() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -31,12 +33,38 @@ export default function OnboardingSubscription() {
   const [nativeIos, setNativeIos] = useState(false);
   const [nativeAndroid, setNativeAndroid] = useState(false);
 
-  // Store products (Apple or Google Play depending on platform)
+  // Store products (all 4 plans loaded at once)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  const planKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
-  const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
+  // Selected plan — native only; web always uses company plan
+  const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>("starter");
+
+  // Company plan (web path)
+  const companyPlanKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
+  const companyPlan = subscriptionPlans[companyPlanKey] || subscriptionPlans.starter;
+
+  const isNativeApp = nativeIos || nativeAndroid;
+  const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;
+
+  // Which plan to display — native uses selectedPlanKey, web uses company plan
+  const displayPlan = isNativeApp
+    ? subscriptionPlans[selectedPlanKey] || subscriptionPlans.starter
+    : companyPlan;
+
+  // Product IDs for the currently selected plan
+  const appleProductId = displayPlan.appleProductId;
+  const googleProductId = displayPlan.googlePlayProductId;
+
+  // Find the store product for the selected plan
+  const storeProduct = nativeIos
+    ? products.find(p => p.identifier === appleProductId)
+    : products.find(p => p.identifier === googleProductId);
+
+  const storePrice = storeProduct?.priceString ?? `$${displayPlan.price}`;
+
+  // If products finished loading but the selected plan isn't available in the store
+  const planUnavailable = isNativeApp && !productsLoading && products.length > 0 && !storeProduct;
 
   // Detect platform once on mount
   useEffect(() => {
@@ -82,15 +110,7 @@ export default function OnboardingSubscription() {
     return null;
   }
 
-  // Find the store product for this plan
-  const appleProductId = plan.appleProductId;
-  const googleProductId = plan.googlePlayProductId;
-  const storeProduct = nativeIos
-    ? products.find(p => p.identifier === appleProductId)
-    : products.find(p => p.identifier === googleProductId);
-  const storePrice = storeProduct?.priceString ?? `$${plan.price}`;
-
-  // ── Helper: post JWS or purchaseToken to backend and enter the app ──────────
+  // ── Helper: post JWS or purchaseToken to backend ────────────────────────────
   const finishNativePurchase = async (
     platform: "apple" | "google_play",
     payload: Record<string, string>,
@@ -279,9 +299,6 @@ export default function OnboardingSubscription() {
     ? handleAndroidRestore
     : handleWebRestore;
 
-  const isNativeApp = nativeIos || nativeAndroid;
-  const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;
-
   // Subscribe button label
   let subscribeBtnLabel: React.ReactNode;
   if (isLoading) {
@@ -294,6 +311,8 @@ export default function OnboardingSubscription() {
   } else if (isNativeApp) {
     subscribeBtnLabel = productsLoading
       ? "Loading..."
+      : planUnavailable
+      ? "Not Available"
       : `Subscribe · ${storePrice}/mo`;
   } else {
     subscribeBtnLabel = "Start 7-Day Free Trial";
@@ -335,33 +354,80 @@ export default function OnboardingSubscription() {
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{user.company.name} is all set up</p>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 mb-6">
+            {/* ── Plan selector — native only ─────────────────────────────── */}
+            {isNativeApp && (
+              <div className="mb-4">
+                <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 text-center">
+                  Choose your plan
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  {PLAN_ORDER.map((key) => {
+                    const p = subscriptionPlans[key];
+                    const isSelected = key === selectedPlanKey;
+                    const prod = nativeIos
+                      ? products.find(x => x.identifier === p.appleProductId)
+                      : products.find(x => x.identifier === p.googlePlayProductId);
+                    const priceStr = prod?.priceString ?? `$${p.price}`;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedPlanKey(key)}
+                        disabled={isLoading || isRestoring}
+                        className={`flex-shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl border-2 transition-all text-left disabled:opacity-60 ${
+                          isSelected
+                            ? "border-blue-600 bg-blue-600 text-white shadow-md"
+                            : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-300 dark:hover:border-blue-600"
+                        }`}
+                      >
+                        <span className="text-sm font-semibold leading-none">{p.label}</span>
+                        <span className={`text-xs mt-1 leading-none ${isSelected ? "text-blue-100" : "text-slate-400 dark:text-slate-400"}`}>
+                          {productsLoading ? "…" : priceStr}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Pricing card ────────────────────────────────────────────── */}
+            <div className={`bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 mb-6 border-2 transition-all ${
+              isNativeApp ? "border-blue-200 dark:border-blue-800" : "border-transparent"
+            }`}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-white">{plan.label}</h3>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white">{displayPlan.label}</h3>
                   <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
                     {isNativeApp
-                      ? `${storePrice}/mo`
-                      : `7-day free trial, then $${plan.price}/mo`}
+                      ? productsLoading ? "Loading price…" : `${storePrice}/mo`
+                      : `7-day free trial, then $${displayPlan.price}/mo`}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-slate-800 dark:text-white">{storePrice}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
-                </div>
+                {isNativeApp && (
+                  <div className="text-right">
+                    {productsLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-slate-400 ml-auto" />
+                    ) : (
+                      <>
+                        <p className="text-2xl font-bold text-slate-800 dark:text-white">{storePrice}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-200 dark:border-slate-600 pt-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <Users className="w-4 h-4 text-blue-500" />
-                  <span>Up to {plan.userLimit} {plan.userLimit === 1 ? "user" : "users"}</span>
+                  <Users className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span>Up to {displayPlan.userLimit} {displayPlan.userLimit === 1 ? "user" : "users"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
                   <span>All core features included</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <Shield className="w-4 h-4 text-purple-500" />
+                  <Shield className="w-4 h-4 text-purple-500 shrink-0" />
                   <span>
                     {storeLabel
                       ? `Billed securely via ${storeLabel}`
@@ -369,13 +435,23 @@ export default function OnboardingSubscription() {
                   </span>
                 </div>
               </div>
+
+              {/* Plan unavailable warning */}
+              {planUnavailable && (
+                <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    This plan isn't available in the store right now.
+                  </p>
+                </div>
+              )}
             </div>
 
             <Button
               type="button"
               onClick={handleSubscribe}
               className="w-full"
-              disabled={isLoading || (isNativeApp && productsLoading)}
+              disabled={isLoading || (isNativeApp && (productsLoading || planUnavailable))}
             >
               {subscribeBtnLabel}
             </Button>

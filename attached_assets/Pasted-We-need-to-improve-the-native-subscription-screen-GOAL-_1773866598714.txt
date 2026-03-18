@@ -1,0 +1,70 @@
+We need to improve the native subscription screen.
+
+GOAL
+Right now the user only sees one plan (Starter).
+I need the user to be able to switch between subscription plans before subscribing.
+
+This needs to work cleanly on the native subscription/paywall screen, especially on iPhone.
+
+WHAT TO BUILD
+Add a plan selector to the native subscription flow so the user can choose between:
+
+- Starter
+- Team
+- Pro
+- Scale
+
+UI REQUIREMENTS
+- Show all 4 plans clearly
+- Make it obvious which plan is currently selected
+- Tapping a different plan should update the pricing card and subscribe button immediately
+- The selected plan should control which Apple product ID gets purchased
+- Keep the design polished, simple, and mobile friendly
+- Do not make it cluttered
+
+RECOMMENDED LAYOUT
+On the subscription screen:
+1. Add a horizontal plan selector or stacked plan cards near the pricing section
+2. When a plan is selected, update:
+   - plan name
+   - monthly price
+   - feature bullets
+   - subscribe button text
+3. Subscribe button should say the correct price for the selected plan
+4. Restore Purchases stays below
+
+PLAN CONTENT
+Use the existing EcoLogic plan structure already in the app:
+- Starter = 1 user
+- Team = up to 5 users
+- Pro = up to 10 users
+- Scale = up to 15 users
+
+If feature bullets already come from shared plan config, reuse that.
+Do not hardcode duplicate plan logic in multiple places if avoidable.
+
+PURCHASE LOGIC
+- On native iPhone, subscribing should purchase the Apple product ID for the currently selected plan
+- On native Android, subscribing should purchase the Google Play product ID for the currently selected plan
+- On web, keep existing behavior unless this screen is shared and can be safely improved too
+- Do not break restore purchases
+- Do not break current Apple/Google validation flow
+
+DEFAULT SELECTION
+- Default to Starter on first load
+- Preserve good loading state while store products are loading
+- If a product fails to load, show a clear message and disable purchase for that plan
+
+UX DETAILS
+- The selected plan should have a stronger border/background/badge
+- Show “Current selection” styling clearly
+- Keep buttons disabled while purchase is processing
+- Keep the layout feeling premium and easy to understand
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. how the selected plan is stored in state
+3. how the selected plan maps to Apple / Google product IDs
+4. whether web behavior changed at all
+5. how the user now switches plans on the subscription screen
