@@ -19421,7 +19421,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const { eq, desc } = await import('drizzle-orm');
         const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
-        const jobRows = await db.select({ id: jobs.id, title: jobs.title, status: jobs.status, scheduledDate: jobs.scheduledDate,
+        const jobRows = await db.select({ id: jobs.id, title: jobs.title, status: jobs.status, startDate: jobs.startDate,
           customerId: jobs.customerId, assignedTo: jobs.assignedTo, createdAt: jobs.createdAt })
           .from(jobs).where(eq(jobs.companyId, company.id)).orderBy(desc(jobs.createdAt)).limit(50);
         res.json({ ok: true, jobs: jobRows, companyId: company.id });
@@ -19438,8 +19438,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const { eq, desc } = await import('drizzle-orm');
         const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
-        const invoiceRows = await db.select({ id: invoices.id, status: invoices.status, totalAmount: invoices.totalAmount,
-          paidAmount: invoices.paidAmount, balanceDue: invoices.balanceDue, jobId: invoices.jobId, createdAt: invoices.createdAt })
+        const invoiceRows = await db.select({ id: invoices.id, status: invoices.status, totalCents: invoices.totalCents,
+          paidAmountCents: invoices.paidAmountCents, balanceDueCents: invoices.balanceDueCents, jobId: invoices.jobId, createdAt: invoices.createdAt })
           .from(invoices).where(eq(invoices.companyId, company.id)).orderBy(desc(invoices.createdAt)).limit(30);
         const invoiceIds = invoiceRows.map((i: any) => i.id);
         let paymentRows: any[] = [];
