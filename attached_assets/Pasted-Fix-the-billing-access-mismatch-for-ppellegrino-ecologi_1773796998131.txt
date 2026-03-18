@@ -1,0 +1,137 @@
+Fix the billing/access mismatch for ppellegrino@ecologicc.com. Right now Dev Tools says the company is blocked, but in the real app that account can still log in and use EcoLogic. I need one true source of truth.
+
+PROBLEM
+For the ZSL company / ppellegrino@ecologicc.com account:
+- Dev Tools Billing Access says blocked
+- But the actual account can still log in and use the app
+
+That means the billing/access logic shown in Dev Tools does NOT match the real enforcement logic used by the app.
+
+GOAL
+Make Dev Tools show the exact same access result the real app is using.
+If the company can access the app, Dev Tools must say allowed.
+If the company is truly blocked, the app must block it too.
+No mismatch.
+
+TASK
+Trace the real access path end-to-end and fix the inconsistency.
+
+WHAT TO CHECK
+
+1) FIND THE REAL ENFORCEMENT PATH
+Trace exactly what happens when ppellegrino@ecologicc.com logs in and opens the app.
+Find:
+- where login succeeds
+- where company access/subscription enforcement is checked
+- whether there is any paywall gate after login
+- whether the app is currently only checking auth and not billing
+- whether there is a dev bypass, demo bypass, special-company bypass, or grandfathered fallback
+
+I want the exact function(s)/file(s) that determine whether the user can proceed into the app.
+
+2) COMPARE DEV TOOLS VS REAL APP LOGIC
+Find the exact logic Dev Tools is using for:
+- blocked / allowed
+- access source
+- effective plan
+Then compare it against the real app logic.
+
+Likely causes:
+- Dev Tools uses getEffectiveBillingAccess() but main app does not
+- main app still uses old plan/status fields
+- company inactive flag is ignored in one place
+- subscription enforcement only applies in some routes but not at login/app shell
+- dev bypass/demo company flag is allowing access in the app
+- ZSL has a manual override not being surfaced correctly in Dev Tools
+- app has no real billing gate yet for that account
+
+3) SINGLE SOURCE OF TRUTH
+Create or finalize ONE shared resolver function used by both:
+- Dev Tools display
+- actual app access enforcement
+
+Something like:
+- getEffectiveCompanyAccess(companyId)
+or
+- getEffectiveBillingAccess(companyId)
+
+This resolver must determine:
+- allowed: true/false
+- source: stripe / trial / free_access / bypass / blocked
+- effectivePlan
+- seatLimit
+- blockReason
+
+Then:
+- Dev Tools must read from this
+- app-level billing gate must read from this
+No separate duplicate logic.
+
+4) CHECK ZSL SPECIFICALLY
+For company 533 / ZSL / ppellegrino@ecologicc.com, log:
+- company id
+- company code
+- company status
+- raw plan
+- raw max users
+- raw Stripe customer/subscription state
+- trial state
+- override state
+- demo/test flags
+- any bypass flags
+- final resolver output
+- actual enforcement result when logging in
+
+Example log format:
+[dev-tools][access-debug] companyId=533 ...
+[access-enforcement] companyId=533 allowed=... source=... reason=...
+
+5) FIX THE UI COPY / STATUS
+Once logic is corrected, the Billing Access card should show plain truth.
+
+Examples:
+- Allowed — this company currently has manual free access
+- Allowed — this company is currently bypassing subscription lock
+- Allowed — active paid subscription
+- Allowed — active trial
+- Blocked — no active subscription, trial, or manual access
+
+No fake “Blocked” if the app still lets them in.
+
+6) FIX THE APP GATE IF NEEDED
+If the app is incorrectly allowing blocked companies in, fix that too.
+The actual desired behavior should be consistent.
+
+Rule:
+- If resolver says blocked, company should not get normal app access
+- If resolver says allowed, company can access the app
+- If you intentionally want certain companies allowed, set a real manual override and surface it in Dev Tools
+
+7) ZSL SHOULD PROBABLY BE ALLOWED
+Given my report that ppellegrino@ecologicc.com is working fine in the app, one of these should happen:
+A. Dev Tools should show that ZSL is allowed because of a real override/bypass/trial/subscription
+OR
+B. if ZSL is only working because enforcement is missing, fix enforcement and then let me decide whether to turn on bypass/free access for ZSL
+
+Do not silently leave the mismatch.
+
+8) ADD A DEBUG FIELD IN BILLING ACCESS
+In the Billing Access area, add a small dev-only line:
+- Access Source
+- Block Reason
+- Last Checked
+This helps confirm the result is coming from the real shared resolver.
+
+9) OUTPUT I WANT
+After fixing, tell me:
+1. exact root cause of the mismatch
+2. exact file(s) where the real app enforcement lives
+3. exact file(s) where Dev Tools was reading from
+4. whether the bug was in Dev Tools display, app enforcement, or both
+5. the final resolved status for ZSL
+6. proof that Dev Tools and the real app now use the same resolver
+
+IMPORTANT
+Do not hand-wave this.
+I need Dev Tools billing status to match reality exactly.
+If ppellegrino@ecologicc.com can access the app, the reason must be visible and truthful in Dev Tools.

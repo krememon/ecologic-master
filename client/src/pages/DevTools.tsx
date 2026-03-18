@@ -497,35 +497,55 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
           <p className="text-sm text-slate-500 italic">{billingFetching ? 'Loading billing data…' : 'Billing data unavailable'}</p>
         ) : (() => {
           const eb = d.effectiveBilling;
+          const aeb = d.appEffectiveBilling;
           const hasManualChanges = d.adminFreeAccess || d.adminBypassSubscription || d.adminPlanOverride || d.adminSeatLimitOverride || d.adminUnlimitedSeats;
+          const mismatch = aeb && (aeb.allowed !== eb?.allowed || aeb.source !== eb?.source);
 
-          const statusSentence = (() => {
-            if (d.adminPaused) return { text: 'This company is paused by an admin and cannot access EcoLogic.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
-            switch (eb?.source) {
-              case 'override_free_access': return { text: 'This company currently has free access turned on manually.', cls: 'bg-violet-950/60 border-violet-700 text-violet-300' };
-              case 'override_bypass': return { text: 'This company is allowed in because subscription bypass is active.', cls: 'bg-amber-950/60 border-amber-800 text-amber-300' };
-              case 'stripe': return { text: 'This company is allowed in through its paid Stripe subscription.', cls: 'bg-emerald-950/60 border-emerald-800 text-emerald-300' };
-              case 'trial': return { text: 'This company is allowed in through an active trial.', cls: 'bg-blue-950/60 border-blue-800 text-blue-300' };
-              default: return { text: 'This company is currently blocked — it does not have an active subscription.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
+          // Primary banner = what the app actually enforces (appEffectiveBilling)
+          const appStatusSentence = (() => {
+            if (!aeb) return { text: 'App access state unavailable.', cls: 'bg-slate-800 border-slate-700 text-slate-400' };
+            if (d.adminPaused) return { text: 'This company is paused by an admin — no app access.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
+            switch (aeb.source) {
+              case 'dev_env_bypass': return { text: 'Allowed — BYPASS_SUBSCRIPTION env var is active (dev/preview only). All companies bypass subscription checks in this environment.', cls: 'bg-yellow-950/60 border-yellow-700 text-yellow-300' };
+              case 'user_subscription_bypass': return { text: `Allowed — one or more users have a personal subscription bypass set.`, cls: 'bg-yellow-950/60 border-yellow-700 text-yellow-300' };
+              case 'override_free_access': return { text: 'Allowed — free access is turned on manually.', cls: 'bg-violet-950/60 border-violet-700 text-violet-300' };
+              case 'override_bypass': return { text: 'Allowed — subscription bypass is active manually.', cls: 'bg-amber-950/60 border-amber-800 text-amber-300' };
+              case 'stripe': return { text: 'Allowed — active paid Stripe subscription.', cls: 'bg-emerald-950/60 border-emerald-800 text-emerald-300' };
+              case 'trial': return { text: 'Allowed — active trial.', cls: 'bg-blue-950/60 border-blue-800 text-blue-300' };
+              default: return { text: 'Blocked — this company does not have an active subscription, trial, or manual access grant.', cls: 'bg-red-950/60 border-red-800 text-red-300' };
             }
           })();
 
           return (
             <div className="space-y-5">
-              {/* Status banner */}
-              <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border ${statusSentence.cls}`}>
-                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <p className="text-sm font-medium leading-snug">{statusSentence.text}</p>
+              {/* Primary status — what the app actually sees */}
+              <div>
+                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-1.5">What the App Currently Sees</p>
+                <div className={`flex items-start gap-2.5 px-4 py-3.5 rounded-xl border ${appStatusSentence.cls}`}>
+                  {aeb?.allowed ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" /> : <XCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                  <p className="text-sm font-medium leading-snug">{appStatusSentence.text}</p>
+                </div>
               </div>
 
-              {/* Quick facts */}
+              {/* Mismatch warning — if app state differs from resolver state */}
+              {mismatch && (
+                <div className="rounded-xl border border-yellow-700/60 bg-yellow-950/20 px-4 py-3 space-y-1">
+                  <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest mb-1">⚠ Dev Tools ≠ Real App</p>
+                  <p className="text-xs text-yellow-300">The billing resolver says <span className="font-mono font-bold">{eb?.allowed ? 'allowed' : 'blocked'}</span> ({eb?.source}), but the app is actually enforcing <span className="font-mono font-bold">{aeb?.allowed ? 'allowed' : 'blocked'}</span> ({aeb?.source}).</p>
+                  <p className="text-xs text-yellow-500 mt-1">{aeb?.reason}</p>
+                </div>
+              )}
+
+              {/* Quick facts grid */}
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {[
-                  { label: 'Access Source', val: <SourceBadge source={eb?.source} /> },
-                  { label: 'Effective Plan', val: <span className="font-mono text-slate-200">{eb?.effectivePlan || '—'}</span> },
+                  { label: 'App Access Source', val: <span className="font-mono text-xs text-slate-300">{aeb?.source || '—'}</span> },
+                  { label: 'DB Resolver Result', val: <SourceBadge source={eb?.source} /> },
+                  { label: 'Effective Plan', val: <span className="font-mono text-slate-200">{aeb?.effectivePlan || eb?.effectivePlan || '—'}</span> },
                   { label: 'User Limit', val: <span className="text-slate-200">{d.adminUnlimitedSeats ? 'Unlimited' : (eb?.seatLimit ?? '—')}</span> },
                   { label: 'Stripe Status', val: <Badge variant="outline" className="border-slate-600 text-slate-300 text-[10px]">{d.subscriptionStatus || 'inactive'}</Badge> },
                   { label: 'Trial End', val: <span className="text-slate-300">{d.trialEndsAt ? new Date(d.trialEndsAt).toLocaleDateString() : '—'}</span> },
+                  { label: 'Block Reason', val: <span className="font-mono text-xs text-slate-400">{eb?.blockReason || '—'}</span> },
                   { label: 'Stripe Connected', val: <StatusBadge ok={d.hasStripeSubscription} label={d.hasStripeSubscription ? 'Yes' : 'No'} /> },
                 ].map(({ label, val }) => (
                   <div key={label} className="flex flex-col gap-0.5 bg-slate-800/60 rounded-lg px-3 py-2.5">
@@ -535,10 +555,27 @@ function CompanyConsole({ companyCode, initialData, onClear }: {
                 ))}
               </div>
 
-              {/* Manual changes notice */}
+              {/* Dev bypass warning */}
+              {d.globalDevBypass && (
+                <div className="rounded-xl border border-yellow-700 bg-yellow-950/20 px-4 py-3 space-y-1.5">
+                  <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest mb-1">Global Dev Environment Bypass Active</p>
+                  <p className="text-xs text-yellow-300">The <span className="font-mono">BYPASS_SUBSCRIPTION=1</span> environment variable is set. All users in all companies bypass the subscription gate in this dev/preview environment. This does NOT apply in production.</p>
+                  <p className="text-xs text-yellow-600 mt-1">To test real billing enforcement, unset the BYPASS_SUBSCRIPTION env var or deploy to production.</p>
+                </div>
+              )}
+
+              {/* User bypass */}
+              {d.userBypasses?.length > 0 && (
+                <div className="rounded-xl border border-yellow-700/60 bg-yellow-950/10 px-4 py-3">
+                  <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest mb-1">Personal User Bypass</p>
+                  <p className="text-xs text-yellow-300">These users have a personal subscription bypass: <span className="font-mono">{d.userBypasses.join(', ')}</span></p>
+                </div>
+              )}
+
+              {/* Manual overrides notice */}
               {hasManualChanges && (
                 <div className="rounded-xl border border-violet-700/60 bg-violet-950/20 px-4 py-3 space-y-1.5">
-                  <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-2">Manual Overrides Active</p>
+                  <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest mb-2">Manual Billing Overrides Active</p>
                   {d.adminFreeAccess && <p className="text-xs text-violet-300">✦ Free access is turned on</p>}
                   {d.adminBypassSubscription && <p className="text-xs text-amber-300">⚡ Subscription check is bypassed</p>}
                   {d.adminPlanOverride && <p className="text-xs text-slate-300">Forced plan: <span className="font-mono font-bold">{d.adminPlanOverride}</span></p>}

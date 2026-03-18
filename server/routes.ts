@@ -19456,11 +19456,43 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     app.get('/api/dev/admin/company/by-code/:code/billing', isAuthenticated, requireDev, async (req: any, res) => {
       try {
         const code = (req.params.code as string).toUpperCase().trim();
-        const { eq } = await import('drizzle-orm');
+        const { eq, inArray } = await import('drizzle-orm');
         const { getEffectiveBillingAccess } = await import('./billingResolver');
         const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
+
+        // ── What the billing resolver says (pure DB-driven result) ──────────
         const effectiveBilling = getEffectiveBillingAccess(company);
+
+        // ── What the real app actually enforces ────────────────────────────
+        // Mirror the exact priority chain in /api/subscriptions/status
+        const globalDevBypass =
+          process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+
+        // Check if any company member has a personal subscriptionBypass
+        const memberRows = await db
+          .select({ userId: companyMembers.userId })
+          .from(companyMembers)
+          .where(eq(companyMembers.companyId, company.id));
+        const memberIds = memberRows.map((m: any) => m.userId);
+        let userBypasses: string[] = [];
+        if (memberIds.length > 0) {
+          const allMembers = await db
+            .select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass })
+            .from(users)
+            .where(inArray(users.id, memberIds));
+          userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+        }
+
+        // Compute "app effective" — what the actual app returns for users of this company
+        const appEffectiveBilling = globalDevBypass
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active — all companies bypass subscription checks in this environment', effectivePlan: 'dev', seatLimit: 999 }
+          : userBypasses.length > 0
+          ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
+          : { ...effectiveBilling, reason: effectiveBilling.blockReason };
+
+        console.log(`[dev-tools][access-debug] companyId=${company.id} code=${code} subscriptionStatus=${company.subscriptionStatus} adminFreeAccess=${company.adminFreeAccess} adminBypass=${company.adminBypassSubscription} globalDevBypass=${globalDevBypass} resolverResult=${effectiveBilling.source} appResult=${appEffectiveBilling.source}`);
+
         res.json({
           ok: true, companyId: company.id, companyName: company.name,
           subscriptionStatus: company.subscriptionStatus, subscriptionPlan: company.subscriptionPlan,
@@ -19474,6 +19506,9 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           adminOverrideUpdatedAt: company.adminOverrideUpdatedAt,
           adminPaused: company.adminPaused,
           effectiveBilling,
+          globalDevBypass,
+          userBypasses,
+          appEffectiveBilling,
         });
       } catch (e: any) {
         res.status(500).json({ ok: false, error: e.message });
