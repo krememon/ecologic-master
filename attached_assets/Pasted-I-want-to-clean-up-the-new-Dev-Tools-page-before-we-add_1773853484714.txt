@@ -1,0 +1,113 @@
+I want to clean up the new Dev Tools page before we add any real admin actions.
+
+This step is UI/wording cleanup only.
+Do NOT add new backend logic.
+Do NOT add destructive actions yet.
+
+GOAL
+Make the page much easier to understand, less cluttered, and more admin-friendly.
+
+CHANGES TO MAKE
+
+1. FIX USER STATUS COLORS
+- In the Users card, “active” should be GREEN, not red
+- Any inactive/suspended/blocked states can use warning/destructive colors
+- Make status colors feel intuitive
+
+2. FIX JOB STATUS DISPLAY
+Right now the Recent Jobs list is misleading because it is showing “archived,” which is not the real job progress status.
+I do NOT want archive state to be the main visible status badge there.
+
+Update the Recent Jobs card so each row shows:
+- Job title
+- customer name
+- date
+- the real useful status for the job (for example: open, scheduled, in progress, completed, unpaid, etc. — whatever the actual meaningful job status field is in this app)
+- If archive state exists, either hide it entirely from this card OR only show it as a subtle secondary label if truly needed
+The goal is: when I glance at the list, I should understand the real state of the job, not whether it was removed from the jobs page.
+
+3. CLEAN UP RECENT JOBS LAYOUT
+The jobs list feels cluttered.
+Make it cleaner and easier to scan:
+- tighter structure
+- clearer hierarchy
+- less visual noise
+- better spacing
+- cleaner badge treatment
+- mobile friendly
+I still want the data, just presented in a cleaner way.
+
+4. CLEAN UP RECENT INVOICES LAYOUT
+The invoices list also feels cluttered.
+Redesign the list so each item is easier to read quickly.
+I want each invoice row/card to feel simpler.
+
+Suggested structure:
+- invoice number
+- amount
+- paid/unpaid/pending badge
+- date
+- if showing “paid of total”, make it cleaner and less noisy
+Use a layout that feels more polished and less cramped.
+
+5. RENAME THE ADMIN ACTIONS SO THEY ACTUALLY MAKE SENSE
+The current labels are too technical/confusing:
+- “Toggle Dev Bypass”
+- “Force Paywall”
+- “Remove Subscription”
+
+I want the action labels rewritten in plain English so I immediately understand what they do.
+
+For this step, rename/reframe the buttons visually to something clearer like:
+- “Turn Free Access On/Off” instead of Toggle Dev Bypass
+- “Show Paywall” instead of Force Paywall
+- “Remove Paid Plan” instead of Remove Subscription
+
+You do NOT have to use those exact labels if you have better plain-English wording, but the final labels must be:
+- super easy to understand
+- short
+- admin-friendly
+- not technical
+
+6. ADD SMALL HELPER TEXT UNDER EACH ADMIN ACTION BUTTON
+Under or near each action, add a tiny one-line explanation so I know exactly what it means.
+
+Examples of the kind of clarity I want:
+- Turn Free Access On/Off → “Lets this company use the app without a paid subscription.”
+- Show Paywall → “Makes the company see the billing/paywall screen.”
+- Remove Paid Plan → “Removes the active subscription from this company.”
+
+Keep the helper text short and clean.
+
+7. CLEAN UP COMPANY OVERVIEW WORDING
+I also want the company overview terms to be easier to understand.
+Review labels like:
+- Free Access Override
+- Sub Bypass
+- Account Status
+and rename them into simpler plain-English admin wording where appropriate.
+
+For example:
+- “Free Access”
+- “Subscription Bypass”
+- “Company Status”
+Only rename if the result is clearer.
+Keep the meaning accurate.
+
+IMPORTANT
+- This is still a cleanup pass only
+- Do not wire destructive actions yet
+- Do not change the backend meaning of anything unless required for displaying the correct real status
+- Keep the UI polished, modern, and mobile-friendly
+- Prioritize clarity over technical language
+
+DELIVERABLES
+1. Fix active badge color to green
+2. Show a more meaningful real job status instead of archived as the main badge
+3. Clean up Recent Jobs layout
+4. Clean up Recent Invoices layout
+5. Rename confusing admin action labels into plain English
+6. Add tiny helper descriptions for each admin action
+7. Simplify confusing company overview labels where appropriate
+8. Tell me exactly which files changed
+9. Tell me the final wording used for the admin actions and company overview labels

@@ -11,7 +11,7 @@ import {
   Search, Building2, Users, Briefcase, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle, ChevronRight
+  AlertTriangle, ChevronRight, DollarSign
 } from "lucide-react";
 
 const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
@@ -62,16 +62,53 @@ interface InvoiceData {
   createdAt: string | null;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function centsToDisplay(cents: number) {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// ── Badge components ──────────────────────────────────────────────────────
+
 function SubscriptionBadge({ status }: { status: string | null }) {
   if (!status) return <Badge variant="secondary">None</Badge>;
-  const map: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-    active: "default",
-    trialing: "outline",
-    canceled: "destructive",
-    past_due: "destructive",
-    inactive: "secondary",
-  };
-  return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
+  if (status === "active") return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Active</Badge>;
+  if (status === "trialing") return <Badge variant="outline">Trial</Badge>;
+  if (status === "past_due") return <Badge variant="destructive">Past Due</Badge>;
+  if (status === "canceled" || status === "cancelled") return <Badge variant="destructive">Cancelled</Badge>;
+  return <Badge variant="secondary">{status}</Badge>;
+}
+
+function UserStatusBadge({ status }: { status: string }) {
+  if (status === "ACTIVE") {
+    return <Badge className="text-xs bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Active</Badge>;
+  }
+  return <Badge variant="destructive" className="text-xs">{status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
+}
+
+// Maps raw DB job status → human label + color
+function JobStatusBadge({ status }: { status: string }) {
+  const s = (status || "").toLowerCase();
+  if (s === "active") return <Badge className="text-xs shrink-0 bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">In Progress</Badge>;
+  if (s === "completed") return <Badge className="text-xs shrink-0 bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Completed</Badge>;
+  if (s === "cancelled" || s === "canceled") return <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>;
+  if (s === "archived") return <Badge variant="secondary" className="text-xs shrink-0 opacity-60">Archived</Badge>;
+  return <Badge variant="secondary" className="text-xs shrink-0">Open</Badge>;
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  const s = (status || "").toLowerCase();
+  if (s === "paid") return <Badge className="text-xs shrink-0 bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Paid</Badge>;
+  if (s === "partial") return <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">Partial</Badge>;
+  if (s === "overdue") return <Badge variant="destructive" className="text-xs shrink-0">Overdue</Badge>;
+  if (s === "cancelled" || s === "canceled") return <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>;
+  if (s === "sent" || s === "pending") return <Badge variant="outline" className="text-xs shrink-0">Sent</Badge>;
+  return <Badge variant="secondary" className="text-xs shrink-0">{s.charAt(0).toUpperCase() + s.slice(1)}</Badge>;
 }
 
 function BoolBadge({ value, trueLabel, falseLabel, trueVariant = "default", falseVariant = "secondary" }: {
@@ -84,23 +121,53 @@ function BoolBadge({ value, trueLabel, falseLabel, trueVariant = "default", fals
   return <Badge variant={value ? trueVariant : falseVariant}>{value ? trueLabel : falseLabel}</Badge>;
 }
 
-function centsToDisplay(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
-}
+// ── Layout helpers ────────────────────────────────────────────────────────
 
 function EmptySection({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
   return (
-    <div className="flex items-center gap-2 py-6 text-sm text-slate-400 dark:text-slate-500">
+    <div className="flex items-center gap-2 py-6 text-sm text-slate-400 dark:text-slate-500 px-6">
       <Icon className="h-4 w-4 shrink-0" />
       <span>{message}</span>
     </div>
   );
 }
+
+function InfoRow({ icon: Icon, label, value }: {
+  icon: React.ElementType;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <Icon className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{label}</p>
+        <div className="text-sm text-slate-800 dark:text-slate-200 mt-0.5">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+// Each admin action: a button + one-line description
+function AdminAction({ icon: Icon, label, description, onClick, className = "" }: {
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Button variant="outline" size="sm" onClick={onClick} className={`w-fit ${className}`}>
+        <Icon className="h-3.5 w-3.5 mr-1.5" />
+        {label}
+      </Button>
+      <p className="text-xs text-slate-400 dark:text-slate-500 pl-1">{description}</p>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
 
 export default function DevTools() {
   const { user } = useAuth() as { user: any };
@@ -112,10 +179,7 @@ export default function DevTools() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Multiple results (name search)
   const [searchResults, setSearchResults] = useState<CompanyBasic[]>([]);
-
-  // Selected company + detail data
   const [company, setCompany] = useState<CompanyBasic | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
   const [jobs, setJobs] = useState<JobData[]>([]);
@@ -126,7 +190,7 @@ export default function DevTools() {
   }
 
   const placeholderAction = (label: string) => {
-    toast({ title: "Not wired yet", description: `"${label}" will be enabled in the next step.` });
+    toast({ title: "Coming soon", description: `"${label}" will be wired in the next step.` });
   };
 
   const clearDetail = () => {
@@ -174,14 +238,11 @@ export default function DevTools() {
       if (!data.ok) throw new Error(data.error || "Search failed");
 
       const results: CompanyBasic[] = data.companies ?? [];
-
       if (results.length === 0) {
-        // nothing — hasSearched will show "not found"
+        // hasSearched shows "not found"
       } else if (results.length === 1) {
-        // Single result — auto-select and load detail
         await loadDetail(results[0].id);
       } else {
-        // Multiple results (name search) — show picker
         setSearchResults(results);
       }
     } catch (e: any) {
@@ -203,7 +264,7 @@ export default function DevTools() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
 
-      {/* ── HEADER ──────────────────────────────────────────────── */}
+      {/* ── HEADER ───────────────────────────────────────────── */}
       <div className="flex items-start justify-between pt-2">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -220,7 +281,7 @@ export default function DevTools() {
         </div>
       </div>
 
-      {/* ── LOOKUP ──────────────────────────────────────────────── */}
+      {/* ── FIND COMPANY ─────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -230,7 +291,6 @@ export default function DevTools() {
           <CardDescription>Look up any company by company ID, owner email, or name</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Search mode tabs */}
           <div className="flex gap-1.5 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 w-fit">
             {searchModes.map(({ key, label }) => (
               <button
@@ -247,7 +307,6 @@ export default function DevTools() {
             ))}
           </div>
 
-          {/* Search input */}
           <div className="flex gap-2">
             <Input
               value={searchQuery}
@@ -270,9 +329,8 @@ export default function DevTools() {
             </Button>
           </div>
 
-          {/* No results */}
           {showNoResults && (
-            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-2 pl-1">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-1 pl-1">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
               No company found for that query.
             </div>
@@ -280,7 +338,7 @@ export default function DevTools() {
         </CardContent>
       </Card>
 
-      {/* ── MULTIPLE RESULTS PICKER ──────────────────────────────── */}
+      {/* ── MULTI-RESULT PICKER ───────────────────────────────── */}
       {showPicker && (
         <Card>
           <CardHeader className="pb-3">
@@ -288,7 +346,7 @@ export default function DevTools() {
               <Building2 className="h-4 w-4 text-slate-500" />
               Select a Company
             </CardTitle>
-            <CardDescription>{searchResults.length} matches found — tap one to load its details</CardDescription>
+            <CardDescription>{searchResults.length} matches — tap one to load details</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -300,7 +358,7 @@ export default function DevTools() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{r.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">{r.companyCode ?? "—"} · {r.ownerEmail ?? "no owner"}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 font-mono">{r.companyCode ?? "—"} · {r.ownerEmail ?? "no owner"}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
                     <SubscriptionBadge status={r.subscriptionStatus} />
@@ -313,7 +371,7 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── DETAIL LOADING ────────────────────────────────────────── */}
+      {/* ── LOADING ───────────────────────────────────────────── */}
       {isLoadingDetail && (
         <div className="flex items-center justify-center py-12 gap-3 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -321,7 +379,7 @@ export default function DevTools() {
         </div>
       )}
 
-      {/* ── COMPANY OVERVIEW ────────────────────────────────────── */}
+      {/* ── COMPANY OVERVIEW ──────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
@@ -341,9 +399,21 @@ export default function DevTools() {
               <InfoRow icon={Mail} label="Owner Email" value={company.ownerEmail ?? "—"} />
               <InfoRow icon={CreditCard} label="Plan" value={company.subscriptionPlan ?? "—"} />
               <InfoRow icon={ShieldCheck} label="Subscription" value={<SubscriptionBadge status={company.subscriptionStatus} />} />
-              <InfoRow icon={ShieldOff} label="Account Status" value={<BoolBadge value={company.adminPaused} trueLabel="Paused" falseLabel="Active" trueVariant="destructive" falseVariant="secondary" />} />
-              <InfoRow icon={RefreshCw} label="Free Access Override" value={<BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />} />
-              <InfoRow icon={ShieldCheck} label="Sub Bypass" value={<BoolBadge value={company.adminBypassSubscription} trueLabel="Bypassed" falseLabel="Off" trueVariant="outline" />} />
+              <InfoRow icon={Ban} label="Company Status" value={
+                <BoolBadge
+                  value={company.adminPaused}
+                  trueLabel="Paused"
+                  falseLabel="Active"
+                  trueVariant="destructive"
+                  falseVariant="secondary"
+                />
+              } />
+              <InfoRow icon={RefreshCw} label="Free Access" value={
+                <BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />
+              } />
+              <InfoRow icon={ShieldOff} label="Subscription Bypass" value={
+                <BoolBadge value={company.adminBypassSubscription} trueLabel="Bypassed" falseLabel="Off" trueVariant="outline" />
+              } />
               {company.createdAt && (
                 <InfoRow icon={Calendar} label="Created" value={formatDate(company.createdAt)} />
               )}
@@ -352,7 +422,7 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── ADMIN ACTIONS ───────────────────────────────────────── */}
+      {/* ── ADMIN ACTIONS ────────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card className="border-amber-200 dark:border-amber-900">
           <CardHeader className="pb-3">
@@ -360,40 +430,57 @@ export default function DevTools() {
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               Admin Actions
             </CardTitle>
-            <CardDescription>Destructive controls will be enabled in the next step.</CardDescription>
+            <CardDescription>Actions will be wired in the next step — previewing labels only.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Access Controls</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => placeholderAction("Toggle Dev Bypass")}>
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Toggle Dev Bypass
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => placeholderAction("Force Paywall")}>
-                  <ShieldOff className="h-3.5 w-3.5 mr-1.5" />Force Paywall
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => placeholderAction("Remove Subscription")}>
-                  <CreditCard className="h-3.5 w-3.5 mr-1.5" />Remove Subscription
-                </Button>
-              </div>
+          <CardContent className="space-y-5">
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Access Controls</p>
+              <AdminAction
+                icon={RefreshCw}
+                label="Grant Free Access"
+                description="Lets this company use the full app without a paid subscription."
+                onClick={() => placeholderAction("Grant Free Access")}
+              />
+              <AdminAction
+                icon={ShieldOff}
+                label="Show Paywall"
+                description="Removes free access so this company sees the billing screen."
+                onClick={() => placeholderAction("Show Paywall")}
+              />
+              <AdminAction
+                icon={CreditCard}
+                label="Remove Paid Plan"
+                description="Cancels and clears the active subscription from this company."
+                onClick={() => placeholderAction("Remove Paid Plan")}
+              />
             </div>
+
             <Separator />
-            <div>
-              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Company Status</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950" onClick={() => placeholderAction("Block Company")}>
-                  <Ban className="h-3.5 w-3.5 mr-1.5" />Block Company
-                </Button>
-                <Button variant="outline" size="sm" className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950" onClick={() => placeholderAction("Unblock Company")}>
-                  <Unlock className="h-3.5 w-3.5 mr-1.5" />Unblock Company
-                </Button>
-              </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Company Status</p>
+              <AdminAction
+                icon={Ban}
+                label="Pause Company"
+                description="Blocks all users at this company from logging in."
+                onClick={() => placeholderAction("Pause Company")}
+                className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+              />
+              <AdminAction
+                icon={Unlock}
+                label="Unpause Company"
+                description="Restores normal access for this company's users."
+                onClick={() => placeholderAction("Unpause Company")}
+                className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"
+              />
             </div>
+
           </CardContent>
         </Card>
       )}
 
-      {/* ── USERS ───────────────────────────────────────────────── */}
+      {/* ── USERS ────────────────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
@@ -405,35 +492,40 @@ export default function DevTools() {
           </CardHeader>
           <CardContent className="p-0">
             {users.length === 0 ? (
-              <div className="px-6">
-                <EmptySection icon={Users} message="No users found for this company." />
-              </div>
+              <EmptySection icon={Users} message="No users found for this company." />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {users.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between px-6 py-3 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : "—"}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
-                      {u.lastLoginAt && (
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Last login: {formatDate(u.lastLoginAt)}</p>
-                      )}
+                {users.map((u) => {
+                  const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || null;
+                  return (
+                    <div key={u.id} className="flex items-center justify-between px-6 py-3.5 gap-3">
+                      <div className="min-w-0">
+                        {fullName && (
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{fullName}</p>
+                        )}
+                        <p className={`text-sm truncate ${fullName ? "text-xs text-slate-500 dark:text-slate-400" : "font-medium text-slate-900 dark:text-slate-100"}`}>
+                          {u.email}
+                        </p>
+                        {u.lastLoginAt && (
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            Last login {formatDate(u.lastLoginAt)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <Badge variant="outline" className="text-xs">{u.role}</Badge>
+                        <UserStatusBadge status={u.status} />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant="outline" className="text-xs">{u.role}</Badge>
-                      <Badge variant={u.status === "ACTIVE" ? "secondary" : "destructive"} className="text-xs">{u.status}</Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* ── RECENT JOBS ─────────────────────────────────────────── */}
+      {/* ── RECENT JOBS ──────────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
@@ -445,21 +537,20 @@ export default function DevTools() {
           </CardHeader>
           <CardContent className="p-0">
             {jobs.length === 0 ? (
-              <div className="px-6">
-                <EmptySection icon={Briefcase} message="No jobs found for this company." />
-              </div>
+              <EmptySection icon={Briefcase} message="No jobs found for this company." />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {jobs.map((j) => (
-                  <div key={j.id} className="flex items-center justify-between px-6 py-3 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{j.title}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {j.clientName ? `${j.clientName} · ` : ""}
-                        {j.startDate ? formatDate(j.startDate) : formatDate(j.createdAt)}
+                  <div key={j.id} className="px-6 py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-snug flex-1 min-w-0 truncate">
+                        {j.title}
                       </p>
+                      <JobStatusBadge status={j.status} />
                     </div>
-                    <JobStatusBadge status={j.status} />
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      {[j.clientName, j.startDate ? formatDate(j.startDate) : formatDate(j.createdAt)].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -468,77 +559,46 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── RECENT INVOICES ─────────────────────────────────────── */}
+      {/* ── RECENT INVOICES ──────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-slate-500" />
+              <DollarSign className="h-4 w-4 text-slate-500" />
               Recent Invoices
               <Badge variant="secondary" className="ml-1">{invoices.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {invoices.length === 0 ? (
-              <div className="px-6">
-                <EmptySection icon={CreditCard} message="No invoices found for this company." />
-              </div>
+              <EmptySection icon={CreditCard} message="No invoices found for this company." />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {invoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between px-6 py-3 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium font-mono text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {centsToDisplay(inv.paidAmountCents)} paid of {centsToDisplay(inv.totalCents)}
-                        {inv.paidAt ? ` · ${formatDate(inv.paidAt)}` : ""}
-                      </p>
+                {invoices.map((inv) => {
+                  const isPaid = inv.balanceDueCents === 0 && inv.totalCents > 0;
+                  const isPartial = inv.paidAmountCents > 0 && inv.balanceDueCents > 0;
+                  return (
+                    <div key={inv.id} className="px-6 py-3.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {centsToDisplay(inv.totalCents)}
+                            {isPartial && <span className="ml-1 text-amber-600 dark:text-amber-400">· {centsToDisplay(inv.balanceDueCents)} remaining</span>}
+                            {(inv.paidAt || inv.createdAt) && <span className="ml-1">· {formatDate(inv.paidAt ?? inv.createdAt)}</span>}
+                          </p>
+                        </div>
+                        <InvoiceStatusBadge status={inv.status} />
+                      </div>
                     </div>
-                    <InvoiceStatusBadge status={inv.status} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
     </div>
   );
-}
-
-function InfoRow({ icon: Icon, label, value }: {
-  icon: React.ElementType;
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <Icon className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{label}</p>
-        <div className="text-sm text-slate-800 dark:text-slate-200 mt-0.5">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function JobStatusBadge({ status }: { status: string }) {
-  const map: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-    completed: "default",
-    active: "outline",
-    pending: "secondary",
-    cancelled: "destructive",
-  };
-  return <Badge variant={map[status] ?? "secondary"} className="text-xs shrink-0">{status}</Badge>;
-}
-
-function InvoiceStatusBadge({ status }: { status: string }) {
-  const map: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-    paid: "default",
-    partial: "outline",
-    pending: "secondary",
-    overdue: "destructive",
-    cancelled: "destructive",
-  };
-  return <Badge variant={map[status] ?? "secondary"} className="text-xs shrink-0">{status}</Badge>;
 }
