@@ -1,0 +1,89 @@
+Remove the development subscription bypass from every company except my personal company tied to pjpell077@gmail.com.
+
+GOAL
+I want to clean up all company-level dev bypass access so only my personal company keeps it.
+Any other company currently getting access through development bypass should have that bypass removed.
+
+KEEP DEV BYPASS ONLY FOR:
+- pjpell077@gmail.com
+
+REMOVE DEV BYPASS FROM:
+- every other company/user/company membership/account that is currently allowed because of:
+  - development environment bypass
+  - BYPASS_SUBSCRIPTION env behavior
+  - manual dev bypass flag
+  - subscription bypass override
+  - any equivalent fallback that is letting them in without real billing
+
+IMPORTANT
+Do this carefully.
+Before changing anything, identify exactly which companies are currently being allowed in through dev bypass logic.
+
+STEP 1 — DRY RUN REPORT
+Find all companies currently getting access because of any dev bypass path.
+
+For each one, report:
+- company id
+- company code
+- company name
+- owner/main email
+- exact bypass source
+  - env bypass
+  - manual bypass
+  - free access
+  - other
+- whether it should be kept or removed
+
+Then clearly mark:
+- KEEP: the company for pjpell077@gmail.com
+- REMOVE: all others
+
+STEP 2 — FIX THE REAL LOGIC
+I do NOT want broad dev bypass access leaking across companies.
+
+Make the real access logic behave like this:
+- development env bypass must NOT automatically allow random companies
+- if there is a global BYPASS_SUBSCRIPTION env var, restrict it so it only applies to my personal company/email
+- or remove that global behavior entirely and replace it with a targeted allow rule only for my company
+- normal companies should only be allowed by:
+  - active Stripe subscription
+  - active trial
+  - explicit manual free access / bypass override in Dev Tools
+  - any intentional allowed source shown in the resolver
+
+STEP 3 — REMOVE OTHER BYPASSES
+For every company except mine:
+- turn off manual subscription bypass if it exists
+- clear any accidental dev-bypass flags
+- clear any leaked override that was only there because of development/testing
+- leave true paid/trial/free-access states alone unless they were specifically a dev bypass
+
+STEP 4 — PROTECT MY PERSONAL COMPANY
+Keep bypass/access only for the company tied to:
+- pjpell077@gmail.com
+
+If that email is tied to multiple companies, stop and report them before applying changes blindly.
+Only keep bypass on the intended personal company.
+
+STEP 5 — DEV TOOLS / RESOLVER TRUTH
+After cleanup:
+- Dev Tools must show the real access source truthfully
+- no company should say it is allowed through development bypass unless it is actually my protected company
+- other companies should now show their true status:
+  - paid plan
+  - trial
+  - free access
+  - blocked
+
+STEP 6 — OUTPUT I WANT
+After finishing, report:
+1. which company kept dev bypass
+2. which companies had dev bypass removed
+3. exact source of the bypass that was causing leakage
+4. exact file(s) fixed
+5. proof that pjpell077@gmail.com still works
+6. proof that other companies no longer get access from dev bypass
+
+IMPORTANT
+Do not remove real paid access, real trials, or intentional free access unless they were specifically using dev bypass.
+The goal is to eliminate leaked development bypass access everywhere except my personal company.

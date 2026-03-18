@@ -4329,19 +4329,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
 
+      const user = await storage.getUser(userId);
+
+      // Dev bypass — scoped to the allowlisted personal account only (not all companies)
       if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1') {
-        return res.json({
-          active: true,
-          status: 'active',
-          planKey: 'dev',
-          userLimit: 999,
-          currentPeriodEnd: null,
-          bypass: true,
-          reason: 'dev_bypass',
-        });
+        const { isDevAccount } = await import('./devAuth');
+        if (user && isDevAccount(user)) {
+          return res.json({
+            active: true,
+            status: 'active',
+            planKey: 'dev',
+            userLimit: 999,
+            currentPeriodEnd: null,
+            bypass: true,
+            reason: 'dev_bypass',
+          });
+        }
+        // Not in dev allowlist — fall through to real billing check
       }
 
-      const user = await storage.getUser(userId);
       if (user?.subscriptionBypass) {
         console.log(`[subscriptions] DEV BYPASS active for ${user.email}`);
         return res.json({
@@ -19465,28 +19471,32 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const effectiveBilling = getEffectiveBillingAccess(company);
 
         // ── What the real app actually enforces ────────────────────────────
-        // Mirror the exact priority chain in /api/subscriptions/status
-        const globalDevBypass =
-          process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
-
-        // Check if any company member has a personal subscriptionBypass
+        // Check if any company member has a personal subscriptionBypass or is in the dev allowlist
+        const { isDevAccount } = await import('./devAuth');
         const memberRows = await db
           .select({ userId: companyMembers.userId })
           .from(companyMembers)
           .where(eq(companyMembers.companyId, company.id));
         const memberIds = memberRows.map((m: any) => m.userId);
         let userBypasses: string[] = [];
+        let hasDevAllowlistedMember = false;
         if (memberIds.length > 0) {
           const allMembers = await db
             .select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass })
             .from(users)
             .where(inArray(users.id, memberIds));
           userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+          hasDevAllowlistedMember = allMembers.some((u: any) => isDevAccount(u));
         }
+
+        // Mirror the exact (now scoped) priority chain in /api/subscriptions/status
+        // BYPASS_SUBSCRIPTION env var now only applies to dev-allowlisted users
+        const envBypassActive = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const globalDevBypass = envBypassActive && hasDevAllowlistedMember;
 
         // Compute "app effective" — what the actual app returns for users of this company
         const appEffectiveBilling = globalDevBypass
-          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active — all companies bypass subscription checks in this environment', effectivePlan: 'dev', seatLimit: 999 }
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active and applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
           : userBypasses.length > 0
           ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
           : { ...effectiveBilling, reason: effectiveBilling.blockReason };
@@ -19539,16 +19549,19 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
         const effectiveBilling = getEffectiveBillingAccess(updated);
-        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const { isDevAccount } = await import('./devAuth');
         const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
         const memberIds = memberRows.map((m: any) => m.userId);
         let userBypasses: string[] = [];
+        let hasDevAllowlistedMember = false;
         if (memberIds.length > 0) {
-          const allMembers = await db.select({ email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          const allMembers = await db.select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
           userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+          hasDevAllowlistedMember = allMembers.some((u: any) => isDevAccount(u));
         }
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1' && hasDevAllowlistedMember;
         const appEffectiveBilling = globalDevBypass
-          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active — all companies bypass subscription checks in this environment', effectivePlan: 'dev', seatLimit: 999 }
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
           : userBypasses.length > 0
           ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
           : { ...effectiveBilling, reason: effectiveBilling.blockReason };
@@ -19580,16 +19593,19 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
         const effectiveBilling = getEffectiveBillingAccess(updated);
-        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        const { isDevAccount } = await import('./devAuth');
         const memberRows = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
         const memberIds = memberRows.map((m: any) => m.userId);
         let userBypasses: string[] = [];
+        let hasDevAllowlistedMember = false;
         if (memberIds.length > 0) {
-          const allMembers = await db.select({ email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
+          const allMembers = await db.select({ id: users.id, email: users.email, subscriptionBypass: users.subscriptionBypass }).from(users).where(inArray(users.id, memberIds));
           userBypasses = allMembers.filter((u: any) => u.subscriptionBypass).map((u: any) => u.email);
+          hasDevAllowlistedMember = allMembers.some((u: any) => isDevAccount(u));
         }
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1' && hasDevAllowlistedMember;
         const appEffectiveBilling = globalDevBypass
-          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active', effectivePlan: 'dev', seatLimit: 999 }
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
           : userBypasses.length > 0
           ? { allowed: true, source: 'user_subscription_bypass', reason: `User(s) with personal bypass: ${userBypasses.join(', ')}`, effectivePlan: effectiveBilling.effectivePlan, seatLimit: effectiveBilling.seatLimit }
           : { ...effectiveBilling, reason: effectiveBilling.blockReason };
@@ -19694,7 +19710,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const code = (req.params.code as string).toUpperCase().trim();
         const { note } = req.body;
         const actorEmail = (req as any).user?.email || 'unknown';
-        const { eq } = await import('drizzle-orm');
+        const { eq, inArray: inArrayR } = await import('drizzle-orm');
         const { getEffectiveBillingAccess } = await import('./billingResolver');
         const [company] = await db.select().from(companies).where(eq(companies.companyCode, code));
         if (!company) return res.status(404).json({ ok: false, error: 'No company found' });
@@ -19717,9 +19733,18 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         });
         const [updated] = await db.select().from(companies).where(eq(companies.id, company.id));
         const effectiveBilling = getEffectiveBillingAccess(updated);
-        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1';
+        // Restore clears all manual overrides — compute the scoped dev bypass (member-aware)
+        const { isDevAccount } = await import('./devAuth');
+        const memberRowsR = await db.select({ userId: companyMembers.userId }).from(companyMembers).where(eq(companyMembers.companyId, updated.id));
+        const memberIdsR = memberRowsR.map((m: any) => m.userId);
+        let hasDevMember = false;
+        if (memberIdsR.length > 0) {
+          const membersR = await db.select({ id: users.id, email: users.email }).from(users).where(inArrayR(users.id, memberIdsR));
+          hasDevMember = membersR.some((u: any) => isDevAccount(u));
+        }
+        const globalDevBypass = process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1' && hasDevMember;
         const appEffectiveBilling = globalDevBypass
-          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var is active', effectivePlan: 'dev', seatLimit: 999 }
+          ? { allowed: true, source: 'dev_env_bypass', reason: 'BYPASS_SUBSCRIPTION=1 env var applies to the dev-allowlisted account in this company', effectivePlan: 'dev', seatLimit: 999 }
           : { ...effectiveBilling, reason: effectiveBilling.blockReason };
         res.json({ ok: true, effectiveBilling, appEffectiveBilling, globalDevBypass });
       } catch (e: any) { res.status(500).json({ ok: false, error: e.message }); }
