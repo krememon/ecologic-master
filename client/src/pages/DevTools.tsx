@@ -11,62 +11,55 @@ import {
   Search, Building2, Users, Briefcase, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle
+  AlertTriangle, ChevronRight
 } from "lucide-react";
 
 const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
 
 type SearchMode = "code" | "email" | "name";
 
-interface CompanyResult {
+interface CompanyBasic {
   id: number;
   name: string;
-  code: string;
-  ownerEmail: string;
+  companyCode: string | null;
+  ownerEmail: string | null;
   subscriptionPlan: string | null;
   subscriptionStatus: string | null;
   adminFreeAccess: boolean;
   adminBypassSubscription: boolean;
   adminPaused: boolean;
+  adminIsDemo: boolean;
   createdAt: string | null;
 }
 
-interface UserResult {
+interface UserData {
   id: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
   role: string;
   status: string;
+  lastLoginAt: string | null;
 }
 
-interface JobResult {
+interface JobData {
   id: number;
   title: string;
   status: string;
+  clientName: string | null;
   startDate: string | null;
+  createdAt: string | null;
 }
 
-interface InvoiceResult {
+interface InvoiceData {
   id: number;
   invoiceNumber: string;
   totalCents: number;
   paidAmountCents: number;
+  balanceDueCents: number;
   status: string;
-}
-
-function StatusBadge({ value, trueLabel = "Yes", falseLabel = "No", trueVariant = "default", falseVariant = "secondary" }: {
-  value: boolean;
-  trueLabel?: string;
-  falseLabel?: string;
-  trueVariant?: "default" | "destructive" | "outline" | "secondary";
-  falseVariant?: "default" | "destructive" | "outline" | "secondary";
-}) {
-  return (
-    <Badge variant={value ? trueVariant : falseVariant}>
-      {value ? trueLabel : falseLabel}
-    </Badge>
-  );
+  paidAt: string | null;
+  createdAt: string | null;
 }
 
 function SubscriptionBadge({ status }: { status: string | null }) {
@@ -76,26 +69,35 @@ function SubscriptionBadge({ status }: { status: string | null }) {
     trialing: "outline",
     canceled: "destructive",
     past_due: "destructive",
+    inactive: "secondary",
   };
   return <Badge variant={map[status] ?? "secondary"}>{status}</Badge>;
+}
+
+function BoolBadge({ value, trueLabel, falseLabel, trueVariant = "default", falseVariant = "secondary" }: {
+  value: boolean;
+  trueLabel: string;
+  falseLabel: string;
+  trueVariant?: "default" | "destructive" | "outline" | "secondary";
+  falseVariant?: "default" | "destructive" | "outline" | "secondary";
+}) {
+  return <Badge variant={value ? trueVariant : falseVariant}>{value ? trueLabel : falseLabel}</Badge>;
 }
 
 function centsToDisplay(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function PlaceholderState({ icon: Icon, title, description }: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-}) {
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString();
+}
+
+function EmptySection({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
-      <div className="rounded-full bg-slate-100 dark:bg-slate-800 p-4">
-        <Icon className="h-8 w-8 text-slate-400" />
-      </div>
-      <p className="font-medium text-slate-700 dark:text-slate-300">{title}</p>
-      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">{description}</p>
+    <div className="flex items-center gap-2 py-6 text-sm text-slate-400 dark:text-slate-500">
+      <Icon className="h-4 w-4 shrink-0" />
+      <span>{message}</span>
     </div>
   );
 }
@@ -107,21 +109,54 @@ export default function DevTools() {
   const [searchMode, setSearchMode] = useState<SearchMode>("code");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [company, setCompany] = useState<CompanyResult | null>(null);
-  const [users, setUsers] = useState<UserResult[]>([]);
-  const [jobs, setJobs] = useState<JobResult[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceResult[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Multiple results (name search)
+  const [searchResults, setSearchResults] = useState<CompanyBasic[]>([]);
+
+  // Selected company + detail data
+  const [company, setCompany] = useState<CompanyBasic | null>(null);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [jobs, setJobs] = useState<JobData[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
 
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;
   }
 
   const placeholderAction = (label: string) => {
-    toast({
-      title: "Not wired yet",
-      description: `"${label}" will be available in the next step.`,
-    });
+    toast({ title: "Not wired yet", description: `"${label}" will be enabled in the next step.` });
+  };
+
+  const clearDetail = () => {
+    setCompany(null);
+    setUsers([]);
+    setJobs([]);
+    setInvoices([]);
+  };
+
+  const loadDetail = async (id: number) => {
+    setIsLoadingDetail(true);
+    clearDetail();
+    try {
+      const res = await fetch(`/api/admin/company/${id}/detail`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.ok) {
+        setCompany(data.company);
+        setUsers(data.users ?? []);
+        setJobs(data.jobs ?? []);
+        setInvoices(data.invoices ?? []);
+        setSearchResults([]);
+      } else {
+        toast({ title: "Failed to load detail", description: data.error, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setIsLoadingDetail(false);
+    }
   };
 
   const handleSearch = async () => {
@@ -129,26 +164,28 @@ export default function DevTools() {
     if (!q) return;
     setIsSearching(true);
     setHasSearched(true);
-    setCompany(null);
-    setUsers([]);
-    setJobs([]);
-    setInvoices([]);
+    clearDetail();
+    setSearchResults([]);
 
     try {
-      const res = await fetch(`/api/admin/company/lookup?mode=${searchMode}&q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCompany(data.company ?? null);
-        setUsers(data.users ?? []);
-        setJobs(data.jobs ?? []);
-        setInvoices(data.invoices ?? []);
-      } else if (res.status === 404) {
-        setCompany(null);
+      const res = await fetch(`/api/admin/company/search?mode=${searchMode}&q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Search failed");
+
+      const results: CompanyBasic[] = data.companies ?? [];
+
+      if (results.length === 0) {
+        // nothing — hasSearched will show "not found"
+      } else if (results.length === 1) {
+        // Single result — auto-select and load detail
+        await loadDetail(results[0].id);
       } else {
-        toast({ title: "Search failed", description: "Backend not connected yet.", variant: "destructive" });
+        // Multiple results (name search) — show picker
+        setSearchResults(results);
       }
-    } catch {
-      toast({ title: "Search unavailable", description: "Backend read routes not wired yet." });
+    } catch (e: any) {
+      toast({ title: "Search failed", description: e.message, variant: "destructive" });
     } finally {
       setIsSearching(false);
     }
@@ -160,6 +197,9 @@ export default function DevTools() {
     { key: "name", label: "Company Name" },
   ];
 
+  const showNoResults = hasSearched && !isSearching && !isLoadingDetail && !company && searchResults.length === 0;
+  const showPicker = searchResults.length > 1 && !company;
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
 
@@ -167,16 +207,12 @@ export default function DevTools() {
       <div className="flex items-start justify-between pt-2">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Dev Tools
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Dev Tools</h1>
             <Badge variant="outline" className="text-xs font-mono border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950">
               ADMIN ONLY
             </Badge>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Internal admin controls — not visible to regular users
-          </p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Internal admin controls — not visible to regular users</p>
         </div>
         <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mt-1">
           <UserCircle className="h-3.5 w-3.5" />
@@ -234,8 +270,8 @@ export default function DevTools() {
             </Button>
           </div>
 
-          {/* Empty/not found state */}
-          {hasSearched && !isSearching && !company && (
+          {/* No results */}
+          {showNoResults && (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-2 pl-1">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
               No company found for that query.
@@ -244,88 +280,112 @@ export default function DevTools() {
         </CardContent>
       </Card>
 
-      {/* ── COMPANY OVERVIEW ────────────────────────────────────── */}
-      {company && (
+      {/* ── MULTIPLE RESULTS PICKER ──────────────────────────────── */}
+      {showPicker && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Building2 className="h-4 w-4 text-slate-500" />
-              Company Overview
+              Select a Company
             </CardTitle>
+            <CardDescription>{searchResults.length} matches found — tap one to load its details</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {searchResults.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => loadDetail(r.id)}
+                  className="w-full flex items-center justify-between px-6 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{r.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">{r.companyCode ?? "—"} · {r.ownerEmail ?? "no owner"}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <SubscriptionBadge status={r.subscriptionStatus} />
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── DETAIL LOADING ────────────────────────────────────────── */}
+      {isLoadingDetail && (
+        <div className="flex items-center justify-center py-12 gap-3 text-slate-500 dark:text-slate-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Loading company data…</span>
+        </div>
+      )}
+
+      {/* ── COMPANY OVERVIEW ────────────────────────────────────── */}
+      {company && !isLoadingDetail && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-slate-500" />
+                {company.name}
+              </CardTitle>
+              <div className="flex gap-1.5 shrink-0">
+                {company.adminIsDemo && <Badge variant="outline" className="text-xs">Demo</Badge>}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InfoRow icon={Building2} label="Name" value={company.name} />
-                  <InfoRow icon={Hash} label="Invite Code" value={<span className="font-mono font-semibold">{company.code}</span>} />
-                  <InfoRow icon={Mail} label="Owner Email" value={company.ownerEmail} />
-                  <InfoRow icon={CreditCard} label="Plan" value={company.subscriptionPlan ?? "—"} />
-                  <InfoRow icon={ShieldCheck} label="Subscription" value={<SubscriptionBadge status={company.subscriptionStatus} />} />
-                  <InfoRow icon={ShieldOff} label="Paused" value={<StatusBadge value={company.adminPaused} trueLabel="Paused" falseLabel="Active" trueVariant="destructive" falseVariant="secondary" />} />
-                  <InfoRow icon={RefreshCw} label="Free Access Override" value={<StatusBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" trueVariant="default" falseVariant="secondary" />} />
-                  <InfoRow icon={ShieldCheck} label="Sub Bypass" value={<StatusBadge value={company.adminBypassSubscription} trueLabel="Bypassed" falseLabel="Off" trueVariant="outline" falseVariant="secondary" />} />
-                  {company.createdAt && (
-                    <InfoRow icon={Calendar} label="Created" value={new Date(company.createdAt).toLocaleDateString()} />
-                  )}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <InfoRow icon={Hash} label="Company ID" value={<span className="font-mono font-semibold">{company.companyCode ?? "—"}</span>} />
+              <InfoRow icon={Mail} label="Owner Email" value={company.ownerEmail ?? "—"} />
+              <InfoRow icon={CreditCard} label="Plan" value={company.subscriptionPlan ?? "—"} />
+              <InfoRow icon={ShieldCheck} label="Subscription" value={<SubscriptionBadge status={company.subscriptionStatus} />} />
+              <InfoRow icon={ShieldOff} label="Account Status" value={<BoolBadge value={company.adminPaused} trueLabel="Paused" falseLabel="Active" trueVariant="destructive" falseVariant="secondary" />} />
+              <InfoRow icon={RefreshCw} label="Free Access Override" value={<BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />} />
+              <InfoRow icon={ShieldCheck} label="Sub Bypass" value={<BoolBadge value={company.adminBypassSubscription} trueLabel="Bypassed" falseLabel="Off" trueVariant="outline" />} />
+              {company.createdAt && (
+                <InfoRow icon={Calendar} label="Created" value={formatDate(company.createdAt)} />
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
 
       {/* ── ADMIN ACTIONS ───────────────────────────────────────── */}
-      {company && (
+      {company && !isLoadingDetail && (
         <Card className="border-amber-200 dark:border-amber-900">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               Admin Actions
             </CardTitle>
-            <CardDescription>These controls affect billing and access. Destructive actions will be enabled in the next step.</CardDescription>
+            <CardDescription>Destructive controls will be enabled in the next step.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Access controls */}
             <div>
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Access Controls</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => placeholderAction("Toggle Dev Bypass")}>
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Toggle Dev Bypass
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Toggle Dev Bypass
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => placeholderAction("Force Paywall")}>
-                  <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
-                  Force Paywall
+                  <ShieldOff className="h-3.5 w-3.5 mr-1.5" />Force Paywall
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => placeholderAction("Remove Subscription")}>
-                  <CreditCard className="h-3.5 w-3.5 mr-1.5" />
-                  Remove Subscription
+                  <CreditCard className="h-3.5 w-3.5 mr-1.5" />Remove Subscription
                 </Button>
               </div>
             </div>
-
             <Separator />
-
-            {/* Company status */}
             <div>
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Company Status</p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                  onClick={() => placeholderAction("Block Company")}
-                >
-                  <Ban className="h-3.5 w-3.5 mr-1.5" />
-                  Block Company
+                <Button variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950" onClick={() => placeholderAction("Block Company")}>
+                  <Ban className="h-3.5 w-3.5 mr-1.5" />Block Company
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"
-                  onClick={() => placeholderAction("Unblock Company")}
-                >
-                  <Unlock className="h-3.5 w-3.5 mr-1.5" />
-                  Unblock Company
+                <Button variant="outline" size="sm" className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950" onClick={() => placeholderAction("Unblock Company")}>
+                  <Unlock className="h-3.5 w-3.5 mr-1.5" />Unblock Company
                 </Button>
               </div>
             </div>
@@ -334,37 +394,36 @@ export default function DevTools() {
       )}
 
       {/* ── USERS ───────────────────────────────────────────────── */}
-      {company && (
+      {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4 text-slate-500" />
               Users
-              {users.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{users.length}</Badge>
-              )}
+              <Badge variant="secondary" className="ml-1">{users.length}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {users.length === 0 ? (
-              <PlaceholderState
-                icon={Users}
-                title="No users loaded"
-                description="User data will appear here once backend routes are wired."
-              />
+              <div className="px-6">
+                <EmptySection icon={Users} message="No users found for this company." />
+              </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {users.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between py-3 gap-3">
+                  <div key={u.id} className="flex items-center justify-between px-6 py-3 gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                         {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : "—"}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{u.email}</p>
+                      {u.lastLoginAt && (
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Last login: {formatDate(u.lastLoginAt)}</p>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <Badge variant="outline" className="text-xs">{u.role}</Badge>
-                      <Badge variant={u.status === "active" ? "secondary" : "destructive"} className="text-xs">{u.status}</Badge>
+                      <Badge variant={u.status === "ACTIVE" ? "secondary" : "destructive"} className="text-xs">{u.status}</Badge>
                     </div>
                   </div>
                 ))}
@@ -375,37 +434,32 @@ export default function DevTools() {
       )}
 
       {/* ── RECENT JOBS ─────────────────────────────────────────── */}
-      {company && (
+      {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Briefcase className="h-4 w-4 text-slate-500" />
               Recent Jobs
-              {jobs.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{jobs.length}</Badge>
-              )}
+              <Badge variant="secondary" className="ml-1">{jobs.length}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {jobs.length === 0 ? (
-              <PlaceholderState
-                icon={Briefcase}
-                title="No jobs loaded"
-                description="Recent jobs will appear here once backend routes are wired."
-              />
+              <div className="px-6">
+                <EmptySection icon={Briefcase} message="No jobs found for this company." />
+              </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {jobs.map((j) => (
-                  <div key={j.id} className="flex items-center justify-between py-3 gap-3">
+                  <div key={j.id} className="flex items-center justify-between px-6 py-3 gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{j.title}</p>
-                      {j.startDate && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {new Date(j.startDate).toLocaleDateString()}
-                        </p>
-                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {j.clientName ? `${j.clientName} · ` : ""}
+                        {j.startDate ? formatDate(j.startDate) : formatDate(j.createdAt)}
+                      </p>
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">{j.status}</Badge>
+                    <JobStatusBadge status={j.status} />
                   </div>
                 ))}
               </div>
@@ -415,35 +469,32 @@ export default function DevTools() {
       )}
 
       {/* ── RECENT INVOICES ─────────────────────────────────────── */}
-      {company && (
+      {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-slate-500" />
               Recent Invoices
-              {invoices.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{invoices.length}</Badge>
-              )}
+              <Badge variant="secondary" className="ml-1">{invoices.length}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {invoices.length === 0 ? (
-              <PlaceholderState
-                icon={CreditCard}
-                title="No invoices loaded"
-                description="Invoice data will appear here once backend routes are wired."
-              />
+              <div className="px-6">
+                <EmptySection icon={CreditCard} message="No invoices found for this company." />
+              </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {invoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between py-3 gap-3">
+                  <div key={inv.id} className="flex items-center justify-between px-6 py-3 gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium font-mono text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Paid: {centsToDisplay(inv.paidAmountCents)} / {centsToDisplay(inv.totalCents)}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {centsToDisplay(inv.paidAmountCents)} paid of {centsToDisplay(inv.totalCents)}
+                        {inv.paidAt ? ` · ${formatDate(inv.paidAt)}` : ""}
                       </p>
                     </div>
-                    <Badge variant={inv.status === "paid" ? "default" : "outline"} className="text-xs shrink-0">{inv.status}</Badge>
+                    <InvoiceStatusBadge status={inv.status} />
                   </div>
                 ))}
               </div>
@@ -451,7 +502,6 @@ export default function DevTools() {
           </CardContent>
         </Card>
       )}
-
     </div>
   );
 }
@@ -470,4 +520,25 @@ function InfoRow({ icon: Icon, label, value }: {
       </div>
     </div>
   );
+}
+
+function JobStatusBadge({ status }: { status: string }) {
+  const map: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
+    completed: "default",
+    active: "outline",
+    pending: "secondary",
+    cancelled: "destructive",
+  };
+  return <Badge variant={map[status] ?? "secondary"} className="text-xs shrink-0">{status}</Badge>;
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  const map: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
+    paid: "default",
+    partial: "outline",
+    pending: "secondary",
+    overdue: "destructive",
+    cancelled: "destructive",
+  };
+  return <Badge variant={map[status] ?? "secondary"} className="text-xs shrink-0">{status}</Badge>;
 }

@@ -1,0 +1,100 @@
+Now I want to move to the next step of the Dev Tools rebuild.
+
+This step is READ-ONLY ONLY.
+Do not add destructive actions yet.
+Do not wire Remove Subscription / Force Paywall / Toggle Dev Bypass / Block / Unblock yet.
+
+GOAL
+Make the new Dev Tools page actually search and display real company data in a clean, reliable, read-only way.
+
+SEARCH REQUIREMENTS
+The “Find Company” card should support real lookup by:
+1. Company ID
+2. Owner Email
+3. Company Name
+
+BEHAVIOR
+- Company ID search should look up the exact company code / company identifier we use for this tool
+- Owner Email should find the company owned by that email
+- Company Name should search by company name and return the best match, or a small list if multiple are found
+- Keep the UX simple and easy to understand
+- If there are multiple company-name matches, show a clean result picker/list so I can tap the right one
+- If there is no match, show a clean “No company found” state
+- Add loading state while searching
+- Keep the search mobile friendly
+
+BACKEND
+Add clean READ-ONLY backend endpoints for the new Dev Tools page.
+Do not restore the old messy /api/dev/* block.
+Create only the minimum clean read-only endpoints needed for:
+- company lookup
+- company overview
+- company users
+- recent jobs
+- recent invoices/payments
+
+DATA TO DISPLAY
+
+1. COMPANY OVERVIEW CARD
+Show real values for:
+- company name
+- company ID/code
+- owner email
+- subscription plan
+- billing/subscription status
+- blocked status
+- dev bypass status
+- created date if available
+
+2. USERS CARD
+Show real users for the selected company:
+- full name if available
+- email
+- role
+- status
+- last login if available
+
+3. RECENT JOBS CARD
+Show recent jobs for the selected company:
+- job title
+- status
+- customer name if available
+- created date or updated date
+
+4. RECENT PAYMENTS / INVOICES CARD
+Show recent financial records for the selected company:
+- invoice number if available
+- amount
+- payment status
+- created date
+- payment date if available
+
+IMPORTANT RULES
+- READ-ONLY ONLY
+- No mutation endpoints
+- No admin actions yet
+- Keep backend code clean and separated
+- Do not bring back the old huge dev route block
+- Reuse existing helpers if safe and appropriate
+- Keep access restricted to the proper dev/admin accounts only
+- Make the UI easy to scan and not cluttered
+- Use badges/pills for statuses where helpful
+- Keep mobile layout polished
+
+UX REQUIREMENTS
+- If one company is found directly, show it immediately
+- If company name search returns multiple matches, show a simple selectable results list
+- Once I select a company, load all read-only cards
+- If data for a section is empty, show a clean empty state inside that section only
+- Do not bring back the old giant noisy dev tools feeling
+
+DELIVERABLES
+1. Real read-only company search wired up
+2. Real company overview data displayed
+3. Real users list displayed
+4. Real recent jobs displayed
+5. Real recent invoices/payments displayed
+6. Clean loading / empty / no-results states
+7. Exact files changed
+8. Exact new endpoints added
+9. Confirmation that no destructive actions were added yet

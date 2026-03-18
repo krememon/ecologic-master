@@ -19117,6 +19117,148 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     }
   });
 
+  // ─── ADMIN READ-ONLY API ─────────────────────────────────────────────────
+  {
+    const { requireDev } = await import('./devAuth');
+
+    // GET /api/admin/company/search?mode=code|email|name&q=...
+    app.get('/api/admin/company/search', isAuthenticated, requireDev, async (req: any, res) => {
+      const mode = (req.query.mode as string) || '';
+      const q = ((req.query.q as string) || '').trim();
+      if (!q || !['code', 'email', 'name'].includes(mode)) {
+        return res.status(400).json({ ok: false, error: 'mode and q required' });
+      }
+      try {
+        const { companies, users } = await import('@shared/schema');
+        const { eq, ilike } = await import('drizzle-orm');
+
+        let companyRows: any[] = [];
+        if (mode === 'code') {
+          companyRows = await db.select().from(companies)
+            .where(eq(companies.companyCode, q.toUpperCase())).limit(1);
+        } else if (mode === 'email') {
+          const ownerRows = await db.select({ id: users.id }).from(users)
+            .where(ilike(users.email, q)).limit(1);
+          if (ownerRows.length) {
+            companyRows = await db.select().from(companies)
+              .where(eq(companies.ownerId, ownerRows[0].id)).limit(1);
+          }
+        } else {
+          companyRows = await db.select().from(companies)
+            .where(ilike(companies.name, `%${q}%`)).limit(10);
+        }
+
+        const enriched = await Promise.all(companyRows.map(async (c: any) => {
+          const ownerRow = await db.select({ email: users.email }).from(users)
+            .where(eq(users.id, c.ownerId)).limit(1);
+          return {
+            id: c.id,
+            name: c.name,
+            companyCode: c.companyCode,
+            ownerEmail: ownerRow[0]?.email ?? null,
+            subscriptionPlan: c.subscriptionPlan,
+            subscriptionStatus: c.subscriptionStatus,
+            adminFreeAccess: c.adminFreeAccess,
+            adminBypassSubscription: c.adminBypassSubscription,
+            adminPaused: c.adminPaused,
+            adminIsDemo: c.adminIsDemo,
+            createdAt: c.createdAt,
+          };
+        }));
+
+        res.json({ ok: true, companies: enriched });
+      } catch (e: any) {
+        console.error('[admin-ro] search error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
+    // GET /api/admin/company/:id/detail
+    app.get('/api/admin/company/:id/detail', isAuthenticated, requireDev, async (req: any, res) => {
+      const companyId = parseInt(req.params.id);
+      if (!companyId || isNaN(companyId)) {
+        return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+      }
+      try {
+        const { companies, users, companyMembers, jobs, invoices } = await import('@shared/schema');
+        const { eq, desc } = await import('drizzle-orm');
+
+        const companyRows = await db.select().from(companies)
+          .where(eq(companies.id, companyId)).limit(1);
+        if (!companyRows.length) return res.status(404).json({ ok: false, error: 'Company not found' });
+        const c = companyRows[0];
+
+        const ownerRow = await db.select({ email: users.email }).from(users)
+          .where(eq(users.id, c.ownerId)).limit(1);
+
+        const memberRows = await db.select({
+          userId: companyMembers.userId,
+          role: companyMembers.role,
+        }).from(companyMembers).where(eq(companyMembers.companyId, companyId));
+
+        const userRows = (await Promise.all(memberRows.map(async (m: any) => {
+          const uRows = await db.select({
+            id: users.id,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            status: users.status,
+            lastLoginAt: users.lastLoginAt,
+          }).from(users).where(eq(users.id, m.userId)).limit(1);
+          return uRows[0] ? { ...uRows[0], role: m.role } : null;
+        }))).filter(Boolean);
+
+        const jobRows = await db.select({
+          id: jobs.id,
+          title: jobs.title,
+          status: jobs.status,
+          clientName: jobs.clientName,
+          startDate: jobs.startDate,
+          createdAt: jobs.createdAt,
+        }).from(jobs)
+          .where(eq(jobs.companyId, companyId))
+          .orderBy(desc(jobs.createdAt))
+          .limit(10);
+
+        const invoiceRows = await db.select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          totalCents: invoices.totalCents,
+          paidAmountCents: invoices.paidAmountCents,
+          balanceDueCents: invoices.balanceDueCents,
+          status: invoices.status,
+          paidAt: invoices.paidAt,
+          createdAt: invoices.createdAt,
+        }).from(invoices)
+          .where(eq(invoices.companyId, companyId))
+          .orderBy(desc(invoices.createdAt))
+          .limit(10);
+
+        res.json({
+          ok: true,
+          company: {
+            id: c.id,
+            name: c.name,
+            companyCode: c.companyCode,
+            ownerEmail: ownerRow[0]?.email ?? null,
+            subscriptionPlan: c.subscriptionPlan,
+            subscriptionStatus: c.subscriptionStatus,
+            adminFreeAccess: c.adminFreeAccess,
+            adminBypassSubscription: c.adminBypassSubscription,
+            adminPaused: c.adminPaused,
+            adminIsDemo: c.adminIsDemo,
+            createdAt: c.createdAt,
+          },
+          users: userRows,
+          jobs: jobRows,
+          invoices: invoiceRows,
+        });
+      } catch (e: any) {
+        console.error('[admin-ro] detail error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+  }
   // ─────────────────────────────────────────────────────────────────────────
 
   return httpServer;
