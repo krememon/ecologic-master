@@ -19756,24 +19756,24 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const end = c.currentPeriodEnd
           ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'unknown date';
-        effectiveLabel = 'Full Access (Apple Subscription)';
-        rawBillingState = `Active ${plan} subscription via Apple · renews ${end}`;
+        effectiveLabel = 'Full Access (Apple Plan)';
+        rawBillingState = `Apple · ${plan} plan · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'google_play') {
         const plan = c.subscriptionPlan ?? 'Unknown';
         const end = c.currentPeriodEnd
           ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'unknown date';
-        effectiveLabel = 'Full Access (Google Play Subscription)';
-        rawBillingState = `Active ${plan} subscription via Google Play · renews ${end}`;
+        effectiveLabel = 'Full Access (Google Play Plan)';
+        rawBillingState = `Google Play · ${plan} plan · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'stripe') {
         const plan = c.subscriptionPlan ?? 'Unknown';
         const end = c.currentPeriodEnd
           ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'unknown date';
-        effectiveLabel = 'Full Access (Paid Plan)';
-        rawBillingState = `Active ${plan} subscription via Stripe · renews ${end}`;
+        effectiveLabel = 'Full Access (Web Plan)';
+        rawBillingState = `Web · ${plan} plan · renews ${end}`;
         allowed = true;
       } else if (billing.source === 'trial') {
         const end = c.trialEndsAt

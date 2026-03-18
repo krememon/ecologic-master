@@ -64,7 +64,7 @@ interface BillingSnapshot {
   source: string;
   hasFreeAccess: boolean;   // true if adminFreeAccess OR adminBypassSubscription
   hasUserBypass: boolean;   // true if any user at this company has subscriptionBypass=true
-  hasActivePaid: boolean;   // true if active paid subscription (Apple or Stripe) with valid period
+  hasActivePaid: boolean;   // true if active paid subscription (Apple, Google Play, or Stripe) with valid period
   hasTrial: boolean;
   subscriptionStatus: string | null;
   subscriptionPlan: string | null;
@@ -543,31 +543,54 @@ export default function DevTools() {
                 <div className="space-y-0.5">
                   {billing.hasUserBypass && (
                     <FactItem
-                      label="User-Level Override"
-                      value="On"
+                      label="User Override"
+                      value="On — personal access override active"
                       positive={true}
                     />
                   )}
                   <FactItem
-                    label="Free Access (Admin)"
-                    value={billing.hasFreeAccess ? "On" : "Off"}
+                    label="Free Access"
+                    value={billing.hasFreeAccess ? "On — admin override, no paid plan required" : "Off"}
                     positive={billing.hasFreeAccess}
                   />
                   <FactItem
-                    label="Paid Plan"
+                    label="Subscription"
                     value={billing.hasActivePaid
-                      ? `Active (${billing.subscriptionPlan ?? "plan"}) · ${
-                          billing.subscriptionPlatform === 'apple' ? 'Apple' :
-                          billing.subscriptionPlatform === 'google_play' ? 'Google Play' :
-                          'Stripe'
-                        }`
+                      ? (() => {
+                          const planLabel = billing.subscriptionPlan ?? "plan";
+                          const store =
+                            billing.subscriptionPlatform === 'apple' ? 'Apple Plan' :
+                            billing.subscriptionPlatform === 'google_play' ? 'Google Play Plan' :
+                            'Web Plan';
+                          const end = billing.currentPeriodEnd
+                            ? `renews ${new Date(billing.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            : "no renewal date";
+                          return `${store} (${planLabel}) · ${end}`;
+                        })()
                       : "None"}
                     positive={billing.hasActivePaid}
                   />
                   <FactItem
                     label="Trial"
-                    value={billing.hasTrial ? "Active" : "None"}
+                    value={billing.hasTrial
+                      ? `Active · ends ${billing.trialEndsAt
+                          ? new Date(billing.trialEndsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : "unknown"}`
+                      : "None"}
                     positive={billing.hasTrial ? true : undefined}
+                  />
+                  <FactItem
+                    label="Billing Source"
+                    value={
+                      billing.source === 'apple' ? 'Apple' :
+                      billing.source === 'google_play' ? 'Google Play' :
+                      billing.source === 'stripe' ? 'Web (Stripe)' :
+                      billing.source === 'free_access' ? 'Free Access' :
+                      billing.source === 'trial' ? 'Trial' :
+                      billing.source === 'user_bypass' ? 'User Override' :
+                      'None'
+                    }
+                    positive={billing.allowed ? true : undefined}
                   />
                   <FactItem
                     label="Paywall"
@@ -668,17 +691,17 @@ export default function DevTools() {
                   {/* Contextual hints */}
                   {billing.hasUserBypass && (
                     <p className="text-xs text-blue-600 dark:text-blue-400 pt-1">
-                      A user at this company has a personal access override — they get in regardless of company billing state.
+                      A user at this company has a personal access override — they get in regardless of company billing.
                     </p>
                   )}
                   {!billing.hasUserBypass && billing.hasFreeAccess && (
                     <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">
-                      Free Access is ON — this company has full access regardless of their paid plan.
+                      Free Access is ON — this company has full access with no active Apple, Google Play, or web subscription required.
                     </p>
                   )}
                   {!billing.allowed && !billing.hasFreeAccess && !billing.hasUserBypass && (
                     <p className="text-xs text-amber-600 dark:text-amber-400 pt-1">
-                      This company is hitting the paywall. Grant Free Access or restore a subscription to let them in.
+                      This company is hitting the paywall. Grant Free Access or remove the paid plan block to let them in.
                     </p>
                   )}
                 </div>

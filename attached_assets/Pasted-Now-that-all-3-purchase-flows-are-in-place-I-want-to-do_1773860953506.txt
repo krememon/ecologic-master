@@ -1,0 +1,81 @@
+Now that all 3 purchase flows are in place, I want to do a clarity/polish pass on billing display.
+
+GOAL
+Make billing status super easy to understand everywhere, especially in Dev Tools.
+
+I want the wording to clearly show these access sources:
+
+- Full Access (Apple Plan)
+- Full Access (Google Play Plan)
+- Full Access (Web Plan)
+- Full Access (Free Access)
+- Trial Access
+- Paywall Active
+
+IMPORTANT
+- Do not change the actual billing logic unless needed for display consistency
+- This is mainly a wording / display / clarity pass
+- Keep backend source-of-truth intact
+- Keep Dev Tools very easy to scan
+- Make the UI/admin wording plain English
+
+WHAT TO CHANGE
+
+1. DEV TOOLS BILLING LABELS
+Update the Billing Controls / billing snapshot / company overview so the effective access labels are shown as:
+
+- apple → Full Access (Apple Plan)
+- google_play → Full Access (Google Play Plan)
+- stripe → Full Access (Web Plan)
+- free_access → Full Access (Free Access)
+- trial → Trial Access
+- blocked → Paywall Active
+- user_bypass → Full Access (User Override) only if intentionally still supported
+
+2. RAW BILLING DETAIL
+Under the main effective access label, show smaller secondary billing detail where helpful, like:
+- Apple renewal date
+- Google Play renewal date
+- Web renewal date
+- Trial end date
+- Legacy raw record notes if needed
+
+Keep it small and clean.
+
+3. PLATFORM LABEL CLEANUP
+Anywhere the UI currently says generic “Paid Plan”, replace it with the more specific wording:
+- Apple Plan
+- Google Play Plan
+- Web Plan
+
+4. FREE ACCESS CLARITY
+Make sure “Free Access” only means the admin override concept.
+Do not show duplicate confusing terms like subscription bypass in the UI.
+
+5. BILLING CONTROL TEXT
+Make sure the admin actions still read clearly:
+- Grant Free Access
+- Remove Free Access
+- Show Paywall
+- Remove Paid Plan
+- Refresh Status
+
+And update helper text if needed so it matches the new multi-platform billing model.
+
+6. OPTIONAL SMALL POLISH
+If helpful, add a small “Billing Source” field that simply shows:
+- Apple
+- Google Play
+- Web
+- Free Access
+- Trial
+- None
+
+Only add this if it improves clarity and doesn’t clutter the page.
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. final effective access labels used
+3. whether any raw Stripe/Apple/Google wording was cleaned up
+4. whether subscription bypass wording is fully removed from the UI
