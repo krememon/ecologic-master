@@ -19180,8 +19180,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         return res.status(400).json({ ok: false, error: 'Invalid company ID' });
       }
       try {
-        const { companies, users, companyMembers, jobs, invoices } = await import('@shared/schema');
-        const { eq, desc } = await import('drizzle-orm');
+        const { companies, users, companyMembers, payments, invoices, customers } = await import('@shared/schema');
+        const { eq, desc, and, inArray } = await import('drizzle-orm');
 
         const companyRows = await db.select().from(companies)
           .where(eq(companies.id, companyId)).limit(1);
@@ -19208,31 +19208,55 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           return uRows[0] ? { ...uRows[0], role: m.role } : null;
         }))).filter(Boolean);
 
-        const jobRows = await db.select({
-          id: jobs.id,
-          title: jobs.title,
-          status: jobs.status,
-          clientName: jobs.clientName,
-          startDate: jobs.startDate,
-          createdAt: jobs.createdAt,
-        }).from(jobs)
-          .where(eq(jobs.companyId, companyId))
-          .orderBy(desc(jobs.createdAt))
-          .limit(10);
+        // Real payment records only — status 'paid' or 'refunded' (real money movement)
+        const paymentRows = await db.select({
+          id: payments.id,
+          amountCents: payments.amountCents,
+          amount: payments.amount,
+          paymentMethod: payments.paymentMethod,
+          status: payments.status,
+          paidDate: payments.paidDate,
+          invoiceId: payments.invoiceId,
+          customerId: payments.customerId,
+          refundedAmountCents: payments.refundedAmountCents,
+          createdAt: payments.createdAt,
+        }).from(payments)
+          .where(and(
+            eq(payments.companyId, companyId),
+            inArray(payments.status, ['paid', 'refunded']),
+          ))
+          .orderBy(desc(payments.paidDate))
+          .limit(20);
 
-        const invoiceRows = await db.select({
-          id: invoices.id,
-          invoiceNumber: invoices.invoiceNumber,
-          totalCents: invoices.totalCents,
-          paidAmountCents: invoices.paidAmountCents,
-          balanceDueCents: invoices.balanceDueCents,
-          status: invoices.status,
-          paidAt: invoices.paidAt,
-          createdAt: invoices.createdAt,
-        }).from(invoices)
-          .where(eq(invoices.companyId, companyId))
-          .orderBy(desc(invoices.createdAt))
-          .limit(10);
+        // Enrich each payment with invoice number + customer name
+        const transactions = await Promise.all(paymentRows.map(async (p: any) => {
+          let invoiceNumber: string | null = null;
+          let customerName: string | null = null;
+
+          if (p.invoiceId) {
+            const invRow = await db.select({ invoiceNumber: invoices.invoiceNumber })
+              .from(invoices).where(eq(invoices.id, p.invoiceId)).limit(1);
+            invoiceNumber = invRow[0]?.invoiceNumber ?? null;
+          }
+
+          if (p.customerId) {
+            const custRow = await db.select({ firstName: customers.firstName, lastName: customers.lastName })
+              .from(customers).where(eq(customers.id, p.customerId)).limit(1);
+            if (custRow[0]) customerName = `${custRow[0].firstName} ${custRow[0].lastName}`.trim();
+          }
+
+          return {
+            id: p.id,
+            amountCents: p.amountCents ?? Math.round(Number(p.amount) * 100),
+            paymentMethod: p.paymentMethod,
+            status: p.status,
+            paidDate: p.paidDate,
+            invoiceNumber,
+            customerName,
+            refundedAmountCents: p.refundedAmountCents ?? 0,
+            createdAt: p.createdAt,
+          };
+        }));
 
         res.json({
           ok: true,
@@ -19250,8 +19274,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
             createdAt: c.createdAt,
           },
           users: userRows,
-          jobs: jobRows,
-          invoices: invoiceRows,
+          transactions,
         });
       } catch (e: any) {
         console.error('[admin-ro] detail error:', e);

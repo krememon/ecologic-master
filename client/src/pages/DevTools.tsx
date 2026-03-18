@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Building2, Users, Briefcase, CreditCard,
+  Search, Building2, Users, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle, ChevronRight, DollarSign
+  AlertTriangle, ChevronRight, DollarSign, RotateCcw
 } from "lucide-react";
 
 const DEV_ALLOWLIST = ['pjpell077@gmail.com'];
@@ -42,23 +42,15 @@ interface UserData {
   lastLoginAt: string | null;
 }
 
-interface JobData {
+interface TransactionData {
   id: number;
-  title: string;
+  amountCents: number;
+  paymentMethod: string | null;
   status: string;
-  clientName: string | null;
-  startDate: string | null;
-  createdAt: string | null;
-}
-
-interface InvoiceData {
-  id: number;
-  invoiceNumber: string;
-  totalCents: number;
-  paidAmountCents: number;
-  balanceDueCents: number;
-  status: string;
-  paidAt: string | null;
+  paidDate: string | null;
+  invoiceNumber: string | null;
+  customerName: string | null;
+  refundedAmountCents: number;
   createdAt: string | null;
 }
 
@@ -71,6 +63,19 @@ function centsToDisplay(cents: number) {
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function methodLabel(method: string | null): string {
+  if (!method) return "Unknown";
+  const map: Record<string, string> = {
+    cash: "Cash",
+    check: "Check",
+    credit_card: "Card",
+    bank_transfer: "Bank Transfer",
+    stripe: "Card (Stripe)",
+    other: "Other",
+  };
+  return map[method] ?? method;
 }
 
 // ── Badge components ──────────────────────────────────────────────────────
@@ -89,26 +94,6 @@ function UserStatusBadge({ status }: { status: string }) {
     return <Badge className="text-xs bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Active</Badge>;
   }
   return <Badge variant="destructive" className="text-xs">{status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
-}
-
-// Maps raw DB job status → human label + color
-function JobStatusBadge({ status }: { status: string }) {
-  const s = (status || "").toLowerCase();
-  if (s === "active") return <Badge className="text-xs shrink-0 bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">In Progress</Badge>;
-  if (s === "completed") return <Badge className="text-xs shrink-0 bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Completed</Badge>;
-  if (s === "cancelled" || s === "canceled") return <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>;
-  if (s === "archived") return <Badge variant="secondary" className="text-xs shrink-0 opacity-60">Archived</Badge>;
-  return <Badge variant="secondary" className="text-xs shrink-0">Open</Badge>;
-}
-
-function InvoiceStatusBadge({ status }: { status: string }) {
-  const s = (status || "").toLowerCase();
-  if (s === "paid") return <Badge className="text-xs shrink-0 bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">Paid</Badge>;
-  if (s === "partial") return <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">Partial</Badge>;
-  if (s === "overdue") return <Badge variant="destructive" className="text-xs shrink-0">Overdue</Badge>;
-  if (s === "cancelled" || s === "canceled") return <Badge variant="destructive" className="text-xs shrink-0">Cancelled</Badge>;
-  if (s === "sent" || s === "pending") return <Badge variant="outline" className="text-xs shrink-0">Sent</Badge>;
-  return <Badge variant="secondary" className="text-xs shrink-0">{s.charAt(0).toUpperCase() + s.slice(1)}</Badge>;
 }
 
 function BoolBadge({ value, trueLabel, falseLabel, trueVariant = "default", falseVariant = "secondary" }: {
@@ -148,7 +133,6 @@ function InfoRow({ icon: Icon, label, value }: {
   );
 }
 
-// Each admin action: a button + one-line description
 function AdminAction({ icon: Icon, label, description, onClick, className = "" }: {
   icon: React.ElementType;
   label: string;
@@ -182,8 +166,7 @@ export default function DevTools() {
   const [searchResults, setSearchResults] = useState<CompanyBasic[]>([]);
   const [company, setCompany] = useState<CompanyBasic | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
-  const [jobs, setJobs] = useState<JobData[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
+  const [transactions, setTransactions] = useState<TransactionData[]>([]);
 
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;
@@ -196,8 +179,7 @@ export default function DevTools() {
   const clearDetail = () => {
     setCompany(null);
     setUsers([]);
-    setJobs([]);
-    setInvoices([]);
+    setTransactions([]);
   };
 
   const loadDetail = async (id: number) => {
@@ -210,8 +192,7 @@ export default function DevTools() {
       if (data.ok) {
         setCompany(data.company);
         setUsers(data.users ?? []);
-        setJobs(data.jobs ?? []);
-        setInvoices(data.invoices ?? []);
+        setTransactions(data.transactions ?? []);
         setSearchResults([]);
       } else {
         toast({ title: "Failed to load detail", description: data.error, variant: "destructive" });
@@ -260,6 +241,11 @@ export default function DevTools() {
 
   const showNoResults = hasSearched && !isSearching && !isLoadingDetail && !company && searchResults.length === 0;
   const showPicker = searchResults.length > 1 && !company;
+
+  // Total revenue across fetched transactions (paid only, excluding fully refunded)
+  const totalRevenueCents = transactions
+    .filter(t => t.status === "paid")
+    .reduce((sum, t) => sum + Math.max(0, t.amountCents - (t.refundedAmountCents ?? 0)), 0);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
@@ -400,13 +386,7 @@ export default function DevTools() {
               <InfoRow icon={CreditCard} label="Plan" value={company.subscriptionPlan ?? "—"} />
               <InfoRow icon={ShieldCheck} label="Subscription" value={<SubscriptionBadge status={company.subscriptionStatus} />} />
               <InfoRow icon={Ban} label="Company Status" value={
-                <BoolBadge
-                  value={company.adminPaused}
-                  trueLabel="Paused"
-                  falseLabel="Active"
-                  trueVariant="destructive"
-                  falseVariant="secondary"
-                />
+                <BoolBadge value={company.adminPaused} trueLabel="Paused" falseLabel="Active" trueVariant="destructive" falseVariant="secondary" />
               } />
               <InfoRow icon={RefreshCw} label="Free Access" value={
                 <BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />
@@ -433,7 +413,6 @@ export default function DevTools() {
             <CardDescription>Actions will be wired in the next step — previewing labels only.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Access Controls</p>
               <AdminAction
@@ -455,9 +434,7 @@ export default function DevTools() {
                 onClick={() => placeholderAction("Remove Paid Plan")}
               />
             </div>
-
             <Separator />
-
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Company Status</p>
               <AdminAction
@@ -475,7 +452,6 @@ export default function DevTools() {
                 className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"
               />
             </div>
-
           </CardContent>
         </Card>
       )}
@@ -503,13 +479,11 @@ export default function DevTools() {
                         {fullName && (
                           <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{fullName}</p>
                         )}
-                        <p className={`text-sm truncate ${fullName ? "text-xs text-slate-500 dark:text-slate-400" : "font-medium text-slate-900 dark:text-slate-100"}`}>
+                        <p className={`truncate ${fullName ? "text-xs text-slate-500 dark:text-slate-400" : "text-sm font-medium text-slate-900 dark:text-slate-100"}`}>
                           {u.email}
                         </p>
                         {u.lastLoginAt && (
-                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                            Last login {formatDate(u.lastLoginAt)}
-                          </p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Last login {formatDate(u.lastLoginAt)}</p>
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -525,70 +499,74 @@ export default function DevTools() {
         </Card>
       )}
 
-      {/* ── RECENT JOBS ──────────────────────────────────────── */}
+      {/* ── TRANSACTIONS ─────────────────────────────────────── */}
       {company && !isLoadingDetail && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-slate-500" />
-              Recent Jobs
-              <Badge variant="secondary" className="ml-1">{jobs.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {jobs.length === 0 ? (
-              <EmptySection icon={Briefcase} message="No jobs found for this company." />
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {jobs.map((j) => (
-                  <div key={j.id} className="px-6 py-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 leading-snug flex-1 min-w-0 truncate">
-                        {j.title}
-                      </p>
-                      <JobStatusBadge status={j.status} />
-                    </div>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                      {[j.clientName, j.startDate ? formatDate(j.startDate) : formatDate(j.createdAt)].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                ))}
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-slate-500" />
+                  Transactions
+                  <Badge variant="secondary" className="ml-1">{transactions.length}</Badge>
+                </CardTitle>
+                <CardDescription className="mt-1">Completed payments only — most recent first</CardDescription>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── RECENT INVOICES ──────────────────────────────────── */}
-      {company && !isLoadingDetail && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-slate-500" />
-              Recent Invoices
-              <Badge variant="secondary" className="ml-1">{invoices.length}</Badge>
-            </CardTitle>
+              {transactions.length > 0 && (
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Total collected</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{centsToDisplay(totalRevenueCents)}</p>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            {invoices.length === 0 ? (
-              <EmptySection icon={CreditCard} message="No invoices found for this company." />
+            {transactions.length === 0 ? (
+              <EmptySection icon={DollarSign} message="No completed transactions found." />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {invoices.map((inv) => {
-                  const isPaid = inv.balanceDueCents === 0 && inv.totalCents > 0;
-                  const isPartial = inv.paidAmountCents > 0 && inv.balanceDueCents > 0;
+                {transactions.map((t) => {
+                  const isRefunded = t.status === "refunded";
+                  const netCents = Math.max(0, t.amountCents - (t.refundedAmountCents ?? 0));
                   return (
-                    <div key={inv.id} className="px-6 py-3.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</p>
+                    <div key={t.id} className="px-6 py-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          {/* Amount + method */}
+                          <div className="flex items-center gap-2">
+                            <span className={`text-base font-semibold ${isRefunded ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}>
+                              {centsToDisplay(t.amountCents)}
+                            </span>
+                            {isRefunded && netCents < t.amountCents && (
+                              <span className="text-sm text-slate-500 dark:text-slate-400">
+                                (net {centsToDisplay(netCents)})
+                              </span>
+                            )}
+                          </div>
+                          {/* Customer + invoice + date */}
                           <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                            {centsToDisplay(inv.totalCents)}
-                            {isPartial && <span className="ml-1 text-amber-600 dark:text-amber-400">· {centsToDisplay(inv.balanceDueCents)} remaining</span>}
-                            {(inv.paidAt || inv.createdAt) && <span className="ml-1">· {formatDate(inv.paidAt ?? inv.createdAt)}</span>}
+                            {[
+                              t.customerName,
+                              t.invoiceNumber,
+                              formatDate(t.paidDate ?? t.createdAt),
+                            ].filter(Boolean).join(" · ")}
                           </p>
                         </div>
-                        <InvoiceStatusBadge status={inv.status} />
+                        {/* Right side: method badge + status */}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {isRefunded ? (
+                            <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
+                              <RotateCcw className="h-3 w-3 mr-1" />Refunded
+                            </Badge>
+                          ) : (
+                            <Badge className="text-xs bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-800">
+                              Paid
+                            </Badge>
+                          )}
+                          {t.paymentMethod && (
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{methodLabel(t.paymentMethod)}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
