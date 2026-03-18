@@ -1,0 +1,59 @@
+We need to stop treating Stripe as the billing authority for the native iOS app subscription flow.
+
+GOAL
+Plan and begin the migration so iOS native subscription access is driven by Apple IAP / StoreKit instead of Stripe.
+
+CURRENT PROBLEM
+Right now the native app is still using our backend Stripe/local subscription fields as the source of truth for paid access.
+That is why the app says the company has an active paid plan.
+
+WHAT I WANT
+For the native iOS app:
+- subscription purchase flow should go through Apple IAP
+- app access should be based on Apple subscription entitlement
+- backend should store/sync Apple subscription status so the app gate can trust it
+- Stripe should not be the authority for native iOS subscription access
+
+PLEASE DO THIS IN PHASES
+
+PHASE 1 — AUDIT CURRENT BILLING FLOW
+Find every place the app currently uses Stripe/local subscription fields for gating native access.
+Tell me:
+- where subscription status is read
+- where Stripe/local DB is treated as source of truth
+- where this needs to be swapped or extended for Apple IAP
+
+PHASE 2 — APPLE IAP IMPLEMENTATION PLAN
+Give me the exact implementation plan for:
+- App Store Connect subscription setup
+- StoreKit product IDs
+- native purchase flow
+- restore purchases flow
+- backend receipt/transaction verification
+- syncing Apple subscription state into our backend
+- mapping Apple entitlement to our effective access helper
+
+PHASE 3 — DATA MODEL / SOURCE OF TRUTH DESIGN
+Propose the cleanest schema/logic so billing authority can distinguish:
+- Apple subscription
+- Stripe subscription
+- free access override
+- trial access
+- paywall active
+
+I want one effective access result, but clear source labels like:
+- apple
+- stripe
+- trial
+- free_access
+- blocked
+
+PHASE 4 — NATIVE GATE UPDATE
+After Apple IAP is wired, native app entry should check fresh backend entitlement derived from Apple subscription status.
+
+IMPORTANT
+- Do not implement random guesswork
+- Keep the current app working
+- First audit the current flow and produce the clean migration plan
+- Use plain English
+- Tell me exactly which files would need to change
