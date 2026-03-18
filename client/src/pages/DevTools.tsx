@@ -62,9 +62,8 @@ interface BillingSnapshot {
   rawBillingState: string;
   allowed: boolean;
   source: string;
-  hasFreeAccess: boolean;
-  hasBypass: boolean;
-  hasDevBypass: boolean;
+  hasFreeAccess: boolean;   // true if adminFreeAccess OR adminBypassSubscription
+  hasUserBypass: boolean;   // true if any user at this company has subscriptionBypass=true
   hasActiveStripe: boolean;
   hasTrial: boolean;
   subscriptionStatus: string | null;
@@ -159,6 +158,7 @@ function EffectiveAccessBadge({ label }: { label: string }) {
       </span>
     );
   }
+  // Fallback (includes any unexpected label)
   return (
     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
       <AlertTriangle className="h-4 w-4" />
@@ -500,7 +500,7 @@ export default function DevTools() {
                 <BoolBadge value={company.adminPaused} trueLabel="Paused" falseLabel="Active" trueVariant="destructive" falseVariant="secondary" />
               } />
               <InfoRow icon={RefreshCw} label="Free Access" value={
-                <BoolBadge value={company.adminFreeAccess} trueLabel="Enabled" falseLabel="Off" />
+                <BoolBadge value={company.adminFreeAccess || company.adminBypassSubscription} trueLabel="Enabled" falseLabel="Off" />
               } />
               {company.createdAt && (
                 <InfoRow icon={Calendar} label="Created" value={formatDate(company.createdAt)} />
@@ -540,8 +540,15 @@ export default function DevTools() {
 
                 {/* Quick facts */}
                 <div className="space-y-0.5">
+                  {billing.hasUserBypass && (
+                    <FactItem
+                      label="User-Level Override"
+                      value="On"
+                      positive={true}
+                    />
+                  )}
                   <FactItem
-                    label="Free Access"
+                    label="Free Access (Admin)"
                     value={billing.hasFreeAccess ? "On" : "Off"}
                     positive={billing.hasFreeAccess}
                   />
@@ -569,7 +576,7 @@ export default function DevTools() {
                   <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Actions</p>
                   <div className="flex flex-wrap gap-2">
 
-                    {/* Grant Free Access */}
+                    {/* Grant Free Access — disabled if already on or user-level bypass makes it redundant */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -585,7 +592,7 @@ export default function DevTools() {
                       Grant Free Access
                     </Button>
 
-                    {/* Remove Free Access */}
+                    {/* Remove Free Access — disabled if already off */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -601,11 +608,11 @@ export default function DevTools() {
                       Remove Free Access
                     </Button>
 
-                    {/* Show Paywall (force-paywall) */}
+                    {/* Show Paywall — disabled if already fully blocked (no bypass of any kind) */}
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isMutating || (!billing.allowed && !billing.hasFreeAccess)}
+                      disabled={isMutating || (!billing.allowed && !billing.hasFreeAccess && !billing.hasUserBypass)}
                       onClick={() => runBillingAction("force-paywall")}
                       className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 disabled:opacity-40"
                     >
@@ -617,7 +624,7 @@ export default function DevTools() {
                       Show Paywall
                     </Button>
 
-                    {/* Remove Paid Plan */}
+                    {/* Remove Paid Plan — disabled if no active subscription or trial to remove */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -651,15 +658,20 @@ export default function DevTools() {
 
                   </div>
 
-                  {/* Contextual hint */}
-                  {billing.hasFreeAccess && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">
-                      Free Access is ON — this company has full access regardless of their paid plan status.
+                  {/* Contextual hints */}
+                  {billing.hasUserBypass && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 pt-1">
+                      A user at this company has a personal access override — they get in regardless of company billing state.
                     </p>
                   )}
-                  {!billing.allowed && !billing.hasFreeAccess && (
+                  {!billing.hasUserBypass && billing.hasFreeAccess && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 pt-1">
+                      Free Access is ON — this company has full access regardless of their paid plan.
+                    </p>
+                  )}
+                  {!billing.allowed && !billing.hasFreeAccess && !billing.hasUserBypass && (
                     <p className="text-xs text-amber-600 dark:text-amber-400 pt-1">
-                      This company is currently hitting the paywall. Grant Free Access or restore a subscription to let them in.
+                      This company is hitting the paywall. Grant Free Access or restore a subscription to let them in.
                     </p>
                   )}
                 </div>

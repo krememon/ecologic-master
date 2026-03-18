@@ -1,0 +1,99 @@
+We need to clean up a billing/access logic confusion in Dev Tools.
+
+PROBLEM
+The current Dev Tools page is confusing and inaccurate.
+
+For the selected company, I currently have full access to the app in real life, but the Dev Tools page is showing:
+- Free Access: Off
+- Subscription Bypass: Off
+
+That is misleading.
+
+Also, “Free Access” and “Subscription Bypass” appear to be doing the same thing in practice.
+From the current implementation:
+- Grant Free Access turns BOTH adminFreeAccess and adminBypassSubscription on
+- Remove Free Access turns BOTH off
+
+So the UI should NOT show these as two separate concepts if they are being controlled together.
+
+GOAL
+Make Dev Tools show one simple, accurate access override concept in plain English, and make the displayed state reflect the company’s REAL effective access.
+
+WHAT TO CHANGE
+
+1. REMOVE “Subscription Bypass” FROM THE UI
+- Do not show a separate “Subscription Bypass” field in the company overview or billing controls
+- Keep any backend field if needed internally, but do not expose it as a separate user-facing concept
+- The UI should only show one plain-English override concept:
+  - “Free Access”
+
+2. MAKE “FREE ACCESS” REPRESENT THE REAL ADMIN OVERRIDE STATE
+- If adminFreeAccess and adminBypassSubscription are both being used together for granting manual access, collapse them into one UI status
+- “Free Access: On” should mean the company has manual admin-granted access
+- “Free Access: Off” should mean they do not
+
+3. ADD / FIX A CLEAR “EFFECTIVE ACCESS” STATUS
+The top/main status must reflect REALITY, not just raw DB fields.
+
+I want one main plain-English status that correctly answers:
+“Can this company currently use the app?”
+
+Examples:
+- Full Access (Free Access)
+- Full Access (Paid Plan)
+- Trial Access
+- Paywall Active
+
+This should be the PRIMARY truth shown in the UI.
+
+4. RAW STATE CAN EXIST, BUT SECONDARY ONLY
+If needed, show smaller secondary detail like:
+- Raw Billing State: No active subscription
+But the main status must reflect actual effective access.
+
+5. FIX THE CURRENT COMPANY DISPLAY BUG
+For the company I searched, if I currently have full access in the app, the Dev Tools page must reflect that correctly.
+Investigate why it is currently showing Free Access Off / Subscription Bypass Off while real access still works.
+
+Possible causes to inspect:
+- stale local company data
+- wrong company selected
+- the app is using a different access rule than Dev Tools
+- session/company mismatch
+- billing snapshot endpoint not using the same source of truth as the actual app gating
+- one bypass field being ignored by the UI
+- app access coming from valid subscription/trial while the labels are misleading
+
+Find the real cause and fix it properly.
+
+6. SINGLE SOURCE OF TRUTH
+Make sure Dev Tools uses the same effective access helper / logic as the actual app paywall gating.
+I do NOT want Dev Tools showing one thing while the real app behaves another way.
+
+7. BUTTONS / LABELS
+Keep the buttons as:
+- Grant Free Access
+- Remove Free Access
+- Show Paywall
+- Remove Paid Plan
+- Refresh Status
+
+But remove any duplicate/confusing display terminology around bypass/subscription bypass.
+
+UI REQUIREMENTS
+- Plain English only
+- Remove confusing duplicate fields
+- Keep it mobile friendly
+- Main focus should be clarity and accuracy
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. why the previous UI was inaccurate
+3. what the real effective access source of truth is now
+4. whether Subscription Bypass is still kept only as an internal field
+5. what conditions make the UI show:
+   - Full Access (Free Access)
+   - Full Access (Paid Plan)
+   - Trial Access
+   - Paywall Active

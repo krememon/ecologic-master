@@ -19286,18 +19286,29 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     // Single source of truth: wraps getEffectiveBillingAccess → plain-English snapshot
 
     const buildBillingSnapshot = async (companyId: number) => {
-      const { companies } = await import('@shared/schema');
+      const { companies, users } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
       const { getEffectiveBillingAccess } = await import('./billingResolver');
 
       const rows = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
       if (!rows.length) return null;
       const c = rows[0];
+
+      // Check if any user at this company has a personal subscriptionBypass flag.
+      // This mirrors the real app's access path: user-level bypass is checked BEFORE
+      // company-level billing in /api/subscriptions/status.
+      const userRows = await db
+        .select({ subscriptionBypass: users.subscriptionBypass })
+        .from(users)
+        .where(eq(users.companyId, companyId));
+      const hasUserBypass = userRows.some(u => u.subscriptionBypass === true);
+
       const billing = getEffectiveBillingAccess(c);
       const now = new Date();
 
-      const hasFreeAccess = !!c.adminFreeAccess;
-      const hasBypass = !!c.adminBypassSubscription;
+      // "Free Access" in the UI = either adminFreeAccess OR adminBypassSubscription.
+      // Both flags serve the same admin-override purpose and are always set/cleared together.
+      const hasFreeAccess = !!(c.adminFreeAccess || c.adminBypassSubscription);
       const hasActiveStripe =
         c.subscriptionStatus === 'active' &&
         !!(c.currentPeriodEnd && new Date(c.currentPeriodEnd) > now);
@@ -19307,16 +19318,28 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 
       let effectiveLabel: string;
       let rawBillingState: string;
+      let allowed: boolean;
 
-      if (c.adminPaused) {
+      // Priority mirrors the real app's /api/subscriptions/status route:
+      // 1. User-level bypass (subscriptionBypass on user record) — highest priority
+      // 2. Company paused — blocks all access
+      // 3. Company-level admin overrides (adminFreeAccess / adminBypassSubscription)
+      // 4. Stripe active subscription
+      // 5. Trial
+      // 6. Blocked
+
+      if (hasUserBypass) {
+        effectiveLabel = 'Full Access (User Override)';
+        rawBillingState = 'A user at this company has a personal access override enabled';
+        allowed = true;
+      } else if (c.adminPaused) {
         effectiveLabel = 'Paused by Admin';
         rawBillingState = 'All access blocked — company is suspended';
-      } else if (billing.source === 'override_free_access') {
+        allowed = false;
+      } else if (billing.source === 'override_free_access' || billing.source === 'override_bypass') {
         effectiveLabel = 'Full Access (Free Access)';
-        rawBillingState = 'Free access is ON — no paid subscription required';
-      } else if (billing.source === 'override_bypass') {
-        effectiveLabel = 'Full Access (Subscription Bypass)';
-        rawBillingState = 'Subscription gate bypassed by admin';
+        rawBillingState = 'Admin free access is ON — no paid subscription required';
+        allowed = true;
       } else if (billing.source === 'stripe') {
         const plan = c.subscriptionPlan ?? 'Unknown';
         const end = c.currentPeriodEnd
@@ -19324,14 +19347,17 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           : 'unknown date';
         effectiveLabel = 'Full Access (Paid Plan)';
         rawBillingState = `Active ${plan} subscription · renews ${end}`;
+        allowed = true;
       } else if (billing.source === 'trial') {
         const end = c.trialEndsAt
           ? new Date(c.trialEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'unknown date';
         effectiveLabel = 'Trial Access';
         rawBillingState = `Free trial active · ends ${end}`;
+        allowed = true;
       } else {
         effectiveLabel = 'Paywall Active';
+        allowed = false;
         const reasonMap: Record<string, string> = {
           company_paused: 'Company is suspended by admin',
           stripe_subscription_expired: 'Paid subscription has expired',
@@ -19348,11 +19374,10 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         companyCode: c.companyCode,
         effectiveLabel,
         rawBillingState,
-        allowed: billing.allowed,
-        source: billing.source,
+        allowed,
+        source: hasUserBypass ? 'user_bypass' : billing.source,
         hasFreeAccess,
-        hasBypass,
-        hasDevBypass: hasFreeAccess || hasBypass,
+        hasUserBypass,
         hasActiveStripe,
         hasTrial,
         subscriptionStatus: c.subscriptionStatus,
