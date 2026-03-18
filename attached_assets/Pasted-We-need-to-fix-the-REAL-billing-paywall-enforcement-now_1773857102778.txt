@@ -1,0 +1,123 @@
+We need to fix the REAL billing/paywall enforcement now.
+
+This is the next priority for Dev Tools and the app itself.
+
+PROBLEM
+Right now the billing controls are not loading correctly, and more importantly, I need the ACTUAL app access logic to be enforced correctly every time a user enters the app.
+
+For example:
+- The ZSL company does NOT have a subscription
+- So it should NOT be allowed past the paywall
+- The app must recognize this every time the user opens the app / enters the app / refreshes into the app
+
+GOAL
+Make the app reliably check real billing access on app entry and block/paywall companies with no valid access.
+
+TOP PRIORITIES
+
+1. FIX THE BILLING CONTROLS LOAD ERROR
+Right now the Dev Tools page says:
+- “Could not load billing status”
+
+First fix that so the Billing Controls card can actually load the billing snapshot for the selected company.
+
+Find the actual cause:
+- broken endpoint
+- missing route
+- auth failure
+- wrong company id/code being passed
+- frontend query bug
+- backend exception
+- whatever it is
+
+Fix it properly.
+
+2. ENFORCE BILLING ACCESS ON EVERY APP ENTRY
+I want the real app to check effective company access every time the user enters the app.
+
+That means when the user:
+- logs in
+- refreshes
+- opens the app again
+- restores a session
+- lands on the dashboard or protected area
+
+the app should verify:
+- does this user/company currently have valid access?
+
+VALID ACCESS SHOULD ONLY BE:
+- company has Free Access override
+- OR company has active paid subscription
+- OR company has valid active trial
+- OR valid user-level override if that is intentionally supported
+
+IF NOT:
+- they must be sent to the paywall
+- they should not be able to continue using the app
+
+3. SINGLE SOURCE OF TRUTH
+Use one central helper for effective access and make BOTH of these use it:
+- Dev Tools billing snapshot
+- actual app paywall gating
+
+I do NOT want Dev Tools using one logic path and app entry using another.
+
+4. ZSL TEST CASE
+Use ZSL as the example test case:
+- if ZSL has no subscription
+- no trial
+- no free access
+- no valid override
+then ZSL must hit the paywall every time
+
+5. DO NOT RELY ON STALE CLIENT STATE
+The app should not just trust old frontend state.
+On app entry / session restore, it must fetch current effective access from the backend and gate based on that.
+
+6. MAKE THE PROTECTED APP AREA RESPECT THIS
+Wherever the app currently decides whether the user can see the main app, update it so billing access is checked there consistently.
+
+Examples:
+- auth bootstrap
+- current user fetch
+- subscription status fetch
+- protected layout
+- dashboard entry
+Use the cleanest existing place(s) in the app.
+
+7. KEEP DEV TOOLS ACCURATE
+Once fixed, the Billing Controls card should correctly load and show:
+- Effective Access
+- Raw Billing State
+- Free Access On/Off
+- Paid Plan Active/Inactive
+- Trial Active/Inactive
+- Paywall Showing/Hidden
+
+8. CLEAR LOGGING
+Add targeted logs so we can verify gating during testing.
+I want logs that clearly show:
+- company id/code
+- user id/email
+- effective access result
+- why access was granted or denied
+- whether paywall redirect happened
+
+Keep logs targeted and clean, not noisy.
+
+IMPORTANT RULES
+- Do not break login
+- Do not break normal paid companies
+- Do not create duplicate billing logic
+- Centralize the access decision
+- Keep this simple and reliable
+- Preserve dev/admin protections for Dev Tools
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what caused the Billing Controls load failure
+3. where the real app-entry billing check now happens
+4. the exact effective access logic order
+5. whether ZSL will now be forced to the paywall if it has no valid access
+6. what logs were added for testing

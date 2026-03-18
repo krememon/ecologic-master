@@ -63,7 +63,8 @@ export function useSubscriptionGate({
     },
     enabled: shouldFetch,
     retry: 1,
-    staleTime: 60 * 1000,
+    staleTime: 0,           // Always fetch fresh — never use cached billing state
+    refetchOnMount: true,   // Re-check on every app entry / session restore
     refetchOnWindowFocus: true,
   });
 

@@ -4330,11 +4330,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
 
       const user = await storage.getUser(userId);
+      const userEmail = user?.email ?? userId;
 
       // Dev bypass — scoped to the allowlisted personal account only (not all companies)
       if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1') {
         const { isDevAccount } = await import('./devAuth');
         if (user && isDevAccount(user)) {
+          // Silent — dev account bypass is expected, no need to log every poll
           return res.json({
             active: true,
             status: 'active',
@@ -4349,7 +4351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (user?.subscriptionBypass) {
-        console.log(`[subscriptions] DEV BYPASS active for ${user.email}`);
+        console.log(`[access] GRANTED userId=${userId} email=${userEmail} reason=user_bypass`);
         return res.json({
           active: true,
           status: 'active',
@@ -4363,11 +4365,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const company = await storage.getUserCompany(userId);
       if (!company) {
+        console.log(`[access] BLOCKED userId=${userId} email=${userEmail} reason=no_company`);
         return res.json({ active: false, status: 'no_company' });
       }
+
       const { getEffectiveBillingAccess } = await import('./billingResolver');
       const billing = getEffectiveBillingAccess(company);
       const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
+
+      if (billing.allowed) {
+        console.log(`[access] GRANTED userId=${userId} email=${userEmail} companyId=${company.id} companyCode=${company.companyCode ?? '?'} source=${billing.source} plan=${billing.effectivePlan ?? 'none'}`);
+      } else {
+        console.log(`[access] BLOCKED userId=${userId} email=${userEmail} companyId=${company.id} companyCode=${company.companyCode ?? '?'} reason=${billing.blockReason ?? 'no_access'} → paywall`);
+      }
+
       res.json({
         active: billing.allowed,
         status: billing.source,
@@ -19295,13 +19306,16 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       const c = rows[0];
 
       // Check if any user at this company has a personal subscriptionBypass flag.
+      // Users have no direct companyId — they link to companies through companyMembers.
       // This mirrors the real app's access path: user-level bypass is checked BEFORE
       // company-level billing in /api/subscriptions/status.
-      const userRows = await db
+      const { companyMembers } = await import('@shared/schema');
+      const memberRows = await db
         .select({ subscriptionBypass: users.subscriptionBypass })
         .from(users)
-        .where(eq(users.companyId, companyId));
-      const hasUserBypass = userRows.some(u => u.subscriptionBypass === true);
+        .innerJoin(companyMembers, eq(companyMembers.userId, users.id))
+        .where(eq(companyMembers.companyId, companyId));
+      const hasUserBypass = memberRows.some(u => u.subscriptionBypass === true);
 
       const billing = getEffectiveBillingAccess(c);
       const now = new Date();
