@@ -13,7 +13,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     price: 29.99,
     userLimit: 1,
     productId: "ecologic_starter",
-    appleProductId: "com.ecologic.app.starter.monthly",
+    appleProductId: "ecologic_starter",
     googlePlayProductId: "ecologic_starter_monthly",
   },
   team: {
@@ -21,7 +21,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     price: 79.99,
     userLimit: 5,
     productId: "ecologic_team",
-    appleProductId: "com.ecologic.app.team.monthly",
+    appleProductId: "ecologic_team",
     googlePlayProductId: "ecologic_team_monthly",
   },
   pro: {
@@ -29,7 +29,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     price: 159.99,
     userLimit: 10,
     productId: "ecologic_pro",
-    appleProductId: "com.ecologic.app.pro.monthly",
+    appleProductId: "ecologic_pro",
     googlePlayProductId: "ecologic_pro_monthly",
   },
   scale: {
@@ -37,7 +37,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     price: 299.99,
     userLimit: 15,
     productId: "ecologic_scale",
-    appleProductId: "com.ecologic.app.scale.monthly",
+    appleProductId: "ecologic_scale",
     googlePlayProductId: "ecologic_scale_monthly",
   },
 };
