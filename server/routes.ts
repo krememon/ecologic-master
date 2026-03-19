@@ -19968,10 +19968,16 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       if (session.mode !== 'subscription') {
         return res.json({ ok: true, synced: false, reason: 'not a subscription session' });
       }
-      if (session.payment_status !== 'paid') {
-        console.log(`[billing/verify-session] payment_status=${session.payment_status} — not yet paid`);
+      // For subscription checkout sessions, payment_status can be:
+      //   'paid'                 — card charged immediately (most common)
+      //   'no_payment_required'  — trial period or $0 invoice; subscription still active
+      //   'unpaid'               — payment failed (do not sync)
+      const validPaymentStatuses = ['paid', 'no_payment_required'];
+      if (!validPaymentStatuses.includes(session.payment_status)) {
+        console.log(`[billing/verify-session] payment_status=${session.payment_status} — not paid, skipping sync`);
         return res.json({ ok: true, synced: false, reason: `payment_status=${session.payment_status}` });
       }
+      console.log(`[billing/verify-session] payment_status=${session.payment_status} — proceeding with sync`);
 
       const sub = session.subscription;
       if (!sub || typeof sub === 'string') {

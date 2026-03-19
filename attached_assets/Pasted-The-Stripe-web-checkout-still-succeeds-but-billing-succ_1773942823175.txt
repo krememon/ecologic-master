@@ -1,0 +1,115 @@
+The Stripe web checkout still succeeds, but /billing/success is still hanging forever on the loading state even after the new verify-checkout-session endpoint was added.
+
+We need to debug this end-to-end and fix the exact blocking point.
+
+CURRENT BEHAVIOR
+- User starts from web paywall
+- Chooses a plan
+- Stripe Checkout opens correctly
+- Test payment completes
+- User returns to:
+  /billing/success?session_id=cs_test_...
+- Billing success page shows:
+  “Confirming your subscription...”
+  “We’re activating your subscription now...”
+- It never exits this state
+
+IMPORTANT
+- verify-checkout-session was already added
+- success page is supposed to call it on mount
+- then billing/status polling is supposed to pick up the updated company subscription
+- but something in that chain is still failing
+
+DO A FULL TRACE FOR THIS EXACT FLOW
+
+1) Frontend success page trace
+Inspect BillingSuccess.tsx and trace exactly:
+- does verify-checkout-session fire on mount?
+- is it firing only once?
+- what request URL is it calling?
+- what payload is it sending?
+- what response is it getting?
+- is there any silent catch/error swallow?
+- after verify-checkout-session returns, does the page actually start/continue polling?
+- what exact condition allows the page to exit loading?
+
+Add targeted logs for:
+- session_id read from URL
+- verify-checkout-session request start
+- verify-checkout-session response
+- billing status poll response
+- exact reason spinner remains visible
+
+2) Backend verify-checkout-session trace
+Inspect the new POST /api/billing/verify-checkout-session route and log every step:
+- request received
+- authenticated user id
+- authenticated company id
+- session_id received
+- Stripe checkout session retrieved?
+- payment_status
+- mode
+- customer id
+- subscription id
+- expanded subscription status
+- result of company/customer security check
+- result of syncSubscriptionToCompany()
+- final JSON response returned to frontend
+
+If anything returns early, log the exact reason.
+
+3) DB write verification
+Immediately after syncSubscriptionToCompany(), verify the company record actually contains updated values:
+- subscriptionStatus
+- subscriptionPlan
+- stripeSubscriptionId
+- currentPeriodEnd
+- subscriptionPlatform
+- any billingBlocked / paywall / effective access fields
+- any other field /api/billing/status depends on
+
+Log the before and after values.
+
+4) Billing status endpoint audit
+Inspect GET /api/billing/status and confirm:
+- which exact fields it reads
+- what it considers “active” / “allowed”
+- whether it is reading the same fields verify-checkout-session is writing
+- whether there is any stale cache, wrong company lookup, or old field name mismatch
+
+Log the exact status response for the company right after verify-checkout-session runs.
+
+5) Gating/paywall blocker audit
+Check whether access is still blocked because another field remains set, such as:
+- billingBlocked
+- expired paywall flag
+- old Apple plan residue
+- hidden/show paywall override
+- company access resolver using a different source than billing/status
+- resolver still preferring old fields over new Stripe ones
+
+We need the single exact source of truth identified.
+
+6) Fix success page completion logic
+After verify-checkout-session succeeds and /api/billing/status shows allowed/active:
+- the spinner must stop
+- the page must transition
+- the user must be forwarded into the app
+
+If transition logic is missing or waiting on the wrong condition, fix it.
+
+7) Add an emergency fallback for the success page
+If verify-checkout-session succeeds and returns a valid active subscription, do not make the user wait forever for polling.
+Allow the success page to immediately continue based on successful verification response, or after one confirmed active billing/status response.
+
+8) Return exact findings
+I want:
+- exact root cause
+- exact files changed
+- exact log lines / responses that proved it
+- exact condition that was keeping the spinner alive
+- confirmation that after payment the user now gets let back into the app
+
+IMPORTANT
+Do not give vague guesses.
+Actually trace the live success flow and identify the exact blocking condition.

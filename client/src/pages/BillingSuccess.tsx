@@ -41,17 +41,26 @@ export default function BillingSuccess() {
     apiRequest("POST", "/api/billing/verify-checkout-session", { sessionId })
       .then(async (res) => {
         const data = await res.json();
-        console.log(`[billing/success] verify-checkout-session → synced=${data.synced} status=${data.status}`);
-        if (data.synced) {
-          // Force an immediate refresh of billing status after successful sync
+        console.log(`[billing/success] verify-checkout-session → synced=${data.synced} status=${data.status} ok=${data.ok}`);
+        if (data.synced && (data.status === "active" || data.status === "trialing")) {
+          // Subscription confirmed from Stripe directly — no need to wait for the next poll.
+          console.log(`[billing/success] ✅ direct confirm via verify — status=${data.status}`);
           queryClient.invalidateQueries({ queryKey: ["/api/billing/status"] });
           queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
           queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+          setConfirmed(true);
+        } else if (data.synced) {
+          // Synced but status might be unusual — trigger a refetch to let the poll confirm
+          queryClient.invalidateQueries({ queryKey: ["/api/billing/status"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
           refetch();
+        } else {
+          console.warn(`[billing/success] verify returned synced=false, reason=${data.reason} — falling back to polling`);
         }
       })
       .catch((err) => {
         console.warn(`[billing/success] verify-checkout-session error:`, err?.message);
+        console.warn(`[billing/success] falling back to polling`);
       });
   }, [isAuthenticated, sessionId]);
 
@@ -65,7 +74,7 @@ export default function BillingSuccess() {
   useEffect(() => {
     if (!billing) return;
     console.log(`[billing/success] poll #${polls} — billingAllowed=${billing.billingAllowed} status=${billing.subscriptionStatus} plan=${billing.effectivePlan}`);
-    if (billing.billingAllowed && billing.subscriptionStatus === "active") {
+    if (billing.billingAllowed && (billing.subscriptionStatus === "active" || billing.subscriptionStatus === "trialing")) {
       setConfirmed(true);
       queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
       queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
