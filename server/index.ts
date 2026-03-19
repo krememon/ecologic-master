@@ -14,6 +14,7 @@ import { notifyManagers, notifyOwners } from "./notificationService";
 import { startJobScheduler } from "./jobScheduler";
 import { sendReceiptForPayment } from "./receiptService";
 import * as stripeConnectService from "./services/stripeConnect";
+import { syncSubscriptionToCompany, resolveCompanyFromStripeEvent } from "./billingService";
 
 const app = express();
 
@@ -387,6 +388,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     console.log(`[Stripe Webhook] checkout.session.completed: sessionId=${session.id}, paymentIntent=${session.payment_intent}, amount=${session.amount_total}, metadata=${JSON.stringify(session.metadata)}`);
 
     if (!invoiceId) {
+      // Subscription checkouts don't carry an invoiceId — handled by customer.subscription.* events
+      if ((session as any).mode === 'subscription') {
+        console.log('[Stripe Webhook] checkout.session.completed: subscription mode, no invoiceId expected — deferring to subscription events');
+        return res.json({ received: true, message: 'Subscription checkout — handled by subscription events' });
+      }
       console.error('[Stripe Webhook] No invoiceId in metadata');
       return res.status(400).send('Missing invoiceId in metadata');
     }
@@ -971,6 +977,112 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       console.error('[Stripe Webhook] Error processing payout event:', error.message);
     }
   }
+
+  // ── Stripe Billing Subscription Events ────────────────────────────────────
+  // customer.subscription.created / updated / deleted
+  if (
+    event.type === 'customer.subscription.created' ||
+    event.type === 'customer.subscription.updated' ||
+    event.type === 'customer.subscription.deleted'
+  ) {
+    const sub = event.data.object as Stripe.Subscription;
+    const customerId = typeof sub.customer === 'string' ? sub.customer : (sub.customer as any)?.id;
+    const metaCompanyId = sub.metadata?.companyId ?? null;
+
+    try {
+      const companyId = await resolveCompanyFromStripeEvent({ customerId, metadataCompanyId: metaCompanyId });
+      if (!companyId) {
+        console.warn(`[billing-webhook] ${event.type}: could not resolve companyId — customerId=${customerId} meta=${metaCompanyId}`);
+      } else {
+        await syncSubscriptionToCompany(companyId, {
+          id: sub.id,
+          status: sub.status,
+          current_period_end: (sub as any).current_period_end,
+          cancel_at_period_end: sub.cancel_at_period_end,
+          items: sub.items,
+          metadata: sub.metadata as Record<string, string>,
+          customer: customerId,
+        });
+        console.log(`[billing-webhook] ${event.type} synced → companyId=${companyId} status=${sub.status}`);
+      }
+    } catch (err: any) {
+      console.error(`[billing-webhook] ${event.type} error:`, err.message);
+    }
+  }
+
+  // invoice.paid — confirms successful payment, keeps subscription active
+  if (event.type === 'invoice.paid') {
+    const inv = event.data.object as Stripe.Invoice;
+    if (inv.subscription) {
+      const customerId = typeof inv.customer === 'string' ? inv.customer : (inv.customer as any)?.id;
+      const metaCompanyId = inv.metadata?.companyId ?? null;
+      try {
+        const companyId = await resolveCompanyFromStripeEvent({ customerId, metadataCompanyId: metaCompanyId });
+        if (companyId) {
+          // Retrieve the subscription to get current state
+          if (stripe) {
+            try {
+              const subId = typeof inv.subscription === 'string' ? inv.subscription : (inv.subscription as any).id;
+              const freshSub = await stripe.subscriptions.retrieve(subId);
+              await syncSubscriptionToCompany(companyId, {
+                id: freshSub.id,
+                status: freshSub.status,
+                current_period_end: (freshSub as any).current_period_end,
+                cancel_at_period_end: freshSub.cancel_at_period_end,
+                items: freshSub.items,
+                metadata: freshSub.metadata as Record<string, string>,
+                customer: customerId,
+              });
+              console.log(`[billing-webhook] invoice.paid synced → companyId=${companyId} subId=${freshSub.id}`);
+            } catch (subErr: any) {
+              console.error('[billing-webhook] invoice.paid: could not retrieve subscription:', subErr.message);
+            }
+          }
+        } else {
+          console.warn(`[billing-webhook] invoice.paid: could not resolve companyId — customerId=${customerId}`);
+        }
+      } catch (err: any) {
+        console.error('[billing-webhook] invoice.paid error:', err.message);
+      }
+    }
+  }
+
+  // invoice.payment_failed — marks subscription as past_due
+  if (event.type === 'invoice.payment_failed') {
+    const inv = event.data.object as Stripe.Invoice;
+    if (inv.subscription) {
+      const customerId = typeof inv.customer === 'string' ? inv.customer : (inv.customer as any)?.id;
+      const metaCompanyId = inv.metadata?.companyId ?? null;
+      try {
+        const companyId = await resolveCompanyFromStripeEvent({ customerId, metadataCompanyId: metaCompanyId });
+        if (companyId) {
+          if (stripe) {
+            try {
+              const subId = typeof inv.subscription === 'string' ? inv.subscription : (inv.subscription as any).id;
+              const freshSub = await stripe.subscriptions.retrieve(subId);
+              await syncSubscriptionToCompany(companyId, {
+                id: freshSub.id,
+                status: freshSub.status, // will be 'past_due'
+                current_period_end: (freshSub as any).current_period_end,
+                cancel_at_period_end: freshSub.cancel_at_period_end,
+                items: freshSub.items,
+                metadata: freshSub.metadata as Record<string, string>,
+                customer: customerId,
+              });
+              console.log(`[billing-webhook] invoice.payment_failed synced → companyId=${companyId} status=${freshSub.status}`);
+            } catch (subErr: any) {
+              console.error('[billing-webhook] invoice.payment_failed: could not retrieve subscription:', subErr.message);
+            }
+          }
+        } else {
+          console.warn(`[billing-webhook] invoice.payment_failed: could not resolve companyId — customerId=${customerId}`);
+        }
+      } catch (err: any) {
+        console.error('[billing-webhook] invoice.payment_failed error:', err.message);
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   res.json({ received: true });
 });

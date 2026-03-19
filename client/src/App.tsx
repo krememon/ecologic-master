@@ -76,6 +76,8 @@ import DevTools from "@/pages/DevTools";
 import OnboardingCompany from "@/pages/OnboardingCompany";
 import OnboardingSubscription from "@/pages/OnboardingSubscription";
 import Paywall from "@/pages/Paywall";
+import Billing from "@/pages/Billing";
+import BillingSuccess from "@/pages/BillingSuccess";
 import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
 import JobOfferInvite from "@/pages/JobOfferInvite";
@@ -426,6 +428,8 @@ function AuthenticatedRouter() {
         <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/onboarding/subscription" component={OnboardingSubscription} />
         <Route path="/paywall" component={Paywall} />
+        <Route path="/billing" component={Billing} />
+        <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to={nextRoute} />}</Route>
       </Switch>
@@ -526,6 +530,8 @@ function AuthenticatedRouter() {
         <Route path="/jobs/:jobId/pay/:invoiceId">
           {(params) => <PaymentReview jobId={params.jobId} invoiceId={params.invoiceId} />}
         </Route>
+        <Route path="/billing" component={Billing} />
+        <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/dev-tools" component={DevTools} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>

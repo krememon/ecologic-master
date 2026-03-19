@@ -1,0 +1,124 @@
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { CheckCircle, Loader2, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface BillingStatus {
+  ok: boolean;
+  billingAllowed: boolean;
+  subscriptionStatus: string | null;
+  effectivePlan: string | null;
+}
+
+export default function BillingSuccess() {
+  const [, setLocation] = useLocation();
+  const [polls, setPolls] = useState(0);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const { data: billing, refetch, isLoading } = useQuery<BillingStatus>({
+    queryKey: ["/api/billing/status"],
+    refetchInterval: confirmed ? false : 3000,
+  });
+
+  // Invalidate auth user so subscription status propagates app-wide
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+  }, []);
+
+  // Poll until webhook confirms subscription is active (up to ~30 seconds)
+  useEffect(() => {
+    if (!billing) return;
+    if (billing.billingAllowed && billing.subscriptionStatus === "active") {
+      setConfirmed(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+      queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+    }
+    setPolls((p) => p + 1);
+  }, [billing]);
+
+  const isTimedOut = polls >= 12 && !confirmed; // ~36s with 3s interval
+
+  const handleContinue = () => {
+    queryClient.invalidateQueries();
+    setLocation("/jobs", { replace: true });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-4">
+      <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 text-center">
+        {confirmed ? (
+          <>
+            <div className="w-20 h-20 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
+              You're all set!
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
+              Your{" "}
+              <span className="font-medium text-slate-700 dark:text-slate-300 capitalize">
+                {billing?.effectivePlan ?? "EcoLogic"}
+              </span>{" "}
+              subscription is now active.
+            </p>
+            <Button className="w-full" onClick={handleContinue}>
+              Go to Dashboard
+            </Button>
+          </>
+        ) : isTimedOut ? (
+          <>
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
+              Almost there…
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
+              Your payment went through, but confirmation is taking a little longer than usual.
+              This typically resolves within a minute. You can try refreshing or check back shortly.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPolls(0);
+                  refetch();
+                }}
+              >
+                Check Again
+              </Button>
+              <Button variant="ghost" onClick={handleContinue}>
+                Continue to App
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Loader2 className="w-10 h-10 text-blue-600 dark:text-blue-400 animate-spin" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">
+              Confirming your subscription…
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
+              Your payment was successful. We're waiting for confirmation from Stripe.
+              This usually takes just a few seconds.
+            </p>
+            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all duration-1000"
+                style={{ width: `${Math.min(100, (polls / 12) * 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
+              Checking for webhook confirmation…
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

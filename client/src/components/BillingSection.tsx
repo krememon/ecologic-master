@@ -4,15 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CreditCard, Crown, Users, Calendar, AlertTriangle } from 'lucide-react';
+import { CreditCard, Crown, Users, Calendar, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
 export function BillingSection() {
   const { subscriptionStatus, refetch, hasActiveSubscription, isTrialing, planName, maxUsers, trialEndsAt } = useSubscription();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   const cancelSubscriptionMutation = useMutation({
@@ -131,13 +133,26 @@ export function BillingSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <CreditCard className="h-5 w-5" />
-          <span>Billing & Subscription</span>
-        </CardTitle>
-        <CardDescription>
-          Manage your subscription and billing information
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center space-x-2">
+              <CreditCard className="h-5 w-5" />
+              <span>Billing & Subscription</span>
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Manage your subscription and billing information
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-1.5 shrink-0"
+            onClick={() => setLocation('/billing')}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Manage Billing
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Current Plan */}

@@ -177,6 +177,11 @@ export const companies = pgTable("companies", {
   adminPaused: boolean("admin_paused").default(false),
   adminIsDemo: boolean("admin_is_demo").default(false),
   adminNote: text("admin_note"),
+  // Stripe billing fields for web subscriptions
+  stripeCustomerId: varchar("stripe_customer_id_company"),
+  stripePriceId: varchar("stripe_price_id"),
+  subscriptionCancelAtPeriodEnd: boolean("subscription_cancel_at_period_end").default(false),
+  billingUpdatedAt: timestamp("billing_updated_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,0 +1,213 @@
+We are implementing Stripe subscriptions for the WEB version of EcoLogic.
+
+STACK / CONTEXT
+- EcoLogic is the source of truth.
+- Existing app has auth, company membership, roles, paywall/blocking logic, and company-based access.
+- We need Stripe Billing subscriptions for company owners on web.
+- Only Owner/Admin level users should be able to start or manage billing.
+- The app must NOT trust the frontend success redirect alone. Stripe webhook state must control access.
+- Keep architecture clean, production-safe, and easy to extend later for iOS parity.
+
+GOAL
+Implement a full Stripe subscription flow for web:
+1) Start subscription with Stripe Checkout
+2) Manage subscription with Stripe Customer Portal
+3) Sync subscription state back into EcoLogic DB through Stripe webhooks
+4) Use that DB-backed subscription state to control app/paywall access
+
+PLANS / BILLING MODEL
+Support our EcoLogic plan structure as Stripe Prices. For now, wire the backend to accept a selected plan key and map it to env-based Stripe price IDs.
+
+Use env vars like:
+- STRIPE_SECRET_KEY
+- VITE_STRIPE_PUBLISHABLE_KEY
+- STRIPE_WEBHOOK_SECRET
+- STRIPE_PRICE_STARTER
+- STRIPE_PRICE_TEAM
+- STRIPE_PRICE_PRO
+- STRIPE_PRICE_SCALE
+- STRIPE_BILLING_PORTAL_CONFIGURATION_ID (optional if needed)
+- APP_URL
+
+DATABASE CHANGES
+Add company-level billing fields (or equivalent in current schema):
+- stripeCustomerId
+- stripeSubscriptionId
+- stripePriceId
+- subscriptionStatus
+- subscriptionCurrentPeriodEnd
+- subscriptionCancelAtPeriodEnd
+- trialEndsAt (nullable if unused)
+- billingBlocked (boolean) OR compute this from status
+- billingUpdatedAt
+
+If there is already a billing/subscription table, extend that instead of duplicating. Keep data normalized and clear.
+
+ACCESS RULES
+Treat company billing status as the source of truth:
+- allow access when status is active or trialing
+- optionally allow limited grace when past_due
+- block access when canceled, unpaid, incomplete_expired, or missing subscription after trial
+- only company owner/admin can manage billing
+- non-owner users should see current plan/status if appropriate but not be able to change billing
+
+BACKEND TASKS
+
+1) Stripe helper module
+Create a centralized Stripe server helper that initializes Stripe with the secret key and exports helper methods.
+
+2) Create Checkout Session endpoint
+Create:
+POST /api/billing/create-checkout-session
+
+Behavior:
+- require authenticated user
+- verify user belongs to a company
+- verify user has billing permission (owner/admin only; prefer owner if our model supports that)
+- accept { planKey }
+- map planKey to the correct Stripe price ID from env
+- find company record
+- create Stripe customer if company.stripeCustomerId is missing
+- save stripeCustomerId to DB
+- create Stripe Checkout Session in subscription mode
+- attach metadata:
+  - companyId
+  - companyCode if available
+  - planKey
+  - initiatedByUserId
+- use success_url = `${APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`
+- use cancel_url = `${APP_URL}/billing`
+- return session.url
+
+3) Create Customer Portal Session endpoint
+Create:
+POST /api/billing/create-portal-session
+
+Behavior:
+- require authenticated user
+- verify billing permission
+- require company.stripeCustomerId
+- create Stripe billing portal session
+- return portal URL
+- return_url should point back to `${APP_URL}/billing`
+
+4) Billing status endpoint
+Create:
+GET /api/billing/status
+
+Return a clean payload for the frontend:
+- current plan
+- subscriptionStatus
+- cancelAtPeriodEnd
+- currentPeriodEnd
+- stripeCustomerId exists?
+- stripeSubscriptionId exists?
+- billing access allowed?
+- billing blocked?
+- trialEndsAt if relevant
+
+5) Stripe webhook endpoint
+Create:
+POST /api/stripe/webhook
+
+IMPORTANT:
+- use raw body for Stripe signature verification
+- verify signature with STRIPE_WEBHOOK_SECRET
+- handle idempotently
+- log event type clearly
+- never crash the server on unknown event types
+
+Handle at minimum:
+- checkout.session.completed
+- customer.subscription.created
+- customer.subscription.updated
+- customer.subscription.deleted
+- invoice.paid
+- invoice.payment_failed
+
+Webhook DB sync rules:
+- identify company primarily through metadata and/or stripeCustomerId
+- store stripeCustomerId, stripeSubscriptionId, stripePriceId
+- update subscriptionStatus
+- update subscriptionCurrentPeriodEnd
+- update subscriptionCancelAtPeriodEnd
+- update billingUpdatedAt
+- set billingBlocked based on allowed statuses
+- if subscription is canceled or unpaid, ensure app access becomes blocked
+- if reactivated / paid, unblock access
+
+6) Middleware / access integration
+Integrate billing state into the existing auth/company gating logic.
+We already have paywall/block behavior in the app, so connect it cleanly:
+- if company billing is blocked, owner/admin should be redirected to paywall/billing page
+- non-owner members in blocked companies should see blocked/paywall experience, not full app access
+- keep existing dev bypass logic intact where intended
+- do NOT break my personal dev bypass account or admin tooling
+
+FRONTEND TASKS
+
+1) Billing page
+Create or upgrade a web Billing page:
+- show current plan
+- show subscription status
+- show renewal date / period end
+- show “cancels at period end” if applicable
+- show plan cards for Starter / Team / Pro / Scale
+- show Subscribe / Change Plan / Manage Billing buttons
+
+2) Subscribe flow
+When user picks a plan:
+- call POST /api/billing/create-checkout-session
+- redirect browser to returned Stripe Checkout URL
+
+3) Manage billing flow
+- call POST /api/billing/create-portal-session
+- redirect browser to returned portal URL
+
+4) Success page handling
+Create billing success screen that:
+- tells user subscription is being confirmed
+- refetches GET /api/billing/status
+- does NOT blindly assume access until backend/webhook confirms status
+- shows a helpful loading / pending state if webhook hasn’t landed yet
+
+5) UX polish
+- modern clean EcoLogic UI
+- concise plan comparison
+- clear badges for Active / Trialing / Past Due / Canceled
+- mobile responsive
+- no duplicate buttons
+- no dead-end screens
+
+SECURITY / RELIABILITY
+- never expose secret keys client-side
+- validate planKey server-side
+- verify webhook signatures
+- handle duplicate webhook deliveries safely
+- do not trust client-reported companyId if server can infer from session
+- keep logs targeted and minimal, not noisy
+
+DELIVERABLES
+1) Full backend implementation
+2) DB/schema changes + migration
+3) Frontend billing page and success flow
+4) Route wiring
+5) Exact env vars required
+6) Short test checklist
+7) Short summary of files changed
+
+TEST CHECKLIST
+Provide a test checklist for:
+- subscribe as owner
+- cancel from portal
+- renew successfully
+- failed payment / past_due behavior
+- blocked company redirected to paywall
+- non-owner cannot manage billing
+- dev bypass still works correctly
+
+IMPORTANT
+- Reuse existing company/auth/paywall patterns where possible
+- Do not break current mobile or native purchase flow
+- Keep code production-ready and organized
+- Show me the exact files changed and the exact webhook events handled

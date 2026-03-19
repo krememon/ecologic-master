@@ -19883,6 +19883,134 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     });
 
   }
+  // ── Stripe Billing Routes ─────────────────────────────────────────────────
+  // GET /api/billing/status — returns current subscription state for the company
+  app.get('/api/billing/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(404).json({ ok: false, message: 'No company membership found' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+
+      const { getEffectiveBillingAccess } = await import('./billingResolver');
+      const billing = getEffectiveBillingAccess(company);
+
+      return res.json({
+        ok: true,
+        companyId: company.id,
+        subscriptionStatus: company.subscriptionStatus,
+        subscriptionPlan: company.subscriptionPlan,
+        subscriptionPlatform: company.subscriptionPlatform,
+        stripePriceId: company.stripePriceId || null,
+        stripeSubscriptionId: company.stripeSubscriptionId || null,
+        hasStripeCustomer: !!company.stripeCustomerId,
+        currentPeriodEnd: company.currentPeriodEnd || null,
+        cancelAtPeriodEnd: company.subscriptionCancelAtPeriodEnd ?? false,
+        trialEndsAt: company.trialEndsAt || null,
+        billingAllowed: billing.allowed,
+        billingSource: billing.source,
+        effectivePlan: billing.effectivePlan,
+        seatLimit: billing.seatLimit,
+        billingUpdatedAt: company.billingUpdatedAt || null,
+      });
+    } catch (err: any) {
+      console.error('[billing/status] error:', err.message);
+      return res.status(500).json({ ok: false, message: 'Failed to load billing status' });
+    }
+  });
+
+  // POST /api/billing/create-checkout-session — starts a Stripe Checkout for a chosen plan
+  app.post('/api/billing/create-checkout-session', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
+
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(403).json({ ok: false, message: 'No company membership found' });
+      if (member.role !== 'OWNER') return res.status(403).json({ ok: false, message: 'Only the company owner can manage billing' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+
+      const { planKey } = req.body;
+      if (!planKey || typeof planKey !== 'string') {
+        return res.status(400).json({ ok: false, message: 'planKey is required' });
+      }
+
+      const { getPriceIdForPlan, ALLOWED_PLAN_KEYS } = await import('./billingService');
+      if (!ALLOWED_PLAN_KEYS.includes(planKey)) {
+        return res.status(400).json({ ok: false, message: `Invalid planKey: ${planKey}` });
+      }
+      const priceId = getPriceIdForPlan(planKey);
+      if (!priceId) {
+        return res.status(400).json({ ok: false, message: `No Stripe price configured for plan: ${planKey}. Set STRIPE_PRICE_${planKey.toUpperCase()} env var.` });
+      }
+
+      // Find or create Stripe customer for this company
+      let customerId = company.stripeCustomerId ?? null;
+      if (!customerId) {
+        const [owner] = await db.select().from(users).where(eq(users.id, company.ownerId)).limit(1);
+        const customer = await stripe.customers.create({
+          name: company.name,
+          email: owner?.email || undefined,
+          metadata: { companyId: String(company.id), companyCode: company.companyCode || '' },
+        });
+        customerId = customer.id;
+        await db.update(companies).set({ stripeCustomerId: customerId }).where(eq(companies.id, company.id));
+        console.log(`[billing] Created Stripe customer ${customerId} for companyId=${company.id}`);
+      }
+
+      const appUrl = process.env.APP_BASE_URL || 'https://localhost:5000';
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${appUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/billing`,
+        subscription_data: {
+          metadata: { companyId: String(company.id), companyCode: company.companyCode || '', planKey, initiatedByUserId: userId },
+        },
+        metadata: { companyId: String(company.id), planKey },
+      });
+
+      console.log(`[billing] Checkout session created: ${session.id} companyId=${company.id} plan=${planKey}`);
+      return res.json({ ok: true, url: session.url });
+    } catch (err: any) {
+      console.error('[billing/create-checkout-session] error:', err.message);
+      return res.status(500).json({ ok: false, message: err.message || 'Failed to create checkout session' });
+    }
+  });
+
+  // POST /api/billing/create-portal-session — opens Stripe Customer Portal
+  app.post('/api/billing/create-portal-session', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
+
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(403).json({ ok: false, message: 'No company membership found' });
+      if (member.role !== 'OWNER') return res.status(403).json({ ok: false, message: 'Only the company owner can manage billing' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+      if (!company.stripeCustomerId) return res.status(400).json({ ok: false, message: 'No Stripe customer found. Please subscribe first.' });
+
+      const appUrl = process.env.APP_BASE_URL || 'https://localhost:5000';
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: company.stripeCustomerId,
+        return_url: `${appUrl}/billing`,
+      });
+
+      console.log(`[billing] Portal session created for companyId=${company.id}`);
+      return res.json({ ok: true, url: portalSession.url });
+    } catch (err: any) {
+      console.error('[billing/create-portal-session] error:', err.message);
+      return res.status(500).json({ ok: false, message: err.message || 'Failed to create portal session' });
+    }
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return httpServer;

@@ -220,9 +220,9 @@ export default function Paywall() {
     }
   };
 
-  // ── Web (route to onboarding/subscription — unchanged) ─────────────────────
+  // ── Web (route to billing page) ─────────────────────────────────────────────
   const handleWebSubscribe = () => {
-    setLocation("/onboarding/subscription", { replace: true });
+    setLocation("/billing", { replace: true });
   };
 
   const handleLogout = async () => {
