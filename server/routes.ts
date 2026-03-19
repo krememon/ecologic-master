@@ -19720,9 +19720,12 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       // "Free Access" in the UI = either adminFreeAccess OR adminBypassSubscription.
       // Both flags serve the same admin-override purpose and are always set/cleared together.
       const hasFreeAccess = !!(c.adminFreeAccess || c.adminBypassSubscription);
+      // Match billingResolver logic: null currentPeriodEnd is allowed for active subscriptions
+      // (we trust Stripe's 'active' status when period end hasn't been synced yet).
+      // Only treat as inactive if period end is explicitly set AND in the past.
       const hasActivePaid =
         c.subscriptionStatus === 'active' &&
-        !!(c.currentPeriodEnd && new Date(c.currentPeriodEnd) > now);
+        (!c.currentPeriodEnd || new Date(c.currentPeriodEnd) > now);
       const hasTrial =
         c.subscriptionStatus === 'trialing' &&
         !!(c.trialEndsAt && new Date(c.trialEndsAt) > now);

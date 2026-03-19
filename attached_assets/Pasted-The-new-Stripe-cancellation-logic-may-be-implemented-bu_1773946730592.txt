@@ -1,0 +1,61 @@
+The new Stripe cancellation logic may be implemented, but the Dev Tools button is still not clickable. Fix the UI enable/disable logic for the billing action button.
+
+CURRENT ISSUE
+In Dev Tools Billing Controls, the company shows:
+- Effective Access: Full Access (Web Plan)
+- Billing Source: Web (Stripe)
+- Paywall: Hidden
+
+But the cancel/remove action button is still disabled, so I cannot press it.
+
+GOAL
+Make the action button clickable whenever the company has an active Web (Stripe) subscription that can be canceled/removed.
+
+DEBUG / FIX TASKS
+
+1) Inspect the exact disabled condition in client/src/pages/DevTools.tsx
+Find what controls whether the button is disabled.
+Right now it is incorrectly disabling even though the company clearly has a live Web (Stripe) plan.
+
+2) Log the exact values used by the button
+For the current company state, log:
+- hasActivePaid
+- hasTrial
+- billingSource / subscriptionPlatform
+- effective access
+- subscription status
+- stripeSubscriptionId
+- any derived booleans used by the button state
+
+3) Fix the enable condition
+The button should be enabled when ANY of the following is true:
+- company has active paid subscription access
+- company has a trial
+- billing source is Web (Stripe)
+- stripeSubscriptionId exists
+- effective access indicates a paid plan
+Basically, if the company currently has a removable/cancelable paid entitlement, the button should be clickable.
+
+4) Keep correct distinctions
+- Stripe plan: button label should be “Cancel Web Subscription”
+- Apple / other paid plan: button label should be “Remove Paid Plan”
+- No paid plan / no trial: button can stay disabled
+
+5) Make the UI source-of-truth smarter
+If the card shows:
+- Full Access (Web Plan)
+then the button should not be disabled.
+The action button should derive from the same effective billing state the card uses, not from stale or narrower fields.
+
+6) Refresh after actions
+After billing refresh / after remove / after cancel:
+- recompute button enabled state correctly
+- no stale disabled UI
+
+7) Deliverables
+Return:
+- exact disabled logic before
+- exact disabled logic after
+- exact file/lines changed
+- why it was disabled incorrectly
+- confirmation that the button is now clickable for active Web (Stripe) plans

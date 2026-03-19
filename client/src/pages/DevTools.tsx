@@ -675,7 +675,13 @@ export default function DevTools() {
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={isMutating || (!billing.hasActivePaid && !billing.hasTrial)}
+                            disabled={isMutating || (
+                              !billing.hasActivePaid &&
+                              !billing.hasTrial &&
+                              billing.source !== 'stripe' &&
+                              billing.source !== 'apple' &&
+                              billing.source !== 'google_play'
+                            )}
                             onClick={() => setConfirmRemovePaidPlan(true)}
                             className={buttonClass}
                           >
