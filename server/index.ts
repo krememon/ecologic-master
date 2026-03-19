@@ -1248,6 +1248,27 @@ app.use((req, res, next) => {
     res.status(500).json({ message: "Server error", detail: err?.message });
   });
 
+  // Guard against transient database disconnects (e.g. Neon 57P01 "terminating connection
+  // due to administrator command" during periodic suspend). These are unhandled rejections
+  // that would otherwise crash the process. Log and continue — the pool will reconnect.
+  process.on('unhandledRejection', (reason: any) => {
+    const code = reason?.code || reason?.routine || '';
+    const msg = reason?.message || String(reason);
+    // Neon/Postgres transient connection errors — safe to swallow
+    if (
+      code === '57P01' ||
+      msg.includes('terminating connection') ||
+      msg.includes('Connection terminated') ||
+      msg.includes('connection closed') ||
+      msg.includes('Connection ended unexpectedly')
+    ) {
+      console.warn('[db] Transient database disconnect swallowed (will reconnect):', msg);
+      return;
+    }
+    // Everything else: log loudly but still don't crash — Express will handle per-request errors
+    console.error('[process] Unhandled promise rejection:', reason);
+  });
+
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
