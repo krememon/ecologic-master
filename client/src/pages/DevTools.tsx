@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Redirect } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import {
   Search, Building2, Users, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
-  AlertTriangle, ChevronRight, DollarSign, RotateCcw,
+  AlertTriangle, ChevronRight, ChevronLeft, DollarSign, RotateCcw,
   CheckCircle2, XCircle, Zap
 } from "lucide-react";
 
@@ -234,6 +234,34 @@ export default function DevTools() {
   const [isBillingMutating, setIsBillingMutating] = useState<string | null>(null);
   const [confirmRemovePaidPlan, setConfirmRemovePaidPlan] = useState(false);
 
+  // Paginated company directory
+  const [listItems, setListItems] = useState<CompanyBasic[]>([]);
+  const [listPage, setListPage] = useState(1);
+  const [listHasNext, setListHasNext] = useState(false);
+  const [listHasPrev, setListHasPrev] = useState(false);
+  const [isListLoading, setIsListLoading] = useState(false);
+
+  const loadListPage = async (page: number) => {
+    setIsListLoading(true);
+    try {
+      const res = await fetch(`/api/admin/company/list?page=${page}&pageSize=20`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.ok) {
+        setListItems(data.items ?? []);
+        setListPage(data.page);
+        setListHasNext(data.hasNext);
+        setListHasPrev(data.hasPrev);
+      }
+    } catch (e: any) {
+      // silent — list is best-effort; search still works
+    } finally {
+      setIsListLoading(false);
+    }
+  };
+
+  useEffect(() => { loadListPage(1); }, []);
+
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;
   }
@@ -416,7 +444,13 @@ export default function DevTools() {
               value={searchQuery}
               onChange={(e) => {
                 const raw = e.target.value;
-                setSearchQuery(searchMode === "code" ? raw.toUpperCase().slice(0, 6) : raw);
+                const next = searchMode === "code" ? raw.toUpperCase().slice(0, 6) : raw;
+                setSearchQuery(next);
+                if (!next.trim()) {
+                  setHasSearched(false);
+                  setSearchResults([]);
+                  clearDetail();
+                }
               }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               maxLength={searchMode === "code" ? 6 : undefined}
@@ -441,6 +475,80 @@ export default function DevTools() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── COMPANY DIRECTORY (default list when no search) ───── */}
+      {!searchQuery.trim() && !company && !isLoadingDetail && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-slate-400" />
+                Company Directory
+              </CardTitle>
+              {isListLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+              {!isListLoading && (
+                <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                  page {listPage}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {/* Column headers */}
+            <div className="grid grid-cols-[64px_1fr_1fr] gap-2 px-5 py-1.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">ID</span>
+              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Owner Email</span>
+              <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Company Name</span>
+            </div>
+
+            {isListLoading && listItems.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-slate-400 dark:text-slate-500 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading companies…</span>
+              </div>
+            ) : listItems.length === 0 ? (
+              <div className="py-6 px-5 text-sm text-slate-400 dark:text-slate-500">No companies found.</div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {listItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => loadDetail(item.id)}
+                    className="w-full grid grid-cols-[64px_1fr_1fr] gap-2 items-center px-5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+                  >
+                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{item.id}</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 truncate">{item.ownerEmail ?? "—"}</span>
+                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate flex items-center gap-1">
+                      {item.name}
+                      <ChevronRight className="h-3 w-3 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 shrink-0" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Pagination controls */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => { const p = listPage - 1; setListPage(p); loadListPage(p); }}
+                disabled={!listHasPrev || isListLoading}
+                className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed hover:text-slate-800 dark:hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                &lt;- Prev
+              </button>
+              <button
+                onClick={() => { const p = listPage + 1; setListPage(p); loadListPage(p); }}
+                disabled={!listHasNext || isListLoading}
+                className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 disabled:opacity-30 disabled:cursor-not-allowed hover:text-slate-800 dark:hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Next -&gt;
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── MULTI-RESULT PICKER ───────────────────────────────── */}
       {showPicker && (

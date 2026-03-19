@@ -19581,6 +19581,49 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
     });
 
+    // GET /api/admin/company/list?page=1&pageSize=20 — paginated company directory (newest first)
+    app.get('/api/admin/company/list', isAuthenticated, requireDev, async (req: any, res) => {
+      const page = Math.max(1, parseInt((req.query.page as string) || '1'));
+      const pageSize = Math.min(50, Math.max(1, parseInt((req.query.pageSize as string) || '20')));
+      const offset = (page - 1) * pageSize;
+      try {
+        const { companies, users } = await import('@shared/schema');
+        const { desc, eq } = await import('drizzle-orm');
+
+        // Fetch one extra to determine hasNext without a COUNT query
+        const rows = await db.select().from(companies)
+          .orderBy(desc(companies.id))
+          .limit(pageSize + 1)
+          .offset(offset);
+
+        const hasNext = rows.length > pageSize;
+        const pageRows = rows.slice(0, pageSize);
+
+        const enriched = await Promise.all(pageRows.map(async (c: any) => {
+          const ownerRow = await db.select({ email: users.email }).from(users)
+            .where(eq(users.id, c.ownerId)).limit(1);
+          return {
+            id: c.id,
+            name: c.name,
+            companyCode: c.companyCode,
+            ownerEmail: ownerRow[0]?.email ?? null,
+            subscriptionPlan: c.subscriptionPlan,
+            subscriptionStatus: c.subscriptionStatus,
+            adminFreeAccess: c.adminFreeAccess,
+            adminBypassSubscription: c.adminBypassSubscription,
+            adminPaused: c.adminPaused,
+            adminIsDemo: c.adminIsDemo,
+            createdAt: c.createdAt,
+          };
+        }));
+
+        res.json({ ok: true, items: enriched, page, pageSize, hasNext, hasPrev: page > 1 });
+      } catch (e: any) {
+        console.error('[admin-ro] list error:', e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
     // GET /api/admin/company/:id/detail
     app.get('/api/admin/company/:id/detail', isAuthenticated, requireDev, async (req: any, res) => {
       const companyId = parseInt(req.params.id);
