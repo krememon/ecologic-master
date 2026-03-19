@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle } from "lucide-react";
+import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle, Zap } from "lucide-react";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import { PlanSelectorChips } from "@/components/PlanSelectorChips";
 import {
   isNativeIos,
   isNativeAndroid,
@@ -37,20 +38,22 @@ export default function Paywall() {
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  // Selected plan — native only; web uses company plan
+  // Selected plan — native uses this for Apple/Google IAP
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>("starter");
 
-  // Company plan (web path)
+  // Selected plan — web Stripe checkout
   const companyPlanKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
-  const companyPlan = subscriptionPlans[companyPlanKey] || subscriptionPlans.starter;
+  const [webSelectedPlanKey, setWebSelectedPlanKey] = useState<PlanKey>(
+    (subscriptionPlans[companyPlanKey] ? companyPlanKey : "starter") as PlanKey
+  );
 
   const isNativeApp = nativeIos || nativeAndroid;
   const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;
 
-  // Which plan to display — native uses selectedPlanKey, web uses company plan
+  // Which plan to display
   const displayPlan = isNativeApp
     ? subscriptionPlans[selectedPlanKey] || subscriptionPlans.starter
-    : companyPlan;
+    : subscriptionPlans[webSelectedPlanKey] || subscriptionPlans.starter;
 
   // Product IDs for the currently selected plan
   const appleProductId = displayPlan.appleProductId;
@@ -220,9 +223,21 @@ export default function Paywall() {
     }
   };
 
-  // ── Web (route to billing page) ─────────────────────────────────────────────
-  const handleWebSubscribe = () => {
-    setLocation("/billing", { replace: true });
+  // ── Web (direct Stripe checkout with selected plan) ──────────────────────────
+  const handleWebSubscribe = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    console.log("[paywall] Web checkout — plan:", webSelectedPlanKey);
+    try {
+      const res = await apiRequest("POST", "/api/billing/create-checkout-session", { planKey: webSelectedPlanKey });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || "Failed to create checkout session");
+      window.location.href = data.url;
+    } catch (err: any) {
+      console.error("[paywall] Web checkout error:", err.message);
+      toast({ title: "Checkout failed", description: err.message || "Could not start checkout. Please try again.", variant: "destructive" });
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -265,7 +280,7 @@ export default function Paywall() {
       ? "Not Available"
       : `Subscribe · ${storePrice}/mo`;
   } else {
-    subscribeBtnLabel = "Resubscribe Now";
+    subscribeBtnLabel = `Continue with ${displayPlan.label}`;
   }
 
   return (
@@ -288,96 +303,97 @@ export default function Paywall() {
               </p>
             </div>
 
-            {/* ── Plan selector — native only ─────────────────────────────── */}
-            {isNativeApp && (
-              <div className="mb-4">
-                <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 text-center">
-                  Choose your plan
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                  {PLAN_ORDER.map((key) => {
-                    const p = subscriptionPlans[key];
-                    const isSelected = key === selectedPlanKey;
-                    const prod = nativeIos
-                      ? products.find(x => x.identifier === p.appleProductId)
-                      : products.find(x => x.identifier === p.googlePlayProductId);
-                    const priceStr = prod?.priceString ?? `$${p.price}`;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setSelectedPlanKey(key)}
-                        disabled={isLoading || isRestoring}
-                        className={`flex-shrink-0 flex flex-col items-center px-4 py-2.5 rounded-xl border-2 transition-all text-left disabled:opacity-60 ${
-                          isSelected
-                            ? "border-blue-600 bg-blue-600 text-white shadow-md"
-                            : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-300 dark:hover:border-blue-600"
-                        }`}
-                      >
-                        <span className="text-sm font-semibold leading-none">{p.label}</span>
-                        <span className={`text-xs mt-1 leading-none ${isSelected ? "text-blue-100" : "text-slate-400 dark:text-slate-400"}`}>
-                          {productsLoading ? "…" : priceStr}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* ── Plan selector — all platforms ──────────────────────────── */}
+            <div className="mb-5">
+              <PlanSelectorChips
+                selected={isNativeApp ? selectedPlanKey : webSelectedPlanKey}
+                onChange={isNativeApp ? setSelectedPlanKey : setWebSelectedPlanKey}
+                disabled={isLoading || isRestoring}
+                prices={isNativeApp
+                  ? Object.fromEntries(PLAN_ORDER.map((key) => {
+                      const p = subscriptionPlans[key];
+                      const prod = nativeIos
+                        ? products.find(x => x.identifier === p.appleProductId)
+                        : products.find(x => x.identifier === p.googlePlayProductId);
+                      return [key, prod?.priceString ?? `$${p.price}`];
+                    })) as Partial<Record<PlanKey, string>>
+                  : undefined
+                }
+                loadingPrices={isNativeApp && productsLoading}
+              />
+            </div>
 
             {/* ── Pricing card ─────────────────────────────────────────────── */}
-            <div className={`bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 mb-6 border-2 transition-all ${
-              isNativeApp ? "border-blue-200 dark:border-blue-800" : "border-transparent"
-            }`}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-white">{displayPlan.label}</h3>
-                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                    {isNativeApp
-                      ? productsLoading ? "Loading price…" : `${storePrice}/mo`
-                      : `${storePrice}/mo`}
-                  </p>
-                </div>
-                {isNativeApp && (
-                  <div className="text-right">
-                    {productsLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-slate-400 ml-auto" />
-                    ) : (
-                      <>
-                        <p className="text-2xl font-bold text-slate-800 dark:text-white">{storePrice}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
-                      </>
+            {(() => {
+              const planBullets: Record<PlanKey, { icon: React.ReactNode; text: string }[]> = {
+                starter: [
+                  { icon: <Users className="w-4 h-4 text-blue-500 shrink-0" />, text: "Up to 1 user" },
+                  { icon: <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />, text: "All core features included" },
+                  { icon: <Shield className="w-4 h-4 text-purple-500 shrink-0" />, text: storeLabel ? `Billed securely via ${storeLabel}` : "Secure and reliable" },
+                ],
+                team: [
+                  { icon: <Users className="w-4 h-4 text-blue-500 shrink-0" />, text: "Up to 5 users" },
+                  { icon: <Zap className="w-4 h-4 text-amber-500 shrink-0" />, text: "Great for growing crews" },
+                  { icon: <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />, text: "All core features included" },
+                ],
+                pro: [
+                  { icon: <Users className="w-4 h-4 text-blue-500 shrink-0" />, text: "Up to 10 users" },
+                  { icon: <Zap className="w-4 h-4 text-amber-500 shrink-0" />, text: "Advanced team operations" },
+                  { icon: <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />, text: "All core features included" },
+                ],
+                scale: [
+                  { icon: <Users className="w-4 h-4 text-blue-500 shrink-0" />, text: `Up to ${displayPlan.userLimit} users` },
+                  { icon: <Zap className="w-4 h-4 text-amber-500 shrink-0" />, text: "Built for scaling operations" },
+                  { icon: <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />, text: "All core features included" },
+                ],
+              };
+              const activePlanKey = isNativeApp ? selectedPlanKey : webSelectedPlanKey;
+              const bullets = planBullets[activePlanKey] ?? planBullets.starter;
+              const priceDisplay = isNativeApp
+                ? (productsLoading ? "Loading…" : `${storePrice}/mo`)
+                : `$${displayPlan.price}/mo`;
+
+              return (
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-5 mb-6 border-2 border-blue-200 dark:border-blue-800 transition-all">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 dark:text-white">{displayPlan.label}</h3>
+                      <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{priceDisplay}</p>
+                    </div>
+                    {isNativeApp && (
+                      <div className="text-right">
+                        {productsLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-slate-400 ml-auto" />
+                        ) : (
+                          <>
+                            <p className="text-2xl font-bold text-slate-800 dark:text-white">{storePrice}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">/month</p>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              <div className="border-t border-slate-200 dark:border-slate-600 pt-3 space-y-2">
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <Users className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span>Up to {displayPlan.userLimit} {displayPlan.userLimit === 1 ? "user" : "users"}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                  <span>All core features included</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <Shield className="w-4 h-4 text-purple-500 shrink-0" />
-                  <span>
-                    {storeLabel ? `Billed securely via ${storeLabel}` : "Secure and reliable"}
-                  </span>
-                </div>
-              </div>
+                  <div className="border-t border-slate-200 dark:border-slate-600 pt-3 space-y-2">
+                    {bullets.map((b, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                        {b.icon}
+                        <span>{b.text}</span>
+                      </div>
+                    ))}
+                  </div>
 
-              {/* Plan unavailable warning */}
-              {planUnavailable && (
-                <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    This plan isn't available in the store right now.
-                  </p>
+                  {planUnavailable && (
+                    <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        This plan isn't available in the store right now.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
             <Button
               type="button"

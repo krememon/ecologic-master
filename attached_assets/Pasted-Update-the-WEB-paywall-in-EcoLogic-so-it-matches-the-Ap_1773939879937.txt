@@ -1,0 +1,124 @@
+Update the WEB paywall in EcoLogic so it matches the Apple subscription selector style and lets users choose between all 4 plans directly on the paywall.
+
+GOAL
+Right now the web paywall only shows Starter.
+It needs to show:
+- Starter
+- Team
+- Pro
+- Scale
+
+The user should be able to tap/click any plan card on the web paywall, just like the Apple flow, then continue into the Stripe web subscription flow for that selected plan.
+
+WHAT TO CHANGE
+
+1) WEB PAYWALL UI
+Update the web paywall card so it includes a horizontal or responsive selectable plan row with all 4 plans:
+- Starter — $29.99
+- Team — $79.99
+- Pro — $159.99
+- Scale — $299.99
+
+Style direction:
+- Match the Apple-style selector shown in our mobile screenshot as closely as possible
+- Clean modern card buttons
+- Selected plan should be clearly highlighted
+- Unselected plans should still be visible and clickable
+- Keep it polished and centered inside the paywall card
+- Mobile responsive
+- No weird overflow/cropping on smaller screens
+
+2) PLAN SELECTION STATE
+Add selectedPlan state on the web paywall.
+Default selection should be:
+- current company plan if known and still relevant
+- otherwise Starter
+
+When the user clicks a plan card, update selectedPlan immediately.
+
+3) PAYWALL COPY / DETAILS
+Under the selector, update the details section to reflect the selected plan.
+At minimum show:
+- plan name
+- monthly price
+- short bullets relevant to that plan
+
+Suggested bullets for now:
+Starter
+- Up to 1 user
+- All core features included
+- Secure and reliable
+
+Team
+- Up to 5 users
+- Great for growing crews
+- All core features included
+
+Pro
+- Up to 10 users
+- Advanced team operations
+- All core features included
+
+Scale
+- Larger teams
+- Built for scaling operations
+- All core features included
+
+4) SUBSCRIBE BUTTON BEHAVIOR
+The main CTA button on the web paywall should use the selected plan.
+So if Team is selected, clicking Subscribe / Resubscribe should create a Stripe Checkout session for Team, not always Starter.
+
+Make sure the paywall button passes the selected plan key into the existing billing flow.
+Example plan keys:
+- starter
+- team
+- pro
+- scale
+
+5) BILLING PAGE CONSISTENCY
+If /billing already has a plan selector, make sure the UI and behavior are consistent with the paywall:
+- same 4 plans
+- same price labels
+- same plan key mapping
+- same selected state handling
+- no mismatched Stripe price IDs
+
+If possible, extract a reusable PlanSelector component used by both:
+- /paywall
+- /billing
+
+6) BACKEND SAFETY
+Confirm backend checkout session creation already validates planKey server-side.
+If not, add strict validation so only:
+- starter
+- team
+- pro
+- scale
+are allowed.
+
+Map each plan key to the correct env var:
+- STRIPE_PRICE_STARTER
+- STRIPE_PRICE_TEAM
+- STRIPE_PRICE_PRO
+- STRIPE_PRICE_SCALE
+
+7) UX DETAILS
+- Selected plan should persist while user is on the paywall page
+- Button label can remain “Resubscribe Now” or become “Continue with [Plan]”
+- Show loading state while redirecting to Stripe
+- Prevent duplicate clicks
+- No dead-end states
+
+8) IMPORTANT
+- Do not break the current paywall gating
+- Do not break Apple flow
+- This change is specifically for WEB paywall UX + Stripe plan selection
+- Keep existing Remove Paid Plan behavior intact
+- Keep dev bypass logic untouched
+
+DELIVERABLES
+1) Updated web paywall with 4 selectable plans
+2) Selected plan drives Stripe Checkout planKey correctly
+3) Reusable selector if appropriate
+4) Exact files changed
+5) Short summary of how selected plan now flows from paywall → billing route / checkout session
