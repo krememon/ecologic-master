@@ -1,0 +1,133 @@
+Implement a real Delete Company action in Dev Tools.
+
+GOAL
+In Dev Tools, I want a way to fully delete companies from EcoLogic.
+
+IMPORTANT
+This is a dangerous admin/dev-only action.
+It must be heavily protected and require confirmation.
+Do NOT allow accidental deletion.
+Do NOT allow my protected personal/dev account or protected internal companies to be deleted.
+
+INTENDED BEHAVIOR
+In the company detail view inside Dev Tools, add a dangerous red “Delete Company” action.
+
+When clicked:
+1) show a strong confirmation modal
+2) require typing the company name or a confirm phrase
+3) if confirmed, delete the company and all associated company-scoped data
+4) remove it from Dev Tools search/list
+5) if currently logged into that company, force logout / remove access
+6) return me safely to the Dev Tools company search/list screen
+
+PROTECTION RULES
+1) Dev Tools only
+This action must only be accessible from Dev Tools admin access.
+
+2) Protected companies cannot be deleted
+Add a hard denylist / protection rule for:
+- my personal/dev company/account(s)
+- any explicitly protected internal/testing companies you identify
+- optionally any company tied to pjpell077@gmail.com or other protected emails
+
+If a protected company is selected:
+- button should be hidden or disabled
+- backend must still hard-block deletion even if frontend is bypassed
+
+3) Double confirmation
+Use a serious destructive modal.
+
+Suggested flow:
+- Title: Delete company permanently?
+- Body: This will permanently delete this company and its related records. This cannot be undone.
+- Require typing:
+  DELETE
+  or the exact company name
+- Confirm button:
+  Delete company permanently
+
+4) Backend must be the real source of truth
+Do not trust frontend-only confirmation.
+Backend must enforce all protection rules.
+
+SCOPE OF DELETION
+Delete the company and all company-scoped records that belong to it.
+
+Audit and remove related data such as:
+- company record
+- memberships / company users / roles
+- jobs
+- estimates
+- invoices
+- payments / transaction records if company-scoped
+- documents / document metadata
+- messages / chats / DMs if company-scoped
+- notifications if company-scoped
+- timesheets / labor records
+- crews / assignments
+- customers / clients
+- subcontractor records if scoped to company
+- billing/subscription records
+- any related join-table rows
+- any storage references / files if relevant
+
+IMPORTANT
+Be careful with deletion order to avoid foreign key failures.
+If the DB uses cascades, use them safely.
+If not, delete in correct dependency order.
+
+PREFERRED IMPLEMENTATION
+1) Audit schema for all tables that reference companyId or company membership/user linkage
+2) Create a backend service function like:
+deleteCompanyDeep(companyId, options)
+3) Use a DB transaction so partial deletion cannot leave broken state
+4) Log exactly what was deleted
+5) Return a structured result summary
+
+SOFT DELETE VS HARD DELETE
+I want REAL deletion for Dev Tools cleanup, not just hiding.
+But if there are critical tables that should not be hard-deleted, document that clearly and either:
+- safely anonymize/archive them
+OR
+- explain the minimum safe exception
+
+DEFAULT should be hard delete for test/dev companies.
+
+FRONTEND
+In DevTools company detail view:
+- add a new red danger card or button near Company Status / Billing Controls area
+- make it visually more dangerous than Remove Paid Plan
+- after successful deletion:
+  - clear selected company detail state
+  - go back to search/list
+  - show success toast/banner
+
+ERROR HANDLING
+- if deletion fails midway, transaction rolls back
+- show clear error message
+- if company is protected, show protected-company error
+- if company no longer exists, handle gracefully
+
+LOGOUT / ACCESS CLEANUP
+If the deleted company is the currently active company in the session:
+- end access cleanly
+- redirect to safe screen or logout
+If other members of that company exist, they should no longer be able to access deleted company data
+
+TEST CASES
+I want these tested:
+1) delete a normal test company with no data
+2) delete a company with jobs/payments/documents/users
+3) protected dev company cannot be deleted
+4) frontend bypass attempt still blocked by backend
+5) after deletion, company no longer appears in Dev Tools search/list
+6) deleted company users cannot continue using stale session data
+
+DELIVERABLES
+Return:
+- exact backend route added
+- exact service/function added
+- exact tables/records deleted
+- exact frontend file changed
+- exact protection rules added
+- confirmation that Delete Company now works safely from Dev Tools

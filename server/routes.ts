@@ -19984,6 +19984,36 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
     });
 
+    // DELETE /api/admin/company/:id — permanently delete a company and all its data
+    // Protected companies (ID 415, owner pjpell077@gmail.com) are hard-blocked on the backend.
+    app.delete('/api/admin/company/:id', isAuthenticated, requireDev, async (req: any, res) => {
+      const companyId = parseInt(req.params.id);
+      if (!companyId || isNaN(companyId)) {
+        return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+      }
+
+      const actorEmail: string = req.user?.email || req.user?.claims?.email || 'unknown';
+
+      try {
+        const { deleteCompanyDeep, getProtectionReason } = await import('./adminDeleteService');
+
+        // Pre-flight protection check (gives a 403 before running any TX)
+        const protectionReason = await getProtectionReason(companyId);
+        if (protectionReason) {
+          console.warn(`[admin-delete] 403 — actor=${actorEmail} companyId=${companyId}: ${protectionReason}`);
+          return res.status(403).json({ ok: false, error: protectionReason, protected: true });
+        }
+
+        const result = await deleteCompanyDeep(companyId, actorEmail);
+        console.log(`[admin-delete] SUCCESS — actor=${actorEmail} deleted companyId=${companyId} name="${result.companyName}" tables=${result.tablesAffected.length} orphaned=${result.orphanedUsersDeleted}`);
+
+        res.json({ ok: true, result });
+      } catch (e: any) {
+        console.error(`[admin-delete] ERROR — actor=${actorEmail} companyId=${companyId}:`, e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
   }
   // ── Stripe Billing Routes ─────────────────────────────────────────────────
   // GET /api/billing/status — returns current subscription state for the company
