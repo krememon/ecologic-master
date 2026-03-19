@@ -1,0 +1,93 @@
+The Company Directory UI is built, but it is showing “No companies found.” We need to debug why the list endpoint is returning nothing and make the companies actually appear.
+
+CURRENT ISSUE
+The new Company Directory card renders correctly, but no rows show up.
+It says:
+- No companies found.
+- page 1
+
+So either:
+1) the frontend is not calling the endpoint correctly
+2) the endpoint is returning an empty array
+3) the SQL query / owner-email join is wrong
+4) auth/admin guard is blocking the request
+5) the response shape doesn’t match what the frontend expects
+
+GOAL
+Make the Company Directory actually populate with company rows.
+
+DO THIS EXACT DEBUG
+
+1) Verify the frontend request
+Inspect the network/API call made on DevTools mount.
+Confirm:
+- exact URL requested
+- exact response payload
+- exact HTTP status code
+
+Log the response from:
+GET /api/admin/company/list?page=1&pageSize=20
+
+2) Verify the backend route runs
+In server/routes.ts, add targeted logs to the new list endpoint:
+- handler entered
+- authenticated user id/email
+- query params page/pageSize
+- raw DB row count returned
+- final items length returned
+
+3) Verify the SQL query
+Inspect the actual query used for the list endpoint.
+I want to know:
+- which table is queried for companies
+- how owner email is derived
+- whether the join/filter is too restrictive
+- whether it accidentally excludes valid companies
+
+Most likely problems to check:
+- INNER JOIN removing rows because some companies don’t have the expected owner relation
+- filtering to only owners with a specific role/status and excluding everything
+- wrong table/column names
+- querying the wrong environment/database
+
+4) Compare with the existing Find Company search
+The search already works. Reuse the same underlying company + owner-email logic as the working search path.
+If needed, rebuild the list endpoint to mirror the search query shape but without a search filter.
+
+Important:
+If search can find companies but list returns none, then the list query is wrong.
+Use the search implementation as the source of truth.
+
+5) Verify response shape matches frontend
+Confirm the backend returns:
+{
+  ok: true,
+  items: [
+    { id, ownerEmail, companyName, ... }
+  ],
+  page,
+  pageSize,
+  hasNext,
+  hasPrev
+}
+
+Confirm frontend reads the same fields:
+- item.id
+- item.ownerEmail
+- item.companyName
+
+If names differ (e.g. name instead of companyName), fix the mismatch.
+
+6) Handle companies without owner email gracefully
+If some companies don’t have a resolved owner email:
+- still show the company row
+- display “—” or “No owner email”
+Do not drop the row entirely just because owner email is missing.
+
+7) Deliverables
+Return:
+- exact root cause
+- exact endpoint response before fix
+- exact query/change made
+- exact frontend/backend fields aligned
+- confirmation that the directory now shows real companies 20 at a time

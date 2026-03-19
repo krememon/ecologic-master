@@ -245,8 +245,10 @@ export default function DevTools() {
     setIsListLoading(true);
     try {
       const res = await fetch(`/api/admin/company/list?page=${page}&pageSize=20`);
+      console.log(`[admin-list] fetch status=${res.status}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      console.log(`[admin-list] data.ok=${data.ok} items=${data.items?.length} page=${data.page} hasNext=${data.hasNext}`);
       if (data.ok) {
         setListItems(data.items ?? []);
         setListPage(data.page);
@@ -254,13 +256,20 @@ export default function DevTools() {
         setListHasPrev(data.hasPrev);
       }
     } catch (e: any) {
-      // silent — list is best-effort; search still works
+      console.warn(`[admin-list] fetch error:`, e?.message);
     } finally {
       setIsListLoading(false);
     }
   };
 
-  useEffect(() => { loadListPage(1); }, []);
+  // Only load the list once the user is confirmed to be a dev-allowlist member.
+  // With [] deps the fetch fires on mount (user=null) → the auth-guard redirect
+  // unmounts the component before the response can set state. Using isDevUser as
+  // a dep means the effect waits until auth resolves.
+  const isDevUser = !!(user && DEV_ALLOWLIST.includes(user.email));
+  useEffect(() => {
+    if (isDevUser) loadListPage(1);
+  }, [isDevUser]);
 
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;

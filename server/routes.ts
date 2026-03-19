@@ -19587,12 +19587,14 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       const pageSize = Math.min(50, Math.max(1, parseInt((req.query.pageSize as string) || '20')));
       const offset = (page - 1) * pageSize;
       try {
-        const { companies, users } = await import('@shared/schema');
-        const { desc, eq } = await import('drizzle-orm');
+        // Use statically-imported schema + ORM references (same as working search endpoint pattern)
+        const schemaModule = await import('@shared/schema');
+        const companiesTable = schemaModule.companies;
+        const usersTable = schemaModule.users;
 
-        // Fetch one extra to determine hasNext without a COUNT query
-        const rows = await db.select().from(companies)
-          .orderBy(desc(companies.id))
+        // Fetch one extra row to determine hasNext without a COUNT query
+        const rows = await db.select().from(companiesTable)
+          .orderBy(desc(companiesTable.id))
           .limit(pageSize + 1)
           .offset(offset);
 
@@ -19600,8 +19602,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         const pageRows = rows.slice(0, pageSize);
 
         const enriched = await Promise.all(pageRows.map(async (c: any) => {
-          const ownerRow = await db.select({ email: users.email }).from(users)
-            .where(eq(users.id, c.ownerId)).limit(1);
+          const ownerRow = await db.select({ email: usersTable.email }).from(usersTable)
+            .where(eq(usersTable.id, c.ownerId)).limit(1);
           return {
             id: c.id,
             name: c.name,
