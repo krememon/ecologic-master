@@ -86,7 +86,7 @@ export default function BillingSuccess() {
 
   const handleContinue = () => {
     queryClient.invalidateQueries();
-    setLocation("/jobs", { replace: true });
+    setLocation("/", { replace: true });
   };
 
   if (authLoading) {

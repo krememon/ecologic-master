@@ -1,0 +1,67 @@
+Tighten the post-purchase web subscription success flow UX.
+
+CURRENT ISSUES
+After a successful Stripe web subscription purchase:
+1) the success screen is rendering while the normal app sidebar/layout is still visible behind/around it
+2) when the user clicks through after success, they land on the Jobs tab instead of the Home tab
+
+GOAL
+Make the billing success flow feel like a clean standalone success step, then send the user to Home.
+
+REQUIRED CHANGES
+
+1) BILLING SUCCESS PAGE SHOULD BE STANDALONE
+The successful /billing/success screen should NOT render inside the normal authenticated app shell/sidebar layout.
+
+Expected behavior:
+- no left sidebar
+- no normal in-app page chrome
+- no dashboard shell visible
+- just a clean centered success card on the light background
+
+Audit the routing/layout structure and make sure BillingSuccess renders in a standalone auth-safe layout, similar to paywall/auth screens, not inside the main app shell.
+
+2) SUCCESS CTA SHOULD GO TO HOME, NOT JOBS
+After successful subscription activation:
+- the button should route to Home
+- not Jobs
+- not the last remembered tab
+- not any default fallback that currently points to /jobs
+
+Use the actual Home route used by the app.
+If there is route bootstrap logic forcing /jobs as the post-login default, override it for this success flow.
+
+3) AUTO-NAVIGATION / CTA BEHAVIOR
+If the success screen uses a button:
+- rename it if needed to “Go to Home” or keep “Go to Dashboard” but make sure it lands on Home
+- ensure the click explicitly routes to the Home page route
+
+If there is any automatic redirect after a delay:
+- that redirect should also go to Home
+
+4) PRESERVE ACCESS CHECKS
+Do not break subscription gating.
+Only show the success state once billing is truly confirmed.
+After success:
+- user should be allowed into the app
+- landing destination should be Home
+
+5) CHECK FOR LAYOUT WRAPPERS
+Audit:
+- App.tsx
+- authenticated route wrappers
+- shell/sidebar layout components
+- BillingSuccess.tsx route registration
+
+Likely fix:
+- move /billing/success out of the main app-shell wrapper
+- or add a layout exclusion so it renders standalone like /paywall
+
+6) DELIVERABLES
+Return:
+- exact files changed
+- exact route/layout change made
+- exact destination route used after success
+- confirmation that:
+  1) sidebar no longer shows on billing success
+  2) successful users now land on Home instead of Jobs

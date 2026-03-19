@@ -596,6 +596,12 @@ function Router() {
     return <Redirect to="/demo" />;
   }
   
+  // Billing success is a standalone screen — no sidebar, no Layout wrapper.
+  // BillingSuccess handles its own auth states (loading / unauthenticated / confirmed).
+  if (path === '/billing/success' || path.startsWith('/billing/success?')) {
+    return <BillingSuccess />;
+  }
+
   if (path.startsWith('/email-preferences')) {
     return (
       <div className="min-h-screen flex items-center justify-center">
