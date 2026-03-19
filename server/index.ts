@@ -1136,7 +1136,8 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin) {
     const allowed = [
-      process.env.APP_BASE_URL,
+      process.env.APP_PUBLIC_BASE_URL,   // canonical branded domain (app.ecologicc.com)
+      process.env.APP_BASE_URL,           // Replit deployment domain fallback
       ...(process.env.REPLIT_DOMAINS || '').split(',').filter(Boolean).map(d => `https://${d}`),
     ].filter(Boolean);
     if (allowed.includes(origin) || origin.endsWith('.replit.dev') || origin.endsWith('.replit.app')) {
