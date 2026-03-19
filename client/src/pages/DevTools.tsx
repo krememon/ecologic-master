@@ -8,6 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search, Building2, Users, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
@@ -227,6 +232,7 @@ export default function DevTools() {
   const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [isBillingLoading, setIsBillingLoading] = useState(false);
   const [isBillingMutating, setIsBillingMutating] = useState<string | null>(null);
+  const [confirmRemovePaidPlan, setConfirmRemovePaidPlan] = useState(false);
 
   if (!user || !DEV_ALLOWLIST.includes(user.email)) {
     return <Redirect to="/jobs" />;
@@ -654,13 +660,13 @@ export default function DevTools() {
                       Show Paywall
                     </Button>
 
-                    {/* Remove Paid Plan — disabled if no active subscription or trial to remove */}
+                    {/* Remove Paid Plan — opens confirmation dialog */}
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={isMutating || (!billing.hasActivePaid && !billing.hasTrial)}
-                      onClick={() => runBillingAction("remove-paid-plan")}
-                      className="disabled:opacity-40"
+                      onClick={() => setConfirmRemovePaidPlan(true)}
+                      className="border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950 disabled:opacity-40"
                     >
                       {isBillingMutating === "remove-paid-plan" ? (
                         <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -669,6 +675,44 @@ export default function DevTools() {
                       )}
                       Remove Paid Plan
                     </Button>
+
+                    <AlertDialog open={confirmRemovePaidPlan} onOpenChange={setConfirmRemovePaidPlan}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            Remove paid plan?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="text-left space-y-2">
+                            <span className="block">
+                              This will immediately revoke <strong>{company?.name}</strong>'s paid access in EcoLogic and require a new subscription to continue.
+                            </span>
+                            <span className="block text-slate-500 dark:text-slate-400 text-xs">
+                              All paid entitlement fields will be cleared (Apple, Google Play, Stripe). Company and user data are preserved. Admin free-access bypass is unaffected.
+                            </span>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isBillingMutating === "remove-paid-plan"}>
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={isBillingMutating === "remove-paid-plan"}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              setConfirmRemovePaidPlan(false);
+                              await runBillingAction("remove-paid-plan");
+                            }}
+                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                          >
+                            {isBillingMutating === "remove-paid-plan" ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : null}
+                            Remove paid plan
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
                     {/* Refresh */}
                     <Button

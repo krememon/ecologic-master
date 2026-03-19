@@ -19855,17 +19855,35 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           // Remove free access override — falls back to real subscription state
           updates = { adminFreeAccess: false, adminBypassSubscription: false };
         } else if (action === 'remove-paid-plan') {
-          // Clear paid subscription fields — does NOT touch bypass flags
-          // If bypass is OFF after this, company hits paywall; if ON, they keep access
-          updates = { subscriptionStatus: 'inactive', subscriptionPlan: null, currentPeriodEnd: null };
+          // Clear ALL paid entitlement fields — Apple, Google Play, and Stripe/web.
+          // Does NOT touch bypass flags (adminFreeAccess / adminBypassSubscription).
+          // If those are OFF after this, company hits paywall; if ON, they keep free access.
+          // Also clears trialEndsAt so a stale trial cannot grant lingering access.
+          updates = {
+            subscriptionStatus: null,
+            subscriptionPlan: null,
+            currentPeriodEnd: null,
+            subscriptionPlatform: null,
+            originalTransactionId: null,
+            stripeSubscriptionId: null,
+            stripePriceId: null,
+            subscriptionCancelAtPeriodEnd: false,
+            trialEndsAt: null,
+          };
         } else if (action === 'force-paywall') {
-          // Nuclear: remove bypass AND subscription — guarantees paywall
+          // Nuclear: remove bypass AND ALL paid entitlement — guarantees paywall with no escape route
           updates = {
             adminFreeAccess: false,
             adminBypassSubscription: false,
-            subscriptionStatus: 'inactive',
+            subscriptionStatus: null,
             subscriptionPlan: null,
             currentPeriodEnd: null,
+            subscriptionPlatform: null,
+            originalTransactionId: null,
+            stripeSubscriptionId: null,
+            stripePriceId: null,
+            subscriptionCancelAtPeriodEnd: false,
+            trialEndsAt: null,
           };
         }
 

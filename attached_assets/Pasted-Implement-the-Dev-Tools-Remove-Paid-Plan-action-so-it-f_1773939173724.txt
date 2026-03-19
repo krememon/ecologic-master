@@ -1,0 +1,118 @@
+Implement the Dev Tools “Remove Paid Plan” action so it fully revokes a company’s paid access and immediately forces them back to the paywall until they purchase again.
+
+CONTEXT
+- This is for EcoLogic web billing/admin controls.
+- Current Billing Controls card already shows:
+  - Effective Access
+  - Subscription
+  - Trial
+  - Billing Source
+  - Paywall
+- There is already a “Remove Paid Plan” button in the UI, but it does not fully enforce the intended behavior.
+- Intended behavior:
+  1) Admin clicks “Remove Paid Plan”
+  2) Company’s paid entitlement is removed from EcoLogic
+  3) Their billing source/subscription state is cleared or marked inactive
+  4) Paywall becomes active/shown
+  5) They cannot get back into the app unless they subscribe again
+- This should work for Apple-plan and Stripe-web plan states at the app level.
+- IMPORTANT: this is an internal admin/dev action. It is not the same as canceling directly with Apple or Stripe. It should remove app access immediately inside EcoLogic.
+
+GOAL
+Make “Remove Paid Plan” actually work end-to-end.
+
+EXPECTED BEHAVIOR
+When “Remove Paid Plan” is clicked for a company:
+- Immediately remove active paid entitlement in EcoLogic
+- Mark company as unpaid / unsubscribed in app state
+- Clear paid-plan display in Billing Controls
+- Set paywall to shown/active
+- Block all normal app access for all users in that company until a new valid paid subscription is detected
+- If user logs in again, they should be routed to paywall/billing instead of dashboard
+- This should NOT delete the company, users, or business data
+- This should NOT affect my personal dev bypass account or any protected bypass logic
+
+BACKEND
+Find the existing dev/admin billing controls route and wire a real “remove paid plan” mutation.
+
+Add or fix an endpoint like:
+POST /api/dev/admin/company/:companyId/remove-paid-plan
+
+Behavior:
+1) Require authenticated admin/dev access
+2) Load target company
+3) Remove paid entitlement state regardless of billing source
+4) Clear or deactivate all relevant billing fields, including equivalents of:
+   - subscriptionStatus = null or inactive
+   - stripeSubscriptionId = null when appropriate
+   - stripePriceId = null when appropriate
+   - subscriptionCurrentPeriodEnd = null
+   - subscriptionCancelAtPeriodEnd = false
+   - trialEndsAt = null unless trial should remain
+   - paid plan name/tier = null
+   - billing source = null or none
+   - any apple-plan entitlement fields = cleared
+   - any “hasPaidAccess” / “isSubscribed” / “billingActive” style booleans = false
+5) Force paywall visible / blocked state:
+   - billingBlocked = true or equivalent
+   - paywallHidden = false or equivalent
+6) Preserve company and user records
+7) Return updated billing state payload for UI refresh
+
+IMPORTANT LOGIC
+- “Remove Paid Plan” should revoke EcoLogic-side access immediately even if the original source was Apple.
+- We are not trying to remotely cancel Apple from server-side. We are removing EcoLogic’s recognized paid entitlement so access is blocked in-app.
+- Same principle for Stripe: this admin action removes EcoLogic-side paid access immediately.
+- Later legitimate billing webhooks / restored purchases can reactivate access if a valid paid source exists again.
+
+ACCESS ENFORCEMENT
+Audit the existing app gating/paywall logic and ensure this state actually blocks access:
+- blocked company should not reach dashboard/jobs/settings/etc.
+- blocked company should be redirected to paywall/billing flow
+- billing success / valid webhook / valid purchase restore should be required to regain access
+- do not allow stale cached company state to keep access open
+- make sure both fresh login and in-session navigation respect the new blocked state
+
+FRONTEND
+Update the Billing Controls card action for “Remove Paid Plan”:
+- call the backend endpoint
+- show loading state while removing
+- after success, refresh the company billing panel immediately
+- effective access should switch from paid to blocked/unpaid
+- paywall row should reflect shown/active
+- subscription row should reflect none/unsubscribed
+- billing source should reflect none
+- if viewing that company in a live session, force the proper blocked/paywall behavior
+
+UX
+- Add a confirmation modal before removing paid plan:
+  Title: Remove paid plan?
+  Body: This will immediately revoke this company’s paid access in EcoLogic and require a new subscription to continue.
+  Confirm button: Remove paid plan
+- Keep styling aligned with existing Dev Tools UI
+- No duplicate buttons
+- No confusing mixed states after refresh
+
+EDGE CASES
+- If company already has no paid plan, return a safe no-op response
+- If company has free access enabled, preserve or explicitly define priority; preferred behavior:
+  - removing paid plan should only remove paid entitlement
+  - if free access is OFF, they go to paywall
+  - if free access is ON, effective access should reflect free access instead of blocked
+- Do not break trial logic unless trial is intentionally cleared by this action
+- Do not break dev bypass rules for my protected personal account
+- Do not break Stripe webhook reactivation or Apple restore flow later
+
+TEST CASES
+1) Apple-plan company → Remove Paid Plan → app access blocked → paywall shown
+2) Stripe-plan company → Remove Paid Plan → app access blocked → paywall shown
+3) No-plan company → Remove Paid Plan → safe no-op
+4) Company with free access ON → Remove Paid Plan → effective access becomes free access, not paid
+5) Removed paid plan company logs out/in → cannot access app until valid subscription restored
+6) Protected personal/dev bypass account remains unaffected
+
+DELIVERABLES
+- Exact files changed
+- Exact billing fields/flags updated
+- Short explanation of gating changes
+- Confirmation that Remove Paid Plan now immediately blocks access until they pay again
