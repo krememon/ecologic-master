@@ -19990,7 +19990,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       // The subscription embedded in session.subscription (from expand) may be missing
       // fields like current_period_end — which causes "Invalid time value" in syncSubscriptionToCompany.
       const fullSub = await stripe.subscriptions.retrieve(subId);
-      console.log(`[billing/verify-session] subId=${subId} status=${fullSub.status} current_period_end=${(fullSub as any).current_period_end}`);
+      const _itemPeriodEnd = (fullSub.items?.data?.[0] as any)?.current_period_end;
+      console.log(`[billing/verify-session] subId=${subId} status=${fullSub.status} item.current_period_end=${_itemPeriodEnd} sub.current_period_end=${(fullSub as any).current_period_end}`);
 
       // Verify this session belongs to the requesting company (compare Stripe customer ID)
       const sessionCustomerId = typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id;

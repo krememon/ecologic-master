@@ -1,0 +1,99 @@
+We are extremely close. Stripe checkout is succeeding and the billing success page now confirms the subscription, but clicking “Go to Dashboard” immediately sends the user back to the paywall.
+
+That means:
+- payment DID go through
+- verify-checkout-session DID succeed
+- success page DID mark subscription active
+- but the app’s actual access gate / billing resolver still thinks this company is blocked or expired when navigating into the app
+
+We need to debug the exact mismatch between:
+1) the billing success confirmation state
+2) the company billing status saved in DB
+3) the paywall/access resolver used by protected routes
+
+CURRENT OBSERVED BEHAVIOR
+- User completes Stripe checkout
+- /billing/success shows green success state: “Your EcoLogic subscription is now active.”
+- Clicking “Go to Dashboard” routes into the app
+- App immediately sends user back to /paywall
+- So the success page thinks subscription is active, but the real app gate still says access is blocked
+
+DO A FULL TRACE OF THIS EXACT FLOW
+
+1) Verify the company DB record after successful checkout
+For the most recent successful checkout/company:
+- read the exact company billing fields from DB after verify-checkout-session runs
+- output exact values for:
+  - subscriptionStatus
+  - subscriptionPlan
+  - stripeSubscriptionId
+  - stripeCustomerId
+  - subscriptionCurrentPeriodEnd (or equivalent)
+  - subscriptionCancelAtPeriodEnd
+  - subscriptionPlatform
+  - billingBlocked
+  - trialEndsAt
+  - paywallHidden / showPaywall override / any similar flags
+  - adminFreeAccess
+  - adminBypassSubscription
+  - any Apple entitlement remnants
+- confirm whether the DB truly reflects an active paid Stripe subscription
+
+2) Audit the exact access resolver used after clicking “Go to Dashboard”
+Trace the real path used when entering the app:
+- what route/component does “Go to Dashboard” navigate to?
+- what auth/company bootstrap runs next?
+- what endpoint(s) get called immediately after?
+- which resolver decides to redirect to /paywall?
+- what exact condition is returning false / blocked?
+
+I want the exact function/file that makes the redirect decision.
+
+3) Inspect /api/billing/status and /api/subscriptions/status
+If both exist, compare them.
+Find out:
+- which one the success page uses
+- which one the app gate uses
+- whether they read the SAME fields
+- whether one says active while the other still says blocked
+- whether one is still looking at old Apple-era fields or a different source of truth
+
+Output the exact JSON response from both endpoints immediately after a successful checkout.
+
+4) Identify stale flag / old field mismatch
+Most likely issue is one of these:
+- verify-checkout-session writes new Stripe fields, but the paywall resolver reads old fields
+- billingAllowed becomes true in one place, but billingBlocked/paywall flag is never cleared
+- old Apple/paywall residue remains and overrides paid Stripe access
+- company access resolver still expects a different status string/field name
+- success page uses “confirmed” UI state independent of actual app access state
+
+Find the exact mismatch.
+
+5) Fix it so successful Stripe activation truly unlocks the app
+After verify-checkout-session succeeds, ensure ALL fields required by the real access gate are updated consistently.
+If needed:
+- clear billingBlocked
+- clear expired/paywall override flags
+- clear stale Apple-only paid-state blockers
+- align resolver to use one source of truth
+- make /api/billing/status and the real app gate agree
+
+6) Confirm “Go to Dashboard” behavior
+After the fix:
+- successful checkout
+- success page shows confirmed
+- clicking “Go to Dashboard” must enter the app successfully
+- no redirect back to /paywall
+
+7) Deliverables
+Return:
+- exact root cause
+- exact fields that were mismatched
+- exact files changed
+- exact before/after values
+- confirmation that clicking “Go to Dashboard” now enters the app instead of bouncing to paywall
+
+IMPORTANT
+Do not guess.
+Actually trace the successful checkout → success page → dashboard click → paywall redirect path and identify the exact blocking condition.

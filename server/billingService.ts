@@ -58,11 +58,20 @@ export async function syncSubscriptionToCompany(
   const priceId = sub.items?.data?.[0]?.price?.id ?? null;
   const planKey = priceId ? (getPlanKeyForPriceId(priceId) ?? sub.metadata?.planKey ?? null) : null;
   const subscriptionStatus = sub.status; // active, past_due, canceled, trialing, etc.
-  // Guard: current_period_end may be undefined/null if the subscription object came
-  // from an embedded expand (e.g. checkout session) rather than a direct retrieve.
-  const periodEndRaw = (sub as any).current_period_end;
-  const periodEndMs = typeof periodEndRaw === "number" && !isNaN(periodEndRaw) ? periodEndRaw * 1000 : null;
-  const currentPeriodEnd = periodEndMs !== null ? new Date(periodEndMs) : null;
+
+  // In Stripe API version 2025-04-30.basil, current_period_end moved from the top-level
+  // subscription object to each subscription item (sub.items.data[0].current_period_end).
+  // We try: item-level first, then sub-level as fallback for older API responses.
+  const firstItem = sub.items?.data?.[0] as any;
+  const periodEndFromItem = typeof firstItem?.current_period_end === "number" && !isNaN(firstItem.current_period_end)
+    ? firstItem.current_period_end
+    : null;
+  const periodEndFromSub = typeof (sub as any).current_period_end === "number" && !isNaN((sub as any).current_period_end)
+    ? (sub as any).current_period_end
+    : null;
+  const periodEndRaw = periodEndFromItem ?? periodEndFromSub ?? null;
+  const currentPeriodEnd = periodEndRaw !== null ? new Date(periodEndRaw * 1000) : null;
+  console.log(`[billing-sync-debug] subId=${sub.id} periodEndFromItem=${periodEndFromItem} periodEndFromSub=${periodEndFromSub} → raw=${periodEndRaw}`);
 
   const maxUsers = planKey ? getMaxUsersForPlan(planKey) : undefined;
   const customerId = typeof sub.customer === "string" ? sub.customer : null;

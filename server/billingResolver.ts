@@ -40,8 +40,11 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
   }
 
   // ── 2. Active paid subscription (Apple, Google Play, or Stripe) ───────────
-  //   Requires subscriptionStatus = 'active' AND a valid, future currentPeriodEnd.
-  //   Missing currentPeriodEnd is treated as EXPIRED (not as "infinite").
+  //   Requires subscriptionStatus = 'active'.
+  //   currentPeriodEnd is checked only when it IS present:
+  //     - null/missing  → trust Stripe's 'active' status (e.g. fresh checkout before webhook sets the date)
+  //     - future date   → grant access
+  //     - past date     → blocked (subscription definitely expired and was not renewed)
   //   Source label is driven by subscriptionPlatform:
   //     'apple'        → Apple App Store subscription (iOS native)
   //     'google_play'  → Google Play subscription (Android native)
@@ -49,7 +52,9 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
   //     null / other   → Legacy record, defaults to 'stripe' for backward compatibility
   if (company.subscriptionStatus === 'active') {
     const periodEnd = company.currentPeriodEnd ? new Date(company.currentPeriodEnd) : null;
-    if (periodEnd && periodEnd > now) {
+    // Allow if: period end is unknown (trust Stripe) OR period end is in the future
+    const periodEndOk = periodEnd === null || periodEnd > now;
+    if (periodEndOk) {
       const platform = (company.subscriptionPlatform as string | null | undefined) ?? null;
       let source: BillingAccess['source'];
       if (platform === 'apple') source = 'apple';
@@ -65,14 +70,14 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
         blockReason: null,
       };
     }
-    // Has 'active' status but period is expired or missing
+    // Has 'active' status but currentPeriodEnd is set and definitively in the past
     return {
       allowed: false,
       source: 'blocked',
       effectivePlan: null,
       seatLimit: 0,
       notes: [],
-      blockReason: periodEnd ? 'subscription_expired' : 'active_no_period_end',
+      blockReason: 'subscription_expired',
     };
   }
 
