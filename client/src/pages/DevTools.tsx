@@ -661,58 +661,102 @@ export default function DevTools() {
                     </Button>
 
                     {/* Remove Paid Plan — opens confirmation dialog */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={isMutating || (!billing.hasActivePaid && !billing.hasTrial)}
-                      onClick={() => setConfirmRemovePaidPlan(true)}
-                      className="border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950 disabled:opacity-40"
-                    >
-                      {isBillingMutating === "remove-paid-plan" ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <CreditCard className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Remove Paid Plan
-                    </Button>
-
-                    <AlertDialog open={confirmRemovePaidPlan} onOpenChange={setConfirmRemovePaidPlan}>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-orange-500" />
-                            Remove paid plan?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-left space-y-2">
-                            <span className="block">
-                              This will immediately revoke <strong>{company?.name}</strong>'s paid access in EcoLogic and require a new subscription to continue.
-                            </span>
-                            <span className="block text-slate-500 dark:text-slate-400 text-xs">
-                              All paid entitlement fields will be cleared (Apple, Google Play, Stripe). Company and user data are preserved. Admin free-access bypass is unaffected.
-                            </span>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={isBillingMutating === "remove-paid-plan"}>
-                            Cancel
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            disabled={isBillingMutating === "remove-paid-plan"}
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              setConfirmRemovePaidPlan(false);
-                              await runBillingAction("remove-paid-plan");
-                            }}
-                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                    {(() => {
+                      const isStripePlan = billing.source === 'stripe';
+                      const isApplePlan = billing.subscriptionPlatform === 'apple';
+                      const buttonLabel = isStripePlan
+                        ? "Cancel Web Subscription"
+                        : "Remove Paid Plan";
+                      const buttonClass = isStripePlan
+                        ? "border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 disabled:opacity-40"
+                        : "border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950 disabled:opacity-40";
+                      return (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isMutating || (!billing.hasActivePaid && !billing.hasTrial)}
+                            onClick={() => setConfirmRemovePaidPlan(true)}
+                            className={buttonClass}
                           >
                             {isBillingMutating === "remove-paid-plan" ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : null}
-                            Remove paid plan
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            {buttonLabel}
+                          </Button>
+
+                          <AlertDialog open={confirmRemovePaidPlan} onOpenChange={setConfirmRemovePaidPlan}>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                  <AlertTriangle className={`h-5 w-5 ${isStripePlan ? "text-red-500" : "text-orange-500"}`} />
+                                  {isStripePlan ? "Cancel web subscription?" : "Remove paid plan?"}
+                                </AlertDialogTitle>
+                                <AlertDialogDescription className="text-left space-y-2">
+                                  {isStripePlan ? (
+                                    <>
+                                      <span className="block">
+                                        This will <strong>immediately cancel</strong> <strong>{company?.name}</strong>'s Stripe web subscription and revoke all access to EcoLogic.
+                                        They will need to subscribe again to continue.
+                                      </span>
+                                      <span className="block text-slate-500 dark:text-slate-400 text-xs">
+                                        The Stripe subscription will be canceled now — not at period end. EcoLogic access is revoked at the same time.
+                                        Company and user data are preserved. Admin free-access bypass is unaffected.
+                                      </span>
+                                    </>
+                                  ) : isApplePlan ? (
+                                    <>
+                                      <span className="block">
+                                        This will revoke <strong>{company?.name}</strong>'s Apple subscription access in EcoLogic.
+                                      </span>
+                                      <span className="block text-slate-500 dark:text-slate-400 text-xs">
+                                        Apple subscriptions cannot be canceled server-side — this only removes access within EcoLogic.
+                                        The user must cancel their Apple subscription separately in the App Store.
+                                        Company and user data are preserved.
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="block">
+                                        This will immediately revoke <strong>{company?.name}</strong>'s paid access in EcoLogic and require a new subscription to continue.
+                                      </span>
+                                      <span className="block text-slate-500 dark:text-slate-400 text-xs">
+                                        All paid entitlement fields will be cleared. Company and user data are preserved. Admin free-access bypass is unaffected.
+                                      </span>
+                                    </>
+                                  )}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isBillingMutating === "remove-paid-plan"}>
+                                  Keep subscription
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  disabled={isBillingMutating === "remove-paid-plan"}
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    setConfirmRemovePaidPlan(false);
+                                    await runBillingAction("remove-paid-plan");
+                                  }}
+                                  className={isStripePlan ? "bg-red-600 hover:bg-red-700 text-white" : "bg-orange-600 hover:bg-orange-700 text-white"}
+                                >
+                                  {isBillingMutating === "remove-paid-plan" ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : null}
+                                  {isStripePlan
+                                    ? "Cancel subscription and remove access"
+                                    : isApplePlan
+                                    ? "Remove Apple plan access"
+                                    : "Remove paid plan"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
+                      );
+                    })()}
 
                     {/* Refresh */}
                     <Button

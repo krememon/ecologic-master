@@ -1,0 +1,113 @@
+Implement real cancellation/removal for WEB Stripe subscriptions from the Dev Tools Billing Controls.
+
+GOAL
+Right now the Billing Controls card can show:
+- Full Access (Web Plan)
+- Billing Source: Web (Stripe)
+
+I now want the admin/dev tool to be able to actually remove/cancel the company’s Stripe web subscription from EcoLogic admin controls.
+
+INTENDED BEHAVIOR
+When the company has an active WEB Stripe subscription and I click the admin action to remove the paid plan:
+
+1) EcoLogic should immediately revoke access in-app
+2) The company should be forced back to the paywall
+3) The Stripe subscription should also be canceled on Stripe’s side for web subscriptions
+4) The company should not continue renewing in Stripe after removal
+5) The billing UI should refresh and clearly show the subscription is gone / inactive
+
+IMPORTANT DISTINCTION
+- For Apple subscriptions, we cannot truly cancel Apple from server-side, so “Remove Paid Plan” should remain an EcoLogic-side entitlement removal only.
+- For WEB (Stripe) subscriptions, I want the admin action to also cancel the Stripe subscription itself if the billing source is Stripe/web.
+
+REQUIRED IMPLEMENTATION
+
+1) BACKEND: detect billing source
+In the existing remove-paid-plan admin route / logic, detect whether the company’s active billing source is:
+- Apple
+- Web (Stripe)
+- Free access
+- Dev bypass / other internal mode
+
+2) STRIPE CANCELLATION FOR WEB PLANS
+If billing source is Web (Stripe):
+- load the company’s active stripeSubscriptionId
+- call Stripe API to cancel the subscription
+- preferred behavior: immediate cancellation for this admin/dev action (not just cancel at period end), because the goal is to fully revoke access now
+- log the exact Stripe subscription ID canceled
+- handle no-op safely if subscription already canceled / missing
+
+Use Stripe’s subscription cancellation API on the backend only.
+
+3) ECOLOGIC-SIDE ACCESS REVOCATION
+Regardless of Stripe cancel success, the admin action must still:
+- remove paid entitlement in EcoLogic
+- clear active subscription state in DB
+- force paywall shown / blocked
+- remove “Full Access (Web Plan)” state
+- ensure next login or navigation is blocked until they subscribe again
+
+Fields/flags to clear or update consistently:
+- subscriptionStatus
+- subscriptionPlan
+- stripeSubscriptionId
+- stripeCustomerId only if appropriate (usually can be kept if useful, but make this intentional)
+- subscriptionCurrentPeriodEnd
+- subscriptionCancelAtPeriodEnd
+- trialEndsAt if appropriate
+- billing source if no active entitlement remains
+- billingBlocked / paywall flags / effective access flags
+- any stale Apple/web shared entitlement flags
+
+IMPORTANT:
+Keep one clean source of truth. Do not leave the company in a mixed state where Stripe is canceled but app still says active, or vice versa.
+
+4) FRONTEND: billing controls action behavior
+Update the Dev Tools Billing Controls action:
+- if current billing source is Web (Stripe), button copy should make it clear this will cancel the web subscription and remove access
+- add a confirmation modal with stronger warning copy for Stripe/web subscriptions
+
+Suggested modal:
+Title:
+Remove web subscription?
+Body:
+This will immediately cancel the company’s Stripe web subscription and revoke access to EcoLogic. They will need to subscribe again to continue.
+Confirm button:
+Cancel subscription and remove access
+
+For Apple / non-Stripe cases, keep the existing “Remove Paid Plan” behavior/copy as appropriate.
+
+5) STATUS / UI REFRESH
+After success:
+- Billing Controls card should refresh immediately
+- Effective Access should no longer show Full Access (Web Plan)
+- Billing Source should no longer show Web (Stripe) if entitlement is gone
+- Subscription row should update appropriately
+- Paywall should show active/shown
+- Remove Paid Plan button should disable or disappear when there is no longer a paid plan
+
+6) SAFETY / EDGE CASES
+- If stripeSubscriptionId is missing but billing source says Stripe, still revoke EcoLogic-side access and return a warning in logs
+- If Stripe API cancellation fails, still revoke EcoLogic-side access, but return/log that remote Stripe cancellation failed and needs attention
+- Do not break Apple flow
+- Do not break free access flow
+- Do not break dev bypass / protected personal account rules
+- Do not delete company/user/business data
+- Do not cancel the wrong Stripe subscription; verify company → stripeCustomerId / stripeSubscriptionId alignment before canceling
+
+7) TEST CASES
+I want these tested:
+- Active Web (Stripe) company → remove paid plan → Stripe subscription canceled → app access revoked → paywall shown
+- Active Web (Stripe) company with missing subscription ID → app access revoked safely, warning logged
+- Apple-plan company → remove paid plan only revokes EcoLogic-side access, does NOT try Stripe cancellation
+- Free access company → unaffected
+- Protected dev bypass account → unaffected
+
+8) DELIVERABLES
+Return:
+- exact backend route/function updated
+- exact Stripe cancel call used
+- exact DB fields cleared/updated
+- exact frontend files changed
+- exact confirmation modal behavior
+- confirmation that Web (Stripe) subscriptions can now be fully canceled and removed from admin tools

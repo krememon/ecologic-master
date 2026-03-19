@@ -19855,10 +19855,46 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
           // Remove free access override — falls back to real subscription state
           updates = { adminFreeAccess: false, adminBypassSubscription: false };
         } else if (action === 'remove-paid-plan') {
-          // Clear ALL paid entitlement fields — Apple, Google Play, and Stripe/web.
+          // Load the company first so we can detect the billing source and act appropriately.
+          const [targetCompany] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+          if (!targetCompany) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+          const platform = targetCompany.subscriptionPlatform;
+          const subId = targetCompany.stripeSubscriptionId;
+          const isStripePlan = platform === 'stripe' || (platform == null && !!subId);
+          const isApplePlan = platform === 'apple';
+          const isGooglePlayPlan = platform === 'google_play';
+
+          // ── Stripe: cancel the subscription immediately on Stripe's side ──────
+          if (isStripePlan) {
+            if (subId && stripe) {
+              try {
+                await stripe.subscriptions.cancel(subId, { prorate: false });
+                console.log(`[admin-billing] remove-paid-plan: canceled Stripe sub ${subId} for company ${companyId}`);
+              } catch (stripeErr: any) {
+                // If sub is already canceled or not found, treat as no-op. Otherwise log warning.
+                if (stripeErr?.code === 'resource_missing' || stripeErr?.statusCode === 404) {
+                  console.log(`[admin-billing] remove-paid-plan: Stripe sub ${subId} already gone (404) — skipping Stripe cancel`);
+                } else if (stripeErr?.message?.includes('already canceled') || stripeErr?.message?.includes('No such subscription')) {
+                  console.log(`[admin-billing] remove-paid-plan: Stripe sub ${subId} already canceled — skipping`);
+                } else {
+                  // Stripe call failed but we still revoke access on EcoLogic side
+                  console.error(`[admin-billing] remove-paid-plan: Stripe cancel failed for sub ${subId}:`, stripeErr.message, '— revoking EcoLogic access anyway');
+                }
+              }
+            } else {
+              console.warn(`[admin-billing] remove-paid-plan: billing source is Stripe but stripeSubscriptionId is missing for company ${companyId} — revoking EcoLogic access only`);
+            }
+          } else if (isApplePlan) {
+            // Apple subscriptions cannot be canceled server-side; EcoLogic-side revocation only.
+            console.log(`[admin-billing] remove-paid-plan: Apple plan for company ${companyId} — EcoLogic revocation only (cannot cancel Apple server-side)`);
+          } else if (isGooglePlayPlan) {
+            console.log(`[admin-billing] remove-paid-plan: Google Play plan for company ${companyId} — EcoLogic revocation only`);
+          }
+
+          // ── Always: clear ALL paid entitlement fields in EcoLogic DB ─────────
           // Does NOT touch bypass flags (adminFreeAccess / adminBypassSubscription).
-          // If those are OFF after this, company hits paywall; if ON, they keep free access.
-          // Also clears trialEndsAt so a stale trial cannot grant lingering access.
+          // If those are OFF, company hits paywall. Also clears trial to prevent lingering access.
           updates = {
             subscriptionStatus: null,
             subscriptionPlan: null,
