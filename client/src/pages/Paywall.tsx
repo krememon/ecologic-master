@@ -288,8 +288,21 @@ export default function Paywall() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">EcoLogic</h1>
-            <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
+            <h1
+              className="text-5xl md:text-6xl mx-auto mb-2"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                color: "#0B0B0D",
+              }}
+            >
+              EcoLogic
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Professional contractor management
+            </p>
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
