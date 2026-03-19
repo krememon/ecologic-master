@@ -19979,10 +19979,18 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
       console.log(`[billing/verify-session] payment_status=${session.payment_status} — proceeding with sync`);
 
-      const sub = session.subscription;
-      if (!sub || typeof sub === 'string') {
-        return res.json({ ok: true, synced: false, reason: 'subscription not expanded' });
+      // Get the subscription ID from the session (may be string or expanded object)
+      const subRef = session.subscription;
+      if (!subRef) {
+        return res.json({ ok: true, synced: false, reason: 'no subscription on session' });
       }
+      const subId = typeof subRef === 'string' ? subRef : subRef.id;
+
+      // Retrieve the subscription DIRECTLY by ID to get the complete object.
+      // The subscription embedded in session.subscription (from expand) may be missing
+      // fields like current_period_end — which causes "Invalid time value" in syncSubscriptionToCompany.
+      const fullSub = await stripe.subscriptions.retrieve(subId);
+      console.log(`[billing/verify-session] subId=${subId} status=${fullSub.status} current_period_end=${(fullSub as any).current_period_end}`);
 
       // Verify this session belongs to the requesting company (compare Stripe customer ID)
       const sessionCustomerId = typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id;
@@ -19993,17 +20001,17 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 
       const { syncSubscriptionToCompany } = await import('./billingService');
       await syncSubscriptionToCompany(company.id, {
-        id: sub.id,
-        status: sub.status,
-        current_period_end: (sub as any).current_period_end,
-        cancel_at_period_end: sub.cancel_at_period_end,
-        items: sub.items,
-        metadata: sub.metadata as Record<string, string>,
+        id: fullSub.id,
+        status: fullSub.status,
+        current_period_end: (fullSub as any).current_period_end,
+        cancel_at_period_end: fullSub.cancel_at_period_end,
+        items: fullSub.items,
+        metadata: fullSub.metadata as Record<string, string>,
         customer: sessionCustomerId,
       });
 
-      console.log(`[billing/verify-session] ✅ synced companyId=${company.id} subId=${sub.id} status=${sub.status}`);
-      return res.json({ ok: true, synced: true, status: sub.status, subId: sub.id });
+      console.log(`[billing/verify-session] ✅ synced companyId=${company.id} subId=${fullSub.id} status=${fullSub.status}`);
+      return res.json({ ok: true, synced: true, status: fullSub.status, subId: fullSub.id });
     } catch (err: any) {
       console.error('[billing/verify-checkout-session] error:', err.message);
       return res.status(500).json({ ok: false, message: err.message });

@@ -58,7 +58,12 @@ export async function syncSubscriptionToCompany(
   const priceId = sub.items?.data?.[0]?.price?.id ?? null;
   const planKey = priceId ? (getPlanKeyForPriceId(priceId) ?? sub.metadata?.planKey ?? null) : null;
   const subscriptionStatus = sub.status; // active, past_due, canceled, trialing, etc.
-  const currentPeriodEnd = new Date(sub.current_period_end * 1000);
+  // Guard: current_period_end may be undefined/null if the subscription object came
+  // from an embedded expand (e.g. checkout session) rather than a direct retrieve.
+  const periodEndRaw = (sub as any).current_period_end;
+  const periodEndMs = typeof periodEndRaw === "number" && !isNaN(periodEndRaw) ? periodEndRaw * 1000 : null;
+  const currentPeriodEnd = periodEndMs !== null ? new Date(periodEndMs) : null;
+
   const maxUsers = planKey ? getMaxUsersForPlan(planKey) : undefined;
   const customerId = typeof sub.customer === "string" ? sub.customer : null;
 
@@ -67,10 +72,12 @@ export async function syncSubscriptionToCompany(
     subscriptionStatus,
     stripePriceId: priceId,
     subscriptionCancelAtPeriodEnd: sub.cancel_at_period_end,
-    currentPeriodEnd,
     billingUpdatedAt: new Date(),
     subscriptionPlatform: "stripe",
   };
+
+  // Only write currentPeriodEnd if it is a valid date
+  if (currentPeriodEnd !== null) updates.currentPeriodEnd = currentPeriodEnd;
 
   if (planKey) updates.subscriptionPlan = planKey;
   if (maxUsers !== undefined) updates.maxUsers = maxUsers;
@@ -82,7 +89,7 @@ export async function syncSubscriptionToCompany(
   }
 
   console.log(
-    `[billing-sync] companyId=${companyId} subId=${sub.id} status=${subscriptionStatus} plan=${planKey ?? "unknown"} periodEnd=${currentPeriodEnd.toISOString()}`
+    `[billing-sync] companyId=${companyId} subId=${sub.id} status=${subscriptionStatus} plan=${planKey ?? "unknown"} periodEnd=${currentPeriodEnd?.toISOString() ?? "missing"}`
   );
 
   await db
