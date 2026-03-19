@@ -19939,6 +19939,71 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     }
   });
 
+  // POST /api/billing/verify-checkout-session — fallback for when the webhook secret is wrong
+  // Called by the BillingSuccess page with the session_id from the return URL.
+  // Pulls the session directly from Stripe, confirms payment, and writes subscription state to DB.
+  // Safe to call multiple times — syncSubscriptionToCompany is idempotent.
+  app.post('/api/billing/verify-checkout-session', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
+
+      const { sessionId } = req.body;
+      if (!sessionId || typeof sessionId !== 'string') {
+        return res.status(400).json({ ok: false, message: 'sessionId is required' });
+      }
+
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(403).json({ ok: false, message: 'No company membership found' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+
+      console.log(`[billing/verify-session] sessionId=${sessionId} companyId=${company.id}`);
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['subscription'],
+      });
+
+      if (session.mode !== 'subscription') {
+        return res.json({ ok: true, synced: false, reason: 'not a subscription session' });
+      }
+      if (session.payment_status !== 'paid') {
+        console.log(`[billing/verify-session] payment_status=${session.payment_status} — not yet paid`);
+        return res.json({ ok: true, synced: false, reason: `payment_status=${session.payment_status}` });
+      }
+
+      const sub = session.subscription;
+      if (!sub || typeof sub === 'string') {
+        return res.json({ ok: true, synced: false, reason: 'subscription not expanded' });
+      }
+
+      // Verify this session belongs to the requesting company (compare Stripe customer ID)
+      const sessionCustomerId = typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id;
+      if (company.stripeCustomerId && sessionCustomerId && company.stripeCustomerId !== sessionCustomerId) {
+        console.warn(`[billing/verify-session] customer mismatch: company=${company.stripeCustomerId} session=${sessionCustomerId}`);
+        return res.status(403).json({ ok: false, message: 'Session does not belong to your company' });
+      }
+
+      const { syncSubscriptionToCompany } = await import('./billingService');
+      await syncSubscriptionToCompany(company.id, {
+        id: sub.id,
+        status: sub.status,
+        current_period_end: (sub as any).current_period_end,
+        cancel_at_period_end: sub.cancel_at_period_end,
+        items: sub.items,
+        metadata: sub.metadata as Record<string, string>,
+        customer: sessionCustomerId,
+      });
+
+      console.log(`[billing/verify-session] ✅ synced companyId=${company.id} subId=${sub.id} status=${sub.status}`);
+      return res.json({ ok: true, synced: true, status: sub.status, subId: sub.id });
+    } catch (err: any) {
+      console.error('[billing/verify-checkout-session] error:', err.message);
+      return res.status(500).json({ ok: false, message: err.message });
+    }
+  });
+
   // POST /api/billing/create-checkout-session — starts a Stripe Checkout for a chosen plan
   app.post('/api/billing/create-checkout-session', isAuthenticated, async (req: any, res) => {
     try {

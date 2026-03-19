@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { CheckCircle, Loader2, Clock, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +18,7 @@ export default function BillingSuccess() {
   const [polls, setPolls] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const verifyCalledRef = useRef(false);
 
   const sessionId = new URLSearchParams(window.location.search).get("session_id");
   console.log(`[billing/success] render — isAuthenticated=${isAuthenticated} authLoading=${authLoading} sessionId=${sessionId ? sessionId.slice(0, 12) + "…" : "none"}`);
@@ -29,9 +30,34 @@ export default function BillingSuccess() {
     retry: 2,
   });
 
+  // On first authenticated render, call verify-checkout-session to patch DB directly
+  // from Stripe's API. This is a webhook fallback: if the webhook secret is wrong or
+  // Stripe delivery is slow, this guarantees the subscription is written to the DB.
+  useEffect(() => {
+    if (!isAuthenticated || !sessionId || verifyCalledRef.current) return;
+    verifyCalledRef.current = true;
+
+    console.log(`[billing/success] calling verify-checkout-session for sessionId=${sessionId.slice(0, 12)}…`);
+    apiRequest("POST", "/api/billing/verify-checkout-session", { sessionId })
+      .then(async (res) => {
+        const data = await res.json();
+        console.log(`[billing/success] verify-checkout-session → synced=${data.synced} status=${data.status}`);
+        if (data.synced) {
+          // Force an immediate refresh of billing status after successful sync
+          queryClient.invalidateQueries({ queryKey: ["/api/billing/status"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+          refetch();
+        }
+      })
+      .catch((err) => {
+        console.warn(`[billing/success] verify-checkout-session error:`, err?.message);
+      });
+  }, [isAuthenticated, sessionId]);
+
+  // Also invalidate global subscription caches on first auth
   useEffect(() => {
     if (!isAuthenticated) return;
-    console.log(`[billing/success] invalidating subscription caches`);
     queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
   }, [isAuthenticated]);
@@ -146,7 +172,7 @@ export default function BillingSuccess() {
               Confirming your subscription…
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mb-6">
-              Your payment was successful. We're waiting for confirmation from Stripe.
+              Your payment was successful. We're activating your subscription now.
               This usually takes just a few seconds.
             </p>
             <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
@@ -155,9 +181,6 @@ export default function BillingSuccess() {
                 style={{ width: `${Math.min(100, (polls / 12) * 100)}%` }}
               />
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
-              Checking for webhook confirmation…
-            </p>
           </>
         )}
       </div>
