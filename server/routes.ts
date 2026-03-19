@@ -19980,7 +19980,18 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         console.log(`[billing] Created Stripe customer ${customerId} for companyId=${company.id}`);
       }
 
-      const appUrl = process.env.APP_BASE_URL || 'https://localhost:5000';
+      // Derive the return base URL from:
+      // 1. The request's Origin header — ensures same-domain redirect (user stays on the domain they came from)
+      // 2. APP_BASE_URL — only as override if explicitly set to a non-localhost value
+      // 3. Hard-coded canonical domain as final fallback
+      const requestOrigin = (req.headers.origin || '').replace(/\/$/, '');
+      const configuredUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+      const isLocalhostUrl = !configuredUrl || configuredUrl.includes('localhost') || configuredUrl.includes('127.0.0.1');
+      // Use request origin when available (preserves browser domain), fall back to configured URL
+      const appUrl = requestOrigin || (isLocalhostUrl ? null : configuredUrl) || 'https://app.ecologicc.com';
+
+      console.log(`[billing/create-checkout-session] requestOrigin=${requestOrigin} APP_BASE_URL=${process.env.APP_BASE_URL} → appUrl=${appUrl} companyId=${company.id} plan=${planKey}`);
+
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         customer: customerId,
@@ -19993,7 +20004,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         metadata: { companyId: String(company.id), planKey },
       });
 
-      console.log(`[billing] Checkout session created: ${session.id} companyId=${company.id} plan=${planKey}`);
+      console.log(`[billing] Checkout session created: ${session.id} success_url=${appUrl}/billing/success companyId=${company.id} plan=${planKey}`);
       return res.json({ ok: true, url: session.url });
     } catch (err: any) {
       console.error('[billing/create-checkout-session] error:', err.message);
@@ -20015,13 +20026,19 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
       if (!company.stripeCustomerId) return res.status(400).json({ ok: false, message: 'No Stripe customer found. Please subscribe first.' });
 
-      const appUrl = process.env.APP_BASE_URL || 'https://localhost:5000';
+      const requestOriginPortal = (req.headers.origin || '').replace(/\/$/, '');
+      const configuredUrlPortal = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+      const isLocalhostPortal = !configuredUrlPortal || configuredUrlPortal.includes('localhost') || configuredUrlPortal.includes('127.0.0.1');
+      const portalAppUrl = requestOriginPortal || (isLocalhostPortal ? null : configuredUrlPortal) || 'https://app.ecologicc.com';
+
+      console.log(`[billing/create-portal-session] requestOrigin=${requestOriginPortal} → portalAppUrl=${portalAppUrl} companyId=${company.id}`);
+
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: company.stripeCustomerId,
-        return_url: `${appUrl}/billing`,
+        return_url: `${portalAppUrl}/billing`,
       });
 
-      console.log(`[billing] Portal session created for companyId=${company.id}`);
+      console.log(`[billing] Portal session created for companyId=${company.id} return_url=${portalAppUrl}/billing`);
       return res.json({ ok: true, url: portalSession.url });
     } catch (err: any) {
       console.error('[billing/create-portal-session] error:', err.message);

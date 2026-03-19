@@ -406,6 +406,7 @@ function AuthenticatedRouter() {
   if (!isAuthenticated) {
     return (
       <Switch>
+        <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/" component={Welcome} />
         <Route path="/welcome" component={Welcome} />
         <Route path="/auth">{() => <Redirect to="/login" />}</Route>

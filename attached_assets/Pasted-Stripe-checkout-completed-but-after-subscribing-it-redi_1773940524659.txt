@@ -1,0 +1,79 @@
+Stripe checkout completed, but after subscribing it redirected to:
+
+/billing/success?session_id=...
+
+on the Replit domain, and then dumped me on the logged-out homepage instead of completing the billing success flow.
+
+We need to fix the Stripe return flow for web subscriptions.
+
+KNOWN ISSUE
+- After successful Stripe Checkout, the user returns to /billing/success
+- But they appear logged out / sent to homepage
+- This strongly suggests a domain/session mismatch or auth bootstrap redirect problem
+- We are using both:
+  - app.ecologicc.com
+  - eco-logic-pjpell077.replit.app
+- The return URL shown after checkout used the Replit domain
+
+GOAL
+Make Stripe Checkout return to the correct domain and preserve the logged-in session so the billing success page can confirm the subscription and restore access.
+
+TASKS
+
+1) Audit APP_BASE_URL and all Stripe success/cancel URL generation
+- Find exactly what base URL is being used in create-checkout-session
+- Confirm whether Stripe success_url / cancel_url are using APP_BASE_URL, request host, or fallback logic
+- We want the return URL to use the correct canonical web domain for authenticated web users
+- Preferred domain should be:
+  https://app.ecologicc.com
+  unless there is a deliberate local/dev exception
+
+2) Make domain handling explicit
+- Stop mixing Replit preview domain and custom production domain for Stripe returns
+- Define one canonical web base URL for billing redirects
+- Success URL should be:
+  https://app.ecologicc.com/billing/success?session_id={CHECKOUT_SESSION_ID}
+- Cancel URL should be:
+  https://app.ecologicc.com/billing
+- If environment-specific logic exists, make it intentional and safe
+
+3) Audit auth/session cookie behavior across domains
+- Check whether login session/cookies are scoped in a way that only works on one domain
+- Confirm why user is treated as logged out after returning from Stripe
+- Verify cookie domain, secure flags, sameSite settings, proxy trust, and any auth callback assumptions
+- Ensure authenticated session survives redirect to and from Stripe on the canonical domain
+
+4) Audit billing success page behavior
+- Confirm /billing/success is on the paywall bypass list as intended
+- Confirm it does NOT redirect to generic homepage if subscription state is still pending
+- If auth bootstrap is missing or loading, show a billing confirmation/pending state instead of bouncing away
+- Prevent any automatic redirect to landing page while session/subscription refresh is still being resolved
+
+5) Add targeted logs
+Add logs for:
+- the exact success_url and cancel_url generated in create-checkout-session
+- incoming request host/domain when creating checkout
+- auth/session presence on /billing/success load
+- why any redirect to homepage happens
+- billing status fetch result on success page
+
+6) Verify webhook/result path
+- Confirm checkout.session.completed and customer.subscription.created/updated are being received
+- Confirm DB/company subscription state is actually being updated after purchase
+- If webhook succeeded but frontend still dumped to homepage, make that clear in logs
+
+7) Fix and retest
+Expected behavior after fix:
+- user clicks subscribe from paywall
+- Stripe checkout completes
+- user returns to https://app.ecologicc.com/billing/success?session_id=...
+- success page stays in-app
+- billing status refreshes
+- access is restored once backend/webhook confirms active subscription
+- user is not dumped to logged-out homepage
+
+DELIVERABLES
+- exact root cause
+- exact files changed
+- exact before/after behavior
+- exact success_url now being generated
