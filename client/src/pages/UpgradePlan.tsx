@@ -138,10 +138,38 @@ export default function UpgradePlan() {
         await finishNativePurchase("google_play", { purchaseToken: result.purchaseToken, productId: result.productId }, planKey);
 
       } else {
-        const res = await apiRequest("POST", "/api/billing/create-checkout-session", { planKey });
-        const data = await res.json();
-        if (!res.ok || !data.ok || !data.url) throw new Error(data.message || "Could not start checkout");
-        window.location.href = data.url;
+        // Web path: two cases
+        //   1. Existing active Stripe subscriber → switch plan in-place (no duplicate subscription)
+        //   2. New subscriber → redirect to Stripe Checkout to collect payment details
+        const isActiveStripeSub =
+          billing?.subscriptionStatus === "active" &&
+          billing?.hasStripeCustomer &&
+          (billing?.subscriptionPlatform === "stripe" || billing?.subscriptionPlatform == null);
+
+        if (isActiveStripeSub) {
+          // In-place subscription update — single API call, no redirect
+          const res = await apiRequest("POST", "/api/billing/switch-plan", { planKey });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.message || "Could not switch plan");
+
+          await Promise.all([
+            queryClient.refetchQueries({ queryKey: ["/api/billing/status"] }),
+            queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
+            queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] }),
+          ]);
+
+          toast({
+            title: "Plan updated!",
+            description: `You are now on the ${subscriptionPlans[planKey].label} plan.`,
+          });
+          setLocation("/settings");
+        } else {
+          // New subscriber — redirect to Stripe Checkout to collect payment details
+          const res = await apiRequest("POST", "/api/billing/create-checkout-session", { planKey });
+          const data = await res.json();
+          if (!res.ok || !data.ok || !data.url) throw new Error(data.message || "Could not start checkout");
+          window.location.href = data.url;
+        }
       }
     } catch (err: any) {
       toast({

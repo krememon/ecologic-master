@@ -1,0 +1,97 @@
+We found a serious Stripe/web billing issue.
+
+CURRENT ISSUE
+When a web user upgrades to a more expensive plan, the old subscription is still hanging around instead of being replaced cleanly.
+
+Example from the billing screen:
+- EcoLogic Team — $79.99/month
+- EcoLogic Starter — $29.99/month
+Both are showing, which means the previous plan did not get cleaned up properly.
+
+GOAL
+When a web user switches to a new Stripe plan, they should only end up with ONE active subscription.
+The old plan should be canceled/replaced correctly so they are not paying for multiple plans.
+
+IMPORTANT RULE
+If a user upgrades to a more expensive plan on web:
+- the previous Stripe subscription should be canceled/replaced
+- they should only be billed for the new plan
+- billing/settings should show only the current active web plan
+- no duplicate current subscriptions should remain
+
+WHAT TO INVESTIGATE
+
+1. TRACE THE CURRENT WEB UPGRADE FLOW
+Find exactly how the web upgrade flow works today:
+- what endpoint is called
+- whether it creates a brand new Stripe subscription
+- whether it updates an existing Stripe subscription
+- whether it leaves the previous subscription active
+- whether multiple Stripe subscriptions are being attached to the same company/customer
+
+2. FIX THE STRIPE PLAN-CHANGE BEHAVIOR
+For web/Stripe subscriptions, changing plans should NOT leave multiple active subscriptions.
+
+Choose the correct Stripe behavior so that:
+- either the existing subscription is updated to the new price
+OR
+- if a new subscription must be created, the old one is immediately canceled/cleaned up
+
+End result must be:
+- one company
+- one active Stripe subscription
+- one current Stripe price/plan
+
+3. DB SOURCE OF TRUTH
+Make sure the company row reflects only the true current Stripe plan after the switch:
+- subscriptionPlan
+- subscriptionStatus
+- subscriptionPlatform
+- currentPeriodEnd
+- stripeSubscriptionId
+- stripePriceId
+- maxUsers if relevant
+
+Do not leave the old lower-tier Stripe subscription as a second active subscription source.
+
+4. BILLING UI
+After a plan change on web:
+- show only the current active plan
+- do not show multiple “Current subscriptions”
+- if the old subscription is canceled/replaced, it should not appear as another active paid plan
+
+5. BILLING HISTORY VS ACTIVE SUBSCRIPTION
+It is okay to keep historical billing records in Stripe.
+But the Settings / Billing UI should only represent the one actual current subscription for the company.
+
+6. CANCELLATION LOGIC
+Make sure this does not break the cancel-at-period-end behavior for a normal web cancellation.
+This fix is specifically about plan switching/upgrading, not normal cancellation.
+Normal cancellation should still:
+- keep access until currentPeriodEnd
+- then end
+
+7. LOGGING
+Add concise logs for:
+- web plan change requested
+- old stripe subscription id / price
+- new target stripe price
+- whether subscription was updated vs replaced
+- whether old subscription was canceled
+- final active stripe subscription id
+
+8. EXPECTED RESULT
+If a web user goes from Starter to Team:
+- only Team remains active
+- Starter is no longer an active subscription
+- billing/settings shows only Team
+- company DB row shows Team
+- user is only charged for Team going forward
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. whether the old flow was creating a second subscription instead of updating/replacing
+3. what Stripe API approach is now used for plan switching
+4. how the old subscription is cleaned up
+5. confirm only one active web subscription remains after upgrade

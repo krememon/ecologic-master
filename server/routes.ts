@@ -20161,7 +20161,98 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     }
   });
 
-  // POST /api/billing/create-checkout-session — starts a Stripe Checkout for a chosen plan
+  // POST /api/billing/switch-plan — in-place plan switch for existing Stripe subscribers.
+  // Updates the existing Stripe subscription's price instead of creating a second subscription.
+  // This avoids duplicate active subscriptions when a web user changes plans.
+  // New subscribers (no stripeSubscriptionId) must go through /api/billing/create-checkout-session instead.
+  app.post('/api/billing/switch-plan', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
+
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(403).json({ ok: false, message: 'No company membership found' });
+      if (member.role !== 'OWNER') return res.status(403).json({ ok: false, message: 'Only the company owner can switch plans' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+
+      const { planKey } = req.body;
+      if (!planKey || typeof planKey !== 'string') {
+        return res.status(400).json({ ok: false, message: 'planKey is required' });
+      }
+
+      const { getPriceIdForPlan, ALLOWED_PLAN_KEYS, syncSubscriptionToCompany } = await import('./billingService');
+      if (!ALLOWED_PLAN_KEYS.includes(planKey)) {
+        return res.status(400).json({ ok: false, message: `Invalid planKey: ${planKey}` });
+      }
+
+      // Must have an existing active Stripe subscription to switch in-place
+      if (!company.stripeSubscriptionId) {
+        return res.status(400).json({ ok: false, message: 'No existing Stripe subscription found. Please use the checkout flow.' });
+      }
+      if (company.subscriptionPlatform === 'apple' || company.subscriptionPlatform === 'google_play') {
+        return res.status(400).json({ ok: false, message: 'Apple and Google Play subscriptions must be managed through their respective stores.' });
+      }
+
+      const newPriceId = getPriceIdForPlan(planKey);
+      if (!newPriceId) {
+        return res.status(400).json({ ok: false, message: `No Stripe price configured for plan: ${planKey}. Set STRIPE_PRICE_${planKey.toUpperCase()} env var.` });
+      }
+
+      const oldSubId = company.stripeSubscriptionId;
+      const oldPriceId = company.stripePriceId ?? '(unknown)';
+      const oldPlanKey = company.subscriptionPlan ?? '(unknown)';
+
+      console.log(`[billing/switch-plan] web plan change requested — company=${company.id} old=${oldPlanKey}(${oldSubId} price=${oldPriceId}) → new=${planKey}(price=${newPriceId})`);
+
+      // Retrieve the full subscription to get the current item ID
+      const existingSub = await stripe.subscriptions.retrieve(oldSubId);
+      const existingItemId = existingSub.items?.data?.[0]?.id;
+      if (!existingItemId) {
+        return res.status(500).json({ ok: false, message: 'Could not read existing subscription item from Stripe.' });
+      }
+
+      // Update the subscription in-place — replaces the old price with the new one.
+      // proration_behavior: 'create_prorations' credits unused time from the old plan
+      // and charges immediately for the new plan's remaining period.
+      const updatedSub = await stripe.subscriptions.update(oldSubId, {
+        items: [{ id: existingItemId, price: newPriceId }],
+        proration_behavior: 'create_prorations',
+        metadata: { planKey, companyId: String(company.id), updatedByUserId: userId },
+      });
+
+      const periodEnd = new Date(((updatedSub as any).current_period_end ?? (updatedSub.items?.data?.[0] as any)?.current_period_end ?? 0) * 1000);
+      console.log(`[billing/switch-plan] Stripe updated — sub=${updatedSub.id} status=${updatedSub.status} newPrice=${newPriceId} currentPeriodEnd=${periodEnd.toISOString()} cancel_at_period_end=${updatedSub.cancel_at_period_end}`);
+      console.log(`[billing/switch-plan] old subscription ${oldSubId} was updated in-place — no duplicate subscription created`);
+
+      // Sync updated subscription state to the DB immediately (don't wait for webhook)
+      await syncSubscriptionToCompany(company.id, {
+        id: updatedSub.id,
+        status: updatedSub.status,
+        current_period_end: (updatedSub as any).current_period_end,
+        cancel_at_period_end: updatedSub.cancel_at_period_end,
+        items: updatedSub.items,
+        metadata: updatedSub.metadata as Record<string, string>,
+        customer: typeof updatedSub.customer === 'string' ? updatedSub.customer : undefined,
+      });
+
+      console.log(`[billing/switch-plan] ✅ done — company=${company.id} now on plan=${planKey} sub=${updatedSub.id}`);
+      return res.json({
+        ok: true,
+        planKey,
+        subscriptionId: updatedSub.id,
+        currentPeriodEnd: periodEnd.toISOString(),
+      });
+    } catch (err: any) {
+      console.error('[billing/switch-plan] error:', err.message);
+      return res.status(500).json({ ok: false, message: err.message || 'Failed to switch plan' });
+    }
+  });
+
+  // POST /api/billing/create-checkout-session — starts a Stripe Checkout for a chosen plan.
+  // Used for first-time subscribers only. Existing Stripe subscribers must use /api/billing/switch-plan
+  // to avoid creating a second active subscription alongside the existing one.
   app.post('/api/billing/create-checkout-session', isAuthenticated, async (req: any, res) => {
     try {
       if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
