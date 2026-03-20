@@ -346,7 +346,7 @@ export function BillingSection() {
             <ArrowUpRight className="h-4 w-4 mr-2" />
             {!billing.billingAllowed || !displayPlanKey
               ? 'Choose a Plan'
-              : 'Upgrade Plan'}
+              : 'Manage Plan'}
           </Button>
 
           {/* Manage Billing — web only, only if there's an active Stripe subscription */}
