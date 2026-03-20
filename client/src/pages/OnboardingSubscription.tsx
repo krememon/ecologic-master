@@ -117,21 +117,16 @@ export default function OnboardingSubscription() {
     logTag: string,
     expectedPlanKey?: string
   ) => {
-    console.log(`[${logTag}] posting to backend — platform:`, platform, "payload keys:", Object.keys(payload).join(", "), "expectedPlanKey:", expectedPlanKey ?? "(not provided)");
-
     const res = await apiRequest("POST", "/api/subscriptions/validate", {
       platform,
       ...payload,
       ...(expectedPlanKey ? { expectedPlanKey } : {}),
     });
     const data = await res.json();
-    console.log(`[${logTag}] backend response:`, data);
 
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Subscription validation failed");
     }
-
-    console.log(`[${logTag}] validation success — plan:`, data.planKey);
 
     localStorage.removeItem("onboardingChoice");
     localStorage.removeItem("onboardingIndustry");

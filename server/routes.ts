@@ -4516,22 +4516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? (spMap[expectedPlanKey!]?.userLimit ?? txInfo.userLimit)
           : txInfo.userLimit;
 
-        console.log(
-          `[iap-validate] ⚡ APPLE PLAN DECISION —` +
-          ` JWS productId: ${txInfo.productId} → jwsPlan: ${txInfo.planKey} (tier ${jwsTier})` +
-          ` | expectedPlan: ${expectedPlanKey ?? '(not sent)'} (tier ${expTier})` +
-          ` | isDeferredDowngrade: ${isDeferredDowngrade}` +
-          ` | planToWrite: ${planToWrite}` +
-          ` | prevPlan: ${company.subscriptionPlan ?? 'none'}` +
-          ` | company: ${company.id} | env: ${txInfo.environment}`
-        );
-
         if (isDeferredDowngrade) {
-          console.log(
-            `[iap-validate] ⬇️ DEFERRED DOWNGRADE — Apple JWS contains "${txInfo.planKey}" (still-active higher plan)` +
-            ` but user purchased "${expectedPlanKey}". Writing "${expectedPlanKey}" to DB.` +
-            ` Apple will switch the entitlement at next renewal (${txInfo.expiresDate?.toISOString() ?? 'unknown'}).`
-          );
+          console.log(`[iap-validate] deferred-downgrade: jws=${txInfo.planKey} → writing expected=${expectedPlanKey} company=${company.id}`);
         }
 
         const updatedCompany = await storage.updateCompany(company.id, {
@@ -4546,15 +4532,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           onboardingCompleted: true,
         });
 
-        // Verify the write landed correctly
-        console.log(
-          `[iap-validate] Apple — DB confirmed: company=${company.id} ` +
-          `subscriptionPlan="${updatedCompany.subscriptionPlan}" ` +
-          `subscriptionStatus="${updatedCompany.subscriptionStatus}" ` +
-          `subscriptionPlatform="${updatedCompany.subscriptionPlatform}" ` +
-          `currentPeriodEnd=${updatedCompany.currentPeriodEnd?.toISOString() ?? 'null'}`
-        );
-
         return res.json({
           ok: true,
           active: true,
@@ -4564,11 +4541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userLimit: userLimitToWrite,
           currentPeriodEnd: txInfo.expiresDate,
           originalTransactionId: txInfo.originalTransactionId,
-          isDeferredDowngrade,
-          verifiedPlanKey: updatedCompany.subscriptionPlan,
           subscriptionPlatform: updatedCompany.subscriptionPlatform,
-          billingUpdatedAt: updatedCompany.billingUpdatedAt,
-          dbCurrentPeriodEnd: updatedCompany.currentPeriodEnd,
         });
       }
 
@@ -20028,28 +20001,9 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 
         await db.update(companies).set(updates).where(eq(companies.id, companyId));
 
-        // Read back the DB row immediately after update to confirm state
-        const [afterRow] = await db.select({
-          subscriptionStatus: companies.subscriptionStatus,
-          subscriptionPlan: companies.subscriptionPlan,
-          subscriptionPlatform: companies.subscriptionPlatform,
-          currentPeriodEnd: companies.currentPeriodEnd,
-          originalTransactionId: companies.originalTransactionId,
-          billingUpdatedAt: companies.billingUpdatedAt,
-        }).from(companies).where(eq(companies.id, companyId)).limit(1);
-
         const actingEmail = req.user?.email || req.user?.claims?.email || 'unknown';
-        console.log(
-          `[admin-billing] action=${action} companyId=${companyId} by=${actingEmail}` +
-          ` | DB readback: status=${afterRow?.subscriptionStatus ?? 'null'}` +
-          ` plan=${afterRow?.subscriptionPlan ?? 'null'}` +
-          ` platform=${afterRow?.subscriptionPlatform ?? 'null'}` +
-          ` periodEnd=${afterRow?.currentPeriodEnd?.toISOString() ?? 'null'}` +
-          ` originalTxId=${afterRow?.originalTransactionId ?? 'null'}`
-        );
-
         const snapshot = await buildBillingSnapshot(companyId);
-        console.log(`[admin-billing] billing snapshot after ${action}: "${snapshot?.effectiveLabel}"`);
+        console.log(`[admin-billing] action=${action} companyId=${companyId} result="${snapshot?.effectiveLabel}" by=${actingEmail}`);
 
         res.json({ ok: true, action, billing: snapshot });
       } catch (e: any) {

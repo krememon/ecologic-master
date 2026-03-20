@@ -102,21 +102,16 @@ export default function Paywall() {
     logTag: string,
     expectedPlanKey?: string
   ) => {
-    console.log(`[${logTag}] posting to backend — platform:`, platform, "expectedPlanKey:", expectedPlanKey ?? "(not provided)");
-
     const res = await apiRequest("POST", "/api/subscriptions/validate", {
       platform,
       ...payload,
       ...(expectedPlanKey ? { expectedPlanKey } : {}),
     });
     const data = await res.json();
-    console.log(`[${logTag}] backend response:`, data);
 
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Subscription validation failed");
     }
-
-    console.log(`[${logTag}] validation success — plan:`, data.planKey);
 
     await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
     await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
