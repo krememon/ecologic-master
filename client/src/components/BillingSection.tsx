@@ -1,21 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { CreditCard, Users, Loader2, AlertTriangle, ArrowUpRight, XCircle } from 'lucide-react';
+import { CreditCard, Users, Loader2, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionPlans } from '@/config/subscriptionPlans';
@@ -109,12 +99,9 @@ export function BillingSection() {
 
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
   const [nativeIos, setNativeIos] = useState(false);
   const [nativeAndroid, setNativeAndroid] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   useEffect(() => {
     setNativeIos(isNativeIos());
@@ -223,9 +210,6 @@ export function BillingSection() {
   const hasPaidPlan = billing.subscriptionStatus === 'active' && !isFreeAccess;
   const isTrialing = billing.subscriptionStatus === 'trialing' || billing.billingSource === 'trial';
 
-  // Show cancel button only for web Stripe users with an active, non-canceled subscription
-  const showCancelButton = !isNativeApp && isStripePlan && hasPaidPlan && !!billing.stripeSubscriptionId;
-
   // ── Upgrade Plan handler ─────────────────────────────────────────────────
   const handleUpgradePlan = () => {
     const platform = nativeIos ? 'ios' : nativeAndroid ? 'android' : 'web';
@@ -251,25 +235,6 @@ export function BillingSection() {
     }
   };
 
-  // ── Cancel subscription handler (web/Stripe only) ─────────────────────────
-  const handleCancelSubscription = async () => {
-    setIsCanceling(true);
-    try {
-      const res = await apiRequest('POST', '/api/billing/cancel-subscription');
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to schedule cancellation');
-      await queryClient.invalidateQueries({ queryKey: ['/api/billing/status'] });
-      toast({
-        title: 'Cancellation scheduled',
-        description: `Your plan stays active until ${formatDate(data.currentPeriodEnd)}.`,
-      });
-    } catch (e: any) {
-      toast({ title: 'Could not cancel subscription', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsCanceling(false);
-    }
-  };
-
   // ── Platform source label for "Managed through..." ───────────────────────
   const managedThroughLabel = nativeIos
     ? 'Managed through Apple'
@@ -278,184 +243,120 @@ export function BillingSection() {
     : 'Managed through Web Billing';
 
   return (
-    <>
-      {/* ── Cancellation confirmation dialog ─────────────────────────────────── */}
-      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel your subscription?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Your plan will stay active until{' '}
-              <strong>{formatDate(billing.currentPeriodEnd)}</strong>. After that date you'll
-              lose paid access unless you resubscribe. This action cannot be undone here —
-              contact support if you change your mind before the period ends.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCanceling}>Keep Plan</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isCanceling}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async (e) => {
-                e.preventDefault();
-                await handleCancelSubscription();
-                setCancelDialogOpen(false);
-              }}
-            >
-              {isCanceling ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Canceling…</>
-              ) : (
-                'Yes, Cancel Plan'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CreditCard className="h-4 w-4 text-slate-500" />
+          Billing & Subscription
+        </CardTitle>
+        <CardDescription>Manage your subscription and billing information</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CreditCard className="h-4 w-4 text-slate-500" />
-            Billing & Subscription
-          </CardTitle>
-          <CardDescription>Manage your subscription and billing information</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-
-          {/* ── Current Plan ─────────────────────────────────────── */}
-          <div className="flex items-start justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center shrink-0">
-                <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {displayPlanLabel} Plan
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {plan
-                    ? `$${plan.price}/mo · Up to ${billing.seatLimit ?? '—'} users`
-                    : billing.seatLimit
-                    ? `Up to ${billing.seatLimit} users`
-                    : 'No active plan'}
-                </p>
-              </div>
+        {/* ── Current Plan ─────────────────────────────────────── */}
+        <div className="flex items-start justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center shrink-0">
+              <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
-            <div className="shrink-0">
-              <StatusBadge billing={billing} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {displayPlanLabel} Plan
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {plan
+                  ? `$${plan.price}/mo · Up to ${billing.seatLimit ?? '—'} users`
+                  : billing.seatLimit
+                  ? `Up to ${billing.seatLimit} users`
+                  : 'No active plan'}
+              </p>
             </div>
           </div>
+          <div className="shrink-0">
+            <StatusBadge billing={billing} />
+          </div>
+        </div>
 
-          {/* ── Billing Details ───────────────────────────────────── */}
-          <div className="space-y-2.5 text-sm">
+        {/* ── Billing Details ───────────────────────────────────── */}
+        <div className="space-y-2.5 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500 dark:text-slate-400">Billing source</span>
+            <span className="font-medium text-slate-800 dark:text-slate-200">{displayPlatformLabel}</span>
+          </div>
+
+          {(billing.currentPeriodEnd && hasPaidPlan) && (
             <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-slate-400">Billing source</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">{displayPlatformLabel}</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {billing.cancelAtPeriodEnd ? 'Access until' : 'Renews'}
+              </span>
+              <span className={`font-medium ${billing.cancelAtPeriodEnd ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                {formatDate(billing.currentPeriodEnd)}
+              </span>
             </div>
+          )}
 
-            {(billing.currentPeriodEnd && hasPaidPlan) && (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">
-                  {billing.cancelAtPeriodEnd ? 'Access until' : 'Renews'}
-                </span>
-                <span className={`font-medium ${billing.cancelAtPeriodEnd ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                  {formatDate(billing.currentPeriodEnd)}
-                </span>
-              </div>
-            )}
+          {(isTrialing && billing.trialEndsAt) && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Trial ends</span>
+              <span className="font-medium text-blue-600 dark:text-blue-400">{formatDate(billing.trialEndsAt)}</span>
+            </div>
+          )}
 
-            {(isTrialing && billing.trialEndsAt) && (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Trial ends</span>
-                <span className="font-medium text-blue-600 dark:text-blue-400">{formatDate(billing.trialEndsAt)}</span>
-              </div>
-            )}
+          {billing.cancelAtPeriodEnd && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Cancellation scheduled — access ends {formatDate(billing.currentPeriodEnd)}.
+            </div>
+          )}
 
-            {billing.cancelAtPeriodEnd && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Cancellation scheduled — access ends {formatDate(billing.currentPeriodEnd)}.
-              </div>
-            )}
+          {isFreeAccess && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-xs text-green-800 dark:text-green-300">
+              Full access enabled by admin. No payment required.
+            </div>
+          )}
 
-            {isFreeAccess && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-xs text-green-800 dark:text-green-300">
-                Full access enabled by admin. No payment required.
-              </div>
-            )}
+          {!billing.billingAllowed && !isFreeAccess && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Subscription inactive. Subscribe to restore full access.
+            </div>
+          )}
 
-            {!billing.billingAllowed && !isFreeAccess && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Subscription inactive. Subscribe to restore full access.
-              </div>
-            )}
+          {/* "Managed through" note */}
+          {(hasPaidPlan || isTrialing) && !isFreeAccess && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 pt-0.5">{managedThroughLabel}</p>
+          )}
+        </div>
 
-            {/* "Managed through" note */}
-            {(hasPaidPlan || isTrialing) && !isFreeAccess && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 pt-0.5">{managedThroughLabel}</p>
-            )}
-          </div>
+        <Separator />
 
-          <Separator />
+        {/* ── Actions ───────────────────────────────────────────── */}
+        <div className="flex flex-col gap-2">
 
-          {/* ── Actions ───────────────────────────────────────────── */}
-          <div className="flex flex-col gap-2">
+          {/* Manage Plan */}
+          <Button className="w-full" onClick={handleUpgradePlan}>
+            <ArrowUpRight className="h-4 w-4 mr-2" />
+            {!billing.billingAllowed || !displayPlanKey ? 'Choose a Plan' : 'Manage Plan'}
+          </Button>
 
-            {/* Upgrade / Choose Plan */}
+          {/* Manage Billing — web only, only if there's an active Stripe customer */}
+          {!isNativeApp && isStripePlan && billing.hasStripeCustomer && (
             <Button
+              variant="outline"
               className="w-full"
-              onClick={handleUpgradePlan}
+              disabled={isOpeningPortal}
+              onClick={handleOpenPortal}
             >
-              <ArrowUpRight className="h-4 w-4 mr-2" />
-              {!billing.billingAllowed || !displayPlanKey
-                ? 'Choose a Plan'
-                : 'Manage Plan'}
+              {isOpeningPortal
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening…</>
+                : <><CreditCard className="h-4 w-4 mr-2" />Manage Billing</>
+              }
             </Button>
+          )}
 
-            {/* Manage Billing — web only, only if there's an active Stripe subscription */}
-            {!isNativeApp && isStripePlan && billing.hasStripeCustomer && (
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={isOpeningPortal}
-                onClick={handleOpenPortal}
-              >
-                {isOpeningPortal
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening…</>
-                  : <><CreditCard className="h-4 w-4 mr-2" />Manage Billing</>
-                }
-              </Button>
-            )}
+        </div>
 
-            {/* Cancel Plan — web/Stripe only, active subscription, not already canceling */}
-            {showCancelButton && !billing.cancelAtPeriodEnd && (
-              <Button
-                variant="ghost"
-                className="w-full text-slate-500 hover:text-destructive hover:bg-destructive/5"
-                onClick={() => setCancelDialogOpen(true)}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Cancel Plan
-              </Button>
-            )}
-
-            {/* Cancellation already scheduled — show disabled state */}
-            {showCancelButton && billing.cancelAtPeriodEnd && (
-              <Button
-                variant="ghost"
-                className="w-full text-amber-600 dark:text-amber-400 cursor-default opacity-70"
-                disabled
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Cancellation Scheduled
-              </Button>
-            )}
-
-          </div>
-
-        </CardContent>
-      </Card>
-    </>
+      </CardContent>
+    </Card>
   );
 }
