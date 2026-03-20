@@ -533,6 +533,7 @@ function AuthenticatedRouter() {
         </Route>
         <Route path="/billing" component={Billing} />
         <Route path="/billing/success" component={BillingSuccess} />
+        <Route path="/paywall" component={Paywall} />
         <Route path="/dev-tools" component={DevTools} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>

@@ -1,0 +1,75 @@
+We need to fix the Settings → Billing & Subscription actions.
+
+CURRENT ISSUE
+The billing card is now showing correctly, but when I tap:
+- Upgrade Plan
+
+it sends me to the Jobs tab instead of opening the upgrade flow / subscription options.
+
+Also:
+- remove the Restore Purchases button from this Settings billing card entirely
+
+GOAL
+Make the Billing & Subscription card in Settings behave correctly for plan upgrades.
+
+WHAT TO FIX
+
+1. FIX UPGRADE PLAN ACTION
+Right now tapping Upgrade Plan incorrectly routes to Jobs.
+
+Find the real cause and fix it so:
+- on iPhone native, tapping Upgrade Plan opens the subscription upgrade options / plan selection flow
+- on Android native, tapping Upgrade Plan opens the Google Play upgrade options / plan selection flow
+- on web, tapping Upgrade Plan opens the Stripe upgrade/manage flow
+
+IMPORTANT
+- Do not route to Jobs
+- Do not use the onboarding redirect logic for this action
+- This should be a billing/settings action, not a dashboard redirect
+
+2. REMOVE RESTORE PURCHASES FROM SETTINGS CARD
+Completely remove the Restore Purchases button from the Settings → Billing & Subscription card.
+
+Why:
+- It clutters the settings card
+- We only want this card focused on current subscription + management
+- Restore can live on the paywall/subscription entry flow if needed, but not here
+
+3. KEEP THE CARD CLEAN
+After the change, the actions on the Settings billing card should be simple and clean.
+
+For now, the settings billing card should mainly support:
+- Upgrade Plan
+- Refresh Status
+
+If Manage Subscription is already implemented and clean, that can stay if appropriate.
+But Restore Purchases should be gone.
+
+4. UPGRADE FLOW UX
+Tapping Upgrade Plan from settings should open the plan selection / upgrade UI directly.
+It should feel like:
+- “change my current plan”
+not
+- “start onboarding again”
+and definitely not
+- “go to jobs”
+
+5. PLATFORM AWARE BEHAVIOR
+Preserve platform-specific billing behavior:
+- iPhone native → Apple upgrade flow
+- Android native → Google Play upgrade flow
+- Web → Stripe upgrade/manage flow
+
+6. LOGGING
+Add targeted logs for this action:
+- Upgrade button tapped
+- platform detected
+- route / modal / flow opened
+- any fallback path used
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. why Upgrade Plan was wrongly going to Jobs
+3. what it now opens on iPhone / Android / Web
+4. confirm Restore Purchases was removed from the Settings billing card

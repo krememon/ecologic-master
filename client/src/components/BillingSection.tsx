@@ -5,17 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CreditCard, Users, RefreshCw, Loader2, AlertTriangle, ArrowUpRight, RotateCcw } from 'lucide-react';
+import { CreditCard, Users, RefreshCw, Loader2, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionPlans } from '@/config/subscriptionPlans';
 import type { PlanKey } from '@/config/subscriptionPlans';
-import {
-  isNativeIos,
-  isNativeAndroid,
-  restoreApplePurchases,
-  restoreGooglePlayPurchases,
-} from '@/lib/nativeIap';
+import { isNativeIos, isNativeAndroid } from '@/lib/nativeIap';
 import { apiRequest } from '@/lib/queryClient';
 
 // ── Billing status shape returned by /api/billing/status ──────────────────────
@@ -106,7 +101,6 @@ export function BillingSection() {
   const [, setLocation] = useLocation();
   const [nativeIos, setNativeIos] = useState(false);
   const [nativeAndroid, setNativeAndroid] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   useEffect(() => {
@@ -216,44 +210,16 @@ export function BillingSection() {
   const hasPaidPlan = billing.subscriptionStatus === 'active' && !isFreeAccess;
   const isTrialing = billing.subscriptionStatus === 'trialing' || billing.billingSource === 'trial';
 
-  // ── Native restore handler ────────────────────────────────────────────────
-  const handleRestore = async () => {
-    setIsRestoring(true);
-    try {
-      if (nativeIos) {
-        const jws = await restoreApplePurchases();
-        if (!jws) {
-          toast({ title: 'Nothing to restore', description: 'No active EcoLogic subscription was found on this Apple ID.', variant: 'destructive' });
-          return;
-        }
-        const res = await apiRequest('POST', '/api/subscriptions/validate', { platform: 'apple', jwsTransaction: jws });
-        const data = await res.json();
-        if (data.ok) {
-          refetch();
-          toast({ title: 'Restored', description: 'Your subscription has been restored.' });
-        } else {
-          throw new Error(data.message || 'Validation failed');
-        }
-      } else if (nativeAndroid) {
-        const result = await restoreGooglePlayPurchases();
-        if (!result) {
-          toast({ title: 'Nothing to restore', description: 'No active EcoLogic subscription was found on this Google account.', variant: 'destructive' });
-          return;
-        }
-        const res = await apiRequest('POST', '/api/subscriptions/validate', { platform: 'google_play', purchaseToken: result.purchaseToken, productId: result.productId });
-        const data = await res.json();
-        if (data.ok) {
-          refetch();
-          toast({ title: 'Restored', description: 'Your subscription has been restored.' });
-        } else {
-          throw new Error(data.message || 'Validation failed');
-        }
-      }
-    } catch (e: any) {
-      toast({ title: 'Restore failed', description: e.message, variant: 'destructive' });
-    } finally {
-      setIsRestoring(false);
-    }
+  // ── Upgrade Plan handler ─────────────────────────────────────────────────
+  // Web → /billing (Stripe plan selector, already in AuthenticatedRouter)
+  // Native iOS → /paywall (Apple IAP plan selector)
+  // Native Android → /paywall (Google Play IAP plan selector)
+  // NOTE: /paywall is now registered in AuthenticatedRouter so active subscribers can reach it.
+  const handleUpgradePlan = () => {
+    const platform = nativeIos ? 'ios' : nativeAndroid ? 'android' : 'web';
+    const destination = isNativeApp ? '/paywall' : '/billing';
+    console.log('[billing-section] Upgrade Plan tapped — platform:', platform, '→ navigating to', destination);
+    setLocation(destination);
   };
 
   // ── Stripe billing portal handler (web only) ──────────────────────────────
@@ -374,10 +340,13 @@ export function BillingSection() {
           <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Actions</p>
           <div className="flex flex-col gap-2">
 
-            {/* Upgrade / Choose Plan — always shown */}
+            {/* Upgrade / Choose Plan
+                Web → /billing (Stripe plan selector in AuthenticatedRouter)
+                iOS → /paywall (Apple IAP — now registered in AuthenticatedRouter)
+                Android → /paywall (Google Play IAP — now registered in AuthenticatedRouter) */}
             <Button
               className="w-full"
-              onClick={() => setLocation('/paywall')}
+              onClick={handleUpgradePlan}
             >
               <ArrowUpRight className="h-4 w-4 mr-2" />
               {!billing.billingAllowed || !displayPlanKey
@@ -385,7 +354,7 @@ export function BillingSection() {
                 : 'Upgrade Plan'}
             </Button>
 
-            {/* Stripe billing portal — web only, only if there's a Stripe subscription */}
+            {/* Manage Billing — web only, only if there's an active Stripe subscription */}
             {!isNativeApp && isStripePlan && billing.hasStripeCustomer && (
               <Button
                 variant="outline"
@@ -396,21 +365,6 @@ export function BillingSection() {
                 {isOpeningPortal
                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening…</>
                   : <><CreditCard className="h-4 w-4 mr-2" />Manage Billing</>
-                }
-              </Button>
-            )}
-
-            {/* Restore Purchases — native platforms only */}
-            {isNativeApp && (
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={isRestoring}
-                onClick={handleRestore}
-              >
-                {isRestoring
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Restoring…</>
-                  : <><RotateCcw className="h-4 w-4 mr-2" />Restore Purchases</>
                 }
               </Button>
             )}
