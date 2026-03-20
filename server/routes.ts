@@ -20268,6 +20268,61 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
     }
   });
 
+  // POST /api/billing/cancel-subscription — schedule Stripe subscription to cancel at period end.
+  // The user keeps full access until currentPeriodEnd; no immediate loss of service.
+  // Apple and Google Play subscriptions must be cancelled through their respective stores.
+  app.post('/api/billing/cancel-subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) return res.status(503).json({ ok: false, message: 'Stripe is not configured' });
+
+      const userId = req.user?.claims?.sub || req.user?.id;
+      const [member] = await db.select().from(companyMembers).where(eq(companyMembers.userId, userId)).limit(1);
+      if (!member) return res.status(403).json({ ok: false, message: 'No company membership found' });
+      if (member.role !== 'OWNER') return res.status(403).json({ ok: false, message: 'Only the company owner can cancel a subscription' });
+
+      const [company] = await db.select().from(companies).where(eq(companies.id, member.companyId)).limit(1);
+      if (!company) return res.status(404).json({ ok: false, message: 'Company not found' });
+
+      // Safety: Apple and Google Play subscriptions are managed by their stores
+      if (company.subscriptionPlatform === 'apple' || company.subscriptionPlatform === 'google_play') {
+        return res.status(400).json({
+          ok: false,
+          message: 'Apple and Google Play subscriptions must be cancelled through the App Store or Google Play Store.',
+        });
+      }
+
+      if (!company.stripeSubscriptionId) {
+        return res.status(400).json({ ok: false, message: 'No active Stripe subscription found.' });
+      }
+
+      if (company.subscriptionCancelAtPeriodEnd) {
+        return res.status(400).json({ ok: false, message: 'Subscription is already scheduled to cancel at period end.' });
+      }
+
+      console.log(`[billing/cancel] scheduling cancel_at_period_end=true — company=${company.id} sub=${company.stripeSubscriptionId}`);
+
+      const updated = await stripe.subscriptions.update(company.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      const periodEnd = new Date(updated.current_period_end * 1000);
+      console.log(`[billing/cancel] done — sub=${updated.id} cancel_at_period_end=${updated.cancel_at_period_end} currentPeriodEnd=${periodEnd.toISOString()}`);
+
+      await db.update(companies)
+        .set({ subscriptionCancelAtPeriodEnd: true, billingUpdatedAt: new Date() })
+        .where(eq(companies.id, company.id));
+
+      return res.json({
+        ok: true,
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: periodEnd.toISOString(),
+      });
+    } catch (err: any) {
+      console.error('[billing/cancel] error:', err.message);
+      return res.status(500).json({ ok: false, message: err.message || 'Failed to schedule cancellation' });
+    }
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return httpServer;

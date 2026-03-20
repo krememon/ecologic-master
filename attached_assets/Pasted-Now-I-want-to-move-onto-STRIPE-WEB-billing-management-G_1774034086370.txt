@@ -1,0 +1,91 @@
+Now I want to move onto STRIPE / WEB billing management.
+
+GOAL
+On the web version, I need a way for the user to cancel their Stripe subscription from the billing/settings area.
+
+IMPORTANT BEHAVIOR
+If the user cancels:
+- they should NOT lose access immediately
+- they should keep using the app until the end of the current billing period
+- after the current billing period ends, THEN they should hit the paywall / lose paid access unless they renew
+
+So this needs to be a true “cancel at period end” flow.
+
+WHAT TO BUILD
+
+1. WEB BILLING CARD ACTION
+In the web billing/settings flow, add a button for Stripe subscriptions only:
+- “Cancel Plan”
+
+This button should only appear when:
+- platform/source is Stripe / Web
+- the company has an active Stripe subscription
+
+Do NOT show this cancel button for:
+- Apple subscriptions
+- Google Play subscriptions
+- free access
+- trial-only states with no Stripe subscription
+
+2. STRIPE CANCEL-AT-PERIOD-END LOGIC
+When the user clicks Cancel Plan on web:
+- do NOT fully delete access immediately
+- update the Stripe subscription so it cancels at period end
+- store/reflect that state locally as well
+- keep the app accessible until currentPeriodEnd
+- after currentPeriodEnd passes, the billing gate should block/paywall if no other valid access exists
+
+3. BILLING UI AFTER CANCELLATION
+Once canceled, the billing card should clearly show something like:
+- “Cancels on [date]”
+- or “Plan ends on [date]”
+- or “Cancellation scheduled”
+
+And the main plan should still remain active until that date.
+
+Example state:
+- Current Plan: Team Plan
+- Billing Source: Web
+- Status: Active
+- Cancellation: Ends Mar 30, 2026
+
+4. OPTIONAL BUTTON STATE AFTER CANCELLATION
+After cancellation is scheduled:
+- hide the Cancel Plan button
+OR
+- disable it and show “Cancellation Scheduled”
+
+Do not let users spam it.
+
+5. BILLING GATE / ACCESS LOGIC
+Update the billing resolver / access logic so Stripe-canceled-at-period-end behaves correctly:
+- if Stripe subscription is active and currentPeriodEnd is still in the future, access remains allowed
+- if cancellation is scheduled but period end is still in the future, access remains allowed
+- once currentPeriodEnd passes, access should no longer be granted from Stripe
+- Apple / Google Play / free access / trial logic should continue working normally
+
+6. SETTINGS / MANAGE PLAN UI
+On web:
+- keep “Manage Plan” or equivalent
+- include the Cancel Plan action in a clean way
+- keep UI polished and easy to understand
+
+7. SAFETY
+Make sure this does NOT accidentally cancel Apple/Google subscriptions.
+This is web/Stripe only.
+
+8. LOGGING
+Add concise logs for:
+- Stripe cancel requested
+- subscription set to cancel at period end
+- currentPeriodEnd returned
+- billing state after cancellation
+
+9. DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. exact Stripe API action used
+3. how cancellation-at-period-end is stored/reflected in the DB
+4. what the billing card shows after cancellation
+5. confirm web users keep access until currentPeriodEnd
+6. confirm Apple/Google flows were untouched
