@@ -83,8 +83,25 @@ function StatusBadge({ billing }: { billing: BillingStatus }) {
   return <Badge variant="secondary">Inactive</Badge>;
 }
 
+// ── Local AuthUser shape (mirrors useAuth.ts — company is nested, NOT flat) ──
+interface AuthUserWithCompany {
+  id: string;
+  email?: string | null;
+  role?: string | null;
+  company?: {
+    id: number;
+    name: string;
+    subscriptionStatus?: string | null;
+    subscriptionPlan?: string | null;
+  } | null;
+}
+
 export function BillingSection() {
-  const { user } = useAuth() as { user: any };
+  // IMPORTANT: useAuth returns { user } where user.company.id is the company ID.
+  // There is NO flat user.companyId field — that was the root cause of "No Company Found".
+  const { user: rawUser } = useAuth();
+  const user = rawUser as AuthUserWithCompany | null;
+
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [nativeIos, setNativeIos] = useState(false);
@@ -99,12 +116,21 @@ export function BillingSection() {
 
   const isNativeApp = nativeIos || nativeAndroid;
 
-  // Fetch real billing status — same endpoint used by the paywall gate and Dev Tools
+  // Company lives at user.company.id — user.companyId does NOT exist on this type
+  const companyId = user?.company?.id ?? null;
+
+  console.log('[billing-section] user.id=', user?.id, 'company.id=', companyId, 'role=', user?.role);
+
+  // Fetch real billing status — same endpoint used by the paywall gate and Dev Tools.
+  // Only fetch once we know the user has a company (avoids 404 noise for new accounts).
   const { data: billing, isLoading, isError, refetch } = useQuery<BillingStatus>({
     queryKey: ['/api/billing/status'],
+    enabled: !!companyId,
     retry: 1,
     staleTime: 30_000,
   });
+
+  console.log('[billing-section] billing fetch → isLoading=', isLoading, 'isError=', isError, 'ok=', billing?.ok, 'plan=', billing?.subscriptionPlan, 'source=', billing?.billingSource);
 
   // ── No company at all (user never completed onboarding) ─────────────────────
   // Only show this if user is loaded and truly has no company.
@@ -112,7 +138,7 @@ export function BillingSection() {
     return null; // still loading auth
   }
 
-  if (!user.companyId) {
+  if (!companyId) {
     return (
       <Card>
         <CardHeader>

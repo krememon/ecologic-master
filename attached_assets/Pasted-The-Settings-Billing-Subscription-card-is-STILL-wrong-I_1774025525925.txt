@@ -1,0 +1,91 @@
+The Settings → Billing & Subscription card is STILL wrong.
+
+It is still showing:
+- No Company Found
+- Choose Plan
+
+for a logged-in owner who absolutely already has a company.
+
+This means the previous fix did NOT solve the real bug.
+
+GOAL
+Find the real root cause and fix the billing card so it loads the authenticated owner’s actual company and subscription info.
+
+IMPORTANT
+Do not guess.
+Trace the actual data flow end to end and fix the real issue.
+
+WHAT TO INVESTIGATE
+
+1. TRACE THE SETTINGS BILLING CARD DATA FLOW
+Start from the Billing & Subscription card in Settings and trace:
+- what query / hook / API it uses
+- what authenticated user data it receives
+- whether companyId exists there
+- whether it is reading the wrong field
+- whether it is using stale/null state
+- whether native auth differs from web auth
+- whether it is accidentally expecting a different response shape
+
+2. VERIFY THE AUTHENTICATED USER CONTEXT
+On this device/account, the logged-in owner already has a company.
+So inspect the real auth payload on this screen and confirm:
+- user id
+- email
+- companyId
+- role
+- onboarding choice
+
+If the billing card thinks there is no company, explain why that mismatch is happening.
+
+3. FIND WHETHER THE BUG IS:
+- wrong frontend condition
+- wrong API response shape
+- race condition
+- stale query cache
+- native mobile auth path mismatch
+- settings page using a different source than the rest of the app
+- company fetch failing silently
+- owner/company context not being passed through
+
+4. USE THE SAME SOURCE OF TRUTH AS THE APP
+The billing card should use the same real authenticated company/billing source of truth as:
+- auth bootstrap
+- paywall gate
+- Dev Tools billing snapshot if appropriate
+
+I do NOT want a separate fake company check in settings.
+
+5. FIX THE EMPTY STATE LOGIC
+The “No Company Found” empty state should ONLY show if the authenticated user truly has no company at all.
+
+If the user does have a company:
+- load the real company
+- load the real subscription
+- show the actual billing card
+
+6. ADD TARGETED LOGS
+Add clean logs around this card:
+- authenticated user id/email
+- companyId seen by settings page
+- billing fetch request
+- billing fetch response
+- exact reason the empty state is being shown
+
+Keep logs short and targeted.
+
+7. AFTER THE FIX
+The Billing & Subscription card should show real data like:
+- Current Plan
+- Billing Source
+- Status
+- Renewal Date
+- Upgrade / Manage actions
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. the exact root cause
+3. why it was still showing No Company Found
+4. what data source the settings billing card now uses
+5. whether native and web now both resolve the company correctly
