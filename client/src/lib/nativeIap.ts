@@ -126,42 +126,18 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
     productType: PURCHASE_TYPE.SUBS,
   });
 
-  // Log every field available on the purchase result for diagnosis
-  const txProductId = (transaction as any).productIdentifier ?? "(missing)";
+  const txProductId = (transaction as any).productIdentifier ?? "";
   const directJws = transaction.jwsRepresentation ?? null;
-  console.log(
-    "[native-iap] Apple purchaseProduct callback —" +
-    ` transactionId: ${transaction.transactionId}` +
-    ` | productIdentifier: ${txProductId}` +
-    ` | wanted: ${productId}` +
-    ` | directJwsLen: ${directJws?.length ?? 0}` +
-    ` | productMatch: ${txProductId === productId}`
-  );
 
-  // ── Fast path: transaction productIdentifier matches what we purchased ───
-  // If the library returns the correct transaction for the new product,
-  // the direct JWS already contains the right productId — use it immediately.
+  // ── Fast path: transaction is already for the purchased product ───────────
   if (txProductId === productId && directJws) {
-    console.log(`[native-iap] Apple: ✅ fast path — transaction is for ${productId}, using direct JWS`);
     return directJws;
   }
 
-  // ── Deferred-change detection ─────────────────────────────────────────────
-  // When Apple subscription group levels are ordered backwards (Starter=1,
-  // Scale=4 instead of Scale=1, Starter=4), Apple treats Starter→Team as a
-  // DOWNGRADE and defers the entitlement change to the next billing period.
-  // In that case purchaseProduct() returns a transaction where productIdentifier
-  // is the CURRENT (old) product, NOT the purchased one. getPurchases() also
-  // returns the old product because the entitlement hasn't switched yet.
-  // FIX: Reorder group levels in App Store Connect to Scale(1)>Pro(2)>Team(3)>Starter(4).
-  console.log(
-    `[native-iap] Apple: ⚠️ DEFERRED-CHANGE SIGNAL —` +
-    ` transaction returned productIdentifier=${txProductId} but we purchased ${productId}.` +
-    ` This matches Apple deferred-downgrade behavior (incorrect group level order).` +
-    ` Expected product: ${productId} | Received product: ${txProductId}.` +
-    ` Will search entitlements via getPurchases() with retry, but if group levels` +
-    ` are still wrong in App Store Connect, entitlements will also return ${txProductId}.`
-  );
+  // Product mismatch — Apple may be treating this as a deferred change.
+  // (App Store Connect group levels must be Scale=1 > Pro=2 > Team=3 > Starter=4
+  // for upgrades to take effect immediately.)
+  console.warn(`[native-iap] Apple: transaction productIdentifier=${txProductId} does not match purchased=${productId} — searching entitlements.`);
 
   // ── Entitlement lookup with retry ─────────────────────────────────────────
   // For subscription group upgrades Apple propagates the entitlement change
@@ -171,29 +147,20 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
   const RETRY_DELAY_MS = 1500;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) {
-      console.log(`[native-iap] Apple: waiting ${RETRY_DELAY_MS}ms before getPurchases retry ${attempt + 1}/${MAX_ATTEMPTS}`);
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-    }
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
 
     try {
       const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
-      const allIds = purchases.map(t => (t as any).productIdentifier ?? "?").join(", ") || "(none)";
-      console.log(`[native-iap] Apple getPurchases attempt ${attempt + 1}: ${purchases.length} entitlement(s) — [${allIds}]`);
 
       for (const tx of purchases) {
         const pid = (tx as any).productIdentifier ?? "";
-        const jwsLen = tx.jwsRepresentation?.length ?? 0;
         if (pid === productId && tx.jwsRepresentation) {
-          console.log(`[native-iap] Apple: ✅ entitlement found for productId=${pid} len=${jwsLen} on attempt ${attempt + 1}`);
           return tx.jwsRepresentation;
         }
       }
-
-      console.log(`[native-iap] Apple: target productId=${productId} not yet in entitlements (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
     } catch (err: any) {
-      console.warn(`[native-iap] Apple getPurchases attempt ${attempt + 1} failed:`, err.message);
-      break; // Don't retry on exception — fall through to direct JWS
+      console.warn("[native-iap] Apple getPurchases failed:", err.message);
+      break;
     }
   }
 
@@ -208,11 +175,6 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
     );
   }
 
-  console.warn(
-    `[native-iap] Apple: ⚠️ using direct transaction JWS as last resort — len: ${directJws.length}` +
-    ` | transaction was for: ${txProductId} | we wanted: ${productId}` +
-    " | backend will verify and log the actual productId in the JWS"
-  );
   return directJws;
 }
 

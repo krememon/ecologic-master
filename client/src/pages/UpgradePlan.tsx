@@ -67,7 +67,6 @@ export default function UpgradePlan() {
     const android = isNativeAndroid();
     setNativeIos(ios);
     setNativeAndroid(android);
-    console.log("[upgrade-plan] platform — nativeIos:", ios, "nativeAndroid:", android);
   }, []);
 
   const { data: billing, isLoading } = useQuery<BillingStatus>({
@@ -81,7 +80,6 @@ export default function UpgradePlan() {
     setProductsLoading(true);
     const loader = nativeIos ? loadAppleProducts() : loadGooglePlayProducts();
     loader.then((loaded) => {
-      console.log("[upgrade-plan] store products loaded:", loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)");
       setProducts(loaded);
       setProductsLoading(false);
     });
@@ -105,47 +103,22 @@ export default function UpgradePlan() {
     payload: Record<string, string>,
     targetPlanKey: PlanKey,
   ) => {
-    console.log("[upgrade-plan] posting purchase to backend — platform:", platform, "targetPlan:", targetPlanKey, "payload keys:", Object.keys(payload).join(", "));
     const res = await apiRequest("POST", "/api/subscriptions/validate", { platform, ...payload, expectedPlanKey: targetPlanKey });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Subscription validation failed");
 
-    // ── Clean observable log line ─────────────────────────────────────────
-    console.log(
-      `[upgrade-plan] backend confirmed plan=${data.verifiedPlanKey ?? data.planKey}` +
-      ` productId=${data.verifiedProductId ?? '(none)'}` +
-      ` platform=${data.subscriptionPlatform ?? 'unknown'}` +
-      ` billingUpdatedAt=${data.billingUpdatedAt ?? 'null'}` +
-      ` dbCurrentPeriodEnd=${data.dbCurrentPeriodEnd ?? 'null'}` +
-      ` planMismatch=${data.planMismatch ?? false}` +
-      ` expected=${targetPlanKey}`
-    );
-
-    if (data.planMismatch) {
-      console.warn(
-        `[upgrade-plan] PLAN MISMATCH — JWS productId "${data.verifiedProductId}" resolved to plan "${data.verifiedPlanKey ?? data.planKey}" but we expected "${targetPlanKey}".`
-      );
-    }
-
-    // Force-refetch both billing endpoints so the Settings card shows the new plan.
+    // Refresh billing state immediately so Settings shows the new plan.
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ["/api/billing/status"] }),
       queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] }),
     ]);
 
-    // ── Debug toast: show backend-confirmed plan, not just the intended one ──
-    const dbPlanKey = (data.verifiedPlanKey ?? data.planKey) as PlanKey | null;
-    const confirmedPlan = dbPlanKey && subscriptionPlans[dbPlanKey]
-      ? subscriptionPlans[dbPlanKey]
-      : subscriptionPlans[targetPlanKey];
-    const mismatchNote = data.planMismatch
-      ? ` (expected ${subscriptionPlans[targetPlanKey]?.label})`
-      : "";
+    const confirmedPlanKey = (data.verifiedPlanKey ?? data.planKey) as PlanKey;
+    const confirmedPlan = subscriptionPlans[confirmedPlanKey] ?? subscriptionPlans[targetPlanKey];
     toast({
-      title: `Backend confirmed: ${confirmedPlan.label} plan${mismatchNote}`,
-      description: `productId: ${data.verifiedProductId ?? "?"} · updated: ${data.billingUpdatedAt ? new Date(data.billingUpdatedAt).toLocaleTimeString() : "?"}`,
-      variant: data.planMismatch ? "destructive" : "default",
+      title: "Plan upgraded!",
+      description: `You are now on the ${confirmedPlan.label} plan.`,
     });
     setLocation("/settings");
   };
@@ -153,32 +126,24 @@ export default function UpgradePlan() {
   // ── Handle plan selection ─────────────────────────────────────────────────
   const handleSelectPlan = async (planKey: PlanKey) => {
     const plan = subscriptionPlans[planKey];
-    const platform = nativeIos ? "ios" : nativeAndroid ? "android" : "web";
-    console.log("[upgrade-plan] Upgrade tapped — target plan:", planKey, "platform:", platform);
-    console.log("[upgrade-plan] current plan:", currentPlanKey, "billing source:", billing?.billingSource);
-
     setPurchasing(planKey);
 
     try {
       if (nativeIos) {
-        console.log("[upgrade-plan] launching Apple purchase — productId:", plan.appleProductId);
         const jws = await purchaseAppleSubscription(plan.appleProductId);
         await finishNativePurchase("apple", { jwsTransaction: jws }, planKey);
 
       } else if (nativeAndroid) {
-        console.log("[upgrade-plan] launching Google Play purchase — productId:", plan.googlePlayProductId);
         const result = await purchaseGooglePlaySubscription(plan.googlePlayProductId);
         await finishNativePurchase("google_play", { purchaseToken: result.purchaseToken, productId: result.productId }, planKey);
 
       } else {
-        console.log("[upgrade-plan] launching Stripe checkout — planKey:", planKey);
         const res = await apiRequest("POST", "/api/billing/create-checkout-session", { planKey });
         const data = await res.json();
         if (!res.ok || !data.ok || !data.url) throw new Error(data.message || "Could not start checkout");
         window.location.href = data.url;
       }
     } catch (err: any) {
-      console.error("[upgrade-plan] purchase failed:", err.message);
       toast({
         title: "Upgrade failed",
         description: err.message || "Could not complete the upgrade. Please try again.",

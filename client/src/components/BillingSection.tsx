@@ -380,26 +380,6 @@ export function BillingSection() {
           </div>
         </div>
 
-        {/* ── DEBUG STRIP — remove after upgrade testing ─────────────────── */}
-        <div className="mt-4 px-1 py-2 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-          <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 leading-relaxed">
-            <span className="font-semibold text-slate-500 dark:text-slate-400">DB plan:</span>{" "}
-            {billing.subscriptionPlan ?? "null"}{" "}
-            &nbsp;|&nbsp;
-            <span className="font-semibold text-slate-500 dark:text-slate-400">effectivePlan:</span>{" "}
-            {billing.effectivePlan ?? "null"}{" "}
-            &nbsp;|&nbsp;
-            <span className="font-semibold text-slate-500 dark:text-slate-400">platform:</span>{" "}
-            {billing.subscriptionPlatform ?? "null"}{" "}
-            &nbsp;|&nbsp;
-            <span className="font-semibold text-slate-500 dark:text-slate-400">billingUpdatedAt:</span>{" "}
-            {billing.billingUpdatedAt
-              ? new Date(billing.billingUpdatedAt).toLocaleTimeString()
-              : "null"}
-          </p>
-        </div>
-        {/* ── END DEBUG STRIP ──────────────────────────────────────────────── */}
-
       </CardContent>
     </Card>
   );
