@@ -4487,21 +4487,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(422).json({ ok: false, message: `Apple verification failed: ${err.message}` });
         }
 
-        // Diagnostic: compare verified plan against what the client expected to purchase
         const expectedPlanKey = typeof req.body.expectedPlanKey === 'string' ? req.body.expectedPlanKey : null;
-        const planMismatch = expectedPlanKey && expectedPlanKey !== txInfo.planKey;
+
+        // ── Deferred-downgrade detection ─────────────────────────────────────
+        // Apple processes subscription group DOWNGRADES at the end of the
+        // current billing period. When a user "purchases" a lower-tier plan
+        // while a higher-tier Apple subscription is still active, purchaseProduct()
+        // returns the OLD subscription's JWS (the currently active entitlement).
+        // The JWS productId will therefore be the higher-tier product, not the
+        // one the user just purchased.
+        //
+        // Without this guard, the validate endpoint would re-write the old
+        // higher-tier plan (e.g. scale) back to the DB even though the user
+        // paid for the lower-tier plan (e.g. starter). This is the "remove-then-
+        // repurchase shows old plan" bug.
+        //
+        // Fix: when expectedPlanKey is a lower tier than what the JWS returned,
+        // write the expected (purchased) plan instead. Apple will honour the
+        // downgrade at next renewal on its own.
+        const PLAN_TIER: Record<string, number> = { starter: 1, team: 2, pro: 3, scale: 4 };
+        const jwsTier    = PLAN_TIER[txInfo.planKey]  ?? 0;
+        const expTier    = expectedPlanKey ? (PLAN_TIER[expectedPlanKey] ?? 0) : 0;
+        const isDeferredDowngrade = !!expectedPlanKey && expTier > 0 && expTier < jwsTier;
+
+        const planToWrite      = isDeferredDowngrade ? expectedPlanKey : txInfo.planKey;
+        const { subscriptionPlans: spMap } = await import('@shared/subscriptionPlans');
+        const userLimitToWrite = isDeferredDowngrade
+          ? (spMap[expectedPlanKey!]?.userLimit ?? txInfo.userLimit)
+          : txInfo.userLimit;
 
         console.log(
-          `[iap-validate] ⚡ APPLE PLAN DECISION — productId from JWS: ${txInfo.productId} → planKey: ${txInfo.planKey}` +
-          ` | prevPlan: ${company.subscriptionPlan ?? 'none'} | expectedPlanKey: ${expectedPlanKey ?? '(not sent)'}` +
-          ` | MISMATCH: ${planMismatch ? `YES — JWS says "${txInfo.planKey}" but frontend expected "${expectedPlanKey}"` : 'no'}` +
+          `[iap-validate] ⚡ APPLE PLAN DECISION —` +
+          ` JWS productId: ${txInfo.productId} → jwsPlan: ${txInfo.planKey} (tier ${jwsTier})` +
+          ` | expectedPlan: ${expectedPlanKey ?? '(not sent)'} (tier ${expTier})` +
+          ` | isDeferredDowngrade: ${isDeferredDowngrade}` +
+          ` | planToWrite: ${planToWrite}` +
+          ` | prevPlan: ${company.subscriptionPlan ?? 'none'}` +
           ` | company: ${company.id} | env: ${txInfo.environment}`
         );
 
+        if (isDeferredDowngrade) {
+          console.log(
+            `[iap-validate] ⬇️ DEFERRED DOWNGRADE — Apple JWS contains "${txInfo.planKey}" (still-active higher plan)` +
+            ` but user purchased "${expectedPlanKey}". Writing "${expectedPlanKey}" to DB.` +
+            ` Apple will switch the entitlement at next renewal (${txInfo.expiresDate?.toISOString() ?? 'unknown'}).`
+          );
+        }
+
         const updatedCompany = await storage.updateCompany(company.id, {
           subscriptionStatus: 'active',
-          subscriptionPlan: txInfo.planKey,
-          maxUsers: txInfo.userLimit,
+          subscriptionPlan: planToWrite,
+          maxUsers: userLimitToWrite,
           subscriptionPlatform: 'apple',
           originalTransactionId: txInfo.originalTransactionId,
           currentPeriodEnd: txInfo.expiresDate,
@@ -4524,14 +4560,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           active: true,
           status: 'active',
           platform: 'apple',
-          planKey: txInfo.planKey,
-          userLimit: txInfo.userLimit,
+          planKey: planToWrite,
+          userLimit: userLimitToWrite,
           currentPeriodEnd: txInfo.expiresDate,
           originalTransactionId: txInfo.originalTransactionId,
-          planMismatch: planMismatch ? true : false,
-          expectedPlanKey: expectedPlanKey ?? undefined,
-          // Observability fields — exact DB-confirmed values after write
-          verifiedProductId: txInfo.productId,
+          isDeferredDowngrade,
           verifiedPlanKey: updatedCompany.subscriptionPlan,
           subscriptionPlatform: updatedCompany.subscriptionPlatform,
           billingUpdatedAt: updatedCompany.billingUpdatedAt,
@@ -19995,9 +20028,28 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 
         await db.update(companies).set(updates).where(eq(companies.id, companyId));
 
+        // Read back the DB row immediately after update to confirm state
+        const [afterRow] = await db.select({
+          subscriptionStatus: companies.subscriptionStatus,
+          subscriptionPlan: companies.subscriptionPlan,
+          subscriptionPlatform: companies.subscriptionPlatform,
+          currentPeriodEnd: companies.currentPeriodEnd,
+          originalTransactionId: companies.originalTransactionId,
+          billingUpdatedAt: companies.billingUpdatedAt,
+        }).from(companies).where(eq(companies.id, companyId)).limit(1);
+
         const actingEmail = req.user?.email || req.user?.claims?.email || 'unknown';
+        console.log(
+          `[admin-billing] action=${action} companyId=${companyId} by=${actingEmail}` +
+          ` | DB readback: status=${afterRow?.subscriptionStatus ?? 'null'}` +
+          ` plan=${afterRow?.subscriptionPlan ?? 'null'}` +
+          ` platform=${afterRow?.subscriptionPlatform ?? 'null'}` +
+          ` periodEnd=${afterRow?.currentPeriodEnd?.toISOString() ?? 'null'}` +
+          ` originalTxId=${afterRow?.originalTransactionId ?? 'null'}`
+        );
+
         const snapshot = await buildBillingSnapshot(companyId);
-        console.log(`[admin-billing] action=${action} companyId=${companyId} result="${snapshot?.effectiveLabel}" by=${actingEmail}`);
+        console.log(`[admin-billing] billing snapshot after ${action}: "${snapshot?.effectiveLabel}"`);
 
         res.json({ ok: true, action, billing: snapshot });
       } catch (e: any) {

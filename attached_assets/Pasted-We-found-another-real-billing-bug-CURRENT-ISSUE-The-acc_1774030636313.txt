@@ -1,0 +1,102 @@
+We found another real billing bug.
+
+CURRENT ISSUE
+The account evoidekiller@gmail.com was previously on the Scale / $299.99 plan.
+In Dev Tools, I removed his plan, so he should have had NO active plan.
+Then I purchased the $29.99 Starter plan successfully.
+But when I checked Settings, it still showed the old $299.99 Scale plan.
+
+GOAL
+Find why an old higher-tier plan is still being treated as current after the old plan was removed and a new lower-tier Apple plan was purchased.
+
+IMPORTANT
+Do not guess.
+Trace the real source of truth end to end.
+
+WHAT TO INVESTIGATE
+
+1. CHECK THE DATABASE HISTORY / CURRENT ROW
+Immediately inspect the current company row after this exact sequence:
+- old Scale plan existed
+- plan removed in Dev Tools
+- Starter purchased successfully
+
+Confirm the live values for:
+- subscriptionPlan
+- subscriptionStatus
+- subscriptionPlatform
+- currentPeriodEnd
+- originalTransactionId
+- subscriptionCancelAtPeriodEnd
+- billingUpdatedAt
+- maxUsers if relevant
+
+I need to know whether the DB truly says scale or starter right now.
+
+2. CHECK WHETHER DEV TOOLS “REMOVE PLAN” IS ACTUALLY CLEARING EVERYTHING
+Audit what Remove Paid Plan in Dev Tools really does.
+Confirm whether it clears:
+- subscriptionPlan
+- subscriptionStatus
+- currentPeriodEnd
+- originalTransactionId
+- subscriptionPlatform
+- any Apple-linked renewal identifiers
+- any billing snapshot fields
+
+Possible bug:
+Dev Tools removed only part of the billing state, leaving stale Apple-linked fields behind.
+
+3. CHECK APPLE VALIDATION AFTER RE-PURCHASE
+After purchasing Starter again, trace:
+- what productId the backend received
+- what planKey it mapped to
+- what DB values were written
+- whether an older Scale-linked entitlement/original transaction is still overriding the new Starter purchase
+
+4. CHECK CURRENT PLAN RESOLUTION LOGIC
+Audit the code path that decides what plan to display in Settings.
+Find every place the current plan could come from:
+- raw DB subscriptionPlan
+- effective billing snapshot
+- old cached auth/company object
+- old entitlement list
+- maxUsers-derived plan guess
+- fallback mapping based on seat count
+- stale route/query cache
+
+I suspect something may still be inferring Scale from stale data instead of reading the freshly written Starter plan.
+
+5. CHECK IF ORIGINAL TRANSACTION ID / APPLE SUBSCRIPTION GROUP STATE IS CAUSING STALE OVERRIDE
+Possible issue:
+If the old Scale Apple subscription group state still exists and the new Starter purchase is treated within the same group, the app/backend may still be following the previous entitlement chain.
+
+Inspect whether:
+- the old Scale originalTransactionId is still attached
+- the new Starter purchase reused the same Apple subscription group chain
+- validation is reading the wrong active entitlement
+
+6. ADD TARGETED LOGS FOR THIS SCENARIO
+Add logs for:
+- Dev Tools Remove Paid Plan action result
+- DB row immediately after removal
+- Apple validate productId after Starter purchase
+- DB row immediately after Starter purchase
+- Settings billing card current plan source
+- effective billing snapshot current plan
+
+7. EXPECTED RESULT
+After removing the old Scale plan and successfully purchasing Starter:
+- DB should say starter
+- settings should show Starter Plan
+- effective billing should show starter
+- no stale Scale plan should remain anywhere
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. whether the DB really stayed on scale or not
+3. whether Dev Tools removal left stale billing data behind
+4. whether Apple validation wrote starter correctly or not
+5. exactly where the stale $299.99 plan display was coming from
+6. what is now the single source of truth for current plan after a remove-then-repurchase flow
