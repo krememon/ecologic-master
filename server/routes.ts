@@ -4530,6 +4530,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           originalTransactionId: txInfo.originalTransactionId,
           planMismatch: planMismatch ? true : false,
           expectedPlanKey: expectedPlanKey ?? undefined,
+          // Observability fields — exact DB-confirmed values after write
+          verifiedProductId: txInfo.productId,
+          verifiedPlanKey: updatedCompany.subscriptionPlan,
+          subscriptionPlatform: updatedCompany.subscriptionPlatform,
+          billingUpdatedAt: updatedCompany.billingUpdatedAt,
+          dbCurrentPeriodEnd: updatedCompany.currentPeriodEnd,
         });
       }
 

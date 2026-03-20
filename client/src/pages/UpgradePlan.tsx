@@ -104,30 +104,42 @@ export default function UpgradePlan() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Subscription validation failed");
 
-    console.log("[upgrade-plan] backend validation success — returned plan:", data.planKey, "expected:", targetPlanKey, "planMismatch:", data.planMismatch ?? false);
+    // ── Clean observable log line ─────────────────────────────────────────
+    console.log(
+      `[upgrade-plan] backend confirmed plan=${data.verifiedPlanKey ?? data.planKey}` +
+      ` productId=${data.verifiedProductId ?? '(none)'}` +
+      ` platform=${data.subscriptionPlatform ?? 'unknown'}` +
+      ` billingUpdatedAt=${data.billingUpdatedAt ?? 'null'}` +
+      ` dbCurrentPeriodEnd=${data.dbCurrentPeriodEnd ?? 'null'}` +
+      ` planMismatch=${data.planMismatch ?? false}` +
+      ` expected=${targetPlanKey}`
+    );
 
     if (data.planMismatch) {
-      // JWS contained an old plan — purchase was received by Apple but the
-      // entitlement hasn't propagated yet. Warn the user and still refresh.
       console.warn(
-        `[upgrade-plan] PLAN MISMATCH — Apple JWS returned "${data.planKey}" but we expected "${targetPlanKey}".` +
-        " This may resolve after a moment. Refreshing billing status…"
+        `[upgrade-plan] PLAN MISMATCH — JWS productId "${data.verifiedProductId}" resolved to plan "${data.verifiedPlanKey ?? data.planKey}" but we expected "${targetPlanKey}".`
       );
     }
 
-    // Force-refetch both billing endpoints immediately so the Settings page
-    // shows the new plan without any cache delay.
+    // Force-refetch both billing endpoints so the Settings card shows the new plan.
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ["/api/billing/status"] }),
       queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] }),
     ]);
-    console.log("[upgrade-plan] cache refreshed — navigating to settings");
 
-    const confirmedPlan = subscriptionPlans[data.planKey as PlanKey] ?? subscriptionPlans[targetPlanKey];
+    // ── Debug toast: show backend-confirmed plan, not just the intended one ──
+    const dbPlanKey = (data.verifiedPlanKey ?? data.planKey) as PlanKey | null;
+    const confirmedPlan = dbPlanKey && subscriptionPlans[dbPlanKey]
+      ? subscriptionPlans[dbPlanKey]
+      : subscriptionPlans[targetPlanKey];
+    const mismatchNote = data.planMismatch
+      ? ` (expected ${subscriptionPlans[targetPlanKey]?.label})`
+      : "";
     toast({
-      title: "Plan upgraded!",
-      description: `You are now on the ${confirmedPlan.label} plan.`,
+      title: `Backend confirmed: ${confirmedPlan.label} plan${mismatchNote}`,
+      description: `productId: ${data.verifiedProductId ?? "?"} · updated: ${data.billingUpdatedAt ? new Date(data.billingUpdatedAt).toLocaleTimeString() : "?"}`,
+      variant: data.planMismatch ? "destructive" : "default",
     });
     setLocation("/settings");
   };
