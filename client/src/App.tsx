@@ -82,6 +82,7 @@ import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
 import JobOfferInvite from "@/pages/JobOfferInvite";
 import JobOffer from "@/pages/JobOffer";
+import UpgradePlan from "@/pages/UpgradePlan";
 
 let _nativeLaunchUrlChecked = false;
 let _nativeLaunchUrlPromise: Promise<void> | null = null;
@@ -533,6 +534,7 @@ function AuthenticatedRouter() {
         </Route>
         <Route path="/billing" component={Billing} />
         <Route path="/billing/success" component={BillingSuccess} />
+        <Route path="/upgrade-plan" component={UpgradePlan} />
         <Route path="/paywall" component={Paywall} />
         <Route path="/dev-tools" component={DevTools} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>

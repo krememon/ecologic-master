@@ -211,15 +211,12 @@ export function BillingSection() {
   const isTrialing = billing.subscriptionStatus === 'trialing' || billing.billingSource === 'trial';
 
   // ── Upgrade Plan handler ─────────────────────────────────────────────────
-  // Web → /billing (Stripe plan selector, already in AuthenticatedRouter)
-  // Native iOS → /paywall (Apple IAP plan selector)
-  // Native Android → /paywall (Google Play IAP plan selector)
-  // NOTE: /paywall is now registered in AuthenticatedRouter so active subscribers can reach it.
+  // All platforms → /upgrade-plan (dedicated upgrade screen for active subscribers)
+  // The upgrade screen handles platform-specific purchase flows internally.
   const handleUpgradePlan = () => {
     const platform = nativeIos ? 'ios' : nativeAndroid ? 'android' : 'web';
-    const destination = isNativeApp ? '/paywall' : '/billing';
-    console.log('[billing-section] Upgrade Plan tapped — platform:', platform, '→ navigating to', destination);
-    setLocation(destination);
+    console.log('[billing-section] Upgrade Plan tapped — platform:', platform, 'current plan:', billing?.subscriptionPlan, 'source:', billing?.billingSource);
+    setLocation('/upgrade-plan');
   };
 
   // ── Stripe billing portal handler (web only) ──────────────────────────────

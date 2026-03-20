@@ -1,0 +1,116 @@
+The Settings → Billing & Subscription upgrade flow is STILL wrong.
+
+CURRENT ISSUE
+When I tap Upgrade Plan from Settings, it now sends me to a “subscription expired / resubscribe” style screen.
+
+That is NOT what I want.
+
+I do NOT want:
+- session expired
+- subscription expired
+- resubscribe messaging
+- paywall/blocked empty-state language
+
+I want:
+- a clean “Upgrade Your Plan” screen
+- current plan clearly shown
+- higher plans available to choose
+- feels like account management
+- not like the user lost access
+
+GOAL
+Build a proper upgrade-management flow from Settings for active subscribers.
+
+WHAT TO FIX
+
+1. STOP USING THE EXPIRED / PAYWALL SCREEN FOR SETTINGS UPGRADES
+The settings Upgrade Plan button should NOT route to the expired/paywall/subscription-blocked screen.
+
+That screen is for:
+- no active subscription
+- expired access
+- blocked/paywall state
+
+It is NOT for an active customer trying to move to a higher tier.
+
+Find where the current Upgrade Plan action is routing and remove this incorrect path.
+
+2. CREATE A DEDICATED “UPGRADE YOUR PLAN” FLOW
+From Settings, tapping Upgrade Plan should open a dedicated upgrade screen/modal/page.
+
+This upgrade screen should:
+- have a title like “Upgrade Your Plan”
+- show the current plan clearly
+- show the available higher plans
+- make it obvious which plan is current
+- let the user choose a higher plan
+- feel like subscription management, not onboarding/paywall
+
+3. UI REQUIREMENTS
+The upgrade screen should be clean and polished.
+
+Suggested structure:
+- Header: Upgrade Your Plan
+- Small current plan card:
+  - Current Plan: Starter / Team / Pro / Scale
+  - current billing source if helpful
+- Plan options:
+  - Starter
+  - Team
+  - Pro
+  - Scale
+- Current plan should be visibly marked:
+  - “Current Plan”
+- Lower or same-tier plans should be disabled or visually de-emphasized if only upgrades are supported right now
+- Higher plans should be selectable
+- CTA button should say something like:
+  - Upgrade to Team
+  - Upgrade to Pro
+  - Upgrade to Scale
+
+4. PLATFORM BEHAVIOR
+Once a higher plan is chosen:
+- iPhone native → open Apple purchase/upgrade flow for that selected higher plan
+- Android native → open Google Play purchase/upgrade flow
+- Web → open Stripe plan upgrade flow
+
+But the first thing the user should see is the clean upgrade UI — not the expired/resubscribe page.
+
+5. ACTIVE SUBSCRIBER LOGIC
+If the user currently has an active subscription, the upgrade flow must treat them as active.
+
+Do NOT show:
+- “Your subscription has expired”
+- “Resubscribe to continue”
+- lock icon / blocked messaging
+
+That messaging should only appear for actually expired/blocked users.
+
+6. KEEP SETTINGS CONTEXT
+This flow should feel like it came from Settings → Billing.
+Not from onboarding.
+Not from paywall.
+Not from auth redirect logic.
+
+7. LOGGING
+Add targeted logs:
+- Upgrade Plan tapped from Settings
+- current plan / billing source
+- upgrade screen opened
+- selected target plan
+- purchase flow launched
+
+8. CLEANUP
+Remove any reuse of:
+- session expired page
+- paywall expired component
+- onboarding subscription component
+for this Settings upgrade entry point, unless the UI is explicitly forked and made into a proper upgrade-management mode.
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. why it was incorrectly showing the expired/subscription-blocked screen
+3. what dedicated upgrade UI now opens from Settings
+4. how current plan vs higher plans are shown
+5. what happens on iPhone / Android / Web after selecting a higher plan
