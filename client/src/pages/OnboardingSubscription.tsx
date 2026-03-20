@@ -114,13 +114,15 @@ export default function OnboardingSubscription() {
   const finishNativePurchase = async (
     platform: "apple" | "google_play",
     payload: Record<string, string>,
-    logTag: string
+    logTag: string,
+    expectedPlanKey?: string
   ) => {
-    console.log(`[${logTag}] posting to backend — platform:`, platform, "payload keys:", Object.keys(payload).join(", "));
+    console.log(`[${logTag}] posting to backend — platform:`, platform, "payload keys:", Object.keys(payload).join(", "), "expectedPlanKey:", expectedPlanKey ?? "(not provided)");
 
     const res = await apiRequest("POST", "/api/subscriptions/validate", {
       platform,
       ...payload,
+      ...(expectedPlanKey ? { expectedPlanKey } : {}),
     });
     const data = await res.json();
     console.log(`[${logTag}] backend response:`, data);
@@ -154,7 +156,7 @@ export default function OnboardingSubscription() {
         console.error("[onboarding-sub] Apple purchase failed:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
-      await finishNativePurchase("apple", { jwsTransaction: jws }, "onboarding-sub/apple");
+      await finishNativePurchase("apple", { jwsTransaction: jws }, "onboarding-sub/apple", selectedPlanKey);
     } catch (err: any) {
       console.error("[onboarding-sub] Apple purchase error:", err.message);
       setIsLoading(false);

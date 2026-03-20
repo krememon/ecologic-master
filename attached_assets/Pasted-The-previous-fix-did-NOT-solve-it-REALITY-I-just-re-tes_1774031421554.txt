@@ -1,0 +1,107 @@
+The previous fix did NOT solve it.
+
+REALITY
+I just re-tested this exact flow again:
+
+1. evoidekiller@gmail.com was on Scale / $299.99
+2. I removed the subscription in Dev Tools
+3. The account correctly went to the paywall
+4. I purchased Starter / $29.99
+5. Purchase succeeded
+6. I opened Settings
+7. It STILL shows Scale / $299.99
+
+So the old higher-tier plan is STILL winning somewhere.
+
+GOAL
+Find the exact place where Scale is still being re-applied after a remove-plan → buy-Starter flow, and fix it for real.
+
+IMPORTANT
+Do not theorize.
+Do not assume the prior deferred-downgrade fix worked.
+Trace the actual live post-purchase data path and prove where Scale is coming from.
+
+WHAT TO DO
+
+1. TRACE THIS EXACT ACCOUNT AND FLOW
+Use evoidekiller@gmail.com / company 535 as the test case.
+Trace this exact sequence:
+- before remove
+- after Dev Tools remove
+- after Starter purchase
+- after Settings load
+
+2. LOG THE DATABASE STATE AT EACH STEP
+I want the actual DB row printed/logged at these moments:
+A. immediately after Remove Paid Plan
+B. immediately when /api/subscriptions/validate starts
+C. immediately after validate writes to DB
+D. immediately when /api/billing/status is requested by Settings
+
+Log these fields every time:
+- subscriptionPlan
+- subscriptionStatus
+- subscriptionPlatform
+- currentPeriodEnd
+- originalTransactionId
+- maxUsers
+- billingUpdatedAt
+
+3. LOG THE FULL APPLE DECISION PATH
+Inside Apple validate, log:
+- expectedPlanKey
+- verifiedProductId from JWS
+- jwsPlanKey
+- planToWrite
+- whether isDeferredDowngrade was true/false
+- the DB row after the write
+
+I want one clean final log line like:
+[iap-validate] FINAL WRITE company=535 expected=starter jws=scale deferred=true wrote=starter dbNow=starter
+
+4. VERIFY WHETHER THE WRITE IS ACTUALLY STICKING
+I suspect one of these is happening:
+- the validate route writes starter, but another later process writes scale back
+- the validate route still writes scale
+- billing/status is reading a different source than the write target
+- some webhook / resume / restore / follow-up refresh is re-applying the old Scale entitlement
+
+Find which one is true.
+
+5. CHECK FOR A SECOND FOLLOW-UP WRITE
+After the Starter purchase succeeds, inspect whether ANY of these are firing again and overwriting the DB:
+- Apple notification webhook
+- restorePurchases flow
+- billing refresh helper
+- any app resume / entitlement poll
+- any secondary validation request
+- any code path that reads active entitlements and writes plan again
+
+If there is a second write, log it clearly with stack/context.
+
+6. CHECK SETTINGS SOURCE OF TRUTH AGAIN
+Confirm what Settings is reading:
+- raw DB subscriptionPlan?
+- billing snapshot?
+- some derived effective plan?
+- stale auth payload?
+I need exact proof, not assumptions.
+
+7. ADD TEMPORARY HARD LOGS FOR THIS ACCOUNT
+For company 535 only, add very targeted logs until this is fixed.
+I want to see the full lifecycle for this one account without noisy logs for everything else.
+
+8. EXPECTED RESULT
+After remove-plan → Starter purchase:
+- DB should end as starter
+- billing/status should return starter
+- settings should display Starter Plan
+- nothing should write scale back afterward
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. whether validate wrote starter or scale
+3. whether some second process rewrote scale afterward
+4. what Settings actually read
+5. the exact root cause of why Scale is still showing after the retest
