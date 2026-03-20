@@ -99,14 +99,22 @@ export default function UpgradePlan() {
     payload: Record<string, string>,
     targetPlanKey: PlanKey,
   ) => {
-    console.log("[upgrade-plan] posting purchase to backend — platform:", platform, "plan:", targetPlanKey);
+    console.log("[upgrade-plan] posting purchase to backend — platform:", platform, "targetPlan:", targetPlanKey, "payload keys:", Object.keys(payload).join(", "));
     const res = await apiRequest("POST", "/api/subscriptions/validate", { platform, ...payload });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Subscription validation failed");
-    console.log("[upgrade-plan] validation success — plan:", data.planKey ?? targetPlanKey);
-    await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-    await queryClient.invalidateQueries({ queryKey: ["/api/billing/status"] });
-    await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+    console.log("[upgrade-plan] backend validation success — returned plan:", data.planKey, "expected:", targetPlanKey);
+    if (data.planKey && data.planKey !== targetPlanKey) {
+      console.warn("[upgrade-plan] WARNING: backend returned plan", data.planKey, "but we expected", targetPlanKey, "— possible stale JWS was used");
+    }
+    // Force-refetch both billing endpoints immediately so the Settings page
+    // shows the new plan without any cache delay.
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["/api/billing/status"] }),
+      queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] }),
+    ]);
+    console.log("[upgrade-plan] cache refreshed — navigating to settings");
     toast({ title: "Plan upgraded!", description: `You are now on the ${subscriptionPlans[targetPlanKey].label} plan.` });
     setLocation("/settings");
   };

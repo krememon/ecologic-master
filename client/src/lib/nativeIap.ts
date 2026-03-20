@@ -103,6 +103,18 @@ export async function loadAppleProducts(): Promise<IapProduct[]> {
  *
  * Resolves with the StoreKit 2 JWS transaction string on success.
  * Throws if the purchase is cancelled, fails, or JWS is missing.
+ *
+ * ── Upgrade safety ─────────────────────────────────────────────────────────
+ * When upgrading within the same Apple subscription group (e.g. starter →
+ * team), the `transaction.jwsRepresentation` returned directly by
+ * `purchaseProduct` may contain the OLD subscription's JWS — because Apple
+ * processes the group upgrade server-side and the callback can reflect the
+ * original entitlement.
+ *
+ * Fix: after purchase, call getPurchases() and look for the current
+ * entitlement with productIdentifier === targetProductId. Use THAT JWS so
+ * the backend validates the new plan, not the old one. The direct
+ * transaction JWS is kept as a fallback.
  */
 export async function purchaseAppleSubscription(productId: string): Promise<string> {
   console.log("[native-iap] Apple purchase started — productId:", productId);
@@ -114,8 +126,39 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
     productType: PURCHASE_TYPE.SUBS,
   });
 
-  console.log("[native-iap] Apple purchase succeeded — transactionId:", transaction.transactionId);
+  console.log("[native-iap] Apple purchaseProduct callback — transactionId:", transaction.transactionId,
+    "directJwsLen:", transaction.jwsRepresentation?.length ?? 0);
 
+  // ── Post-purchase entitlement check ──────────────────────────────────────
+  // For subscription group upgrades Apple may return an old-entitlement JWS
+  // in the purchase callback. Always look up the freshest entitlement for
+  // the purchased productId via getPurchases() first.
+  try {
+    const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
+    console.log(`[native-iap] Apple getPurchases() post-purchase: ${purchases.length} entitlement(s)`);
+
+    for (const tx of purchases) {
+      const pid = (tx as any).productIdentifier ?? "";
+      const jwsLen = tx.jwsRepresentation?.length ?? 0;
+      console.log(`[native-iap] Apple entitlement — productId: ${pid} jwsLen: ${jwsLen}`);
+      if (pid === productId && tx.jwsRepresentation) {
+        console.log("[native-iap] Apple: using entitlement JWS for productId:", productId, "len:", jwsLen);
+        return tx.jwsRepresentation;
+      }
+    }
+
+    // Purchased product not yet visible in entitlements (can happen briefly
+    // right after an upgrade). Fall through to direct transaction JWS.
+    console.warn(
+      "[native-iap] Apple: target productId", productId,
+      "not found in entitlements — falling back to transaction JWS.",
+      "All entitlement productIds:", purchases.map(t => (t as any).productIdentifier ?? "?").join(", ") || "(none)"
+    );
+  } catch (err: any) {
+    console.warn("[native-iap] Apple getPurchases() after purchase failed:", err.message, "— using transaction JWS");
+  }
+
+  // ── Fallback: use the direct transaction JWS ──────────────────────────────
   const jws = transaction.jwsRepresentation;
   if (!jws) {
     throw new Error(
@@ -124,7 +167,7 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
     );
   }
 
-  console.log("[native-iap] Apple JWS obtained, length:", jws.length);
+  console.log("[native-iap] Apple: using direct transaction JWS, len:", jws.length);
   return jws;
 }
 

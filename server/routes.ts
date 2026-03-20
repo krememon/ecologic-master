@@ -4490,7 +4490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(
           `[iap-validate] Apple verified — productId=${txInfo.productId} plan=${txInfo.planKey} ` +
           `originalTxId=${txInfo.originalTransactionId} expires=${txInfo.expiresDate.toISOString()} ` +
-          `env=${txInfo.environment}`
+          `env=${txInfo.environment} prevPlan=${company.subscriptionPlan ?? 'none'}`
         );
 
         await storage.updateCompany(company.id, {
@@ -4500,10 +4500,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionPlatform: 'apple',
           originalTransactionId: txInfo.originalTransactionId,
           currentPeriodEnd: txInfo.expiresDate,
+          cancelAtPeriodEnd: false,
           onboardingCompleted: true,
         });
 
-        console.log(`[iap-validate] Apple — written to company=${company.id} status=active plan=${txInfo.planKey}`);
+        console.log(
+          `[iap-validate] Apple — DB written: company=${company.id} ` +
+          `prevPlan=${company.subscriptionPlan ?? 'none'} → newPlan=${txInfo.planKey} ` +
+          `status=active platform=apple expires=${txInfo.expiresDate.toISOString()}`
+        );
 
         return res.json({
           ok: true,

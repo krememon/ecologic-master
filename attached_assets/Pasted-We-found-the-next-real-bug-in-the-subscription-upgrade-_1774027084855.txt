@@ -1,0 +1,110 @@
+We found the next real bug in the subscription upgrade flow.
+
+CURRENT ISSUE
+The Apple upgrade purchase succeeds, but the app does NOT update the company’s actual plan afterward.
+
+Example:
+- account starts on Starter ($29.99)
+- user upgrades successfully to Team ($79.99) through Apple
+- purchase succeeds
+- but the app still shows Starter everywhere
+- billing/settings never updates to Team
+
+GOAL
+Make successful Apple subscription upgrades actually update the company’s active plan and UI immediately.
+
+IMPORTANT
+Do not guess.
+Trace the real purchase → validation → DB write → billing refresh flow end to end.
+
+WHAT TO INVESTIGATE
+
+1. TRACE THE APPLE UPGRADE FLOW END TO END
+Start from tapping Upgrade on the upgrade screen and trace:
+- what productId is being passed into the Apple purchase call
+- what Apple returns after success
+- what payload is POSTed to /api/subscriptions/validate
+- what the backend extracts from the Apple transaction
+- what plan key is derived from the Apple product ID
+- what DB fields are written
+- what the frontend refetches after success
+
+2. VERIFY THE CORRECT PRODUCT ID IS BEING PURCHASED
+Confirm that when I tap Team upgrade, the app is actually purchasing:
+- ecologic_team
+
+Not:
+- ecologic_starter
+- stale currently selected plan
+- wrong default plan
+
+Add logs for the selected upgrade target plan and actual productId being purchased.
+
+3. VERIFY BACKEND PLAN MAPPING
+Check the Apple validation path and confirm:
+- ecologic_starter -> starter
+- ecologic_team -> team
+- ecologic_pro -> pro
+- ecologic_scale -> scale
+
+Make sure the backend is updating:
+- subscriptionPlan
+- subscriptionStatus
+- currentPeriodEnd
+- subscriptionPlatform
+using the NEW product that was just purchased
+
+4. MAKE SURE UPGRADES OVERWRITE THE CURRENT PLAN
+If the company was previously on Starter and Apple purchase succeeds for Team, the DB should now reflect Team as the active plan.
+Do not leave the old plan behind.
+Do not keep showing Starter after a valid Team purchase.
+
+5. REFRESH THE UI IMMEDIATELY AFTER SUCCESS
+After a successful upgrade purchase:
+- invalidate/refetch billing status
+- refetch the settings billing card
+- refetch any upgrade screen current-plan state
+- make the UI immediately show the new plan
+
+The user should not have to manually reload or reopen the app.
+
+6. CHECK WHETHER APPLE VALIDATION IS RE-USING OLD ENTITLEMENT DATA
+Possible issue:
+- restore/current entitlement lookup may be picking the old subscription
+- backend may be validating the wrong JWS / stale entitlement
+- upgrade flow may be reading the first matching entitlement instead of the newest upgraded one
+
+Inspect this carefully and fix it properly.
+
+7. HANDLE APPLE UPGRADE LOGIC CORRECTLY
+For Apple subscriptions in the same subscription group, upgrades should result in the new higher-tier subscription becoming the active one.
+Make sure the app/backend treats the new upgraded plan as the source of truth after purchase succeeds.
+
+8. ADD TARGETED LOGS
+Add logs for:
+- current plan before upgrade
+- selected target plan
+- target productId
+- Apple purchase success payload
+- JWS sent to backend
+- backend mapped plan key
+- DB values written
+- post-purchase billing refresh result
+
+Keep logs short and useful.
+
+EXPECTED RESULT
+If I am on Starter and upgrade to Team:
+- purchase succeeds
+- backend writes team as the active plan
+- settings billing card shows Team
+- upgrade screen marks Team as current
+- app seat/user logic can use Team limits
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. exact root cause
+3. whether the wrong productId or wrong entitlement was being used
+4. how the backend now updates the active plan after Apple upgrades
+5. how the frontend now refreshes and shows the new plan immediately
