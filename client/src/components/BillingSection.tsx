@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CreditCard, Users, RefreshCw, Loader2, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { CreditCard, Users, Loader2, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { subscriptionPlans } from '@/config/subscriptionPlans';
@@ -333,51 +333,37 @@ export function BillingSection() {
         <Separator />
 
         {/* ── Actions ───────────────────────────────────────────── */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Actions</p>
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
 
-            {/* Upgrade / Choose Plan
-                Web → /billing (Stripe plan selector in AuthenticatedRouter)
-                iOS → /paywall (Apple IAP — now registered in AuthenticatedRouter)
-                Android → /paywall (Google Play IAP — now registered in AuthenticatedRouter) */}
+          {/* Upgrade / Choose Plan
+              Web → /billing (Stripe plan selector in AuthenticatedRouter)
+              iOS → /paywall (Apple IAP — now registered in AuthenticatedRouter)
+              Android → /paywall (Google Play IAP — now registered in AuthenticatedRouter) */}
+          <Button
+            className="w-full"
+            onClick={handleUpgradePlan}
+          >
+            <ArrowUpRight className="h-4 w-4 mr-2" />
+            {!billing.billingAllowed || !displayPlanKey
+              ? 'Choose a Plan'
+              : 'Upgrade Plan'}
+          </Button>
+
+          {/* Manage Billing — web only, only if there's an active Stripe subscription */}
+          {!isNativeApp && isStripePlan && billing.hasStripeCustomer && (
             <Button
+              variant="outline"
               className="w-full"
-              onClick={handleUpgradePlan}
+              disabled={isOpeningPortal}
+              onClick={handleOpenPortal}
             >
-              <ArrowUpRight className="h-4 w-4 mr-2" />
-              {!billing.billingAllowed || !displayPlanKey
-                ? 'Choose a Plan'
-                : 'Upgrade Plan'}
+              {isOpeningPortal
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening…</>
+                : <><CreditCard className="h-4 w-4 mr-2" />Manage Billing</>
+              }
             </Button>
+          )}
 
-            {/* Manage Billing — web only, only if there's an active Stripe subscription */}
-            {!isNativeApp && isStripePlan && billing.hasStripeCustomer && (
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={isOpeningPortal}
-                onClick={handleOpenPortal}
-              >
-                {isOpeningPortal
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening…</>
-                  : <><CreditCard className="h-4 w-4 mr-2" />Manage Billing</>
-                }
-              </Button>
-            )}
-
-            {/* Refresh */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-slate-500 dark:text-slate-400"
-              onClick={() => refetch()}
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Refresh Status
-            </Button>
-
-          </div>
         </div>
 
       </CardContent>
