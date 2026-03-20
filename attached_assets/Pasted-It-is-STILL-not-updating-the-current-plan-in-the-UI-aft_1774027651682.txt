@@ -1,0 +1,105 @@
+It is STILL not updating the current plan in the UI after a successful Apple upgrade.
+
+So the previous fix was not enough.
+
+CURRENT REALITY
+- upgrade purchase succeeds
+- Apple flow completes
+- but the app still does not show the new plan as current
+- somewhere in the real end-to-end chain, the wrong state is still winning
+
+GOAL
+Find the exact place where the old plan is still overriding the new one, and fix it completely.
+
+IMPORTANT
+Do not assume the previous explanation solved it.
+Trace the REAL live state after an upgrade and identify exactly where the stale/old plan is coming from.
+
+WHAT TO INVESTIGATE NOW
+
+1. VERIFY THE DATABASE AFTER UPGRADE
+Immediately after a successful upgrade, inspect the actual company row in the database and confirm the live values for:
+- subscriptionPlan
+- subscriptionStatus
+- subscriptionPlatform
+- currentPeriodEnd
+- originalTransactionId
+- cancelAtPeriodEnd
+- maxUsers if relevant
+
+I need to know whether the DB itself is updating to team/pro/scale or if it is still staying on starter.
+
+2. VERIFY THE BILLING STATUS ENDPOINT RESPONSE
+Immediately after upgrade, log the exact JSON returned by:
+- /api/billing/status
+- /api/subscriptions/status
+for that company/user
+
+I need to know whether the backend response is still saying starter or whether the frontend is displaying stale state despite fresh backend data.
+
+3. TRACE EVERY PLACE THE CURRENT PLAN IS READ FROM
+Audit the settings billing card and the upgrade screen to find every source that might be showing the current plan:
+- auth user/company payload
+- billing status endpoint
+- subscription status endpoint
+- cached React Query data
+- local component state
+- route state / previous screen state
+- shared plan config fallback/default
+- stale "current plan" prop
+
+Find which one is actually being rendered after upgrade.
+
+4. CHECK WHETHER SETTINGS IS READING THE WRONG FIELD
+Possible issue:
+- billing source says Apple and renew date updates
+- but current plan label is coming from some old company object / auth payload / fallback field that still says starter
+So verify whether the plan shown in Settings comes from:
+- subscriptionPlan from billing snapshot
+or
+- some older company.plan / company.subscriptionPlan / auth bootstrap object
+
+5. FORCE A REAL POST-UPGRADE REFRESH OF ALL RELEVANT DATA
+After successful upgrade, do not only refetch two queries if other screens read different caches.
+Find and refresh ALL relevant queries/state used by:
+- settings billing card
+- upgrade screen
+- any company/account summary shown after navigation
+
+6. LOG THE FULL PLAN VALUE CHAIN
+After upgrade, log:
+- expected target plan
+- DB subscriptionPlan
+- /api/billing/status plan
+- /api/subscriptions/status plan
+- settings screen rendered currentPlan value
+- upgrade screen rendered currentPlan value
+
+I want to see where the mismatch appears.
+
+7. VERIFY APPLE ENTITLEMENT SELECTION AGAIN
+Even if getPurchases() is now used, prove with logs which entitlement is selected:
+- list all returned productIdentifiers
+- show which one was chosen
+- show the JWS-decoded productId that reached the backend
+Do not assume this part is fixed until logs confirm it.
+
+8. FIX THE UI SOURCE OF TRUTH
+Once you identify the mismatch, make the settings card and upgrade screen use ONE correct source of truth for current plan.
+The currently active plan shown to the user should come from the same confirmed-updated billing snapshot.
+
+EXPECTED RESULT
+If I upgrade from Starter to Team:
+- DB should say team
+- billing status endpoint should say team
+- settings card should show Team
+- upgrade screen should mark Team as current
+- seat/user display should reflect Team
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. whether the DB updated correctly or not
+3. whether the backend endpoints returned the correct new plan or not
+4. exactly where the stale starter value was coming from
+5. what is now the single source of truth for the displayed current plan

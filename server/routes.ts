@@ -4487,27 +4487,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(422).json({ ok: false, message: `Apple verification failed: ${err.message}` });
         }
 
+        // Diagnostic: compare verified plan against what the client expected to purchase
+        const expectedPlanKey = typeof req.body.expectedPlanKey === 'string' ? req.body.expectedPlanKey : null;
+        const planMismatch = expectedPlanKey && expectedPlanKey !== txInfo.planKey;
+
         console.log(
-          `[iap-validate] Apple verified — productId=${txInfo.productId} plan=${txInfo.planKey} ` +
-          `originalTxId=${txInfo.originalTransactionId} expires=${txInfo.expiresDate.toISOString()} ` +
-          `env=${txInfo.environment} prevPlan=${company.subscriptionPlan ?? 'none'}`
+          `[iap-validate] ⚡ APPLE PLAN DECISION — productId from JWS: ${txInfo.productId} → planKey: ${txInfo.planKey}` +
+          ` | prevPlan: ${company.subscriptionPlan ?? 'none'} | expectedPlanKey: ${expectedPlanKey ?? '(not sent)'}` +
+          ` | MISMATCH: ${planMismatch ? `YES — JWS says "${txInfo.planKey}" but frontend expected "${expectedPlanKey}"` : 'no'}` +
+          ` | company: ${company.id} | env: ${txInfo.environment}`
         );
 
-        await storage.updateCompany(company.id, {
+        const updatedCompany = await storage.updateCompany(company.id, {
           subscriptionStatus: 'active',
           subscriptionPlan: txInfo.planKey,
           maxUsers: txInfo.userLimit,
           subscriptionPlatform: 'apple',
           originalTransactionId: txInfo.originalTransactionId,
           currentPeriodEnd: txInfo.expiresDate,
-          cancelAtPeriodEnd: false,
+          subscriptionCancelAtPeriodEnd: false,
+          billingUpdatedAt: new Date(),
           onboardingCompleted: true,
         });
 
+        // Verify the write landed correctly
         console.log(
-          `[iap-validate] Apple — DB written: company=${company.id} ` +
-          `prevPlan=${company.subscriptionPlan ?? 'none'} → newPlan=${txInfo.planKey} ` +
-          `status=active platform=apple expires=${txInfo.expiresDate.toISOString()}`
+          `[iap-validate] Apple — DB confirmed: company=${company.id} ` +
+          `subscriptionPlan="${updatedCompany.subscriptionPlan}" ` +
+          `subscriptionStatus="${updatedCompany.subscriptionStatus}" ` +
+          `subscriptionPlatform="${updatedCompany.subscriptionPlatform}" ` +
+          `currentPeriodEnd=${updatedCompany.currentPeriodEnd?.toISOString() ?? 'null'}`
         );
 
         return res.json({
@@ -4519,6 +4528,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userLimit: txInfo.userLimit,
           currentPeriodEnd: txInfo.expiresDate,
           originalTransactionId: txInfo.originalTransactionId,
+          planMismatch: planMismatch ? true : false,
+          expectedPlanKey: expectedPlanKey ?? undefined,
         });
       }
 

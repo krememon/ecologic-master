@@ -100,13 +100,21 @@ export default function UpgradePlan() {
     targetPlanKey: PlanKey,
   ) => {
     console.log("[upgrade-plan] posting purchase to backend — platform:", platform, "targetPlan:", targetPlanKey, "payload keys:", Object.keys(payload).join(", "));
-    const res = await apiRequest("POST", "/api/subscriptions/validate", { platform, ...payload });
+    const res = await apiRequest("POST", "/api/subscriptions/validate", { platform, ...payload, expectedPlanKey: targetPlanKey });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || "Subscription validation failed");
-    console.log("[upgrade-plan] backend validation success — returned plan:", data.planKey, "expected:", targetPlanKey);
-    if (data.planKey && data.planKey !== targetPlanKey) {
-      console.warn("[upgrade-plan] WARNING: backend returned plan", data.planKey, "but we expected", targetPlanKey, "— possible stale JWS was used");
+
+    console.log("[upgrade-plan] backend validation success — returned plan:", data.planKey, "expected:", targetPlanKey, "planMismatch:", data.planMismatch ?? false);
+
+    if (data.planMismatch) {
+      // JWS contained an old plan — purchase was received by Apple but the
+      // entitlement hasn't propagated yet. Warn the user and still refresh.
+      console.warn(
+        `[upgrade-plan] PLAN MISMATCH — Apple JWS returned "${data.planKey}" but we expected "${targetPlanKey}".` +
+        " This may resolve after a moment. Refreshing billing status…"
+      );
     }
+
     // Force-refetch both billing endpoints immediately so the Settings page
     // shows the new plan without any cache delay.
     await Promise.all([
@@ -115,7 +123,12 @@ export default function UpgradePlan() {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] }),
     ]);
     console.log("[upgrade-plan] cache refreshed — navigating to settings");
-    toast({ title: "Plan upgraded!", description: `You are now on the ${subscriptionPlans[targetPlanKey].label} plan.` });
+
+    const confirmedPlan = subscriptionPlans[data.planKey as PlanKey] ?? subscriptionPlans[targetPlanKey];
+    toast({
+      title: "Plan upgraded!",
+      description: `You are now on the ${confirmedPlan.label} plan.`,
+    });
     setLocation("/settings");
   };
 
