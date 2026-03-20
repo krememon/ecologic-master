@@ -1,0 +1,126 @@
+We need to fully upgrade the Settings → Billing & Subscription section so it shows the company’s real current plan and lets the owner manage/upgrade it from there.
+
+GOAL
+In Settings, the company owner should be able to:
+1. See the current active subscription/plan
+2. See the billing source/platform
+3. See renewal/status info
+4. Upgrade/manage the subscription from this screen
+
+PLATFORM BEHAVIOR
+When the owner taps manage/upgrade:
+
+- iPhone native app → open Apple subscription purchase/manage flow
+- Android native app → open Google Play subscription purchase/manage flow
+- Web → open Stripe checkout / billing portal flow
+
+IMPORTANT
+- This should be owner-only
+- It should reflect the REAL company subscription
+- Do not show “No Company Found” if the logged-in owner already has a company
+- Use the actual authenticated user/company context
+- Keep the UI clean and easy to understand
+- Do not break existing purchase validation/gating logic
+
+WHAT TO FIX
+
+1. FIX THE CURRENT “NO COMPANY FOUND” BUG
+Right now Settings → Billing & Subscription is incorrectly showing:
+- No Company Found
+- Choose Plan
+
+for a logged-in owner who already has a company.
+
+Find the root cause and fix it properly.
+Possible causes:
+- wrong user/company fetch
+- settings page not using authenticated company context
+- null company state bug
+- wrong API response shape
+- owner/company relationship mismatch
+
+After the fix, if the owner has a company, the billing card should load real billing info.
+
+2. SHOW REAL CURRENT SUBSCRIPTION
+In the Billing & Subscription card, show:
+- Current Plan (Starter / Team / Pro / Scale)
+- Billing Source:
+  - Apple
+  - Google Play
+  - Web
+  - Free Access
+  - Trial
+  - None
+- Status:
+  - Active
+  - Trial
+  - Paywall Active
+  - etc.
+- Renewal date / expiration date if available
+- Seat/user limit if helpful
+
+Use the same real source-of-truth billing logic already used by the paywall gate and Dev Tools.
+
+3. OWNER-ONLY MANAGEMENT ACTIONS
+For company owners only, add clear actions like:
+- Upgrade Plan
+- Manage Subscription
+- Restore Purchases (native only where appropriate)
+
+Behavior by platform:
+- iPhone native:
+  - Upgrade Plan should open the Apple subscription flow for higher plans
+  - Manage Subscription can link/open Apple subscription management if appropriate
+  - Restore Purchases should use the existing Apple restore flow
+- Android native:
+  - Upgrade Plan should open Google Play purchase flow
+  - Manage Subscription should open Google Play subscription management if appropriate
+  - Restore Purchases should use the existing Google restore flow
+- Web:
+  - Upgrade Plan / Manage Subscription should go to Stripe checkout or billing portal
+
+4. PLAN UPGRADE UX
+When opening upgrade/manage from settings:
+- Show the available plans clearly
+- Highlight the current plan
+- Allow moving to a higher plan cleanly
+- Keep the selected/current plan obvious
+- If downgrade support is not ready, that is okay — but upgrades must be clear
+
+5. PLATFORM-AWARE UI
+Make the wording match the platform:
+- On iPhone: “Managed through Apple”
+- On Android: “Managed through Google Play”
+- On web: “Managed through Web Billing”
+Use plain English.
+
+6. SHARED SOURCE OF TRUTH
+Do not create separate fake billing logic for settings.
+Reuse the existing billing snapshot/subscription status source of truth so:
+- Settings
+- Dev Tools
+- Paywall gate
+all agree on the current subscription state.
+
+7. EMPTY / BLOCKED STATES
+If a company truly has no active plan:
+- show that clearly
+- allow choosing/upgrading a plan from this screen
+But only show “No Company Found” if the user truly has no company at all.
+
+8. CLEAN UI
+Make the section feel polished and easy to scan.
+Suggested content hierarchy:
+- Current Plan
+- Billing Source
+- Renewal / status
+- Manage / Upgrade actions
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what caused the “No Company Found” bug
+3. how the current company/plan is now loaded
+4. how iPhone / Android / Web behavior differs
+5. what actions are available to owners from Settings
+6. whether the current plan now shows correctly
