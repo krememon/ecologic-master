@@ -146,9 +146,21 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
     return directJws;
   }
 
+  // ── Deferred-change detection ─────────────────────────────────────────────
+  // When Apple subscription group levels are ordered backwards (Starter=1,
+  // Scale=4 instead of Scale=1, Starter=4), Apple treats Starter→Team as a
+  // DOWNGRADE and defers the entitlement change to the next billing period.
+  // In that case purchaseProduct() returns a transaction where productIdentifier
+  // is the CURRENT (old) product, NOT the purchased one. getPurchases() also
+  // returns the old product because the entitlement hasn't switched yet.
+  // FIX: Reorder group levels in App Store Connect to Scale(1)>Pro(2)>Team(3)>Starter(4).
   console.log(
-    `[native-iap] Apple: transaction productIdentifier (${txProductId}) does not match target (${productId}).` +
-    " This is an upgrade — will search entitlements via getPurchases() with retry."
+    `[native-iap] Apple: ⚠️ DEFERRED-CHANGE SIGNAL —` +
+    ` transaction returned productIdentifier=${txProductId} but we purchased ${productId}.` +
+    ` This matches Apple deferred-downgrade behavior (incorrect group level order).` +
+    ` Expected product: ${productId} | Received product: ${txProductId}.` +
+    ` Will search entitlements via getPurchases() with retry, but if group levels` +
+    ` are still wrong in App Store Connect, entitlements will also return ${txProductId}.`
   );
 
   // ── Entitlement lookup with retry ─────────────────────────────────────────

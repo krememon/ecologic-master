@@ -25,6 +25,12 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+// UI display order — ascending by price/tier (Starter first, Scale last).
+// NOTE: This is NOT Apple's subscription group level order. Apple levels in
+// App Store Connect must be ordered highest-to-lowest (Scale=1, Starter=4)
+// so that Starter→Team is treated as an immediate upgrade, not a deferred
+// downgrade. This array only controls card rendering and the "lower tier"
+// gray-out logic in the UI.
 const PLAN_ORDER: PlanKey[] = ["starter", "team", "pro", "scale"];
 
 interface BillingStatus {
