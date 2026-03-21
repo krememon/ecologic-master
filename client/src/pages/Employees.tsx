@@ -192,9 +192,20 @@ export default function Employees() {
           <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
           <p className="text-muted-foreground mt-1">Manage your team members and their roles</p>
           {seatStatus?.ok && (
-            <p className={`text-sm mt-1 font-medium ${seatStatus.atLimit ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
-              {seatStatus.seatCount} of {seatStatus.seatLimit} seat{seatStatus.seatLimit !== 1 ? 's' : ''} used
-            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                seatStatus.atLimit
+                  ? 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+              }`}>
+                {seatStatus.seatCount} of {seatStatus.seatLimit} seat{seatStatus.seatLimit !== 1 ? 's' : ''} used
+              </span>
+              {seatStatus.atLimit && (
+                <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                  Plan limit reached
+                </span>
+              )}
+            </div>
           )}
         </div>
         <InviteTeamButton

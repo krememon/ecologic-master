@@ -12,7 +12,7 @@ interface InviteTeamButtonProps {
   seatLimit?: number;
 }
 
-export default function InviteTeamButton({ atLimit = false, seatCount, seatLimit }: InviteTeamButtonProps) {
+export default function InviteTeamButton({ atLimit = false }: InviteTeamButtonProps) {
   const { can } = useCan();
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
@@ -24,14 +24,14 @@ export default function InviteTeamButton({ atLimit = false, seatCount, seatLimit
 
   if (atLimit) {
     return (
-      <div className="flex flex-col items-end gap-1">
-        <Button variant="outline" disabled className="opacity-60 cursor-not-allowed">
+      <div className="flex flex-col items-end gap-2">
+        <Button variant="outline" disabled className="cursor-not-allowed opacity-60">
           <Lock className="h-4 w-4 mr-2" />
-          Seat Limit Reached
+          Invite Team
         </Button>
-        <Link href="/settings">
-          <span className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-            Upgrade plan in Settings
+        <Link href="/settings#billing">
+          <span className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium">
+            Upgrade plan to add more
           </span>
         </Link>
       </div>
@@ -45,7 +45,7 @@ export default function InviteTeamButton({ atLimit = false, seatCount, seatLimit
 
     try {
       const response = await fetch("/api/company/info");
-      
+
       if (!response.ok) {
         if (response.status === 403) {
           return;

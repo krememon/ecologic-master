@@ -595,7 +595,7 @@ export default function Settings() {
 
         {/* Billing & Subscription - Owner Only */}
         {user?.role === 'OWNER' && (
-          <div className="lg:col-span-2">
+          <div id="billing" className="lg:col-span-2">
             <BillingSection />
           </div>
         )}
