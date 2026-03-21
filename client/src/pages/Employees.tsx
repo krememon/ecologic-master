@@ -17,6 +17,14 @@ import { Link } from "wouter";
 import EmployeeCard from "@/components/employees/EmployeeCard";
 import InviteTeamButton from "@/components/employees/InviteTeamButton";
 
+interface SeatStatus {
+  ok: boolean;
+  seatCount: number;
+  seatLimit: number;
+  atLimit: boolean;
+  planKey: string | null;
+}
+
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
 
 interface Employee {
@@ -56,6 +64,11 @@ export default function Employees() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const { toast } = useToast();
+
+  const { data: seatStatus } = useQuery<SeatStatus>({
+    queryKey: ["/api/billing/seat-status"],
+    retry: false,
+  });
 
   const { data, isLoading } = useQuery<{ users: Employee[]; total: number }>({
     queryKey: ["/api/org/users", search, roleFilter, statusFilter],
@@ -119,6 +132,7 @@ export default function Employees() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/billing/seat-status"] });
     },
     onError: (error: any) => {
       toast({
@@ -177,8 +191,17 @@ export default function Employees() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
           <p className="text-muted-foreground mt-1">Manage your team members and their roles</p>
+          {seatStatus?.ok && (
+            <p className={`text-sm mt-1 font-medium ${seatStatus.atLimit ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+              {seatStatus.seatCount} of {seatStatus.seatLimit} seat{seatStatus.seatLimit !== 1 ? 's' : ''} used
+            </p>
+          )}
         </div>
-        <InviteTeamButton />
+        <InviteTeamButton
+          atLimit={seatStatus?.atLimit ?? false}
+          seatCount={seatStatus?.seatCount}
+          seatLimit={seatStatus?.seatLimit}
+        />
       </div>
 
       {/* Filters and Sort */}

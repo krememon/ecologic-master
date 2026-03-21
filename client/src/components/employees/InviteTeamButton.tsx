@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Users } from "lucide-react";
+import { Users, Lock } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { useToast } from "@/hooks/use-toast";
 import { copyText } from "@/lib/clipboard";
+import { Link } from "wouter";
 
-export default function InviteTeamButton() {
+interface InviteTeamButtonProps {
+  atLimit?: boolean;
+  seatCount?: number;
+  seatLimit?: number;
+}
+
+export default function InviteTeamButton({ atLimit = false, seatCount, seatLimit }: InviteTeamButtonProps) {
   const { can } = useCan();
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
@@ -13,6 +20,22 @@ export default function InviteTeamButton() {
 
   if (!can("org.view")) {
     return null;
+  }
+
+  if (atLimit) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <Button variant="outline" disabled className="opacity-60 cursor-not-allowed">
+          <Lock className="h-4 w-4 mr-2" />
+          Seat Limit Reached
+        </Button>
+        <Link href="/settings">
+          <span className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+            Upgrade plan in Settings
+          </span>
+        </Link>
+      </div>
+    );
   }
 
   const handleClick = async () => {

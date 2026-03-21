@@ -4287,6 +4287,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // ── Seat limit check ──────────────────────────────────────────────────
+      const { getEffectiveBillingAccess } = await import('./billingResolver');
+      const billing = getEffectiveBillingAccess(company);
+      const seatLimit = billing.seatLimit;
+
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(companyMembers)
+        .where(eq(companyMembers.companyId, company.id));
+      const seatCount = countRow?.count ?? 0;
+
+      console.log(`[seat-check] join-company — companyId=${company.id} plan=${billing.effectivePlan ?? 'none'} seats=${seatCount}/${seatLimit}`);
+
+      if (seatCount >= seatLimit) {
+        return res.status(403).json({
+          code: 'SEAT_LIMIT_REACHED',
+          message: 'Company has reached max employees',
+        });
+      }
+
       // Add user to company with TECHNICIAN role (default for joining members)
       await db.insert(companyMembers).values({
         userId: userId,
@@ -4319,6 +4339,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error joining company:", error);
       res.status(500).json({ message: "Failed to join company" });
+    }
+  });
+
+  // GET /api/billing/seat-status — current seat usage for the caller's company
+  app.get('/api/billing/seat-status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+
+      const [membership] = await db
+        .select({ companyId: companyMembers.companyId })
+        .from(companyMembers)
+        .where(eq(companyMembers.userId, userId))
+        .limit(1);
+
+      if (!membership) {
+        return res.status(404).json({ ok: false, message: 'No company membership found' });
+      }
+
+      const [company] = await db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, membership.companyId))
+        .limit(1);
+
+      if (!company) {
+        return res.status(404).json({ ok: false, message: 'Company not found' });
+      }
+
+      const { getEffectiveBillingAccess } = await import('./billingResolver');
+      const billing = getEffectiveBillingAccess(company);
+      const seatLimit = billing.seatLimit;
+
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(companyMembers)
+        .where(eq(companyMembers.companyId, company.id));
+      const seatCount = countRow?.count ?? 0;
+
+      console.log(`[seat-status] companyId=${company.id} plan=${billing.effectivePlan ?? 'none'} seats=${seatCount}/${seatLimit}`);
+
+      return res.json({
+        ok: true,
+        seatCount,
+        seatLimit,
+        atLimit: seatCount >= seatLimit,
+        planKey: billing.effectivePlan ?? company.subscriptionPlan ?? null,
+      });
+    } catch (err: any) {
+      console.error('[seat-status] error:', err);
+      return res.status(500).json({ ok: false, message: err.message });
     }
   });
 

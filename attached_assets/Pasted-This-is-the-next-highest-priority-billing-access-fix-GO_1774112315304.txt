@@ -1,0 +1,134 @@
+This is the next highest-priority billing/access fix.
+
+GOAL
+Enforce employee/user limits based on the company’s active subscription plan.
+
+REQUIRED PLAN LIMITS
+Use these exact limits:
+
+- Starter / $29.99 → max 1 user
+- Team / $79.99 → max 5 users
+- Pro / $159.99 → max 10 users
+- Scale / $299.99 → max 15 users
+
+IMPORTANT
+This needs to be enforced everywhere relevant, not just visually.
+
+WHAT TO BUILD
+
+1. SINGLE SOURCE OF TRUTH FOR MAX USERS
+Make sure the company’s active plan maps to one real max-user limit in backend logic.
+
+The current active company plan should determine:
+- max allowed users/employees
+- whether a new employee can join
+- whether owner can add/invite more employees
+
+Use the real active billing source of truth:
+- Apple
+- Google Play
+- Stripe
+- free access / override if applicable
+
+Do NOT hardcode random checks in multiple places.
+
+2. ENFORCE LIMIT WHEN EMPLOYEE TRIES TO JOIN
+If a company is already at its max allowed users and another employee tries to join:
+
+- block the join
+- show a clear message:
+  "Company has reached max employees"
+
+This should apply whether they are:
+- accepting an invite
+- joining via company code
+- being added through onboarding
+- any other employee-join flow
+
+3. ENFORCE LIMIT WHEN OWNER TRIES TO ADD/INVITE
+If the owner/admin tries to add another employee after hitting the max:
+
+- block the action
+- show a clear message
+- direct them to manage subscription in Settings
+
+Preferred message:
+- "Your company has reached the max employees for this plan."
+- "Manage your subscription in Settings to add more employees."
+
+4. SETTINGS / MANAGE SUBSCRIPTION PATH
+If owner hits the limit, the CTA/action should take them to:
+- Settings → Billing & Subscription
+so they can upgrade the plan
+
+On native:
+- route them into the billing/settings flow
+On web:
+- same billing/settings flow
+
+5. COUNTING LOGIC
+Define clearly how users are counted.
+I want this based on real company members/users, not guesswork.
+
+Count all active company users that occupy a seat.
+Be explicit about whether this includes:
+- owner
+- employees
+- dispatchers
+- estimators
+- supervisors
+- techs
+If invited-but-not-accepted users should count, decide explicitly and document it.
+My default preference:
+- count real active members only
+- pending invites should NOT consume a seat until accepted
+
+6. ENFORCE ON BACKEND, NOT JUST UI
+The limit must be enforced server-side.
+UI can show helpful messaging, but backend must reject joins/additions beyond the limit.
+
+7. OPTIONAL UI CLARITY
+Where helpful, show something like:
+- "1 of 1 users used"
+- "5 of 5 users used"
+- "7 of 10 users used"
+especially in billing/settings or employee/invite areas if easy
+
+But enforcement is more important than polish.
+
+8. FREE ACCESS / OVERRIDE
+If free access still uses a plan underneath, use that plan’s user limit.
+If free access should bypass billing but still respect the plan seat limit, keep that behavior.
+Do not make free access unlimited unless that is already intended and explicitly true.
+
+9. LOGGING
+Add concise logs for:
+- company id
+- current plan
+- current user count
+- max allowed users
+- join/invite allowed or blocked
+
+10. EXPECTED RESULT
+Examples:
+
+- Starter company with owner already inside = no more employees allowed
+- Team company with 5 members = 6th employee blocked
+- Pro company with 10 members = 11th blocked
+- Scale company with 15 members = 16th blocked
+
+Employee sees:
+- "Company has reached max employees"
+
+Owner sees:
+- block + route/CTA to manage subscription in Settings
+
+DELIVERABLES
+When done, tell me:
+1. exact files changed
+2. what the single source of truth is for max users
+3. what counts as a user/seat
+4. where backend enforcement happens
+5. where employee join is blocked
+6. where owner invite/add flow is blocked
+7. confirm the exact plan limits now enforced
