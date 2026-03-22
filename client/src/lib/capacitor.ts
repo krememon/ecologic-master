@@ -388,6 +388,102 @@ export async function scheduleLocalTestNotification(): Promise<LocalNotifResult>
   }
 }
 
+/**
+ * On native iOS: fetches the PDF at `url`, writes it to the app's cache
+ * directory using the Filesystem plugin, then invokes the native iOS share/save
+ * sheet via the Share plugin so the user can choose Files, AirDrop, Notes, etc.
+ *
+ * On web: falls back to a programmatic anchor-click download (same as before).
+ *
+ * Returns true if the native flow was triggered, false for web fallback.
+ */
+export async function nativePdfShare(
+  url: string,
+  filename: string,
+): Promise<boolean> {
+  if (!isNativePlatform() || getPlatform() !== "ios") {
+    // Web fallback: programmatic anchor download
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("[pdf-share] Web anchor download failed:", err);
+      window.open(url, "_blank");
+    }
+    return false;
+  }
+
+  try {
+    const { Filesystem, Directory } = await import("@capacitor/filesystem");
+    const { Share } = await import("@capacitor/share");
+
+    console.log("[pdf-share] Fetching PDF blob from:", url);
+
+    // Resolve full URL (native uses absolute URLs to production)
+    const baseUrl = getApiBaseUrl();
+    const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
+
+    const response = await fetch(fullUrl, { credentials: "include" });
+    if (!response.ok) {
+      throw new Error(`PDF fetch failed: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+
+    // Convert blob to base64 for Filesystem.writeFile
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Strip the data-URL prefix (data:application/pdf;base64,...)
+        const base64 = result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // Write to app cache directory
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const writeResult = await Filesystem.writeFile({
+      path: safeFilename,
+      data: base64Data,
+      directory: Directory.Cache,
+    });
+
+    console.log("[pdf-share] Wrote to cache:", writeResult.uri);
+
+    // Invoke native share/save sheet
+    await Share.share({
+      title: safeFilename,
+      files: [writeResult.uri],
+      dialogTitle: "Save or Share PDF",
+    });
+
+    console.log("[pdf-share] Native share sheet opened successfully");
+    return true;
+  } catch (err: any) {
+    // User dismissed the share sheet — treat as success
+    if (
+      err?.message?.includes("canceled") ||
+      err?.message?.includes("cancelled") ||
+      err?.message?.includes("dismiss") ||
+      err?.errorMessage?.includes("canceled")
+    ) {
+      console.log("[pdf-share] Share sheet dismissed by user");
+      return true;
+    }
+    console.error("[pdf-share] Native share failed:", err);
+    // Fallback: open in browser
+    window.open(url, "_blank");
+    return false;
+  }
+}
+
 export async function closeSystemBrowser(): Promise<void> {
   if (!isNativePlatform()) return;
   try {

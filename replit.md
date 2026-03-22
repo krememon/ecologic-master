@@ -45,6 +45,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Payments Tracker**: Dashboard offering a real-time financial overview with filterable invoices and support for partial payments.
 - **Payment Signature Capture**: Configurable post-payment signature collection.
 - **Invoice Sending**: Invoices can be sent via Email (Resend) or SMS (Twilio) with payment links.
+- **Native PDF Share (iOS)**: On native iPhone, tapping the download button on invoice/estimate PDFs fetches the file, writes it to the app cache via `@capacitor/filesystem`, and opens the native iOS share/save sheet (`@capacitor/share`) so users can save to Files, Notes, AirDrop, etc. Web keeps standard anchor-download behavior.
 - **Leads Management**: Dedicated section for tracking potential customers with RBAC.
 - **Time Tracking**: Job-aware clock-in/out for technicians, aggregated "Labor Today" for managers, and auto clock-out.
 - **Geo-Tracking**: GPS tracking tied to clock-in/clock-out, with live crew positions shown on the Schedule map.

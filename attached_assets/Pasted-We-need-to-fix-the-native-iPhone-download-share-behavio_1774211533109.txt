@@ -1,0 +1,93 @@
+We need to fix the native iPhone download/share behavior for invoice/estimate PDFs in EcoLogic.
+
+GOAL
+When the user taps the download button for an invoice/estimate PDF on iPhone, do NOT expand/open the file inline in a web view. Instead, present the native Apple share/save sheet so the user can choose where to save it, such as:
+- Files
+- Notes
+- Save to Photos / Print / etc. as supported by iOS share sheet
+
+In short:
+tap download → open native iOS share/save sheet
+NOT:
+tap download → open/expand the file in a browser/web view
+
+CURRENT BUG
+Right now tapping the download action expands/opens the file instead of giving the normal Apple “where would you like to save/share this” flow.
+
+IMPORTANT
+- Do NOT redesign the modal UI
+- Do NOT remove the existing download button
+- Keep current web behavior unless this same fix cleanly improves it
+- Focus especially on the native iPhone app behavior
+- Use the proper native/share-sheet flow, not a fake custom modal
+- Do NOT route users into a weird browser page when they just want to save/download the file
+
+REQUIRED BEHAVIOR
+On iPhone native app:
+1. User taps download on an invoice/estimate PDF
+2. App fetches/prepares the actual file URL/blob
+3. Native iOS share sheet opens immediately
+4. User can choose Files / Notes / AirDrop / Print / etc.
+5. File saves/shares from the native sheet
+
+This should apply to document download actions like:
+- invoice PDF download
+- estimate PDF download
+- any equivalent generated PDF download action using the same pattern, if appropriate
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the current download button handler for invoice/estimate PDFs.
+2. Identify why it is opening/expanding the file instead of using native share/save behavior.
+3. Replace that behavior in the native iPhone app with the proper share-sheet flow.
+4. Use the correct Capacitor/native plugin or existing native bridge for sharing/saving files.
+5. If needed:
+   - download the file to a temporary local path first
+   - then invoke the native share sheet on that file
+6. Preserve existing file generation logic.
+7. Preserve existing modal/list UI showing the generated PDF.
+8. Keep the “open/view” action separate if there is a separate explicit open/view button.
+9. Only the download action should trigger save/share sheet behavior.
+10. Make sure this works for real generated PDFs, not just hardcoded test files.
+
+TECHNICAL NOTES
+- Use the native iOS share sheet, not a custom HTML popup
+- Prefer existing Capacitor/native plugins if already in project
+- If current behavior relies on opening a signed URL in browser/webview, stop doing that for native download action
+- Likely flow should be:
+  generate/get PDF URL → fetch/download blob/file → write to temp/app cache → invoke Share plugin / native sheet
+- Make sure the MIME type and filename are correct (pdf)
+- Ensure it works in TestFlight/native builds, not just browser
+- Avoid leaving orphan temp files if cleanup pattern already exists
+- If web still needs normal anchor-download behavior, preserve that separately from native behavior
+
+EXPECTED RESULT
+On iPhone:
+- tapping download does NOT expand/open the PDF page
+- instead shows normal Apple share/save options
+- user can save to Files, Notes, etc.
+
+On web/iPad:
+- keep behavior correct and clean based on platform, without breaking existing flows
+
+VALIDATION
+Please verify:
+1. Generate an invoice/estimate PDF
+2. Tap download in native iPhone app
+3. Native iOS share sheet appears
+4. User can save/share to Files/Notes/etc.
+5. No inline browser expansion occurs from the download action
+6. Existing PDF generation still works
+7. Any separate view/open behavior still works if present
+
+DELIVERABLES
+1. Exact files changed
+2. What the old download behavior was doing
+3. What native plugin/flow now handles iPhone download
+4. Whether file is temporarily downloaded locally before sharing
+5. Confirmation that:
+   - iPhone download now opens native Apple share/save sheet
+   - PDF no longer expands/opens when pressing download
+   - file name/type stay correct
+   - existing PDF generation flow still works
+
+Please implement it now.

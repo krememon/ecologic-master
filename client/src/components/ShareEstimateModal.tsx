@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, Maximize2, RefreshCw, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { nativePdfShare } from "@/lib/capacitor";
 
 interface ShareEstimateModalProps {
   open: boolean;
@@ -36,6 +37,7 @@ export function ShareEstimateModal({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState(`Estimate ${estimateNumber} from ${companyName}`);
@@ -265,12 +267,23 @@ export function ShareEstimateModal({
                     <Button
                       variant="ghost"
                       size="sm"
-                      asChild
                       className="h-8 px-2"
+                      disabled={downloadingPdf}
+                      onClick={async () => {
+                        if (!pdfUrl) return;
+                        setDownloadingPdf(true);
+                        try {
+                          await nativePdfShare(pdfUrl, pdfFileName ?? "estimate.pdf");
+                        } finally {
+                          setDownloadingPdf(false);
+                        }
+                      }}
                     >
-                      <a href={pdfUrl} download={pdfFileName}>
+                      {downloadingPdf ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
                         <Download className="h-4 w-4" />
-                      </a>
+                      )}
                     </Button>
                   </div>
                 </div>

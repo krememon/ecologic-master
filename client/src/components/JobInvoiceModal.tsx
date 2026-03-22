@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, CreditCard, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { isNativePlatform } from "@/lib/capacitor";
+import { isNativePlatform, nativePdfShare } from "@/lib/capacitor";
 
 interface JobInvoiceModalProps {
   open: boolean;
@@ -48,6 +48,7 @@ export function JobInvoiceModal({
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [paymentLinkLoading, setPaymentLinkLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState("");
@@ -425,11 +426,27 @@ export function JobInvoiceModal({
                         <span className="text-xs text-green-600 dark:text-green-400 font-medium">PDF Ready</span>
                       </div>
                     </div>
-                    <a href={pdfUrl!} download={pdfFileName ?? undefined} className="flex-shrink-0">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-500">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-slate-500 flex-shrink-0"
+                      disabled={downloadingPdf}
+                      onClick={async () => {
+                        if (!pdfUrl) return;
+                        setDownloadingPdf(true);
+                        try {
+                          await nativePdfShare(pdfUrl, pdfFileName ?? "invoice.pdf");
+                        } finally {
+                          setDownloadingPdf(false);
+                        }
+                      }}
+                    >
+                      {downloadingPdf ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
                         <Download className="h-4 w-4" />
-                      </Button>
-                    </a>
+                      )}
+                    </Button>
                   </div>
 
                   {/* Card actions */}
