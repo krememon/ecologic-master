@@ -1,0 +1,63 @@
+We need to make one simple UX change to the invoice action buttons in EcoLogic.
+
+GOAL
+Add a new button: Send Invoice
+
+But IMPORTANT:
+I do NOT want a whole send modal / share sheet / email compose flow.
+
+All I want is:
+- user taps Send Invoice
+- app copies the same existing online payment link to clipboard
+- user can then paste that link wherever they want for the customer
+
+So this is basically just a clearer UX label for the exact same copy-link behavior we already have.
+
+CURRENT ISSUE
+Right now the copy-link flow is hidden behind Pay / Pay Invoice behavior, and normal users may not understand what happened.
+
+DESIRED ACTIONS
+The header/action area should have:
+- Invoice
+- Pay
+- Send Invoice
+
+BEHAVIOR
+- Invoice button: keep existing invoice behavior exactly as-is
+- Pay button: keep existing pay behavior exactly as-is unless it must be slightly adjusted for consistency
+- Send Invoice button: copy the invoice payment link to clipboard using the same existing link-generation/copy logic already in the app
+
+IMPORTANT
+- Do NOT build a send modal
+- Do NOT build a share sheet flow
+- Do NOT build email compose
+- Do NOT change the underlying payment-link system
+- Do NOT redesign the screen
+- This is just adding a clearer button for the same copy-link action
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the existing invoice payment-link generation/copy logic.
+2. Add a new “Send Invoice” button in the action area next to Invoice and Pay.
+3. Wire Send Invoice to the exact same existing copy-link behavior/source of truth.
+4. Keep the copied link format exactly the same as current working behavior.
+5. Show the normal success feedback/toast already used for copied links, if one exists.
+6. Preserve current mobile layout and button styling.
+7. Do NOT introduce any extra sending flow beyond copying the link.
+
+TECHNICAL NOTES
+- Reuse existing handler/helper if possible
+- Avoid duplicating payment-link logic in multiple places
+- If Pay currently already copies the link, Send Invoice can reuse that same handler or a shared helper
+- Keep this clean and simple
+
+DELIVERABLES
+1. Exact files changed
+2. Where the new Send Invoice button was added
+3. What existing handler/helper it reuses
+4. Confirmation that:
+   - Send Invoice now copies the payment link
+   - no modal/share/email flow was added
+   - existing invoice/payment behavior still works
+   - layout still looks correct
+
+Please implement it now.

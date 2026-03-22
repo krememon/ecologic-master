@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus, Send } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -416,6 +416,31 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     }
   };
 
+  // Handle Send Invoice button click - ensures invoice exists, then copies payment link to clipboard
+  const [sendLinkLoading, setSendLinkLoading] = useState(false);
+  const handleSendInvoiceLink = async () => {
+    setSendLinkLoading(true);
+    try {
+      const inv = await ensureInvoice();
+      if (!inv) return;
+      const paymentUrl = `${window.location.origin}/invoice/${inv.id}/pay`;
+      try {
+        await navigator.clipboard.writeText(paymentUrl);
+        toast({
+          title: "Payment Link Copied",
+          description: "Share this link with your customer so they can pay online.",
+        });
+      } catch {
+        toast({
+          title: "Payment Link",
+          description: paymentUrl,
+        });
+      }
+    } finally {
+      setSendLinkLoading(false);
+    }
+  };
+
   // Handle Pay button click - auto-creates invoice if needed, then navigates to Payment Review
   const handlePayInvoice = async () => {
     if (isPaid) return; // Already paid, do nothing
@@ -686,6 +711,24 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             )
           )}
           
+          {/* Send Invoice Button - copies payment link to clipboard */}
+          {canCreatePaymentLink && job.status !== 'cancelled' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSendInvoiceLink}
+              disabled={sendLinkLoading}
+              className="h-8 px-3 text-sm"
+            >
+              {sendLinkLoading ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-1.5" />
+              )}
+              Send Invoice
+            </Button>
+          )}
+
           {/* Overflow Menu for Edit/Delete */}
           {(canEditJob || isAdmin) && (
             <DropdownMenu>
