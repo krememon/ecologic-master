@@ -729,42 +729,15 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </Button>
           )}
 
-          {/* Overflow Menu — fixed-width, anchored to far right */}
-          {(canEditJob || isAdmin) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 w-8 px-0 shrink-0 ml-auto">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEditJob && (
-                  <DropdownMenuItem onClick={() => navigate(`/jobs/${jobId}/edit`)}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Job
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && (
-                  <DropdownMenuItem 
-                    onClick={() => setIsDeleteDialogOpen(true)}
-                    className="text-red-600 focus:text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Job
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
       </div>
 
-      {/* Tab Switcher */}
-      <div className="mb-6" data-testid="job-tab-switcher">
-        <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+      {/* Tab Switcher + Overflow Menu */}
+      <div className="mb-6 flex items-center gap-2" data-testid="job-tab-switcher">
+        <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1 min-w-0">
           <button
             onClick={() => setActiveTab('documents')}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
               activeTab === 'documents'
                 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -774,7 +747,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </button>
           <button
             onClick={() => setActiveTab('approvals')}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
               activeTab === 'approvals'
                 ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -783,6 +756,34 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             E-signature Approvals
           </button>
         </div>
+
+        {/* Overflow Menu — fixed-width, sits immediately right of the tabs */}
+        {(canEditJob || isAdmin) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 w-8 px-0 shrink-0">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canEditJob && (
+                <DropdownMenuItem onClick={() => navigate(`/jobs/${jobId}/edit`)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Job
+                </DropdownMenuItem>
+              )}
+              {isAdmin && (
+                <DropdownMenuItem
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Job
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Documents Tab */}
