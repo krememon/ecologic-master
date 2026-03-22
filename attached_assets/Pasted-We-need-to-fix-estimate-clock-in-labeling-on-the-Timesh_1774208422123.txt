@@ -1,0 +1,81 @@
+We need to fix estimate clock-in labeling on the Timesheets screen in EcoLogic.
+
+CURRENT BUG
+I clocked into an estimate, but on the Timesheets screen it recorded the entry as:
+
+- Unassigned
+- Deleted job
+
+That is incorrect.
+
+GOAL
+If the user clocks into an estimate, the timesheet entry should show the correct estimate identity instead of “Unassigned” / “Deleted job”.
+
+EXPECTED RESULT
+When clocking into an estimate, the timesheet entry should display the correct label, for example:
+- Jennifer Pellegrino - Estimate
+or whatever the app’s proper estimate display format is
+
+At minimum, it must clearly identify the estimate and not fall back to:
+- Unassigned
+- Deleted job
+
+IMPORTANT
+- Do NOT redesign the Timesheets UI
+- Do NOT change clock-in UI unless needed for data wiring
+- Do NOT break normal job clock-ins
+- Preserve existing timesheet grouping, totals, and layout
+- This is a data/source-of-truth labeling fix
+
+IMPLEMENTATION REQUIREMENTS
+1. Find how clock-ins are stored for estimates vs jobs.
+2. Find why an estimate clock-in is being rendered as “Unassigned” / “Deleted job”.
+3. Update the timesheet data model/query/serializer so estimate-linked time entries resolve to the correct estimate display data.
+4. Ensure timesheet entries can distinguish between:
+   - job clock-ins
+   - estimate clock-ins
+   - truly unassigned clock-ins
+5. If the current timesheet query only joins jobs, extend it to also join/resolve estimates properly.
+6. Make sure a valid estimate is NOT treated as a deleted job.
+7. Use the app’s correct naming convention for estimate entries. Ideally include the customer name and estimate context, such as:
+   - Jennifer Pellegrino - Estimate
+   - Estimate for Jennifer Pellegrino
+   - EST-xxxxx · Jennifer Pellegrino
+Whichever matches the app best.
+8. Preserve day totals and time duration calculations exactly.
+9. Make sure this works on:
+   - immediate clock-in/clock-out
+   - app refresh
+   - historical timesheet view
+   - multiple entries in one day
+
+TECHNICAL NOTES
+- This sounds like the time entry renderer/query is assuming every linked work item is a job
+- Estimate clock-ins may be storing a different foreign key/type that the timesheet view is not resolving
+- Fix the source-of-truth mapping instead of hardcoding a frontend label
+- If there is a work-item type field, use it properly
+- If there is no type field and estimates are being shoved into a job slot incorrectly, fix that safely
+- Preserve compatibility with existing job timesheet entries
+- If a real linked job was actually deleted, keep that deleted-job fallback only for true deleted jobs, not estimates
+
+VALIDATION
+Please verify:
+1. Clock into an estimate
+2. Open Timesheets
+3. The entry shows the correct estimate label, not Unassigned / Deleted job
+4. Clock into a normal job
+5. Normal job timesheet labeling still works
+6. Truly unassigned entries still only show unassigned when actually unassigned
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why estimate clock-ins were showing as Unassigned / Deleted job
+3. What query/model/serializer logic was updated
+4. Exact display format now used for estimate timesheet entries
+5. Confirmation that:
+   - estimate clock-ins show proper estimate labels
+   - job clock-ins still work
+   - true unassigned entries still behave correctly
+   - totals/durations were not broken
+
+Please implement it now.

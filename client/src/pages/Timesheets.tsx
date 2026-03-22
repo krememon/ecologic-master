@@ -21,6 +21,7 @@ interface TimeEntry {
   id: number;
   userId: string;
   jobId: number | null;
+  estimateId?: number | null;
   category: string;
   clockInAt: string;
   clockOutAt: string;
@@ -31,6 +32,7 @@ interface TimeEntry {
   editedByUserId?: string | null;
   editReason?: string | null;
   job?: { id: number; title: string | null } | null;
+  estimate?: { id: number; estimateNumber: string; title: string; customerName: string | null } | null;
   user?: { id: string; firstName: string | null; lastName: string | null };
 }
 
@@ -81,12 +83,23 @@ function calculateMinutes(start: string, end: string): number {
 
 function getJobOrCategory(entry: TimeEntry): { title: string; subtitle?: string } {
   if (entry.job?.title) return { title: entry.job.title };
+  if (entry.estimate) {
+    const est = entry.estimate;
+    const customerPart = est.customerName ? est.customerName : est.title;
+    const label = est.estimateNumber
+      ? `${est.estimateNumber} · ${customerPart}`
+      : customerPart;
+    return { title: label, subtitle: "Estimate" };
+  }
   if (entry.category && entry.category !== "job") {
     const displayCat = entry.category === "admin" ? "work" : entry.category;
     return { title: displayCat.charAt(0).toUpperCase() + displayCat.slice(1) };
   }
-  if (entry.category === "job" && !entry.job) {
+  if (entry.category === "job" && !entry.job && !entry.estimateId) {
     return { title: "Unassigned", subtitle: "Deleted job" };
+  }
+  if (entry.category === "job" && entry.estimateId && !entry.estimate) {
+    return { title: "Estimate", subtitle: `#${entry.estimateId}` };
   }
   return { title: "—" };
 }
