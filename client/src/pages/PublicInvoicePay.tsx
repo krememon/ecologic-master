@@ -437,12 +437,9 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             data-testid="ecologic-wordmark"
             src="/branding/ecologic-wordmark.png"
             alt="EcoLogic"
-            className="mx-auto mb-2 w-auto object-contain"
+            className="mx-auto w-auto object-contain"
             style={{ height: '72px', maxWidth: '480px' }}
           />
-          <p className="text-sm text-slate-500 mt-1" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
-            Professional contractor management
-          </p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
