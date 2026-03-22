@@ -3096,6 +3096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hoursToday: Math.round(totalMinutes / 60 * 100) / 100,
           currentJobId: activeLogWithJob?.jobId || null,
           currentJobTitle: activeLogWithJob?.job?.title || null,
+          currentEstimateId: (activeLogWithJob as any)?.estimateId || null,
           currentCategory: normalizeCategory(activeLogWithJob?.category),
         });
       }
@@ -3134,10 +3135,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentJobId: myActiveLogWithJob?.jobId || null,
         currentJobTitle: myActiveLogWithJob?.job?.title || null,
         currentCategory: normalizeCategory(myActiveLogWithJob?.category),
+        currentEstimateId: (myActiveLogWithJob as any)?.estimateId || null,
         activeLog: myActiveLogWithJob ? {
           id: myActiveLogWithJob.id,
           jobId: myActiveLogWithJob.jobId,
           jobTitle: myActiveLogWithJob.job?.title || null,
+          estimateId: (myActiveLogWithJob as any)?.estimateId || null,
           clockInAt: myActiveLogWithJob.clockInAt,
           category: normalizeCategory(myActiveLogWithJob.category),
         } : null,
@@ -3197,7 +3200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Already clocked in' });
       }
       
-      const { jobId, category } = req.body;
+      const { jobId, category, estimateId } = req.body;
       
       if (jobId && member.role === 'TECHNICIAN') {
         const assignments = await storage.getUserJobAssignments(userId);
@@ -3210,6 +3213,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: 'Not assigned to this job' });
         }
       }
+
+      // Verify estimate assignment for technicians clocking into an estimate
+      if (estimateId && member.role === 'TECHNICIAN') {
+        const clockEst = await storage.getEstimate(estimateId);
+        if (!clockEst || clockEst.companyId !== member.companyId) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const assignedIds: string[] = Array.isArray(clockEst.assignedEmployeeIds) ? (clockEst.assignedEmployeeIds as string[]) : [];
+        if (!assignedIds.includes(userId)) {
+          return res.status(403).json({ error: 'Not assigned to this estimate' });
+        }
+      }
       
       const validCategories = ['job', 'shop', 'drive', 'admin', 'work', 'break'];
       if (category && !validCategories.includes(category)) {
@@ -3217,8 +3232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const dbCategory = category === 'work' ? 'admin' : category;
       
-      const log = await storage.clockIn(userId, member.companyId, jobId, dbCategory);
-      console.log('[Time] clocked in', { userId, logId: log.id, jobId, category });
+      const log = await storage.clockIn(userId, member.companyId, jobId, dbCategory, estimateId);
+      console.log('[Time] clocked in', { userId, logId: log.id, jobId, estimateId, category });
 
       const clockUser = await storage.getUser(userId);
       const clockUserName = clockUser ? `${clockUser.firstName || ''} ${clockUser.lastName || ''}`.trim() || 'A team member' : 'A team member';
@@ -3226,6 +3241,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (jobId) {
         const clockJob = await storage.getJob(jobId);
         if (clockJob) clockBody += ` on ${clockJob.title || clockJob.jobNumber || `Job #${jobId}`}`;
+      } else if (estimateId) {
+        const clockEst = await storage.getEstimate(estimateId);
+        if (clockEst) clockBody += ` on estimate ${(clockEst as any).estimateNumber || `#${estimateId}`}`;
       }
       if (category && category !== 'job') clockBody += ` (${category})`;
       notifyManagers(member.companyId, {
@@ -3238,7 +3256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         excludeUserIds: [userId],
       }).catch(err => console.error('[Clock-in notification error]', err));
 
-      res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, category: normalizeCategory(log.category) });
+      res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, estimateId: log.estimateId, category: normalizeCategory(log.category) });
     } catch (error: any) {
       console.error('Error clocking in:', error);
       res.status(500).json({ error: 'Unable to clock in' });
@@ -3262,7 +3280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Your role cannot switch jobs' });
       }
       
-      const { jobId, category } = req.body;
+      const { jobId, category, estimateId } = req.body;
       
       if (jobId && member.role === 'TECHNICIAN') {
         const assignments = await storage.getUserJobAssignments(userId);
@@ -3275,6 +3293,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: 'Not assigned to this job' });
         }
       }
+
+      if (estimateId && member.role === 'TECHNICIAN') {
+        const switchEst = await storage.getEstimate(estimateId);
+        if (!switchEst || switchEst.companyId !== member.companyId) {
+          return res.status(404).json({ error: 'Estimate not found' });
+        }
+        const assignedIds: string[] = Array.isArray(switchEst.assignedEmployeeIds) ? (switchEst.assignedEmployeeIds as string[]) : [];
+        if (!assignedIds.includes(userId)) {
+          return res.status(403).json({ error: 'Not assigned to this estimate' });
+        }
+      }
       
       const validCategories = ['job', 'shop', 'drive', 'admin', 'work', 'break'];
       if (category && !validCategories.includes(category)) {
@@ -3282,12 +3311,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const dbCategory = category === 'work' ? 'admin' : category;
       
-      const result = await storage.switchJob(userId, member.companyId, jobId, dbCategory);
-      console.log('[Time] switched job', { userId, endedId: result.ended.id, startedId: result.started.id, jobId, category });
+      const result = await storage.switchJob(userId, member.companyId, jobId, dbCategory, estimateId);
+      console.log('[Time] switched job', { userId, endedId: result.ended.id, startedId: result.started.id, jobId, estimateId, category });
       res.json({ 
         success: true, 
         ended: { id: result.ended.id, clockOutAt: result.ended.clockOutAt },
-        started: { id: result.started.id, clockInAt: result.started.clockInAt, jobId: result.started.jobId, category: normalizeCategory(result.started.category) },
+        started: { id: result.started.id, clockInAt: result.started.clockInAt, jobId: result.started.jobId, estimateId: result.started.estimateId, category: normalizeCategory(result.started.category) },
       });
     } catch (error: any) {
       console.error('Error switching job:', error);

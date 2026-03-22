@@ -1644,6 +1644,7 @@ export const timeLogs = pgTable("time_logs", {
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
   category: timeEntryCategoryEnum("category").default("job"),
   clockInAt: timestamp("clock_in_at").notNull(),
   clockOutAt: timestamp("clock_out_at"),

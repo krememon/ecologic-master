@@ -1,0 +1,78 @@
+We need to fix employee assigned-estimate visibility in EcoLogic for BOTH the Home/Dashboard and the Clock In flow.
+
+CURRENT STATUS
+- Push notification is working
+- Assigned estimate is showing on the employee’s Schedule
+- BUT it is NOT showing in:
+  1. the employee Home / Dashboard
+  2. the employee Clock In flow
+
+GOAL
+When an employee is assigned to an estimate, that estimate should appear anywhere assigned work is supposed to surface for that employee, including:
+- Home / Dashboard
+- Clock In / timesheet-related work picker
+- Schedule (already working, keep it working)
+
+IMPORTANT
+- Do NOT redesign UI
+- Do NOT change schedule behavior except to preserve the working result
+- Do NOT break job visibility
+- Do NOT expose all company estimates to employees
+- Preserve RBAC and “assigned only” visibility rules
+- This needs to be a real data/source-of-truth fix, not a fake frontend-only patch
+
+REQUIRED BEHAVIOR
+If employee X is assigned to estimate Y, then estimate Y should:
+1. Appear on employee X’s Schedule (already working)
+2. Appear on employee X’s Dashboard/Home wherever assigned work for today/upcoming is shown
+3. Appear in employee X’s Clock In flow if estimates are intended to be selectable/clock-in-able work items there
+
+If estimates are not yet part of the same work-item model as jobs for dashboard/clock-in, extend that properly.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the source of truth for assigned estimates (already partly working because Schedule sees them).
+2. Find the employee dashboard query/selector that loads today/upcoming assigned work.
+3. Find the clock-in/work-selection query/selector that loads available assigned work items.
+4. Update both so assigned estimates are included where appropriate.
+5. Reuse the same role/assignment visibility logic that is already allowing the estimate onto Schedule.
+6. Make sure only estimates assigned to that employee appear.
+7. If dashboard/clock-in are currently only querying jobs, extend them safely to also include assigned estimates.
+8. Preserve existing job behavior and ordering/sorting rules.
+9. Ensure this works on:
+   - fresh login
+   - app refresh
+   - after assignment
+   - returning to Home from another tab
+
+TECHNICAL NOTES
+- Since Schedule already shows the assigned estimate, the assignment persistence is likely correct now
+- The missing part is probably that Dashboard and Clock In are using a different query/source that only includes jobs
+- Reuse the same estimate visibility logic already proven on Schedule
+- If dashboard uses a “today jobs” endpoint, expand it into a broader assigned work feed or merge assigned estimates into the response
+- If clock-in picker only supports jobs, extend it to support estimates cleanly instead of hacking them in visually
+- Keep the source of truth aligned across Schedule, Dashboard, and Clock In
+- Avoid duplicate cards/items if a work item already appears through another relation
+
+VALIDATION
+Please verify:
+1. Assign an employee to an estimate
+2. Employee receives push notification
+3. Estimate appears on Schedule
+4. Estimate also appears on Home / Dashboard
+5. Estimate also appears in Clock In flow if it should be selectable there
+6. Jobs still appear correctly
+7. No RBAC leakage occurs
+
+DELIVERABLES
+1. Exact files changed
+2. What dashboard query/logic was missing assigned estimates
+3. What clock-in query/logic was missing assigned estimates
+4. How both were updated
+5. Confirmation that:
+   - assigned estimates still show on Schedule
+   - assigned estimates now also show on Dashboard
+   - assigned estimates now also show in Clock In flow
+   - job behavior was not broken
+   - RBAC remains correct
+
+Please implement it now.

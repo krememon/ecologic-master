@@ -128,7 +128,7 @@ export default function Home() {
       if (!res.ok) throw new Error("Failed to fetch estimates");
       return res.json();
     },
-    enabled: isAuthenticated && !!user && role !== 'TECHNICIAN',
+    enabled: isAuthenticated && !!user,
   });
 
   const { data: invoices = [], isLoading: invoicesLoading, isError: invoicesError } = useQuery<InvoiceWithDetails[]>({
@@ -154,7 +154,7 @@ export default function Home() {
   const [jobSearchQuery, setJobSearchQuery] = useState('');
 
   const clockInMutation = useMutation({
-    mutationFn: async (data: { jobId?: number; category?: string }) => {
+    mutationFn: async (data: { jobId?: number; category?: string; estimateId?: number }) => {
       const res = await apiRequest('POST', '/api/time/clock-in', data);
       return res.json();
     },
@@ -186,7 +186,7 @@ export default function Home() {
   });
 
   const switchJobMutation = useMutation({
-    mutationFn: async (data: { jobId?: number; category?: string }) => {
+    mutationFn: async (data: { jobId?: number; category?: string; estimateId?: number }) => {
       const res = await apiRequest('POST', '/api/time/switch', data);
       return res.json();
     },
@@ -246,6 +246,14 @@ export default function Home() {
       clockInMutation.mutate({ jobId, category: 'job' });
     } else {
       switchJobMutation.mutate({ jobId, category: 'job' });
+    }
+  };
+
+  const handleEstimateSelect = (estimateId: number) => {
+    if (jobPickerMode === 'clockIn') {
+      clockInMutation.mutate({ estimateId, category: 'job' });
+    } else {
+      switchJobMutation.mutate({ estimateId, category: 'job' });
     }
   };
 
@@ -425,7 +433,38 @@ export default function Home() {
     })
     .slice(0, 5);
 
-  const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || (canSeeEstimates && estimatesLoading) || (isAdmin && invoicesLoading);
+  // Estimate helpers for technicians
+  const getEstimateDate = (est: Estimate): Date | null => {
+    if (est.scheduledDate) return new Date(est.scheduledDate as unknown as string);
+    return null;
+  };
+
+  const myEstimates = isTechnician
+    ? estimates.filter(est => {
+        const ids: string[] = Array.isArray(est.assignedEmployeeIds) ? (est.assignedEmployeeIds as string[]) : [];
+        return ids.includes(userId || '') && est.status !== 'archived';
+      })
+    : [];
+
+  const todayEstimates = myEstimates.filter(est => {
+    const date = getEstimateDate(est);
+    return date && isToday(date) && est.status !== 'approved';
+  });
+
+  const upcomingEstimates = myEstimates
+    .filter(est => {
+      const date = getEstimateDate(est);
+      return date && date > today && est.status !== 'approved';
+    })
+    .sort((a, b) => {
+      const da = getEstimateDate(a);
+      const db = getEstimateDate(b);
+      if (!da || !db) return 0;
+      return da.getTime() - db.getTime();
+    })
+    .slice(0, 5);
+
+  const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || estimatesLoading || (isAdmin && invoicesLoading);
 
   const statusStripItems: Array<{ icon: React.ElementType; value: number; label: string; route: string }> = [];
   
@@ -697,7 +736,7 @@ export default function Home() {
             <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
               Today
             </h2>
-            {todayJobs.length === 0 ? (
+            {todayJobs.length === 0 && todayEstimates.length === 0 ? (
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardContent className="py-8 text-center">
                   <Calendar className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
@@ -715,6 +754,14 @@ export default function Home() {
                     status={job.status}
                     isPaid={(job as any).isPaid || job.paymentStatus === 'paid'}
                     onClick={() => navigate(`/jobs/${job.id}`)}
+                  />
+                ))}
+                {todayEstimates.map(est => (
+                  <JobCard
+                    key={`est-${est.id}`}
+                    title={`${est.estimateNumber ? est.estimateNumber + ': ' : ''}${est.title}`}
+                    status={est.status as any}
+                    onClick={() => navigate(`/estimates/${est.id}`)}
                   />
                 ))}
               </div>
@@ -842,7 +889,7 @@ export default function Home() {
             </div>
           )}
 
-          {upcomingJobs.length > 0 && (
+          {(upcomingJobs.length > 0 || upcomingEstimates.length > 0) && (
             <div className="px-4 mb-6">
               <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
                 Upcoming
@@ -866,6 +913,26 @@ export default function Home() {
                       status={job.status}
                       isPaid={(job as any).isPaid || job.paymentStatus === 'paid'}
                       onClick={() => navigate(`/jobs/${job.id}`)}
+                    />
+                  );
+                })}
+                {upcomingEstimates.map(est => {
+                  const estDate = getEstimateDate(est);
+                  let dateLabel = '';
+                  if (estDate) {
+                    if (isTomorrow(estDate)) {
+                      dateLabel = 'Tomorrow';
+                    } else {
+                      dateLabel = format(estDate, 'EEE, MMM d');
+                    }
+                  }
+                  return (
+                    <JobCard
+                      key={`est-${est.id}`}
+                      title={`${est.estimateNumber ? est.estimateNumber + ': ' : ''}${est.title}`}
+                      subtitle={dateLabel}
+                      status={est.status as any}
+                      onClick={() => navigate(`/estimates/${est.id}`)}
                     />
                   );
                 })}
@@ -926,13 +993,44 @@ export default function Home() {
                       )}
                     </button>
                   ))}
+                {isTechnician && myEstimates
+                  .filter(est => {
+                    const estDate = getEstimateDate(est);
+                    if (!estDate || !isToday(estDate)) return false;
+                    if (est.status === 'approved') return false;
+                    if (jobSearchQuery !== '' && !est.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())) return false;
+                    return true;
+                  })
+                  .slice(0, 10)
+                  .map(est => (
+                    <button
+                      key={`est-${est.id}`}
+                      onClick={() => handleEstimateSelect(est.id)}
+                      disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                    >
+                      <FileText className="h-5 w-5 text-blue-400" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                          {est.estimateNumber ? `${est.estimateNumber}: ` : ''}{est.title}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Estimate</p>
+                      </div>
+                      {(clockInMutation.isPending || switchJobMutation.isPending) && (
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                      )}
+                    </button>
+                  ))}
                 {myJobs.filter(job => {
                   if (job.status === 'completed' || job.status === 'cancelled') return false;
                   const jobDate = getJobDate(job);
                   if (!jobDate || !isToday(jobDate)) return false;
                   if (jobSearchQuery !== '' && !job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())) return false;
                   return true;
-                }).length === 0 && (
+                }).length === 0 && (!isTechnician || myEstimates.filter(est => {
+                  const estDate = getEstimateDate(est);
+                  return estDate && isToday(estDate) && est.status !== 'approved';
+                }).length === 0) && (
                   <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
                     No jobs scheduled for today
                   </p>

@@ -427,9 +427,9 @@ export interface IStorage {
   getActiveTimeLogWithJob(userId: string, companyId: number): Promise<(TimeLog & { job?: { id: number; title: string | null } }) | undefined>;
   getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]>;
   getCompanyTimeLogsToday(companyId: number, date: string): Promise<TimeLog[]>;
-  clockIn(userId: string, companyId: number, jobId?: number, category?: string): Promise<TimeLog>;
+  clockIn(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<TimeLog>;
   clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
-  switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }>;
+  switchJob(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<{ ended: TimeLog; started: TimeLog }>;
   getJobLaborTotals(jobId: number): Promise<{ totalMinutes: number; laborByUser: { userId: string; minutes: number }[] }>;
   getTimeEntriesForUser(userId: string, companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null })[]>;
   getTimeEntriesForCompany(companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null; user?: { id: string; firstName: string | null; lastName: string | null } })[]>;
@@ -3813,7 +3813,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(timeLogs.clockInAt));
   }
   
-  async clockIn(userId: string, companyId: number, jobId?: number, category?: string): Promise<TimeLog> {
+  async clockIn(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<TimeLog> {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     
@@ -3823,7 +3823,8 @@ export class DatabaseStorage implements IStorage {
         userId,
         companyId,
         jobId: jobId || null,
-        category: (category as any) || (jobId ? 'job' : null),
+        estimateId: estimateId || null,
+        category: (category as any) || (jobId || estimateId ? 'job' : null),
         clockInAt: now,
         date: dateStr,
       })
@@ -3843,7 +3844,7 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
   
-  async switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }> {
+  async switchJob(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<{ ended: TimeLog; started: TimeLog }> {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     
@@ -3864,7 +3865,8 @@ export class DatabaseStorage implements IStorage {
         userId,
         companyId,
         jobId: jobId || null,
-        category: (category as any) || (jobId ? 'job' : null),
+        estimateId: estimateId || null,
+        category: (category as any) || (jobId || estimateId ? 'job' : null),
         clockInAt: now,
         date: dateStr,
       })
