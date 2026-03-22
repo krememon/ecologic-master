@@ -4,10 +4,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, Trash2, X } from "lucide-react";
+import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, UserMinus, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCan } from "@/hooks/useCan";
 import { formatPhone } from "@shared/phoneUtils";
 
@@ -139,8 +138,8 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
             profileImageUrl={employee.profileImageUrl}
             role={employee.role}
           />
-          {/* Name + badges — pr-16 reserves space for the absolutely positioned action buttons */}
-          <div className="flex-1 min-w-0 pr-16">
+          {/* Name + badges — pr-10 reserves space for the single kebab button */}
+          <div className="flex-1 min-w-0 pr-10">
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               <Badge className={getRoleBadgeColor(employee.role)} data-testid={`badge-role-${employee.id}`}>
                 {getRoleLabel(employee.role)}
@@ -160,63 +159,17 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
             </CardTitle>
           </div>
 
-          {/* Actions — absolutely positioned so they never compete for badge/name width */}
-          <div className="absolute top-0 right-0 flex items-center gap-0.5">
-            {canModify && (
-              <TooltipProvider>
-                <Tooltip>
-                  <AlertDialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}>
-                    <TooltipTrigger asChild>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-slate-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                          data-testid={`button-remove-${employee.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Remove from company</p>
-                    </TooltipContent>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Remove from company?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will immediately revoke access to your company. The user's account remains but they'll need a new company invite code to continue.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => {
-                            onRemove(employee.id);
-                            setIsRemoveDialogOpen(false);
-                          }}
-                          disabled={isRemoving}
-                          className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-                        >
-                          {isRemoving ? 'Removing...' : 'Remove'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            
+          {/* Actions — single kebab menu, absolutely positioned so it never competes for badge/name width */}
+          <div className="absolute top-0 right-0">
             {can('users.view') && (
               <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" data-testid={`button-kebab-${employee.id}`}>
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canModify && (
-                  <>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" data-testid={`button-kebab-${employee.id}`}>
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canModify && (
                     <DropdownMenuItem
                       onSelect={() => {
                         setSelectedRole(employee.role);
@@ -227,47 +180,82 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                       <Edit className="h-4 w-4 mr-2" />
                       Change Role
                     </DropdownMenuItem>
-                  </>
-                )}
-                
-                {canModify && (
-                  <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-                    <AlertDialogTrigger asChild>
-                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid={`menu-toggle-status-${employee.id}`}>
-                        {employee.status === 'ACTIVE' ? (
-                          <>
-                            <UserX className="h-4 w-4 mr-2" />
-                            Deactivate
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="h-4 w-4 mr-2" />
-                            Activate
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {employee.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} Employee
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to {employee.status === 'ACTIVE' ? 'deactivate' : 'activate'} {fullName}?
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleStatusToggle} disabled={isUpdating}>
-                          {isUpdating ? 'Updating...' : 'Confirm'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                  )}
+
+                  {canModify && (
+                    <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid={`menu-toggle-status-${employee.id}`}>
+                          {employee.status === 'ACTIVE' ? (
+                            <>
+                              <UserX className="h-4 w-4 mr-2" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="h-4 w-4 mr-2" />
+                              Activate
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {employee.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} Employee
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to {employee.status === 'ACTIVE' ? 'deactivate' : 'activate'} {fullName}?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleStatusToggle} disabled={isUpdating}>
+                            {isUpdating ? 'Updating...' : 'Confirm'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+
+                  {canModify && (
+                    <AlertDialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem
+                          onSelect={(e) => e.preventDefault()}
+                          className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                          data-testid={`menu-remove-${employee.id}`}
+                        >
+                          <UserMinus className="h-4 w-4 mr-2" />
+                          Remove from company
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remove from company?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will immediately revoke {fullName}'s access to your company. Their account remains but they'll need a new invite code to rejoin.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => {
+                              onRemove(employee.id);
+                              setIsRemoveDialogOpen(false);
+                            }}
+                            disabled={isRemoving}
+                            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                          >
+                            {isRemoving ? 'Removing...' : 'Remove'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </CardHeader>

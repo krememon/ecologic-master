@@ -1,0 +1,82 @@
+We are changing the Employees card actions in EcoLogic.
+
+GOAL
+Remove the standalone trash/delete icon from the employee card entirely, and instead add a new option inside the 3-dot menu: “Remove from company”.
+
+WHY
+This makes the UI cleaner and makes more sense than having a separate trash icon floating near the role pill.
+
+IMPORTANT
+- Remove the garbage/trash icon from the employee cards
+- Keep the 3-dot menu
+- Add “Remove from company” as a menu action
+- Do NOT redesign the card layout
+- Do NOT change anything else visually unless needed for this action/menu update
+- Preserve current role/status pill layout
+- Preserve landscape, portrait, phone, and desktop behavior
+
+REQUIRED BEHAVIOR
+Employee card actions should now be handled through the 3-dot menu only.
+
+Expected 3-dot menu options should include:
+- Change Role
+- Deactivate
+- Remove from company
+
+If there are role/permission rules already in place, preserve them. Example:
+- Owner should not be removable from company unless that is already intentionally supported somewhere else
+- Only users with correct permissions should see/use Remove from company
+- Do not expose unsafe actions if current RBAC should block them
+
+IMPLEMENTATION REQUIREMENTS
+1. Remove the standalone trash/delete icon/button from the employee card UI.
+2. Add a new menu item in the existing kebab/3-dot dropdown: “Remove from company”.
+3. Wire that menu action to the correct existing remove-member/delete-member/remove-from-company backend flow if one already exists.
+4. If there is no existing correct backend endpoint, implement the safest correct one for removing a member from the company.
+5. Preserve current deactivate behavior separately — “Deactivate” and “Remove from company” are NOT the same action.
+6. Add proper confirmation before removal, using the app’s existing modal/confirm pattern if one exists.
+7. After successful removal:
+   - remove the employee from the Employees list immediately
+   - refresh seat usage/count correctly
+   - refresh any related team/member counts
+8. Do NOT break:
+   - owner account
+   - current company membership rules
+   - RBAC
+   - invite/join flow
+   - employee deactivation flow
+
+PRODUCT LOGIC
+“Remove from company” should mean the user is no longer a member of that company.
+This is different from deactivating them.
+Use the existing source of truth for company membership.
+
+TECHNICAL NOTES
+- Reuse the existing 3-dot menu component if possible
+- Keep the menu clean and aligned
+- Make sure the new menu action works on iPad portrait too
+- If there is already a remove action hidden elsewhere, consolidate to one source of truth
+- Do NOT leave dead delete-icon code behind if it is no longer used
+- If there are protections for removing the last owner or removing yourself, preserve them
+
+CONFIRMATION / MODAL COPY
+Use sensible confirmation copy like:
+“Remove this employee from the company?”
+“This will remove their access to this company.”
+
+If there is better existing destructive-action copy in the app, reuse that style.
+
+DELIVERABLES
+1. Exact files changed
+2. What UI element was removed
+3. Where “Remove from company” was added in the menu
+4. What backend/company-membership action it triggers
+5. Confirmation that:
+   - trash icon is gone
+   - remove action now lives in the 3-dot menu
+   - deactivate still works separately
+   - employee disappears from list after removal
+   - seat count refreshes correctly
+   - RBAC/safety protections still work
+
+Please implement it now.
