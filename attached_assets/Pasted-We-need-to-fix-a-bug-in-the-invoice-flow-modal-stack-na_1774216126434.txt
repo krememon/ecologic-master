@@ -1,0 +1,84 @@
+We need to fix a bug in the invoice flow modal stack/navigation in EcoLogic.
+
+CURRENT BUG
+After I:
+1. Generate invoice
+2. Tap Next
+3. Then try to go back to the job card
+
+The modal gets stuck and it will NOT let me use:
+- Cancel
+- the X button
+
+So the user is getting trapped in that flow.
+
+GOAL
+After generating an invoice and moving forward with Next, the user must still be able to cleanly exit back to the job card using Cancel or the X button whenever that UI is supposed to allow it.
+
+IMPORTANT
+- Do NOT redesign the modal UI
+- Do NOT change the invoice flow unless needed to fix this stuck-state bug
+- Preserve invoice generation behavior
+- Preserve Next behavior
+- This is a modal/navigation/state fix
+- The user should never get trapped in the invoice flow
+
+REQUIRED BEHAVIOR
+After invoice generation:
+- Cancel should work
+- X button should work
+- both should cleanly close/dismiss the current invoice flow and return to the job card
+- there should be no dead overlay, blocked click layer, frozen pending state, or stale modal step preventing dismissal
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the full Generate Invoice PDF / Next flow and how modal state changes after tapping Next.
+2. Identify why Cancel and X stop working after progressing.
+3. Fix the root cause so dismissal works correctly in every step where it should.
+4. Check for issues like:
+   - stale loading state
+   - overlay intercepting clicks
+   - disabled buttons never being re-enabled
+   - nested modal state not resetting
+   - wrong z-index / invisible layer
+   - step state advancing without proper close handler
+   - onClose handler disconnected after Next
+5. Ensure closing returns the user to the correct job card/detail view.
+6. Preserve invoice data that should remain saved/generated.
+7. Make sure this works on iPhone/iPad/native and normal web behavior if shared.
+
+TECHNICAL NOTES
+- This sounds like a modal state machine / step flow bug
+- Check whether Next opens a second step/modal while the first overlay remains mounted
+- Check whether Cancel/X are visually present but blocked by another layer
+- Check whether `onOpenChange`, `onClose`, or dialog state is no longer bound after step transition
+- If there are multiple modal booleans, consolidate/fix ownership so one close action can fully dismiss the flow
+- Make sure Escape/overlay-close rules remain intentional, but explicit Cancel/X must work
+
+VALIDATION
+Please verify:
+1. Generate invoice
+2. Tap Next
+3. Tap Cancel
+4. It closes correctly back to the job card
+
+Also verify:
+5. Generate invoice
+6. Tap Next
+7. Tap X
+8. It closes correctly back to the job card
+
+And:
+9. No frozen overlay remains
+10. Reopening the invoice flow still works normally afterward
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why Cancel/X stopped working after Next
+3. What state/navigation/modal handling was fixed
+4. Confirmation that:
+   - Cancel now works
+   - X now works
+   - user returns cleanly to the job card
+   - invoice generation/Next flow still works
+
+Please implement it now.

@@ -216,13 +216,11 @@ export function JobInvoiceModal({
     setInvoiceBalanceDueCents(null);
     setInvoiceAmountPaidCents(null);
     setInvoiceTotalCents(null);
-    setInvoiceStatusLoading(true);
     setPreviewImageUrl(null);
     setPreviewLoading(false);
     setPreviewError(false);
     setLoadingExisting(false);
     setErrorMessage(null);
-    setPaymentLinkLoading(false);
     setToEmail(customerEmail || "");
     onOpenChange(false);
   };
