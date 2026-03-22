@@ -1,0 +1,113 @@
+We found the real issue. The native share flow is failing because the app is trying to `fetch()` the uploaded PDF URL directly inside the native app, and that fetch is failing:
+
+- `[pdf-share] native path — fetching: https://eco-logic-pjpell077.replit.app/uploads/Estimate_EST_000003.pdf`
+- `[pdf-share] Fetch failed: {}`
+
+So this is why it falls back / still misbehaves.
+
+We need to FIX the native PDF download/share pipeline at the root.
+
+GOAL
+On native iPhone, tapping the PDF download button should:
+1. stay inside the app
+2. successfully get the PDF bytes
+3. save them to a temp local file
+4. open the native Apple share sheet
+
+CURRENT ROOT BUG
+Direct native `fetch()` to the `/uploads/...pdf` URL is failing in the Capacitor app.
+
+MOST LIKELY CAUSES TO CHECK
+- the uploaded file URL is not accessible the way native fetch is calling it
+- missing headers/cookies/auth expectations
+- wrong fetch method for native Capacitor context
+- ATS / native networking / redirect issue
+- the app is trying to fetch a public file URL directly instead of using a controlled backend endpoint that returns the file cleanly
+
+CORRECT FIX
+Do NOT have the native app fetch `/uploads/...pdf` directly as its primary path.
+
+Instead, create a proper backend download endpoint for PDFs and have the app call THAT endpoint in a controlled way, then share the downloaded local file.
+
+REQUIRED IMPLEMENTATION
+1. Find the current native PDF share/download handler.
+2. Stop using direct native fetch of raw `/uploads/...pdf` URLs as the main iPhone path.
+3. Create or use a backend endpoint like one of these patterns:
+   - `GET /api/estimates/:id/pdf/download`
+   - `GET /api/invoices/:id/pdf/download`
+   - or a shared secure file-download endpoint
+4. That backend endpoint should:
+   - validate auth/company access
+   - resolve the real stored PDF path
+   - return the PDF bytes/file stream with correct headers
+   - send proper `Content-Type: application/pdf`
+   - send proper filename via `Content-Disposition`
+5. In the native app download handler:
+   - call the backend endpoint
+   - get the file data in a reliable native-safe way
+   - write it to a temporary local file with Filesystem
+   - invoke the native Share sheet on the local file
+6. Do NOT navigate to the upload URL
+7. Do NOT open Browser/Safari
+8. Do NOT rely on anchor tags for native
+9. Preserve web behavior separately if needed
+
+TECHNICAL NOTES
+- Since direct fetch to `/uploads/...pdf` is failing, the safer pattern is:
+  app → authenticated backend PDF endpoint → bytes/blob/base64 → local temp file → Share plugin
+- If standard `fetch()` is unreliable in this Capacitor native context, use the Capacitor HTTP plugin / native HTTP path if already available or appropriate
+- The key is that the native path must retrieve the file programmatically and never navigate to it
+- Add detailed logging for:
+  - requested endpoint
+  - response status
+  - content-type
+  - content-length if available
+  - file write success
+  - share invocation success
+- Make sure estimate and invoice PDFs both use the same shared downloader if possible
+
+DEBUGGING REQUIREMENTS
+Please log clearly:
+- exact endpoint being requested
+- response status code
+- whether response body was received
+- bytes length / base64 length
+- local file path written
+- whether share sheet opened successfully
+
+If the request fails, log:
+- status code
+- response text/body if available
+- whether it was a network error vs auth error vs file-not-found
+
+EXPECTED RESULT
+On native iPhone:
+- tap download
+- no external link opens
+- app successfully downloads the PDF through backend/native-safe path
+- temp local PDF file is written
+- native Apple share sheet opens
+- user can save to Files / Notes / etc.
+
+VALIDATION
+Please verify:
+1. Estimate PDF download works in native iPhone app
+2. Invoice PDF download works in native iPhone app
+3. No external browser opens
+4. Share sheet opens from inside app
+5. File name is correct
+6. Fetch no longer fails with `[pdf-share] Fetch failed: {}`
+
+DELIVERABLES
+1. Exact files changed
+2. What old native fetch path was failing
+3. What backend download endpoint was added/used
+4. What native request method is now used
+5. How the file is written locally before sharing
+6. Confirmation that:
+   - no external link opens
+   - native share sheet opens
+   - estimate + invoice PDFs both work
+   - fetch failure is resolved
+
+Please fix it now based on this actual fetch failure, not by changing the modal UI.

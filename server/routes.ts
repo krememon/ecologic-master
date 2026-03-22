@@ -8230,6 +8230,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/jobs/:jobId/invoice/pdf/download - Stream the latest invoice PDF for native app download
+  app.get('/api/jobs/:jobId/invoice/pdf/download', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Find the latest invoice PDF document for this job
+      const docs = await storage.getDocumentsByJob(jobId);
+      const invoiceDocs = docs
+        .filter(d => d.type === 'invoice' || d.category === 'Invoices')
+        .sort((a, b) => {
+          const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return db - da;
+        });
+
+      if (!invoiceDocs.length) {
+        return res.status(404).json({ message: "No invoice PDF found for this job" });
+      }
+
+      const latestDoc = invoiceDocs[0];
+      const pdfUrl = latestDoc.fileUrl; // e.g. "/uploads/Invoice_INV_xxx.pdf"
+
+      // Path traversal protection
+      const uploadsDir = path.resolve('uploads');
+      const rawPath = pdfUrl.startsWith('/') ? pdfUrl.substring(1) : pdfUrl;
+      const resolvedPath = path.resolve(rawPath);
+
+      if (
+        (!resolvedPath.startsWith(uploadsDir + path.sep) && resolvedPath !== uploadsDir) ||
+        (!rawPath.startsWith('uploads/') && !rawPath.startsWith('uploads\\'))
+      ) {
+        console.warn(`[pdf-download] Path traversal blocked: ${pdfUrl}`);
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+
+      if (!fs.existsSync(resolvedPath)) {
+        console.warn(`[pdf-download] Invoice PDF not found on disk: ${resolvedPath}`);
+        return res.status(404).json({ message: "PDF file not found on server. Please regenerate the invoice." });
+      }
+
+      const pdfBuffer = fs.readFileSync(resolvedPath);
+      const fileName = path.basename(resolvedPath);
+
+      console.log(`[pdf-download] Serving invoice PDF: ${fileName} (${pdfBuffer.length} bytes) for job ${jobId}`);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(pdfBuffer);
+    } catch (error) {
+      console.error("[pdf-download] Error serving invoice PDF:", error);
+      res.status(500).json({ message: "Failed to download invoice PDF" });
+    }
+  });
+
   // POST /api/jobs/:jobId/invoice/email - Send invoice PDF via email
   app.post('/api/jobs/:jobId/invoice/email', isAuthenticated, async (req: any, res) => {
     try {
@@ -10901,6 +10965,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching latest PDF:", error);
       res.status(500).json({ message: "Failed to fetch latest PDF" });
+    }
+  });
+
+  // GET /api/estimates/:id/pdf/download - Stream the latest estimate PDF for native app download
+  app.get('/api/estimates/:id/pdf/download', requirePerm('estimates.view'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      const latestDoc = await storage.getLatestEstimateDocument(estimateId, companyId);
+      if (!latestDoc) {
+        return res.status(404).json({ message: "No PDF found for this estimate. Please generate it first." });
+      }
+
+      const pdfUrl = latestDoc.fileUrl; // e.g. "/uploads/Estimate_EST_xxx.pdf"
+
+      // Path traversal protection
+      const uploadsDir = path.resolve('uploads');
+      const rawPath = pdfUrl.startsWith('/') ? pdfUrl.substring(1) : pdfUrl;
+      const resolvedPath = path.resolve(rawPath);
+
+      if (
+        (!resolvedPath.startsWith(uploadsDir + path.sep) && resolvedPath !== uploadsDir) ||
+        (!rawPath.startsWith('uploads/') && !rawPath.startsWith('uploads\\'))
+      ) {
+        console.warn(`[pdf-download] Estimate path traversal blocked: ${pdfUrl}`);
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+
+      if (!fs.existsSync(resolvedPath)) {
+        console.warn(`[pdf-download] Estimate PDF not found on disk: ${resolvedPath}`);
+        return res.status(404).json({ message: "PDF file not found on server. Please regenerate the estimate PDF." });
+      }
+
+      const pdfBuffer = fs.readFileSync(resolvedPath);
+      const fileName = path.basename(resolvedPath);
+
+      console.log(`[pdf-download] Serving estimate PDF: ${fileName} (${pdfBuffer.length} bytes) for estimate ${estimateId}`);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(pdfBuffer);
+    } catch (error) {
+      console.error("[pdf-download] Error serving estimate PDF:", error);
+      res.status(500).json({ message: "Failed to download estimate PDF" });
     }
   });
 

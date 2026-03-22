@@ -389,24 +389,27 @@ export async function scheduleLocalTestNotification(): Promise<LocalNotifResult>
 }
 
 /**
- * Fetch the PDF at `url` and present the native iOS share/save sheet so the
- * user can choose Files, AirDrop, Notes, etc. — entirely inside the app.
+ * Fetch the PDF and present the native iOS share/save sheet (Files, AirDrop, Notes…)
+ * entirely inside the app — never opens Safari or any external link on native.
  *
  * Strategy (in order):
- *  1. Fetch the PDF as a Blob, wrap in a File, then call navigator.share({ files })
- *     → Works natively inside iOS WKWebView without any Capacitor plugin sync.
- *     → Never opens Safari or any external page.
- *  2. If Web Share API isn't available (older native builds or Android without flag),
- *     fall back to Capacitor Filesystem + Share plugins.
- *  3. On non-native web: programmatic anchor-click download (unchanged).
+ *  1. On native: fetch via the dedicated authenticated API endpoint (Bearer token),
+ *     then try Web Share API (works in iOS WKWebView without plugin sync),
+ *     then fall back to Capacitor Filesystem + Share plugins.
+ *  2. On web: programmatic anchor-click download (unchanged).
  *
- * IMPORTANT: The native paths NEVER call window.open or navigate anywhere.
- * Only the web (non-native) path uses the anchor download which may open the
- * browser's built-in download manager — that is correct web behaviour.
+ * @param url            Web URL for the anchor-click download path (non-native).
+ * @param filename       Suggested filename for the downloaded/shared PDF.
+ * @param nativeEndpoint Optional relative API endpoint (e.g. "/api/jobs/3/invoice/pdf/download")
+ *                       used exclusively on native iOS/Android. This endpoint is auth-gated,
+ *                       returns the PDF bytes, and is called with the Bearer token so the
+ *                       native Capacitor WebView can authenticate the request correctly.
+ *                       If omitted, the raw `url` is used as a fallback for native too.
  */
 export async function nativePdfShare(
   url: string,
   filename: string,
+  nativeEndpoint?: string,
 ): Promise<boolean> {
   // Sanitise filename — preserve dots and dashes, replace everything else.
   const safeFilename = (filename || "document.pdf")
@@ -432,18 +435,53 @@ export async function nativePdfShare(
   }
 
   // ── Native path (iOS / Android) ──────────────────────────────────────────
-  // Resolve full absolute URL — native WebViews need the production base URL.
+  // Use the dedicated authenticated API endpoint if provided.
+  // Fall back to the raw URL only if no endpoint was specified.
   const baseUrl = getApiBaseUrl();
-  const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
 
-  console.log("[pdf-share] native path — fetching:", fullUrl);
+  // Build the absolute URL to fetch from
+  const rawTarget = nativeEndpoint ?? url;
+  const fullUrl = rawTarget.startsWith("http") ? rawTarget : `${baseUrl}${rawTarget}`;
+
+  // Include Bearer token so the native WebView's Capacitor fetch authenticates properly.
+  // The native app stores its session as "nativeSessionId" in localStorage — standard
+  // across all authenticated native API calls (see queryClient.ts getNativeAuthHeaders).
+  const nativeSid = (() => {
+    try { return localStorage.getItem("nativeSessionId"); } catch { return null; }
+  })();
+  const authHeaders: Record<string, string> = nativeSid
+    ? { Authorization: `Bearer ${nativeSid}` }
+    : {};
+
+  console.log(
+    `[pdf-share] native path — endpoint: ${fullUrl}`,
+    `| bearerPresent: ${!!nativeSid}`,
+    `| usingDedicated: ${!!nativeEndpoint}`,
+  );
 
   let pdfBlob: Blob;
   try {
-    const response = await fetch(fullUrl, { credentials: "include" });
-    if (!response.ok) throw new Error(`PDF fetch failed: ${response.status}`);
-    pdfBlob = new Blob([await response.arrayBuffer()], { type: "application/pdf" });
-    console.log("[pdf-share] Blob fetched, size:", pdfBlob.size);
+    const response = await fetch(fullUrl, {
+      credentials: "include",
+      headers: authHeaders,
+    });
+
+    console.log(
+      `[pdf-share] fetch response: status=${response.status}`,
+      `contentType=${response.headers.get("content-type")}`,
+      `contentLength=${response.headers.get("content-length")}`,
+    );
+
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "(unreadable)");
+      console.error(`[pdf-share] Fetch HTTP error ${response.status}:`, bodyText);
+      throw new Error(`PDF fetch failed: ${response.status}`);
+    }
+
+    const arrayBuf = await response.arrayBuffer();
+    console.log(`[pdf-share] Received ${arrayBuf.byteLength} bytes`);
+    pdfBlob = new Blob([arrayBuf], { type: "application/pdf" });
+    console.log("[pdf-share] Blob created, size:", pdfBlob.size);
   } catch (fetchErr) {
     // Fetch itself failed — log and bail. Do NOT open any external link.
     console.error("[pdf-share] Fetch failed:", fetchErr);

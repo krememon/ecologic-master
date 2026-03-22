@@ -435,7 +435,11 @@ export function JobInvoiceModal({
                         if (!pdfUrl) return;
                         setDownloadingPdf(true);
                         try {
-                          await nativePdfShare(pdfUrl, pdfFileName ?? "invoice.pdf");
+                          await nativePdfShare(
+                            pdfUrl,
+                            pdfFileName ?? "invoice.pdf",
+                            `/api/jobs/${jobId}/invoice/pdf/download`,
+                          );
                         } finally {
                           setDownloadingPdf(false);
                         }

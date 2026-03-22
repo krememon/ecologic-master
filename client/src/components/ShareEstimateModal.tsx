@@ -273,7 +273,11 @@ export function ShareEstimateModal({
                         if (!pdfUrl) return;
                         setDownloadingPdf(true);
                         try {
-                          await nativePdfShare(pdfUrl, pdfFileName ?? "estimate.pdf");
+                          await nativePdfShare(
+                            pdfUrl,
+                            pdfFileName ?? "estimate.pdf",
+                            `/api/estimates/${estimateId}/pdf/download`,
+                          );
                         } finally {
                           setDownloadingPdf(false);
                         }
