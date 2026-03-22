@@ -152,7 +152,7 @@ export default function OnboardingSubscription() {
     await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
 
     toast({ title: "Subscription active!", description: "Welcome to EcoLogic. You're all set." });
-    setLocation("/jobs", { replace: true });
+    setLocation("/", { replace: true });
   };
 
   // ── Apple purchase ──────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ export default function OnboardingSubscription() {
       localStorage.removeItem("onboardingIndustry");
       await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/jobs", { replace: true });
+      setLocation("/", { replace: true });
     } catch (error: any) {
       setIsLoading(false);
       toast({ title: "Error", description: error.message || "Failed to start trial. Please try again.", variant: "destructive" });
@@ -290,7 +290,7 @@ export default function OnboardingSubscription() {
         await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
         localStorage.removeItem("onboardingChoice");
         localStorage.removeItem("onboardingIndustry");
-        setLocation("/jobs", { replace: true });
+        setLocation("/", { replace: true });
       } else {
         toast({ title: "No active subscription", description: "We couldn't find an active subscription for your account.", variant: "destructive" });
       }

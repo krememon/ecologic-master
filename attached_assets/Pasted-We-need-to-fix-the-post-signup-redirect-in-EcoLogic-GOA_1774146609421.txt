@@ -1,0 +1,50 @@
+We need to fix the post-signup redirect in EcoLogic.
+
+GOAL
+After a user successfully creates a new owner account/company, they should land on the Home / Dashboard page — NOT the Jobs/Estimates page.
+
+IMPORTANT
+- Do NOT change any UI
+- Do NOT change the signup flow itself unless needed for the redirect
+- Do NOT affect login behavior unless this same incorrect redirect is being reused there unintentionally
+- This is specifically for the successful new owner account/company creation flow
+
+REQUIRED BEHAVIOR
+Current behavior:
+- New owner finishes account/company creation
+- App redirects them to Jobs/Estimates
+
+Correct behavior:
+- New owner finishes account/company creation
+- App redirects them to the Home / Dashboard page
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact success path after owner signup / company creation completes.
+2. Change the redirect target from Jobs/Estimates to the Home / Dashboard route.
+3. Preserve any required auth/session/bootstrap logic that happens before or during redirect.
+4. Make sure this works for the full first-time owner flow, including cases where company creation and session setup happen in sequence.
+5. Do NOT break:
+   - returning user login
+   - employee join flow
+   - invite acceptance flow
+   - paywall / subscription flow
+   - onboarding completion logic
+6. If there is shared redirect logic, make this change carefully so only the intended first-time owner success flow lands on Dashboard unless other flows are also supposed to.
+
+TECHNICAL NOTES
+- Reuse the app’s real dashboard/home route — do not invent a new path
+- If there is a central post-auth redirect helper, update it carefully
+- If jobs/estimates is being selected because of a default tab state, fix the root cause instead of stacking another redirect on top
+- Avoid redirect flicker / double navigation
+- Make sure browser refresh after signup still keeps the user in the correct authenticated area
+
+DELIVERABLES
+1. Exact files changed
+2. Exact redirect path before and after
+3. Where the redirect was being triggered
+4. Confirmation that:
+   - new owner signup now lands on Home / Dashboard
+   - Jobs/Estimates no longer opens first after account creation
+   - other auth flows were not unintentionally changed
+
+Please implement it now.
