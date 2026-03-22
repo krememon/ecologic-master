@@ -1865,7 +1865,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               You need to connect your Stripe account before you can send customers a payment link for online invoice payments.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
+          <div className="flex flex-col gap-2 pt-2">
             {(role === 'OWNER') && (
               <Button
                 className="w-full"
@@ -1885,7 +1885,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             <Button variant="outline" className="w-full" onClick={() => setShowStripeGateDialog(false)}>
               Cancel
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
