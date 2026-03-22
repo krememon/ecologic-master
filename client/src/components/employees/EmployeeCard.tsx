@@ -131,37 +131,37 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
   return (
     <Card className="hover:shadow-md transition-shadow" data-testid={`card-employee-${employee.id}`}>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          {/* Avatar + name/badges */}
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <EmployeeAvatar
-              firstName={employee.firstName}
-              lastName={employee.lastName}
-              profileImageUrl={employee.profileImageUrl}
-              role={employee.role}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                <Badge className={getRoleBadgeColor(employee.role)} data-testid={`badge-role-${employee.id}`}>
-                  {getRoleLabel(employee.role)}
-                </Badge>
-                <Badge 
-                  className={employee.isClockedIn
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                  }
-                  data-testid={`badge-status-${employee.id}`}
-                >
-                  {employee.isClockedIn ? 'Active' : 'Inactive'}
-                </Badge>
-              </div>
-              <CardTitle className="text-base leading-snug truncate" data-testid={`text-employee-name-${employee.id}`}>
-                {fullName}
-              </CardTitle>
+        <div className="flex items-start gap-3 relative">
+          {/* Avatar */}
+          <EmployeeAvatar
+            firstName={employee.firstName}
+            lastName={employee.lastName}
+            profileImageUrl={employee.profileImageUrl}
+            role={employee.role}
+          />
+          {/* Name + badges — pr-16 reserves space for the absolutely positioned action buttons */}
+          <div className="flex-1 min-w-0 pr-16">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+              <Badge className={getRoleBadgeColor(employee.role)} data-testid={`badge-role-${employee.id}`}>
+                {getRoleLabel(employee.role)}
+              </Badge>
+              <Badge 
+                className={employee.isClockedIn
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }
+                data-testid={`badge-status-${employee.id}`}
+              >
+                {employee.isClockedIn ? 'Active' : 'Inactive'}
+              </Badge>
             </div>
+            <CardTitle className="text-base leading-snug truncate" data-testid={`text-employee-name-${employee.id}`}>
+              {fullName}
+            </CardTitle>
           </div>
 
-          <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Actions — absolutely positioned so they never compete for badge/name width */}
+          <div className="absolute top-0 right-0 flex items-center gap-0.5">
             {canModify && (
               <TooltipProvider>
                 <Tooltip>

@@ -1,0 +1,54 @@
+We only need one small targeted fix now.
+
+GOAL
+On the Employees page in iPad portrait, stop the garbage/delete icon from overlapping the green “Technician” pill.
+
+IMPORTANT
+- Do NOT change the overall layout
+- Do NOT change card sizing
+- Do NOT change spacing anywhere else unless absolutely required for this exact overlap
+- Do NOT affect landscape
+- Do NOT affect phone/mobile
+- Do NOT affect other pages/components if they currently look correct
+
+ISSUE
+Right now on iPad portrait, the delete/trash icon is sitting on top of the role pill area for the employee card. The rest looks much better now — we just need that overlap fixed.
+
+REQUIRED FIX
+Adjust the employee card header/actions layout so the delete icon has its own safe space and does not collide with:
+- the role pill
+- the status pill
+- the 3-dot menu
+- the name/email content below
+
+IMPLEMENTATION REQUIREMENTS
+1. Inspect the employee card component only.
+2. Find why the delete icon is overlapping the role pill in iPad portrait.
+3. Make the smallest possible fix so the delete icon stays visually separated.
+4. Preserve the current look everywhere else.
+5. The fix should work for different role pill lengths, including “Technician”.
+6. Do NOT introduce a broad responsive change.
+
+TECHNICAL NOTES
+- This is likely a local positioning/flex/alignment issue in the card header
+- Check for absolute positioning, missing right padding, missing gap, or actions container width constraints
+- Give the actions area a stable reserved space so longer role pills cannot run into it
+- If needed, slightly constrain the pill/text container with `min-w-0` and keep the actions in a non-shrinking container
+- Keep the exact same visual style as much as possible
+
+EXPECTED RESULT
+In iPad portrait on Employees page:
+- trash icon no longer overlaps the Technician pill
+- pills and actions look cleanly separated
+- everything else stays the same
+
+DELIVERABLES
+1. Exact file changed
+2. Root cause of the overlap
+3. Exact small fix made
+4. Confirmation that:
+   - overlap is gone
+   - landscape still looks the same
+   - other breakpoints/pages were not changed unintentionally
+
+Please make only this narrow fix now.
