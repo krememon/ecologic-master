@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -37,12 +37,30 @@ export default function OnboardingSubscription() {
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  // Selected plan — native only; web always uses company plan
-  const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>("starter");
-
-  // Company plan (web path)
-  const companyPlanKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
+  // Company plan — derived from subscriptionPlan written at company creation (which maps from team size)
+  const companyPlanKey: PlanKey = (
+    user?.company?.subscriptionPlan && PLAN_ORDER.includes(user.company.subscriptionPlan as PlanKey)
+      ? user.company.subscriptionPlan
+      : "starter"
+  ) as PlanKey;
   const companyPlan = subscriptionPlans[companyPlanKey] || subscriptionPlans.starter;
+
+  // Selected plan — native only; initialised from companyPlanKey so it matches the owner's team-size choice
+  const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>(companyPlanKey);
+
+  // One-time sync: if user data loads after mount (async auth), update the native preselection
+  const nativePlanSynced = useRef(false);
+  useEffect(() => {
+    if (
+      !nativePlanSynced.current &&
+      user?.company?.subscriptionPlan &&
+      PLAN_ORDER.includes(user.company.subscriptionPlan as PlanKey)
+    ) {
+      setSelectedPlanKey(user.company.subscriptionPlan as PlanKey);
+      nativePlanSynced.current = true;
+      console.log("[onboarding-sub] native plan preselected from company size:", user.company.subscriptionPlan);
+    }
+  }, [user?.company?.subscriptionPlan]);
 
   const isNativeApp = nativeIos || nativeAndroid;
   const storeLabel = nativeIos ? "Apple" : nativeAndroid ? "Google Play" : null;

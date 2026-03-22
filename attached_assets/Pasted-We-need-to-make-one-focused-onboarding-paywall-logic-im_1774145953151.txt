@@ -1,0 +1,53 @@
+We need to make one focused onboarding/paywall logic improvement in EcoLogic.
+
+GOAL
+When a new owner creates an account and selects their company size during onboarding, the paywall screen should still show ALL subscription options, but it should automatically preselect the matching plan based on the company size they chose.
+
+IMPORTANT
+- Do NOT redesign the UI
+- Do NOT remove any plan options from the paywall
+- Do NOT change pricing copy/layout unless needed for existing logic
+- This is only about default selection / preselection behavior
+- Preserve all current billing flows for Stripe / Apple / Google / free trial / existing users
+
+BEHAVIOR REQUIRED
+Map the onboarding company-size choice to the default selected paywall plan:
+
+- If owner chose “1 person” → automatically preselect the $29.99 plan
+- If owner chose “2–5 people” → automatically preselect the $79.99 plan
+- If owner chose “6–10 people” → automatically preselect the $159.99 plan
+- If owner chose the highest size bucket / larger company option → automatically preselect the correct higher plan that matches our existing pricing structure
+
+The paywall must still display every available plan. The user can still manually switch to another option if they want. We are only setting the initial selected/default plan.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where the owner onboarding flow stores or passes the selected company size.
+2. Persist/pass that selected size into the paywall flow for first-time owner signup.
+3. On paywall screen load, use that size choice to set the initial selected plan.
+4. Only auto-preselect for the new owner signup flow where this value exists.
+5. Do NOT interfere with existing behavior for:
+   - returning users
+   - existing companies
+   - employee join flow
+   - upgrade/downgrade flows unless they already intentionally set a selected plan
+6. If no company size value exists, keep current default behavior unchanged.
+
+TECHNICAL NOTES
+- Reuse existing plan IDs / billing identifiers / product mappings already in the app
+- Avoid hardcoding duplicate pricing logic in multiple places if possible
+- Create a single mapping helper if needed:
+  companySizeSelection -> defaultPlan
+- Make sure the paywall selected state initializes correctly and does not get overwritten unexpectedly after render
+- If the selected plan is controlled by query params / state / props / API response, integrate cleanly with that existing source of truth rather than fighting it
+
+DELIVERABLES
+1. Exact files changed
+2. What company size values were found and how they map to the plans
+3. Exact logic path from onboarding → paywall
+4. Confirmation that:
+   - all plans still display
+   - the matching one is preselected automatically
+   - manual changing still works
+   - existing non-owner flows were not affected
+
+Please implement it now.
