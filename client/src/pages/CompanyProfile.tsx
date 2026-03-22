@@ -405,7 +405,7 @@ export default function CompanyProfile() {
                 id="addressLine2"
                 value={formData.addressLine2 || ""}
                 onChange={(e) => handleChange('addressLine2', e.target.value || null)}
-                placeholder="Enter address line 2"
+                placeholder="Optional"
               />
             </div>
 
@@ -434,7 +434,7 @@ export default function CompanyProfile() {
                   id="postalCode"
                   value={formData.postalCode || ""}
                   onChange={(e) => handleChange('postalCode', e.target.value || null)}
-                  placeholder="Enter ZIP code"
+                  placeholder="Enter ZIP"
                 />
               </div>
               <div className="space-y-2">
