@@ -1,0 +1,118 @@
+We need to fix a critical payment-routing issue in EcoLogic.
+
+CRITICAL BUG
+Online invoice payments are currently going to EcoLogic’s Stripe/bank account instead of the contractor/company’s connected Stripe account.
+
+That is wrong.
+
+GOAL
+When a contractor/company gets paid through an online invoice in EcoLogic, the money must go to THAT contractor/company’s connected Stripe account / bank account — not mine.
+
+CURRENT INTENDED PRODUCT LOGIC
+- Each company/contractor should connect their own Stripe account
+- If they have NOT connected Stripe yet, the app should route them to the Stripe payouts/connect area in Customize so they can connect it
+- Once connected, online invoice payments must be processed into that contractor/company’s Stripe destination, not EcoLogic’s default account
+
+IMPORTANT
+- This is a real money-routing fix
+- Do NOT do a fake frontend-only change
+- Do NOT leave any path where invoice payments silently go to EcoLogic instead of the contractor
+- Preserve the existing “connect Stripe first” gating if it already exists
+- We need the correct Stripe Connect / payout architecture enforced as source of truth
+
+REQUIRED BEHAVIOR
+1. Company has connected Stripe:
+   - customer pays online invoice
+   - payment is routed to that company’s connected Stripe account
+   - contractor receives the funds in their Stripe-connected payout flow
+
+2. Company has NOT connected Stripe:
+   - they should NOT be able to route online invoice money into EcoLogic’s account
+   - app should block/paywall that specific payment flow appropriately
+   - app should send them to the Stripe payouts/connect setup in Customize (or the correct connect flow already in app)
+
+3. There should be no fallback where invoice payments default to EcoLogic’s Stripe account unless that is part of an intentional platform-fee architecture and the contractor’s funds are still correctly routed via Stripe Connect
+
+CORE TASK
+Audit and fix the entire invoice online payment path so the payment destination is the contractor/company’s connected Stripe account.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact backend flow used when a customer opens an online invoice payment link and pays.
+2. Identify where Stripe PaymentIntents / Checkout Sessions / invoice payment intents are currently being created.
+3. Find how the target Stripe account is currently being resolved.
+4. Fix it so the source of truth is the company/contractor’s connected Stripe account, not EcoLogic’s platform account.
+5. Reuse the existing company Stripe connect/account linkage already stored in the DB if that exists.
+6. If Stripe Connect is already partially implemented, make invoice payments use it correctly.
+7. If there are multiple payment flows, fix ALL invoice online payment paths, including:
+   - public invoice payment page
+   - copied payment link flow
+   - any invoice pay button creating Stripe sessions/intents
+8. Enforce the missing-account rule:
+   - if no connected Stripe account exists for the company, do not let invoice online payment proceed to EcoLogic’s account
+   - route the contractor user to the Stripe payouts/connect setup
+9. Preserve the existing user experience where possible, but correctness of money routing is the top priority.
+10. Make sure this works for real funds routing, not just UI state.
+
+STRIPE/ARCHITECTURE NOTES
+Please verify and use the correct Stripe Connect architecture already intended in EcoLogic.
+
+Need to determine whether the app should use:
+- direct charges
+- destination charges
+- separate charges and transfers
+
+Use whatever architecture matches the existing platform design, but the end result must be:
+- contractor/company gets their funds
+- EcoLogic does NOT accidentally receive full invoice payments
+
+If EcoLogic takes a platform fee anywhere, preserve only the intentional fee logic. Do NOT let the whole invoice amount land in EcoLogic by mistake.
+
+THINGS TO CHECK CAREFULLY
+- PaymentIntent creation parameters
+- Checkout Session creation parameters
+- `stripeAccount` usage / connected account context
+- transfer_data / destination account logic
+- application_fee_amount / platform fee logic if applicable
+- public invoice payment route/controller
+- company billing/connect status lookup
+- what happens when companyStripeAccountId is missing
+- whether invoice payments are using the same connected-account routing as any other contractor payment flow already built
+
+BLOCKING / SAFETY RULES
+If the company has not connected Stripe:
+- do not allow online invoice payment to silently continue into EcoLogic’s account
+- show the correct blocked/setup-required behavior
+- send contractor user to the Stripe payouts/connect setup flow
+
+If a customer is already on a public invoice pay link and the contractor has no connected Stripe:
+- fail safely and clearly
+- do NOT process payment into EcoLogic’s account
+
+VALIDATION
+Please test all of this carefully:
+1. Company A with connected Stripe sends invoice
+2. Customer pays online
+3. Funds route to Company A’s Stripe-connected destination
+
+4. Company B without connected Stripe tries to use online invoice payment
+5. App blocks that path correctly
+6. Contractor is sent to Stripe connect/payouts setup
+7. No money routes to EcoLogic by mistake
+
+8. Existing public invoice pay page still works for connected companies
+9. Payment status updates still sync correctly after successful payment
+10. EcoLogic platform account does not receive contractor invoice funds unless explicitly intended as a platform fee
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why payments were routing to EcoLogic
+3. What Stripe payment creation logic was changed
+4. How the connected contractor/company Stripe account is now resolved
+5. What happens when no connected Stripe account exists
+6. Confirmation that:
+   - invoice payments now route to the contractor/company’s Stripe account
+   - missing Stripe connection blocks the payment path correctly
+   - no accidental fallback to EcoLogic account remains
+   - payment status syncing still works
+
+Please implement this carefully now. This is a high-priority money-routing fix.

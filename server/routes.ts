@@ -11592,6 +11592,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
 
+      const isSubcontractJobPublicGet = invoice.jobId
+        ? !!(await stripeConnectService.getAcceptedReferralForJob(invoice.jobId))
+        : false;
+      const onlinePaymentAvailable = isSubcontractJobPublicGet
+        || !!(company?.stripeConnectAccountId && company?.stripeConnectChargesEnabled);
+
       res.json({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -11605,6 +11611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dueDate: invoice.dueDate,
         issueDate: invoice.issueDate,
         lineItems: invoice.lineItems,
+        onlinePaymentAvailable,
         company: {
           name: company?.name || 'Unknown Company',
           email: company?.email || null,
@@ -11685,6 +11692,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const publicConnectedAccountId = !isSubcontractJobPublic && company?.stripeConnectAccountId && company?.stripeConnectChargesEnabled
         ? company.stripeConnectAccountId
         : null;
+
+      if (!isSubcontractJobPublic && !publicConnectedAccountId) {
+        return res.status(402).json({
+          message: "Online card payments are not available for this invoice. Please contact the contractor directly to arrange payment.",
+          code: 'STRIPE_NOT_CONNECTED',
+        });
+      }
 
       console.log('[create-intent public]', {
         invoiceIdParam: invoiceId,
@@ -16235,6 +16249,13 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       const connectedAccountId = !isSubcontractJob && company.stripeConnectAccountId && company.stripeConnectChargesEnabled
         ? company.stripeConnectAccountId
         : null;
+
+      if (!isSubcontractJob && !connectedAccountId) {
+        return res.status(402).json({
+          message: "Online card payments are not available. Please connect a Stripe account in Settings → Payouts to accept card payments.",
+          code: 'STRIPE_NOT_CONNECTED',
+        });
+      }
 
       console.log('[create-intent]', {
         invoiceIdParam: invoiceId,

@@ -51,6 +51,7 @@ interface PublicInvoiceData {
     zip: string | null;
   } | null;
   jobTitle: string | null;
+  onlinePaymentAvailable?: boolean;
 }
 
 function formatCurrency(cents: number): string {
@@ -72,6 +73,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [invoice, setInvoice] = useState<PublicInvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -197,6 +199,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     if (isCheckoutLoading || !invoice) return;
     if (partialEnabled && !isPublicPartialValid) return;
     setIsCheckoutLoading(true);
+    setPaymentError(null);
     try {
       const res = await fetch('/api/public/invoices/create-intent', {
         method: 'POST',
@@ -217,7 +220,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
       setIntentAmountCents(data.amountCents);
       setShowPaymentForm(true);
     } catch (err: any) {
-      setError(err.message || 'Payment failed');
+      setPaymentError(err.message || 'Payment failed');
     } finally {
       setIsCheckoutLoading(false);
     }
@@ -579,59 +582,82 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
 
           {!isPaid && invoice.totalCents > 0 && !showPaymentForm && (
             <div className="px-8 pb-8 md:px-10 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium text-gray-700">Partial Payment</Label>
-                <Switch
-                  checked={partialEnabled}
-                  onCheckedChange={(checked) => {
-                    setPartialEnabled(checked);
-                    if (!checked) setPartialAmountStr("");
-                  }}
-                />
-              </div>
-              {partialEnabled && (
-                <div className="space-y-1">
-                  <Input
-                    type="number"
-                    min="0.50"
-                    step="0.01"
-                    max={(balanceDue / 100).toFixed(2)}
-                    placeholder="Amount in dollars"
-                    value={partialAmountStr}
-                    onChange={(e) => setPartialAmountStr(e.target.value)}
-                    className="h-12 text-lg"
-                  />
-                  {partialAmountStr && !isPublicPartialValid && (
-                    <p className="text-xs text-red-500">
-                      {publicPartialCents < 50
-                        ? "Minimum payment is $0.50"
-                        : `Maximum is ${formatCurrency(balanceDue)}`}
-                    </p>
-                  )}
-                  {partialAmountStr && isPublicPartialValid && (
-                    <p className="text-xs text-gray-500">
-                      Remaining after payment: {formatCurrency(balanceDue - publicPartialCents)}
-                    </p>
-                  )}
+              {invoice.onlinePaymentAvailable === false ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-center space-y-1">
+                  <p className="text-sm font-semibold text-amber-800">Online card payments are not available</p>
+                  <p className="text-sm text-amber-700">
+                    Please contact {invoice.company?.name || 'the contractor'} directly to arrange payment.
+                    {invoice.company?.phone && (
+                      <> Call <a href={`tel:${invoice.company.phone}`} className="underline font-medium">{invoice.company.phone}</a>.</>
+                    )}
+                    {!invoice.company?.phone && invoice.company?.email && (
+                      <> Email <a href={`mailto:${invoice.company.email}`} className="underline font-medium">{invoice.company.email}</a>.</>
+                    )}
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium text-gray-700">Partial Payment</Label>
+                    <Switch
+                      checked={partialEnabled}
+                      onCheckedChange={(checked) => {
+                        setPartialEnabled(checked);
+                        if (!checked) setPartialAmountStr("");
+                      }}
+                    />
+                  </div>
+                  {partialEnabled && (
+                    <div className="space-y-1">
+                      <Input
+                        type="number"
+                        min="0.50"
+                        step="0.01"
+                        max={(balanceDue / 100).toFixed(2)}
+                        placeholder="Amount in dollars"
+                        value={partialAmountStr}
+                        onChange={(e) => setPartialAmountStr(e.target.value)}
+                        className="h-12 text-lg"
+                      />
+                      {partialAmountStr && !isPublicPartialValid && (
+                        <p className="text-xs text-red-500">
+                          {publicPartialCents < 50
+                            ? "Minimum payment is $0.50"
+                            : `Maximum is ${formatCurrency(balanceDue)}`}
+                        </p>
+                      )}
+                      {partialAmountStr && isPublicPartialValid && (
+                        <p className="text-xs text-gray-500">
+                          Remaining after payment: {formatCurrency(balanceDue - publicPartialCents)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <Button
+                    onClick={handlePay}
+                    disabled={isCheckoutLoading || (partialEnabled && !isPublicPartialValid)}
+                    className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  >
+                    {isCheckoutLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-5 w-5 mr-2" />
+                        Pay {formatCurrency(publicPaymentAmount)}
+                      </>
+                    )}
+                  </Button>
+                  {paymentError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 flex items-start gap-2">
+                      <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-red-700">{paymentError}</p>
+                    </div>
+                  )}
+                </>
               )}
-              <Button
-                onClick={handlePay}
-                disabled={isCheckoutLoading || (partialEnabled && !isPublicPartialValid)}
-                className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-              >
-                {isCheckoutLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Pay {formatCurrency(publicPaymentAmount)}
-                  </>
-                )}
-              </Button>
             </div>
           )}
 
