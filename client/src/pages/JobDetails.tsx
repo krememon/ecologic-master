@@ -657,8 +657,8 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </h1>
         </div>
         
-        {/* Row 2: Action Bar */}
-        <div className="flex items-center gap-2 flex-wrap pl-1">
+        {/* Row 2: Action Bar — single horizontal row, no wrapping */}
+        <div className="flex items-center gap-1.5 pl-1 overflow-x-auto">
           {/* Invoice Button */}
           {canCreatePaymentLink && (
             <Button
@@ -666,7 +666,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               variant="outline"
               onClick={handleInvoiceClick}
               disabled={invoiceLoading}
-              className="h-8 px-3 text-sm"
+              className="h-8 px-2.5 text-sm shrink-0 whitespace-nowrap"
             >
               {invoiceLoading ? (
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -677,15 +677,15 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </Button>
           )}
           
-          {/* Status Badge - Cancelled takes priority over Pay/Paid */}
+          {/* Status Badge / Pay Button — Cancelled takes priority */}
           {job.status === 'cancelled' ? (
-            <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium">
+            <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium shrink-0 whitespace-nowrap">
               <X className="h-3.5 w-3.5" />
               Cancelled
             </Badge>
           ) : canCreatePaymentLink && (
             isPaid ? (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium">
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium shrink-0 whitespace-nowrap">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Paid
               </Badge>
@@ -694,7 +694,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 size="sm"
                 onClick={handlePayInvoice}
                 disabled={paymentLoading}
-                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-sm"
+                className="bg-green-600 hover:bg-green-700 text-white h-8 px-2.5 text-sm shrink-0 whitespace-nowrap"
               >
                 {paymentLoading ? (
                   <>
@@ -711,14 +711,14 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             )
           )}
           
-          {/* Send Invoice Button - copies payment link to clipboard */}
+          {/* Send Invoice Button — copies payment link to clipboard */}
           {canCreatePaymentLink && job.status !== 'cancelled' && (
             <Button
               size="sm"
               variant="outline"
               onClick={handleSendInvoiceLink}
               disabled={sendLinkLoading}
-              className="h-8 px-3 text-sm"
+              className="h-8 px-2.5 text-sm shrink-0 whitespace-nowrap"
             >
               {sendLinkLoading ? (
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -729,11 +729,11 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </Button>
           )}
 
-          {/* Overflow Menu for Edit/Delete */}
+          {/* Overflow Menu — fixed-width, anchored to far right */}
           {(canEditJob || isAdmin) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 px-2">
+                <Button variant="outline" size="sm" className="h-8 w-8 px-0 shrink-0 ml-auto">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
