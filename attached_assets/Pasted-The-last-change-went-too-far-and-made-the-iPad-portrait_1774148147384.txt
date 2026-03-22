@@ -1,0 +1,74 @@
+The last change went too far and made the iPad portrait Employees layout worse. We need to REVERT the broad responsive/layout change and make only a targeted fix for the actual UI issues visible in iPad portrait.
+
+GOAL
+On the Employees page in iPad portrait, keep the same overall layout we already had, but fix the card content so it fits cleanly.
+
+WHAT WENT WRONG
+The previous change altered the overall tablet layout and now the page looks broken/squished. That is NOT what we want.
+
+DO THIS INSTEAD
+Revert the broad iPad portrait responsive/layout change, then apply a narrow fix only for the Employees cards/filter content issues in portrait.
+
+ACTUAL ISSUES TO FIX
+On iPad portrait:
+1. Long email text should stay properly inside the employee card
+2. The trash/delete icon and 3-dot menu should not be smushed into the card content
+3. Role/status pills and top-right actions need proper spacing/alignment
+4. Card content should feel clean and balanced without overflowing or awkward wrapping
+5. The page should still look like the same Employees page layout — not a different UI mode
+
+IMPORTANT
+- Do NOT redesign the page
+- Do NOT change the overall sidebar/content structure
+- Do NOT change global iPad/tablet breakpoints unless absolutely necessary
+- Do NOT break landscape
+- Do NOT break phone/mobile
+- This should be a targeted Employees-page/card layout fix, not a global responsive overhaul
+
+IMPLEMENTATION REQUIREMENTS
+1. Revert the broad change that forced iPad portrait into a different overall layout treatment.
+2. Inspect the Employees page card component and its internal layout rules.
+3. Fix the employee card content so portrait iPad handles:
+   - long names
+   - long emails
+   - top-right action icons
+   - role/status pills
+4. Ensure the email stays inside the card cleanly by using the correct approach, such as:
+   - proper width constraints
+   - min-width: 0 where needed
+   - overflow-wrap / word-break only if truly needed
+   - text truncation/ellipsis if that matches current app style
+5. Ensure the delete icon and kebab/dots menu are aligned in a stable top-right actions area and are not overlapping pills/text.
+6. Keep the two-card row if it still fits correctly on iPad portrait, but only if the cards themselves render cleanly.
+7. If the filter row also needs a tiny portrait-specific tweak for spacing, make it minimal and local to this page.
+
+TECHNICAL NOTES
+- This sounds like a card internal flex/grid sizing problem, not a whole-app breakpoint problem
+- Check for missing `min-w-0`, bad flex shrink/grow behavior, absolute positioning collisions, or card header layout issues
+- If email links are causing overflow, constrain the text container rather than changing the whole page layout
+- Top-right actions should have a dedicated container/column so they do not collide with pills or text
+- Preserve existing visual style
+
+EXPECTED RESULT
+In iPad portrait on Employees page:
+- email text sits properly inside the card
+- action icons are not jammed into the content
+- pills/text/actions have proper spacing
+- overall page looks like the original correct layout, just cleaned up
+- landscape still looks good
+
+DELIVERABLES
+1. Exact files changed
+2. What was reverted from the previous change
+3. Root cause inside the employee card layout
+4. Exact targeted fix made for:
+   - email overflow/placement
+   - action icon spacing
+   - pills/header spacing
+5. Confirmation that:
+   - iPad portrait Employees page is fixed
+   - landscape still looks correct
+   - phone/mobile was not affected
+   - no broad global layout hack remains
+
+Please implement this carefully now.

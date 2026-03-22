@@ -155,7 +155,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                   {employee.isClockedIn ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
-              <CardTitle className="text-lg leading-snug" data-testid={`text-employee-name-${employee.id}`}>
+              <CardTitle className="text-base leading-snug truncate" data-testid={`text-employee-name-${employee.id}`}>
                 {fullName}
               </CardTitle>
             </div>
@@ -276,22 +276,22 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
         {employee.email && (
           <a 
             href={`mailto:${employee.email}`}
-            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer min-w-0"
             data-testid={`link-email-${employee.id}`}
           >
-            <Mail className="h-4 w-4" />
-            {employee.email}
+            <Mail className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{employee.email}</span>
           </a>
         )}
         
         {employee.phone && (
           <a 
             href={`tel:${employee.phone}`}
-            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer min-w-0"
             data-testid={`link-phone-${employee.id}`}
           >
-            <Phone className="h-4 w-4" />
-            {formatPhone(employee.phone)}
+            <Phone className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{formatPhone(employee.phone)}</span>
           </a>
         )}
         
@@ -307,11 +307,11 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                 window.open(`https://maps.google.com/?q=${encodedAddress}`, '_blank');
               }
             }}
-            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
+            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left w-full min-w-0"
             data-testid={`link-address-${employee.id}`}
           >
-            <MapPin className="h-4 w-4" />
-            {address}
+            <MapPin className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{address}</span>
           </button>
         )}
         
