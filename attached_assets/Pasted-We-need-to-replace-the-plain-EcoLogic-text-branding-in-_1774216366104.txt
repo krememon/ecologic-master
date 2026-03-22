@@ -1,0 +1,75 @@
+We need to replace the plain “EcoLogic” text branding in the invoice/payment/public document view with the actual EcoLogic transparent logo image asset.
+
+GOAL
+Anywhere this invoice/public payment page currently shows the plain black “EcoLogic” text at the top, replace it with my actual transparent EcoLogic image/logo instead.
+
+IMPORTANT
+- Use the provided transparent EcoLogic image asset as the brand mark
+- Do NOT keep the plain text logo there
+- Do NOT redesign the page layout
+- Do NOT stretch or distort the logo
+- Keep it crisp and centered
+- Preserve the existing clean look of the page
+- Make sure it works on mobile, especially iPhone/iPad
+- Use the real uploaded transparent image, not a recreated text version
+
+WHERE TO CHANGE IT
+On the invoice/public payment page (and any shared public invoice/estimate PDF/web view header if they use the same branding block), the current top branding area that says:
+- EcoLogic
+- Professional contractor management
+
+should use the actual EcoLogic logo image instead of the text wordmark.
+
+DESIRED RESULT
+- Top header uses the transparent EcoLogic image/logo
+- Logo is properly sized and centered
+- No weird cropping
+- No black background issues
+- No stretched aspect ratio
+- It should look premium and consistent with the brand
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where the current public invoice/payment page header renders the plain “EcoLogic” text.
+2. Replace that text-based branding with the actual transparent logo image asset.
+3. Preserve the overall header spacing and alignment unless a tiny adjustment is needed for the image to fit cleanly.
+4. Keep the subtitle only if it still looks intentional with the image. If it looks awkward, remove or adjust it carefully.
+5. Make sure the image uses the correct object-fit / contain behavior.
+6. Ensure the logo renders correctly on:
+   - invoice public pay page
+   - invoice preview/web view if shared
+   - any estimate/invoice public document page using the same branding header
+7. Do NOT break PDF generation if that same header is reused there.
+8. If the asset needs to be stored in a shared/public-safe location, wire it correctly.
+9. Avoid using CSS that makes the transparent logo disappear against the page.
+10. If there are separate headers for web view vs generated PDF, update both as needed so branding is consistent.
+
+TECHNICAL NOTES
+- Use the actual provided logo file
+- Preserve transparency
+- Do NOT convert it into a dark/black box
+- Prefer `object-contain` with explicit max height/width
+- Make sure retina/mobile rendering stays sharp
+- If the public page and generated PDF use different rendering pipelines, update both branding sources if needed
+- If the current text logo is hardcoded in multiple places, consolidate if possible
+
+VALIDATION
+Please verify:
+1. Public invoice/payment page now shows the actual EcoLogic transparent logo image
+2. Logo is centered and not distorted
+3. Background remains clean
+4. PDF/public page still works
+5. Mobile layout still looks good
+6. No plain text “EcoLogic” logo remains in that header where this shared branding should now be image-based
+
+DELIVERABLES
+1. Exact files changed
+2. Where the old text logo was removed
+3. What image asset/path is now used
+4. Whether subtitle text was kept or adjusted
+5. Confirmation that:
+   - actual transparent logo image is now used
+   - it renders cleanly on public invoice/payment view
+   - it does not distort/crop badly
+   - PDF/public flows still work
+
+Please implement it now.
