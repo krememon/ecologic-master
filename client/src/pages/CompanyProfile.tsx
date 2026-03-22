@@ -293,7 +293,6 @@ export default function CompanyProfile() {
                 id="name"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                placeholder="Your Company Name"
                 required
               />
             </div>
@@ -366,7 +365,6 @@ export default function CompanyProfile() {
                   id="phone"
                   value={formData.phone || ""}
                   onChange={(e) => handleChange('phone', formatPhoneInput(e.target.value) || null)}
-                  placeholder="555-123-4567"
                   inputMode="numeric"
                   autoComplete="tel"
                 />
@@ -378,7 +376,6 @@ export default function CompanyProfile() {
                   type="email"
                   value={formData.email || ""}
                   onChange={(e) => handleChange('email', e.target.value || null)}
-                  placeholder="contact@company.com"
                 />
               </div>
             </div>
@@ -395,7 +392,6 @@ export default function CompanyProfile() {
                   handleChange('postalCode', addr.postalCode || null);
                   handleChange('country', addr.country || null);
                 }}
-                placeholder="123 Main Street"
               />
             </div>
 
@@ -405,7 +401,6 @@ export default function CompanyProfile() {
                 id="addressLine2"
                 value={formData.addressLine2 || ""}
                 onChange={(e) => handleChange('addressLine2', e.target.value || null)}
-                placeholder="Suite 100"
               />
             </div>
 
@@ -416,7 +411,6 @@ export default function CompanyProfile() {
                   id="city"
                   value={formData.city || ""}
                   onChange={(e) => handleChange('city', e.target.value || null)}
-                  placeholder="City"
                 />
               </div>
               <div className="space-y-2">
@@ -425,7 +419,6 @@ export default function CompanyProfile() {
                   id="state"
                   value={formData.state || ""}
                   onChange={(e) => handleChange('state', e.target.value || null)}
-                  placeholder="CA"
                 />
               </div>
               <div className="space-y-2">
@@ -434,7 +427,6 @@ export default function CompanyProfile() {
                   id="postalCode"
                   value={formData.postalCode || ""}
                   onChange={(e) => handleChange('postalCode', e.target.value || null)}
-                  placeholder="12345"
                 />
               </div>
               <div className="space-y-2">
@@ -443,7 +435,6 @@ export default function CompanyProfile() {
                   id="country"
                   value={formData.country || ""}
                   onChange={(e) => handleChange('country', e.target.value || null)}
-                  placeholder="US"
                 />
               </div>
             </div>
@@ -454,7 +445,6 @@ export default function CompanyProfile() {
                 id="licenseNumber"
                 value={formData.licenseNumber || ""}
                 onChange={(e) => handleChange('licenseNumber', e.target.value || null)}
-                placeholder="e.g., CA-123456"
               />
             </div>
 
@@ -464,7 +454,6 @@ export default function CompanyProfile() {
                 id="defaultFooterText"
                 value={formData.defaultFooterText || ""}
                 onChange={(e) => handleChange('defaultFooterText', e.target.value || null)}
-                placeholder="Licensed & insured. Thank you for your business."
                 rows={3}
               />
               <p className="text-xs text-slate-500 dark:text-slate-400">

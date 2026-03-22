@@ -1,0 +1,60 @@
+We need to remove all placeholder text from the entire Company Profile page in EcoLogic.
+
+GOAL
+Get rid of all placeholder text on the full Company Profile page.
+
+EXAMPLES
+- Phone field should NOT show placeholder text
+- Email field should NOT show placeholder text
+- Address Line 1 should NOT show placeholder text
+- Address Line 2 should NOT show placeholder text
+- City / State / ZIP / Country should NOT show placeholder text
+- License Number should NOT show placeholder text
+- Default Footer Text should NOT show placeholder text
+
+In short:
+all labels stay
+all placeholders go away
+
+IMPORTANT
+- Do NOT redesign the page
+- Do NOT change labels
+- Do NOT change spacing unless removing placeholders naturally affects field appearance
+- Do NOT change saved values or form logic
+- Do this for the whole Company Profile page, not just the visible fields in the screenshot
+
+REQUIRED BEHAVIOR
+- Empty inputs should appear empty with no example text inside them
+- Existing saved values should still populate normally
+- Labels above/next to the fields remain as the field identifier
+- This should apply to every placeholder on the Company Profile page
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the full Company Profile page/component.
+2. Remove placeholder text from every input/textarea/select on that page.
+3. Keep current labels exactly as they are.
+4. Preserve all existing save/update behavior.
+5. Preserve validation behavior.
+6. Preserve autofill/browser behavior as much as possible.
+7. Make sure no placeholder text remains anywhere on that page.
+
+TECHNICAL NOTES
+- This should likely just be removing `placeholder` props/attributes from the Company Profile form controls
+- If placeholders are coming from a shared form config for this page, remove them there cleanly
+- Do NOT affect placeholders on unrelated pages unless they intentionally share this exact Company Profile config
+- If any select/dropdown fake placeholder is being used only as a default value, keep the actual value logic intact but remove unnecessary placeholder copy
+
+VALIDATION
+Please verify:
+1. Company Profile page loads
+2. All labels still show
+3. Empty fields have no placeholder text
+4. Existing populated values still display correctly
+5. Saving still works normally
+
+DELIVERABLES
+1. Exact files changed
+2. Confirmation that placeholders were removed across the full Company Profile page
+3. Confirmation that labels and save behavior were preserved
+
+Please implement it now.
