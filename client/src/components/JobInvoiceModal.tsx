@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, CreditCard, X } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isNativePlatform, nativePdfShare } from "@/lib/capacitor";
 
@@ -41,13 +41,11 @@ export function JobInvoiceModal({
   const [invoiceBalanceDueCents, setInvoiceBalanceDueCents] = useState<number | null>(null);
   const [invoiceAmountPaidCents, setInvoiceAmountPaidCents] = useState<number | null>(null);
   const [invoiceTotalCents, setInvoiceTotalCents] = useState<number | null>(null);
-  const [invoiceStatusLoading, setInvoiceStatusLoading] = useState(true);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [paymentLinkLoading, setPaymentLinkLoading] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
@@ -66,9 +64,6 @@ export function JobInvoiceModal({
   // Fetch existing PDF and fresh invoice status when modal opens
   useEffect(() => {
     if (open) {
-      // Set loading flag to prevent stale state from showing Pay Invoice
-      setInvoiceStatusLoading(true);
-      
       // Always fetch fresh invoice status when modal opens
       fetch(`/api/jobs/${jobId}/invoice`, { credentials: 'include' })
         .then(async (res) => {
@@ -98,9 +93,6 @@ export function JobInvoiceModal({
         })
         .catch((err) => {
           console.log("[Invoice UI] Could not fetch invoice status:", err);
-        })
-        .finally(() => {
-          setInvoiceStatusLoading(false);
         });
 
       // Only fetch PDF if not already loaded
@@ -257,58 +249,7 @@ export function JobInvoiceModal({
     sendEmailMutation.mutate();
   };
 
-  const handleGetPaymentLink = async () => {
-    if (!invoiceId) {
-      toast({
-        title: "No Invoice",
-        description: "Generate an invoice first before creating a payment link.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const paymentUrl = `${window.location.origin}/invoice/${invoiceId}/pay`;
-    try {
-      await navigator.clipboard.writeText(paymentUrl);
-      toast({
-        title: "Payment Link Copied",
-        description: "Share this link with your customer so they can pay online.",
-      });
-    } catch {
-      window.open(paymentUrl, "_blank");
-      toast({
-        title: "Payment Link Opened",
-        description: "Share this page link with your customer to collect payment.",
-      });
-    }
-    setPaymentLinkLoading(false);
-  };
-
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);
-  // Comprehensive isPaid check - matches backend logic
-  const isPaid = (
-    invoiceStatus?.toLowerCase() === 'paid' ||
-    !!invoicePaidAt ||
-    (typeof invoiceBalanceDueCents === 'number' && invoiceBalanceDueCents <= 0) ||
-    (typeof invoiceAmountPaidCents === 'number' && typeof invoiceTotalCents === 'number' && invoiceAmountPaidCents >= invoiceTotalCents)
-  );
-  
-  // Only show "Pay Invoice" when we've confirmed the invoice is NOT paid
-  // Hide the button while loading to prevent flash of stale state
-  const canShowPayButton = !invoiceStatusLoading && !isPaid;
-  
-  // Debug log for render
-  console.log("[Invoice PDF Modal] render flags", {
-    invoiceStatusLoading,
-    status: invoiceStatus,
-    paidAt: invoicePaidAt,
-    balanceDueCents: invoiceBalanceDueCents,
-    amountPaidCents: invoiceAmountPaidCents,
-    totalCents: invoiceTotalCents,
-    isPaid,
-    canShowPayButton
-  });
-
   const isNative = isNativePlatform();
 
   return (
@@ -486,26 +427,6 @@ export function JobInvoiceModal({
                   Next
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
-                {invoiceId && canShowPayButton && (
-                  <Button
-                    variant="outline"
-                    onClick={handleGetPaymentLink}
-                    disabled={paymentLinkLoading}
-                    className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
-                  >
-                    {paymentLinkLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Pay Invoice
-                      </>
-                    )}
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   onClick={handleClose}
@@ -579,26 +500,6 @@ export function JobInvoiceModal({
                   </>
                 )}
               </Button>
-              {invoiceId && canShowPayButton && (
-                <Button
-                  variant="outline"
-                  onClick={handleGetPaymentLink}
-                  disabled={paymentLinkLoading}
-                  className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
-                >
-                  {paymentLinkLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Pay Invoice
-                    </>
-                  )}
-                </Button>
-              )}
               <Button
                 variant="outline"
                 onClick={() => setStep(1)}
