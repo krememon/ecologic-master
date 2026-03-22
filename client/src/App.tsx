@@ -191,7 +191,20 @@ function getNextOnboardingRoute(params: {
 
   if (user?.company) {
     const { onboardingCompleted } = user.company;
+    const isOwner = user.role === 'OWNER';
 
+    // Non-owner members (SUPERVISOR, TECHNICIAN) inherit access from the company.
+    // They are never routed to the paywall or the subscription purchase flow —
+    // that is the company owner's responsibility.
+    if (!isOwner) {
+      if (onboardingCompleted) {
+        console.log("[auth] redirecting to dashboard — employee, onboarding complete");
+        return null;
+      }
+      return null;
+    }
+
+    // Owner: enforce subscription gate
     if (onboardingCompleted && subActive) {
       console.log("[auth] redirecting to dashboard — onboarding complete + subscription active");
       return null;

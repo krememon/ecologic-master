@@ -1,0 +1,66 @@
+We need to fix billing/paywall access logic in EcoLogic so EMPLOYEES never get sent to the paywall.
+
+GOAL
+Employees who join a company should not see the paywall screen at all. Paywall/billing enforcement should apply to the company/owner subscription state, not force an employee into a subscribe flow for themselves.
+
+CURRENT BUG
+- I created an account as an employee
+- It brought me to the paywall screen
+- But I actually have access to the company/account
+
+That is incorrect.
+
+CORRECT BEHAVIOR
+- Employee joins/signs up successfully
+- Employee should go straight into the app (Home / Dashboard)
+- Employee should NOT see the paywall
+- Employee should inherit access based on the company’s membership/subscription status, not be treated like they personally need to buy a plan
+
+IMPORTANT
+- Do NOT change paywall UI
+- Do NOT change plan pricing
+- Do NOT change owner billing flows except as needed to stop employees from being gated incorrectly
+- Do NOT break subscription enforcement for owners/companies that truly should be blocked
+- Preserve RBAC and company membership logic
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where billing/paywall gating is being checked after auth/signup/join.
+2. Identify why employee accounts are being treated like they should see the paywall.
+3. Update the gating logic so employees are excluded from paywall display.
+4. Employees should follow the company access rules only:
+   - if they are a valid member of a company with access, they enter the app
+   - they should not be shown subscription purchase UI
+5. Preserve correct owner/company billing enforcement:
+   - owners can still be shown paywall when appropriate
+   - company-level subscription expiry/blocking still works where intended
+6. Make sure this is fixed for:
+   - employee signup/join-company flow
+   - employee login afterward
+   - app refresh / protected route checks
+7. After successful employee signup/join, route them to Home / Dashboard, not paywall.
+8. If there is shared auth/billing gating, make the change carefully so employees bypass paywall but still respect blocked/no-access company states if those already exist intentionally.
+
+TECHNICAL NOTES
+- Check post-auth bootstrap logic, protected route wrappers, billing status endpoints, membership role checks, and company access resolution
+- The source of truth should be company membership + company access, not “this user has no subscription therefore show paywall”
+- Avoid a frontend-only band-aid if the backend access resolver is returning the wrong thing
+- If the app has role-aware billing access already, reuse it consistently
+- Make sure employee users do not briefly flash the paywall before redirecting away
+
+EXPECTED RESULT
+- Employee joins company → lands in app Home / Dashboard
+- Employee never sees paywall
+- Owner/company billing flows still work correctly
+- No paywall flash on employee login or refresh
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why employees were seeing paywall
+3. Exact billing/access logic updated
+4. Confirmation that:
+   - employee signup/join no longer goes to paywall
+   - employee login also skips paywall
+   - employee goes to Home / Dashboard
+   - owner/company billing enforcement still works correctly
+
+Please implement it now.

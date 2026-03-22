@@ -4441,6 +4441,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ active: false, status: 'no_company' });
       }
 
+      // Non-owner members (SUPERVISOR, TECHNICIAN) inherit access from the company.
+      // Paywall / subscription purchase is the owner's responsibility — employees are
+      // never personally gated regardless of the company's billing state.
+      if (user?.role && user.role !== 'OWNER') {
+        console.log(`[access] GRANTED userId=${userId} email=${userEmail} role=${user.role} companyId=${company.id} reason=employee_member`);
+        return res.json({
+          active: true,
+          status: 'member_access',
+          planKey: null,
+          userLimit: 0,
+          currentPeriodEnd: null,
+        });
+      }
+
       const { getEffectiveBillingAccess } = await import('./billingResolver');
       const billing = getEffectiveBillingAccess(company);
       const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
