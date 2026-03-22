@@ -1,0 +1,74 @@
+We need to add Google address autofill to EcoLogic for customer addresses.
+
+GOAL
+When adding a new customer address, the user should get Google-style address autocomplete/suggestions instead of needing to fully type the address manually.
+
+USE CASE
+If a customer does not already have an address, and the user adds one, the address field should pop up suggestions/autofill as they type.
+
+IMPORTANT
+- Do NOT redesign the page
+- Do NOT change the overall customer flow unless needed for address entry
+- Keep the existing form layout/style as much as possible
+- This should feel native and smooth on web + mobile app
+- Preserve manual entry as a fallback if needed
+
+REQUIRED BEHAVIOR
+1. On the customer address input field, as the user types:
+   - show address suggestions/autocomplete
+   - allow selecting a suggested address
+2. When a suggestion is selected, populate the correct structured fields if they exist, such as:
+   - street
+   - city
+   - state
+   - zip/postal code
+   - country
+3. If the form currently uses one combined address field, still support autocomplete cleanly and map details appropriately.
+4. If the customer already has no address and the user is adding one, this should work there.
+5. Keep manual editing possible after autofill.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where customer addresses are created/edited in the app.
+2. Integrate Google Places / Google Address Autocomplete into the address input flow.
+3. Use the proper frontend Google Places autocomplete pattern, not a fake local suggestion list.
+4. Make sure selection fills the form correctly.
+5. Handle cases where the user types manually and does not choose a suggestion.
+6. Preserve existing save/update behavior for customer records.
+7. Make sure this works in:
+   - add new customer flow
+   - edit customer address flow, if applicable
+   - any modal/form where customer address is entered
+8. If API key/config is needed:
+   - wire it through env variables properly
+   - do NOT expose secrets carelessly
+   - use the existing env/config pattern in the project
+
+TECHNICAL NOTES
+- Reuse any existing Google Maps/Places setup if EcoLogic already has one
+- If not, add the cleanest minimal integration
+- Prefer structured place parsing over dumping raw strings
+- Avoid breaking validation
+- Avoid double-firing or weird mobile keyboard issues
+- Ensure dropdown positioning works inside modals/forms
+- Make sure it behaves correctly in the native wrapper too
+
+UX EXPECTATION
+- User taps/clicks address field
+- Starts typing
+- Address suggestions appear
+- User taps one
+- Address fills in properly
+- User can still adjust details before saving
+
+DELIVERABLES
+1. Exact files changed
+2. Where Google autocomplete was added
+3. What env/config was required
+4. How selected addresses are parsed into customer fields
+5. Confirmation that:
+   - new customer address now supports Google autofill
+   - existing customer address edit flow also works if applicable
+   - manual entry still works
+   - no existing customer save/update flow was broken
+
+Please implement it now.
