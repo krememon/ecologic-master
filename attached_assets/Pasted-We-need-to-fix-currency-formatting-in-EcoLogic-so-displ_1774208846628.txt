@@ -1,0 +1,65 @@
+We need to fix currency formatting in EcoLogic so displayed dollar amounts always include proper thousands separators.
+
+GOAL
+Whenever a money amount is shown in the UI, it should display with commas, for example:
+- $15000.00 → $15,000.00
+- $1500.00 → $1,500.00
+- $350.00 → $350.00
+
+IMPORTANT
+- Do NOT redesign any UI
+- Do NOT change pricing values or calculations
+- Do NOT change stored numeric values in the database
+- This is a display formatting fix only
+- Apply this consistently across the app, not just one estimate card
+
+REQUIRED BEHAVIOR
+All currency values shown to the user should use proper formatted USD-style display with thousands separators.
+
+Examples:
+- $29.99 stays $29.99
+- $350.00 stays $350.00
+- $1500.00 becomes $1,500.00
+- $15000.00 becomes $15,000.00
+- $1234567.89 becomes $1,234,567.89
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the existing money/currency formatting logic used throughout EcoLogic.
+2. If a shared currency formatter/helper already exists, update/fix it there.
+3. If formatting is duplicated in multiple places, create one shared source of truth and migrate uses to it where reasonable.
+4. Make sure all displayed dollar amounts use consistent formatting with commas.
+5. Preserve cents/decimal behavior exactly as intended.
+6. Preserve negative values/refunds formatting if those exist anywhere.
+7. Do NOT break calculations, sorting, or API payloads by converting stored values incorrectly.
+8. Apply this to estimate totals and other places where money is shown, such as if applicable:
+   - estimates
+   - invoices
+   - payments
+   - dashboard totals
+   - billing/subscription pricing displays only if they already use the shared formatter and it does not break their current intended style
+
+TECHNICAL NOTES
+- Prefer a proper shared formatter using Intl.NumberFormat or the app’s existing helper
+- Avoid ad hoc string replacement hacks
+- Keep this as a display-layer fix
+- If some screens intentionally omit cents, preserve their intended style while still adding comma separators
+- Make sure formatted output is stable on web + native wrapper
+
+VALIDATION
+Please verify at minimum:
+1. Estimate total like $15000.00 now shows as $15,000.00
+2. Smaller amounts still look correct
+3. Subscription prices like $29.99 are not broken
+4. Invoices/payments/totals still render correctly
+5. No calculations or save/update flows changed
+
+DELIVERABLES
+1. Exact files changed
+2. What formatter/helper was updated or created
+3. Where it is now used
+4. Confirmation that:
+   - currency values now show commas correctly
+   - cents behavior was preserved
+   - this was display-only and did not affect stored values/calculations
+
+Please implement it now.

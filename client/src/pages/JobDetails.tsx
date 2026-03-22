@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
 import { JobInvoiceModal } from "@/components/JobInvoiceModal";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
+import { formatCurrency } from "@/lib/utils";
 
 interface JobDetailsProps {
   jobId: string;
@@ -1013,15 +1014,15 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                             <p className="text-sm text-muted-foreground">{item.description}</p>
                           )}
                           <p className="text-sm text-muted-foreground">
-                            {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
+                            {item.quantity} × {formatCurrency(item.unitPriceCents)} / {item.unit}
                           </p>
                           {item.taxable && itemTaxCents > 0 && (
                             <p className="text-xs text-muted-foreground">
-                              + Tax ({item.taxNameSnapshot || 'Tax'}): ${(itemTaxCents / 100).toFixed(2)}
+                              + Tax ({item.taxNameSnapshot || 'Tax'}): {formatCurrency(itemTaxCents)}
                             </p>
                           )}
                         </div>
-                        <p className="font-medium">${(displayTotal / 100).toFixed(2)}</p>
+                        <p className="font-medium">{formatCurrency(displayTotal)}</p>
                       </div>
                     );
                   })}
@@ -1058,17 +1059,17 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                       <>
                         <div className="flex justify-between text-sm text-muted-foreground">
                           <span>Subtotal</span>
-                          <span>${(subtotal / 100).toFixed(2)}</span>
+                          <span>{formatCurrency(subtotal)}</span>
                         </div>
                         <div className="flex justify-between text-sm text-muted-foreground">
                           <span>Tax</span>
-                          <span>${(totalTax / 100).toFixed(2)}</span>
+                          <span>{formatCurrency(totalTax)}</span>
                         </div>
                       </>
                     )}
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span>${(grandTotal / 100).toFixed(2)}</span>
+                      <span>{formatCurrency(grandTotal)}</span>
                     </div>
                   </div>
                 );
@@ -1221,7 +1222,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                     const sigSrc = sig.signatureDataUrl.startsWith('data:')
                       ? sig.signatureDataUrl
                       : `data:image/png;base64,${sig.signatureDataUrl}`;
-                    const amountStr = sig.totalCents ? `$${(sig.totalCents / 100).toFixed(2)}` : '';
+                    const amountStr = sig.totalCents ? formatCurrency(sig.totalCents) : '';
                     return (
                       <div key={sig.id} className="border rounded-lg bg-background overflow-hidden">
                         <div className="flex items-center justify-between p-3 pb-2">
@@ -1275,7 +1276,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <div className="space-y-4">
                   {paymentSignatures.map((sig) => {
                     const methodLabel = sig.paymentMethod === 'stripe' ? 'Card' : sig.paymentMethod === 'cash' ? 'Cash' : sig.paymentMethod === 'check' ? 'Check' : sig.paymentMethod || 'Unknown';
-                    const amountStr = sig.amountCents != null ? `$${(sig.amountCents / 100).toFixed(2)}` : '';
+                    const amountStr = sig.amountCents != null ? formatCurrency(sig.amountCents) : '';
                     const sigSrc = sig.signaturePngBase64
                       ? (sig.signaturePngBase64.startsWith('data:') ? sig.signaturePngBase64 : `data:image/png;base64,${sig.signaturePngBase64}`)
                       : null;
@@ -1353,7 +1354,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 {viewingSig.amountCents != null && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Amount</span>
-                    <span className="font-medium">${(viewingSig.amountCents / 100).toFixed(2)}</span>
+                    <span className="font-medium">{formatCurrency(viewingSig.amountCents)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -1405,19 +1406,19 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <p className="font-medium">
                   {payoutAuditData.referral.referralType === 'percent'
                     ? `${payoutAuditData.referral.referralValue}%`
-                    : `$${(parseFloat(payoutAuditData.referral.referralValue) / 100).toFixed(2)}`}
+                    : formatCurrency(parseFloat(payoutAuditData.referral.referralValue))}
                 </p>
               </div>
               {payoutAuditData.referral.contractorPayoutAmountCents != null && (
                 <div>
                   <span className="text-muted-foreground">Payout Amount</span>
-                  <p className="font-medium">${(payoutAuditData.referral.contractorPayoutAmountCents / 100).toFixed(2)}</p>
+                  <p className="font-medium">{formatCurrency(payoutAuditData.referral.contractorPayoutAmountCents)}</p>
                 </div>
               )}
               {payoutAuditData.referral.companyShareAmountCents != null && (
                 <div>
                   <span className="text-muted-foreground">Your Share</span>
-                  <p className="font-medium">${(payoutAuditData.referral.companyShareAmountCents / 100).toFixed(2)}</p>
+                  <p className="font-medium">{formatCurrency(payoutAuditData.referral.companyShareAmountCents)}</p>
                 </div>
               )}
             </div>
@@ -1440,7 +1441,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                         >
                           {p.status}
                         </Badge>
-                        <span className="text-muted-foreground">Payment ${(p.grossAmountCents / 100).toFixed(2)}</span>
+                        <span className="text-muted-foreground">Payment {formatCurrency(p.grossAmountCents)}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(p.createdAt), 'MMM d, yyyy')}
@@ -1449,13 +1450,13 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                     {p.transferAmountCents > 0 && (
                       <div className="text-xs flex justify-between pl-6">
                         <span>Receiver share</span>
-                        <span className="font-medium">${(p.transferAmountCents / 100).toFixed(2)}</span>
+                        <span className="font-medium">{formatCurrency(p.transferAmountCents)}</span>
                       </div>
                     )}
                     {(p.secondTransferAmountCents ?? 0) > 0 && (
                       <div className="text-xs flex justify-between pl-6">
                         <span>Sender share</span>
-                        <span className="font-medium">${((p.secondTransferAmountCents ?? 0) / 100).toFixed(2)}</span>
+                        <span className="font-medium">{formatCurrency(p.secondTransferAmountCents ?? 0)}</span>
                       </div>
                     )}
                   </div>

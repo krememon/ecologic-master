@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { formatDollarAmount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,7 @@ function formatTime(timeStr: string): string {
 
 function feeBadge(type: string, value: string) {
   const v = parseFloat(value || "0");
-  return type === "percent" ? `${v}%` : `$${v.toFixed(2)}`;
+  return type === "percent" ? `${v}%` : formatDollarAmount(v);
 }
 
 function ReferralCard({ item, direction }: { item: ReferralActivityItem; direction: "sent" | "received" }) {

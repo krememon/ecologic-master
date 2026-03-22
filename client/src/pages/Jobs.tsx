@@ -28,6 +28,7 @@ import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { JobInvoiceModal } from "@/components/JobInvoiceModal";
 import { Share2, Receipt } from "lucide-react";
 import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
+import { formatCurrency } from "@/lib/utils";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 import { PendingSignatureBanner } from "@/components/PendingSignatureBanner";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
@@ -1321,10 +1322,10 @@ export default function Jobs() {
                               <p className="text-sm text-muted-foreground">{item.description}</p>
                             )}
                             <p className="text-sm text-muted-foreground">
-                              {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
+                              {item.quantity} × {formatCurrency(item.unitPriceCents)} / {item.unit}
                             </p>
                           </div>
-                          <p className="font-medium">${(item.lineTotalCents / 100).toFixed(2)}</p>
+                          <p className="font-medium">{formatCurrency(item.lineTotalCents)}</p>
                         </div>
                       ))}
                     </div>
@@ -1334,7 +1335,7 @@ export default function Jobs() {
                   <Separator className="my-3" />
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total</span>
-                    <span>${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
+                    <span>{formatCurrency(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0))}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -1804,7 +1805,7 @@ export default function Jobs() {
                       <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100 dark:border-slate-800">
                         <span className="text-sm text-slate-500">Total</span>
                         <span className="font-semibold text-green-600">
-                          ${((estimate.totalCents || 0) / 100).toFixed(2)}
+                          {formatCurrency(estimate.totalCents || 0)}
                         </span>
                       </div>
                       <div className="text-xs text-slate-400 pt-1">

@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { formatDollarAmount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -221,7 +222,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: typeof Clock; label: 
 function feeBadge(type: string, value: string) {
   const v = parseFloat(value || '0');
   if (type === 'percent') return `${v}%`;
-  return `$${v.toFixed(2)}`;
+  return formatDollarAmount(v);
 }
 
 function jobSecondaryInfo(job: any): string {
@@ -864,7 +865,7 @@ export default function Contractors() {
                         {jPrice > 0 && earnings > 0 && (
                           <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                             <DollarSign className="w-3.5 h-3.5" />
-                            Expected: ${earnings.toFixed(2)}
+                            Expected: {formatDollarAmount(earnings)}
                           </span>
                         )}
                       </div>
