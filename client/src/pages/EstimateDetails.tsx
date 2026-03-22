@@ -14,6 +14,7 @@ import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Uploa
 import { Textarea } from "@/components/ui/textarea";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
+import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 import { useCan } from "@/hooks/useCan";
 import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
@@ -85,6 +86,9 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
 
   // Delete confirmation state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // Edit sheet state
+  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
   
   // RBAC: Owner, Supervisor can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR';
@@ -453,14 +457,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem
-                    onClick={() => {
-                      const jobId = (estimate as any).jobId;
-                      if (jobId) {
-                        navigate(`/jobs/${jobId}?tab=estimates`);
-                      } else {
-                        navigate('/jobs?tab=estimates');
-                      }
-                    }}
+                    onClick={() => setIsEditSheetOpen(true)}
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Estimate
@@ -1183,6 +1180,19 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           estimateNumber={estimate.estimateNumber}
           customerEmail={estimate.customerEmail}
           customerFirstName={estimate.customerName?.split(' ')[0] || null}
+        />
+      )}
+
+      {/* Edit Estimate Sheet */}
+      {estimate && (
+        <NewEstimateSheet
+          open={isEditSheetOpen}
+          onOpenChange={setIsEditSheetOpen}
+          estimateId={estimate.id}
+          initialEstimate={estimate}
+          onEstimateCreated={() => {
+            queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
+          }}
         />
       )}
 

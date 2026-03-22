@@ -1440,12 +1440,23 @@ export const createEstimateSchema = z.object({
 
 export const updateEstimateSchema = z.object({
   title: z.string().min(1, "Title is required").optional(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
   status: z.enum(["draft", "sent", "accepted", "rejected"]).optional(),
+  customerId: z.number().int().positive().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  customerEmail: z.string().nullable().optional(),
+  customerPhone: z.string().nullable().optional(),
+  customerAddress: z.string().nullable().optional(),
+  jobAddressLine1: z.string().nullable().optional(),
+  jobCity: z.string().nullable().optional(),
+  jobState: z.string().nullable().optional(),
+  jobZip: z.string().nullable().optional(),
+  jobType: z.string().nullable().optional(),
+  taxCents: z.number().int().min(0).optional(),
   assignedEmployeeIds: z.array(z.string()).optional(),
-  scheduledDate: z.union([z.date(), z.string()]).optional(),
-  scheduledTime: z.string().optional(),
-  scheduledEndTime: z.string().optional(),
+  scheduledDate: z.union([z.date(), z.string()]).nullable().optional(),
+  scheduledTime: z.string().nullable().optional(),
+  scheduledEndTime: z.string().nullable().optional(),
   requestedStartAt: z.union([z.date(), z.string()]).optional(),
   items: z.array(z.object({
     id: z.number().optional(), // Existing item ID for updates

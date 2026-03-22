@@ -1,0 +1,76 @@
+We need to fix the Edit Estimate action in EcoLogic so it opens the actual populated estimate-edit form for that specific estimate.
+
+CURRENT BUG
+The Edit Estimate button exists now, but tapping it just brings the user to the general Estimates tab/screen. That is incorrect.
+
+GOAL
+When the user taps “Edit Estimate” from the 3-dot menu on an estimate detail page, it should open the estimate editing screen with that exact estimate’s existing data already loaded and editable.
+
+IMPORTANT
+- Do NOT redesign the UI
+- Do NOT just redirect to the generic Estimates list/tab
+- Do NOT create a blank estimate form
+- This must open the real edit flow for the selected estimate
+- Preserve existing styling and mobile behavior
+- Keep Delete Estimate as-is unless needed for related routing cleanup
+
+REQUIRED BEHAVIOR
+From the estimate detail screen:
+1. Tap 3-dot menu
+2. Tap Edit Estimate
+3. Open the estimate form/editor for that specific estimate
+4. The form should be prefilled with the estimate’s current values, including whatever fields already exist in the app, such as:
+   - selected customer
+   - line items
+   - location
+   - job type
+   - schedule
+   - assigned employees
+   - notes
+   - status/draft-related values if applicable
+5. User can edit and save
+6. On save, the original estimate updates correctly
+7. User is returned to the correct estimate detail/result view after save, or the current intended post-save flow for estimate editing
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the current Edit Estimate click handler from the estimate detail 3-dot menu.
+2. Replace the generic navigation-to-estimates-tab behavior with navigation into the actual edit-estimate flow.
+3. Pass the selected estimate ID (or equivalent source-of-truth identifier) into the edit screen.
+4. Ensure the edit screen fetches/loads that estimate’s existing data.
+5. If the app already has a create-estimate screen that can also support edit mode, wire it properly into edit mode instead of duplicating UI.
+6. If there is already an edit-estimate route/screen/modal, navigate there directly.
+7. Preserve form validation and save logic.
+8. Make sure editing an existing estimate updates that estimate rather than accidentally creating a new one.
+9. Preserve permissions/RBAC so only allowed users can edit.
+10. Ensure this works cleanly on mobile native layouts too.
+
+TECHNICAL NOTES
+- Reuse existing estimate form if possible
+- This sounds like the button is routing to a list route instead of an edit route / edit-state route
+- The edit screen needs both:
+  - the estimate identifier
+  - a way to bootstrap existing field values
+- Check whether there is already a create/edit shared component that supports initialValues or editMode
+- Make sure save uses update semantics, not create semantics
+- Avoid losing current customer/line-item relationships when editing
+- Preserve draft/approval business rules if there are restrictions
+
+EXPECTED RESULT
+- Edit Estimate opens a real populated edit form for that exact estimate
+- User sees the original estimate data in the fields
+- Changes save back to the same estimate
+- It no longer dumps the user at the generic Estimates tab
+
+DELIVERABLES
+1. Exact files changed
+2. What the old Edit Estimate action was doing
+3. What route/screen/edit flow it now opens
+4. How the selected estimate data is loaded into the form
+5. How save now updates the existing estimate instead of creating/navigating incorrectly
+6. Confirmation that:
+   - Edit Estimate opens the real edit screen
+   - fields are prefilled with the selected estimate’s data
+   - saving updates the same estimate
+   - mobile layout still works
+
+Please implement it now.

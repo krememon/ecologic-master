@@ -91,6 +91,8 @@ interface NewEstimateSheetProps {
   onOpenChange: (open: boolean) => void;
   onEstimateCreated?: () => void;
   initialCustomer?: Customer | null;
+  estimateId?: number;
+  initialEstimate?: any; // EstimateWithItems - using any to avoid circular import
 }
 
 function formatCurrency(cents: number): string {
@@ -139,7 +141,8 @@ function InfoRow({
   );
 }
 
-export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initialCustomer }: NewEstimateSheetProps) {
+export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initialCustomer, estimateId, initialEstimate }: NewEstimateSheetProps) {
+  const isEditMode = !!estimateId;
   const { toast } = useToast();
 
   // Form state
@@ -148,9 +151,8 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
   
   // Set initial customer and address when sheet opens with one
   useEffect(() => {
-    if (open && initialCustomer) {
+    if (open && initialCustomer && !isEditMode) {
       setSelectedCustomer(initialCustomer);
-      // Prefill address from customer if available
       if (initialCustomer.address) {
         setJobLocation({
           addressLine1: initialCustomer.address,
@@ -160,7 +162,76 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
         });
       }
     }
-  }, [open, initialCustomer]);
+  }, [open, initialCustomer, isEditMode]);
+
+  // Populate form from existing estimate when in edit mode
+  useEffect(() => {
+    if (open && isEditMode && initialEstimate) {
+      setNotes(initialEstimate.notes || "");
+      setJobType(initialEstimate.jobType || null);
+      setJobLocation({
+        addressLine1: initialEstimate.jobAddressLine1 || "",
+        city: initialEstimate.jobCity || "",
+        state: initialEstimate.jobState || "",
+        zip: initialEstimate.jobZip || "",
+      });
+      setAssignedEmployees(Array.isArray(initialEstimate.assignedEmployeeIds) ? initialEstimate.assignedEmployeeIds : []);
+
+      // Populate customer from snapshot fields (customer may no longer exist)
+      if (initialEstimate.customerId || initialEstimate.customerName) {
+        setSelectedCustomer({
+          id: initialEstimate.customerId || 0,
+          firstName: (initialEstimate.customerName || "").split(" ")[0] || null,
+          lastName: (initialEstimate.customerName || "").split(" ").slice(1).join(" ") || null,
+          email: initialEstimate.customerEmail || null,
+          phone: initialEstimate.customerPhone || null,
+          address: initialEstimate.customerAddress || null,
+          companyName: null,
+          jobTitle: null,
+          notes: null,
+          companyId: 0,
+          emailOptIn: true,
+          smsOptIn: true,
+          emailUnsubscribedAt: null,
+          smsUnsubscribedAt: null,
+          createdAt: null,
+        } as any);
+      }
+
+      // Populate line items
+      if (initialEstimate.items && initialEstimate.items.length > 0) {
+        setLineItems(initialEstimate.items.map((item: any) => ({
+          name: item.name || "",
+          description: item.description || "",
+          taskCode: item.taskCode || "",
+          quantity: String(item.quantity || "1"),
+          unitPriceCents: item.unitPriceCents || 0,
+          priceDisplay: item.unitPriceCents ? String(item.unitPriceCents / 100) : "",
+          unit: item.unit || "each",
+          taxable: item.taxable || false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
+          saveToPriceBook: false,
+        })));
+      } else {
+        setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
+      }
+
+      // Populate schedule from scheduledDate / scheduledTime
+      if (initialEstimate.scheduledDate || initialEstimate.scheduledTime) {
+        const rawDate = initialEstimate.scheduledDate;
+        const dateStr = rawDate ? new Date(rawDate).toISOString().split('T')[0] : "";
+        setSchedule({
+          date: dateStr,
+          startTime: initialEstimate.scheduledTime || "",
+          endTime: initialEstimate.scheduledEndTime || "",
+        });
+      } else {
+        setSchedule({ date: "", startTime: "", endTime: "" });
+      }
+    }
+  }, [open, isEditMode, initialEstimate]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }
   ]);
@@ -320,6 +391,28 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
         title: "Error", 
         description: error.message || "Failed to create estimate.", 
         variant: "destructive" 
+      });
+    }
+  });
+
+  const updateEstimateMutation = useMutation({
+    mutationFn: async (data: Parameters<typeof createEstimateMutation.mutate>[0]) => {
+      const response = await apiRequest('PATCH', `/api/estimates/${estimateId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
+      resetForm();
+      onOpenChange(false);
+      onEstimateCreated?.();
+      toast({ title: "Estimate updated" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update estimate.",
+        variant: "destructive"
       });
     }
   });
@@ -518,7 +611,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
     const scheduledTime = schedule.startTime || (schedule.date ? '09:00' : null);
     const scheduledEndTime = schedule.endTime || null;
 
-    createEstimateMutation.mutate({
+    const payload = {
       title: autoTitle,
       notes: notes || undefined,
       customerId: selectedCustomer?.id,
@@ -550,7 +643,13 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
         taxCents: calculateLineTax(item),
         sortOrder: index,
       })),
-    });
+    };
+
+    if (isEditMode) {
+      updateEstimateMutation.mutate(payload);
+    } else {
+      createEstimateMutation.mutate(payload);
+    }
   };
 
   // Line item helpers
@@ -690,15 +789,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
             >
               Cancel
             </button>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Estimate</h3>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{isEditMode ? 'Edit Estimate' : 'New Estimate'}</h3>
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={createEstimateMutation.isPending}
+              disabled={createEstimateMutation.isPending || updateEstimateMutation.isPending}
               className="min-w-[60px] h-8 rounded-lg"
               data-testid="button-save-estimate"
             >
-              {createEstimateMutation.isPending ? 'Saving...' : 'Save'}
+              {(createEstimateMutation.isPending || updateEstimateMutation.isPending) ? 'Saving...' : 'Save'}
             </Button>
           </div>
 

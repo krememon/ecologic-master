@@ -9753,6 +9753,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/estimates/:id - Full update of estimate fields + line items
+  app.patch('/api/estimates/:id', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      if (isNaN(estimateId)) return res.status(400).json({ message: "Invalid estimate ID" });
+
+      const existing = await storage.getEstimate(estimateId);
+      if (!existing || existing.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      const { updateEstimateSchema } = await import('@shared/schema');
+      const parsed = updateEstimateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation error", errors: parsed.error.flatten() });
+      }
+
+      const updated = await storage.updateEstimate(estimateId, parsed.data);
+      console.log(`[Estimates] full update estimateId=${estimateId} companyId=${companyId}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating estimate:", error);
+      res.status(500).json({ message: "Failed to update estimate" });
+    }
+  });
+
   // DELETE /api/estimates/:id - Delete estimate (any status allowed)
   app.delete('/api/estimates/:id', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
