@@ -1,0 +1,62 @@
+We need to make the public invoice/payment page branding match the large sign-in screen branding.
+
+CURRENT ISSUE
+The EcoLogic logo + subtitle on the public invoice/payment page is still way too small.
+I do NOT want it as a tiny top header.
+I want it big like the sign-in screen branding.
+
+GOAL
+Make the public invoice/payment page branding look like the sign-in page:
+- large EcoLogic logo image
+- centered
+- subtitle directly underneath:
+  Professional contractor management
+- visually prominent and sized similarly to the sign-in screen
+
+IMPORTANT
+- Keep using the actual transparent EcoLogic image/logo
+- Do NOT switch back to plain text for the main logo
+- Do NOT distort or crop the logo
+- Do NOT redesign the invoice card itself
+- This is specifically about making the branding block much larger, like the sign-in page
+- Keep it centered and premium looking
+
+REFERENCE
+Use the sign-in screen branding as the visual benchmark for size and spacing.
+The invoice/public payment page branding should feel nearly the same size/scale as that.
+
+REQUIRED CHANGES
+1. Find the public invoice/payment page branding block.
+2. Increase the logo display size substantially so it is comparable to the sign-in page.
+3. Keep the subtitle underneath:
+   Professional contractor management
+4. Match the sign-in page’s spacing/alignment/style as closely as possible.
+5. If the branding block is using different size classes than sign-in, reuse the sign-in sizing values or shared branding styles.
+6. Keep the invoice card below it intact.
+7. Ensure it still looks good on iPad and web.
+
+TECHNICAL NOTES
+- Reuse the same logo sizing/container pattern from the sign-in page if possible
+- Reuse the same subtitle styling from sign-in if possible
+- Prefer sharing the same branding component/styles rather than duplicating random values
+- Keep `object-contain`
+- Make sure the image remains crisp and centered
+- Adjust vertical spacing so it feels intentional, not like a tiny header floating above the card
+
+EXPECTED RESULT
+The top of the public invoice/payment page should visually feel like:
+- the same big EcoLogic branding used on sign-in
+- not a tiny logo
+- not a mini header
+
+DELIVERABLES
+1. Exact files changed
+2. Whether sign-in branding styles/component were reused
+3. What sizing values were updated
+4. Confirmation that:
+   - logo is now large like sign-in
+   - subtitle remains underneath
+   - invoice card layout still works
+   - branding is no longer tiny
+
+Please implement it now.
