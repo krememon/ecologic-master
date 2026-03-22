@@ -1,0 +1,101 @@
+The previous change did NOT fix it. We need to correct the behavior at the root.
+
+CURRENT BUG
+Tapping the download button is still sending the user to an external link / outside the app.
+
+That is NOT acceptable.
+
+GOAL
+In the native iPhone app, tapping the download button for an invoice/estimate PDF should stay inside the app and immediately open the native Apple share/save sheet so the user can choose:
+- Save to Files
+- Notes
+- AirDrop
+- Print
+- other normal iOS share targets
+
+In short:
+tap download → native iOS share sheet
+NOT:
+tap download → browser / Safari / external URL / in-app browser / external page
+
+IMPORTANT
+- This is specifically for the native iPhone app behavior
+- Do NOT open any external link
+- Do NOT rely on window.open, anchor download, Browser plugin, or navigating to the signed URL
+- Do NOT redesign the modal UI
+- Keep the existing download button
+- Use a real native file-share/save flow
+- The action must remain inside the app
+
+ROOT REQUIREMENT
+The download button handler must be changed so it does NOT navigate to the PDF URL at all on native iPhone.
+
+Instead it must:
+1. Obtain the PDF file URL or file bytes from the backend
+2. Download/fetch the PDF data programmatically inside the app
+3. Write the PDF to a temporary local file on device
+4. Invoke the native iOS share sheet on that local file
+5. Let the user save/share it from the Apple sheet
+
+REQUIRED IMPLEMENTATION
+1. Find the exact current download button code path.
+2. Remove any native-app path that does one of these:
+   - `window.open(...)`
+   - `<a href=... target="_blank">`
+   - direct navigation to signed URL
+   - Browser plugin open
+   - opening external Safari / webview page
+3. Replace native iPhone download behavior with:
+   - fetch/download PDF as blob/arrayBuffer
+   - convert/write to local temp file using the proper Capacitor filesystem/native file API
+   - call native Share plugin / iOS share sheet using that local file
+4. Keep filename correct, e.g. `Invoice_INV-xxxxx.pdf` or `Estimate_EST-xxxxx.pdf`
+5. Keep MIME type correct: `application/pdf`
+6. If the backend currently only returns a signed URL, that is fine — but the app must fetch it silently and share the downloaded local file, not navigate to it.
+7. If authentication/headers are required to fetch the PDF, preserve them.
+8. If web needs different behavior, branch by native platform cleanly:
+   - native iPhone: native share sheet flow
+   - web: existing browser download behavior can remain if correct
+9. If iPad native should also use the same native share sheet behavior, that is acceptable as long as it stays in-app and works correctly.
+
+TECHNICAL NOTES
+- This must be a native code path, not a browser-navigation path
+- Use Capacitor platform detection properly
+- Use Filesystem plugin or existing native file helper to write temp file
+- Use Share plugin with the saved local file URI
+- Do not pass the remote URL directly into a flow that causes iOS to open Safari
+- The share sheet should open from the app context itself
+- Make sure the handler awaits the download/write before opening share
+- Keep the existing “view/open” action separate if there is another icon for that
+
+EXPECTED RESULT
+On native iPhone:
+- user taps download
+- app stays inside EcoLogic
+- Apple share/save sheet appears immediately
+- user chooses Files / Notes / AirDrop / etc.
+- no external page opens
+- no Safari/browser navigation happens
+
+VALIDATION
+Please verify this exact flow on native iPhone build:
+1. Generate invoice/estimate PDF
+2. Tap download
+3. Confirm no browser/external link opens
+4. Confirm native Apple share sheet opens instead
+5. Confirm file can be saved to Files
+6. Confirm filename is correct
+7. Confirm estimate and invoice both work if they use same shared downloader
+
+DELIVERABLES
+1. Exact files changed
+2. Exact old code path that was incorrectly opening the external link
+3. Exact new native code path used instead
+4. Whether file is fetched from remote URL then written locally before sharing
+5. Confirmation that:
+   - no external link opens anymore
+   - native Apple share/save sheet opens from inside the app
+   - file name and PDF type are correct
+   - invoice and estimate downloads both work if shared logic is used
+
+Please fix the actual button handler now, not just the surrounding UI.

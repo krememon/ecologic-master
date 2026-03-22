@@ -389,24 +389,38 @@ export async function scheduleLocalTestNotification(): Promise<LocalNotifResult>
 }
 
 /**
- * On native iOS: fetches the PDF at `url`, writes it to the app's cache
- * directory using the Filesystem plugin, then invokes the native iOS share/save
- * sheet via the Share plugin so the user can choose Files, AirDrop, Notes, etc.
+ * Fetch the PDF at `url` and present the native iOS share/save sheet so the
+ * user can choose Files, AirDrop, Notes, etc. — entirely inside the app.
  *
- * On web: falls back to a programmatic anchor-click download (same as before).
+ * Strategy (in order):
+ *  1. Fetch the PDF as a Blob, wrap in a File, then call navigator.share({ files })
+ *     → Works natively inside iOS WKWebView without any Capacitor plugin sync.
+ *     → Never opens Safari or any external page.
+ *  2. If Web Share API isn't available (older native builds or Android without flag),
+ *     fall back to Capacitor Filesystem + Share plugins.
+ *  3. On non-native web: programmatic anchor-click download (unchanged).
  *
- * Returns true if the native flow was triggered, false for web fallback.
+ * IMPORTANT: The native paths NEVER call window.open or navigate anywhere.
+ * Only the web (non-native) path uses the anchor download which may open the
+ * browser's built-in download manager — that is correct web behaviour.
  */
 export async function nativePdfShare(
   url: string,
   filename: string,
 ): Promise<boolean> {
-  if (!isNativePlatform() || getPlatform() !== "ios") {
-    // Web fallback: programmatic anchor download
+  // Sanitise filename — preserve dots and dashes, replace everything else.
+  const safeFilename = (filename || "document.pdf")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/\.pdf$/i, "") + ".pdf";
+
+  // ── Non-native web path ──────────────────────────────────────────────────
+  // Simple anchor-click download. window.open is acceptable here because the
+  // user is already in a regular browser tab.
+  if (!isNativePlatform()) {
     try {
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+      a.download = safeFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -417,69 +431,99 @@ export async function nativePdfShare(
     return false;
   }
 
+  // ── Native path (iOS / Android) ──────────────────────────────────────────
+  // Resolve full absolute URL — native WebViews need the production base URL.
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
+
+  console.log("[pdf-share] native path — fetching:", fullUrl);
+
+  let pdfBlob: Blob;
+  try {
+    const response = await fetch(fullUrl, { credentials: "include" });
+    if (!response.ok) throw new Error(`PDF fetch failed: ${response.status}`);
+    pdfBlob = new Blob([await response.arrayBuffer()], { type: "application/pdf" });
+    console.log("[pdf-share] Blob fetched, size:", pdfBlob.size);
+  } catch (fetchErr) {
+    // Fetch itself failed — log and bail. Do NOT open any external link.
+    console.error("[pdf-share] Fetch failed:", fetchErr);
+    return false;
+  }
+
+  // ── Path A: Web Share API with files ────────────────────────────────────
+  // navigator.share({ files }) works inside iOS WKWebView (Safari engine)
+  // without requiring Capacitor plugin registration or cap sync.
+  // This is the primary native path.
+  const shareFile = new File([pdfBlob], safeFilename, { type: "application/pdf" });
+  if (
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [shareFile] })
+  ) {
+    try {
+      await navigator.share({ files: [shareFile], title: safeFilename });
+      console.log("[pdf-share] Web Share API succeeded");
+      return true;
+    } catch (shareErr: any) {
+      // AbortError = user dismissed the sheet — that is fine, not a failure.
+      if (shareErr?.name === "AbortError") {
+        console.log("[pdf-share] Share sheet dismissed by user");
+        return true;
+      }
+      // Any other error: fall through to Capacitor plugin path below.
+      console.warn("[pdf-share] Web Share API error, trying Capacitor:", shareErr);
+    }
+  }
+
+  // ── Path B: Capacitor Filesystem + Share plugins ─────────────────────────
+  // Used when Web Share API isn't available (some Android versions).
+  // IMPORTANT: If these plugins throw (not yet synced to native project),
+  // we log the error and return false — we do NOT call window.open.
   try {
     const { Filesystem, Directory } = await import("@capacitor/filesystem");
     const { Share } = await import("@capacitor/share");
 
-    console.log("[pdf-share] Fetching PDF blob from:", url);
-
-    // Resolve full URL (native uses absolute URLs to production)
-    const baseUrl = getApiBaseUrl();
-    const fullUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
-
-    const response = await fetch(fullUrl, { credentials: "include" });
-    if (!response.ok) {
-      throw new Error(`PDF fetch failed: ${response.status}`);
-    }
-
-    const blob = await response.blob();
-
-    // Convert blob to base64 for Filesystem.writeFile
-    const base64Data = await new Promise<string>((resolve, reject) => {
+    // Convert blob → base64
+    const base64Data: string = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result as string;
-        // Strip the data-URL prefix (data:application/pdf;base64,...)
-        const base64 = result.split(",")[1];
-        resolve(base64);
+        resolve(result.split(",")[1]);
       };
       reader.onerror = reject;
-      reader.readAsDataURL(blob);
+      reader.readAsDataURL(pdfBlob);
     });
 
-    // Write to app cache directory
-    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
     const writeResult = await Filesystem.writeFile({
       path: safeFilename,
       data: base64Data,
       directory: Directory.Cache,
     });
-
     console.log("[pdf-share] Wrote to cache:", writeResult.uri);
 
-    // Invoke native share/save sheet
     await Share.share({
       title: safeFilename,
       files: [writeResult.uri],
       dialogTitle: "Save or Share PDF",
     });
 
-    console.log("[pdf-share] Native share sheet opened successfully");
+    console.log("[pdf-share] Capacitor share sheet opened");
     return true;
-  } catch (err: any) {
-    // User dismissed the share sheet — treat as success
-    if (
-      err?.message?.includes("canceled") ||
-      err?.message?.includes("cancelled") ||
-      err?.message?.includes("dismiss") ||
-      err?.errorMessage?.includes("canceled")
-    ) {
+  } catch (capErr: any) {
+    const isCancelled =
+      capErr?.name === "AbortError" ||
+      capErr?.message?.includes("canceled") ||
+      capErr?.message?.includes("cancelled") ||
+      capErr?.errorMessage?.includes("canceled");
+
+    if (isCancelled) {
       console.log("[pdf-share] Share sheet dismissed by user");
       return true;
     }
-    console.error("[pdf-share] Native share failed:", err);
-    // Fallback: open in browser
-    window.open(url, "_blank");
+
+    // Plugins not available (needs cap sync) or other error.
+    // DO NOT fall back to window.open — that would open Safari externally.
+    console.error("[pdf-share] Capacitor share failed (plugins may need cap sync):", capErr);
     return false;
   }
 }
