@@ -1,0 +1,66 @@
+We need to fix iPad portrait responsiveness in EcoLogic so the app does NOT reflow/shift into a different tablet-mobile layout when the iPad is rotated vertically.
+
+GOAL
+When the iPad is held vertically (portrait), the UI should remain in the same tablet/desktop-style layout as horizontal (landscape), instead of changing card sizing/spacing/wrapping/reflow behavior.
+
+WHAT I AM SEEING
+- In iPad landscape, the Employees page layout looks correct
+- In iPad portrait, the UI shifts/reformats
+- When rotated back to landscape, it looks fine again
+
+DESIRED RESULT
+- iPad portrait should keep the same overall layout behavior as iPad landscape
+- Do NOT let the page collapse into a narrower mobile/tablet-stacked layout just because the iPad is vertical
+- Preserve the intended desktop/tablet presentation on iPad in both orientations
+
+IMPORTANT
+- Do NOT redesign the UI
+- Do NOT change visual styling unless required to preserve the same layout
+- Do NOT break phone responsiveness
+- This should be an iPad/tablet breakpoint behavior fix, not a one-off hack for only one component if the root issue is global
+- We want the UI to stay stable on iPad orientation change
+
+IMPLEMENTATION REQUIREMENTS
+1. Identify why iPad portrait is crossing into a different responsive breakpoint/layout mode.
+2. Ensure iPad devices in portrait still use the same tablet/desktop layout rules as landscape where appropriate.
+3. Check whether the issue is caused by:
+   - CSS/media-query breakpoints
+   - viewport width logic
+   - JS `isMobile` / `isTablet` / orientation detection
+   - container max-width/grid minmax/card wrapping behavior
+   - split-pane/sidebar/content width rules
+4. Fix the root cause rather than adding brittle per-page overrides unless absolutely necessary.
+5. Validate at minimum on:
+   - Employees page
+   - dashboard/home
+   - jobs list / estimates list
+   - any major card/grid/list layout that may be using the same responsive helper logic
+6. Preserve phone/mobile behavior exactly as intended.
+7. Avoid layout flicker on rotation.
+
+TECHNICAL NOTES
+- If we are using window width breakpoints, make sure iPad portrait width is not being treated like phone/mobile when it should remain tablet/desktop.
+- If there is a shared responsive helper/hook, fix it there.
+- If the issue is CSS grid wrapping because of container widths, tighten the min widths or tablet-specific rules so cards/filter bars don’t reflow badly in portrait.
+- If needed, treat iPad portrait as tablet-desktop layout rather than compact/mobile layout.
+- Do NOT force a fake zoomed desktop viewport that would harm usability on phones.
+- Do NOT lock device orientation. We want portrait to work correctly, not be disabled.
+
+SPECIFIC OUTCOME FOR THE SCREENSHOT
+On the Employees page in iPad portrait:
+- filter row should stay properly aligned
+- employee cards should keep the intended layout
+- spacing/padding should not awkwardly shift
+- the page should feel the same as landscape, just narrower — not like a different UI mode
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause found
+3. What responsive logic/breakpoints were changed
+4. Confirmation that:
+   - iPad portrait no longer shifts into the wrong layout
+   - landscape still looks correct
+   - phone/mobile layout was not broken
+   - rotation between portrait/landscape remains stable
+
+Please implement it now.
