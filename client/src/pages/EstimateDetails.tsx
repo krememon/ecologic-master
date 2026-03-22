@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2, MapPin, Edit, StickyNote } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2, MapPin, Edit, StickyNote, MoreVertical } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
@@ -80,6 +82,9 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [editedNotes, setEditedNotes] = useState('');
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+
+  // Delete confirmation state
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   
   // RBAC: Owner, Supervisor can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR';
@@ -256,6 +261,20 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     },
   });
   
+  const deleteEstimateMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest('DELETE', `/api/estimates/${estimateId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      toast({ title: "Estimate deleted" });
+      navigate(getReturnUrl(), { replace: true });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete estimate", variant: "destructive" });
+    },
+  });
+
   const openEstimateScheduleModal = () => {
     // Pre-populate with existing schedule from scheduledDate and scheduledTime
     const rawDate = (estimate as any)?.scheduledDate;
@@ -425,6 +444,37 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               {estimate.status === 'approved' && <CheckCircle className="h-3 w-3" />}
               {estimate.status}
             </span>
+            {canEditEstimate && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-8 w-8 flex items-center justify-center rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const jobId = (estimate as any).jobId;
+                      if (jobId) {
+                        navigate(`/jobs/${jobId}?tab=estimates`);
+                      } else {
+                        navigate('/jobs?tab=estimates');
+                      }
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Estimate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                    onClick={() => setIsDeleteConfirmOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Estimate
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
@@ -1135,6 +1185,28 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           customerFirstName={estimate.customerName?.split(' ')[0] || null}
         />
       )}
+
+      {/* Delete Estimate Confirmation */}
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete estimate?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
+              onClick={() => deleteEstimateMutation.mutate()}
+              disabled={deleteEstimateMutation.isPending}
+            >
+              {deleteEstimateMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

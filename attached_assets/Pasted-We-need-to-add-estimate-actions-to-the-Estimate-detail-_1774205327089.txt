@@ -1,0 +1,80 @@
+We need to add estimate actions to the Estimate detail screen in EcoLogic.
+
+GOAL
+On the estimate screen, the 3-dot menu should include:
+- Edit Estimate
+- Delete Estimate
+
+Delete Estimate should appear directly underneath Edit Estimate in the dropdown.
+
+IMPORTANT
+- Do NOT redesign the screen
+- Keep the existing 3-dot button
+- Match the current menu style/pattern already used elsewhere in the app
+- Do NOT remove or break existing actions like Share / Approve Estimate
+- Preserve mobile styling and spacing
+- Keep this clean on iPhone and iPad
+
+REQUIRED BEHAVIOR
+On the Estimate detail page:
+1. User taps the 3-dot menu
+2. Dropdown opens
+3. It shows:
+   - Edit Estimate
+   - Delete Estimate
+4. Tapping Edit Estimate should open the correct existing estimate edit flow
+5. Tapping Delete Estimate should trigger a destructive confirmation first
+6. After successful delete:
+   - user should be removed from that estimate detail view safely
+   - route back to the correct previous list/detail context (likely estimates list or job context, whichever is correct in current app flow)
+   - deleted estimate should no longer appear in UI
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the estimate detail screen and its existing 3-dot action menu.
+2. Add “Edit Estimate” to that menu if it does not already exist there.
+3. Add “Delete Estimate” directly below it.
+4. Wire Edit Estimate to the real existing estimate edit flow/source of truth.
+5. Wire Delete Estimate to the real delete-estimate backend flow if it already exists.
+6. If delete flow does not exist yet, implement the safest proper one.
+7. Use the app’s existing destructive confirmation modal/pattern if available.
+8. Make sure delete is blocked/handled correctly if there are business rules around approved/sent/shared estimates.
+9. Preserve RBAC/permissions:
+   - only users who should be able to edit/delete estimates can see/use these actions
+10. Make sure menu alignment/positioning looks correct on mobile, especially because this is a compact header area.
+
+DELETE CONFIRMATION
+Use sensible copy like:
+- Title: Delete estimate?
+- Body: This action cannot be undone.
+If the app already has a standard destructive confirmation style, reuse it.
+
+TECHNICAL NOTES
+- Reuse existing menu/dropdown component patterns
+- Reuse existing icon style if menus elsewhere use icons
+- Keep Edit Estimate above Delete Estimate
+- Delete Estimate should be styled as destructive if current menu patterns support that
+- Do NOT leave dead code or duplicate action handlers
+- Ensure no UI overlap issues in the header after adding the menu items
+
+EXPECTED RESULT
+On the estimate detail screen:
+- 3-dot menu opens cleanly
+- Edit Estimate shows first
+- Delete Estimate shows directly below it
+- Edit works
+- Delete confirms, deletes, and exits cleanly
+- No other estimate page UI is broken
+
+DELIVERABLES
+1. Exact files changed
+2. Where the 3-dot menu was updated
+3. What Edit Estimate now triggers
+4. What Delete Estimate now triggers
+5. What happens after successful deletion
+6. Confirmation that:
+   - menu contains Edit Estimate + Delete Estimate
+   - delete sits directly under edit
+   - permissions still work
+   - mobile layout still looks correct
+
+Please implement it now.
