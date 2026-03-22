@@ -198,7 +198,7 @@ export default function StripeConnectSettings() {
                 className="flex-1 gap-2"
               >
                 {onboardingLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                {status === "pending_onboarding" ? "Complete Onboarding" : "Update Information"}
+                {status === "pending_onboarding" ? "Complete Onboarding" : status === "not_started" ? "Connect" : "Update Information"}
               </Button>
             )}
 
