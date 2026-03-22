@@ -293,6 +293,7 @@ export default function CompanyProfile() {
                 id="name"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
+                placeholder="Enter company name"
                 required
               />
             </div>
@@ -365,6 +366,7 @@ export default function CompanyProfile() {
                   id="phone"
                   value={formData.phone || ""}
                   onChange={(e) => handleChange('phone', formatPhoneInput(e.target.value) || null)}
+                  placeholder="Enter phone"
                   inputMode="numeric"
                   autoComplete="tel"
                 />
@@ -376,6 +378,7 @@ export default function CompanyProfile() {
                   type="email"
                   value={formData.email || ""}
                   onChange={(e) => handleChange('email', e.target.value || null)}
+                  placeholder="Enter email"
                 />
               </div>
             </div>
@@ -392,6 +395,7 @@ export default function CompanyProfile() {
                   handleChange('postalCode', addr.postalCode || null);
                   handleChange('country', addr.country || null);
                 }}
+                placeholder="Enter address"
               />
             </div>
 
@@ -401,6 +405,7 @@ export default function CompanyProfile() {
                 id="addressLine2"
                 value={formData.addressLine2 || ""}
                 onChange={(e) => handleChange('addressLine2', e.target.value || null)}
+                placeholder="Enter address line 2"
               />
             </div>
 
@@ -411,6 +416,7 @@ export default function CompanyProfile() {
                   id="city"
                   value={formData.city || ""}
                   onChange={(e) => handleChange('city', e.target.value || null)}
+                  placeholder="Enter city"
                 />
               </div>
               <div className="space-y-2">
@@ -419,6 +425,7 @@ export default function CompanyProfile() {
                   id="state"
                   value={formData.state || ""}
                   onChange={(e) => handleChange('state', e.target.value || null)}
+                  placeholder="Enter state"
                 />
               </div>
               <div className="space-y-2">
@@ -427,6 +434,7 @@ export default function CompanyProfile() {
                   id="postalCode"
                   value={formData.postalCode || ""}
                   onChange={(e) => handleChange('postalCode', e.target.value || null)}
+                  placeholder="Enter ZIP code"
                 />
               </div>
               <div className="space-y-2">
@@ -435,6 +443,7 @@ export default function CompanyProfile() {
                   id="country"
                   value={formData.country || ""}
                   onChange={(e) => handleChange('country', e.target.value || null)}
+                  placeholder="Enter country"
                 />
               </div>
             </div>
@@ -445,6 +454,7 @@ export default function CompanyProfile() {
                 id="licenseNumber"
                 value={formData.licenseNumber || ""}
                 onChange={(e) => handleChange('licenseNumber', e.target.value || null)}
+                placeholder="Enter license number"
               />
             </div>
 
@@ -454,6 +464,7 @@ export default function CompanyProfile() {
                 id="defaultFooterText"
                 value={formData.defaultFooterText || ""}
                 onChange={(e) => handleChange('defaultFooterText', e.target.value || null)}
+                placeholder="Enter footer text"
                 rows={3}
               />
               <p className="text-xs text-slate-500 dark:text-slate-400">

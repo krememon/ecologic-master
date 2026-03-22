@@ -1,0 +1,78 @@
+We need to update the Company Profile page placeholders in EcoLogic.
+
+CLARIFICATION
+Do NOT leave the fields blank with no placeholder text.
+What we want is clean, intentional placeholder copy for every field on the Company Profile page.
+
+GOAL
+Every input on the Company Profile page should have a matching “Enter …” style placeholder (or the most natural equivalent), similar to how Address Line 1 currently shows “Enter address”.
+
+EXAMPLES
+- Phone → Enter phone
+- Email → Enter email
+- Address Line 1 → Enter address
+- Address Line 2 → Enter address line 2
+- City → Enter city
+- State → Enter state
+- ZIP Code → Enter ZIP code
+- Country → Enter country
+- License Number → Enter license number
+- Default Footer Text → Enter footer text
+
+IMPORTANT
+- Do NOT redesign the page
+- Do NOT change labels
+- Do NOT change save behavior
+- Do NOT affect unrelated pages
+- This is only for the Company Profile page
+- Keep the placeholders clean and consistent
+
+REQUIRED BEHAVIOR
+On the Company Profile page:
+- empty fields should show helpful placeholder text
+- existing saved values should still display normally
+- labels remain exactly as they are
+- placeholders should be consistent and professional across the whole page
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the full Company Profile page/component.
+2. Add/update placeholder text for every field on that page.
+3. Use consistent wording style across the page.
+4. Preserve all existing save/update logic.
+5. Preserve validation and autofill behavior.
+6. Make sure no field on the page is left with the wrong placeholder style.
+
+SUGGESTED PLACEHOLDER COPY
+Use these unless the existing form wording suggests an even more natural equivalent:
+
+- Company Name → Enter company name
+- Phone → Enter phone
+- Email → Enter email
+- Address Line 1 → Enter address
+- Address Line 2 → Enter address line 2
+- City → Enter city
+- State → Enter state
+- ZIP Code → Enter ZIP code
+- Country → Enter country
+- License Number → Enter license number
+- Default Footer Text → Enter footer text
+
+TECHNICAL NOTES
+- This should likely be updating the `placeholder` props/attributes on the Company Profile form controls
+- Only update this page
+- Do NOT remove the existing helper text under Default Footer Text
+- Keep current populated values untouched
+
+VALIDATION
+Please verify:
+1. Company Profile page loads
+2. Every empty field has the correct new placeholder
+3. Existing saved values still show normally
+4. Save/update still works exactly the same
+
+DELIVERABLES
+1. Exact files changed
+2. The final placeholder copy used for each field
+3. Confirmation that labels and save behavior were preserved
+
+Please implement it now.
