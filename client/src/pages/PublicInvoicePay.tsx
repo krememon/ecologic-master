@@ -432,15 +432,15 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 md:py-12">
       <div className="max-w-[900px] mx-auto">
-        <div className="flex flex-col items-center mb-10 gap-2">
+        <div className="text-center mb-8">
           <img
             data-testid="ecologic-wordmark"
             src="/branding/ecologic-wordmark.png"
             alt="EcoLogic"
-            className="w-auto object-contain"
-            style={{ height: '52px', maxWidth: '340px' }}
+            className="mx-auto mb-2 w-auto object-contain"
+            style={{ height: '72px', maxWidth: '480px' }}
           />
-          <p className="text-sm font-medium text-gray-500" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
+          <p className="text-sm text-slate-500 mt-1" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
             Professional contractor management
           </p>
         </div>

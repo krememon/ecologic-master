@@ -1,0 +1,70 @@
+The current change is wrong.
+
+I do NOT want a tiny header wordmark.
+I want the Public Invoice Pay branding to match the large sign-in branding look.
+
+IMPORTANT CLARIFICATION
+- Use the same visible dark EcoLogic wordmark asset that already works on the sign-in/auth screens
+- Do NOT use the white/near-invisible transparent asset on the light background
+- But ALSO do NOT render it tiny
+- The current size is still way too small
+
+GOAL
+On the Public Invoice Pay page, make the EcoLogic branding block look like the sign-in screen branding in terms of visual prominence:
+- large EcoLogic wordmark/logo
+- centered
+- subtitle directly underneath:
+  Professional contractor management
+- same general size/feel as sign-in branding, not a tiny mini-header
+
+CURRENT PROBLEM
+The agent switched to the correct dark asset, but then rendered it much too small.
+This is not a visibility-only issue.
+It still needs to be MUCH larger.
+
+WHAT TO DO
+1. In `client/src/pages/PublicInvoicePay.tsx`, keep using the correct dark wordmark asset that is visible on light backgrounds:
+   - `/branding/ecologic-wordmark.png`
+   or whatever exact existing sign-in asset/path is already used successfully
+2. Make the branding block reuse the SAME sizing pattern / classes / structure as the sign-in/auth branding if possible.
+3. Increase the displayed logo substantially so it visually matches the sign-in page branding.
+4. Keep the subtitle underneath:
+   - `Professional contractor management`
+5. Keep everything centered.
+6. Do NOT redesign the invoice card below.
+
+ROOT REQUIREMENT
+Do NOT guess new tiny values.
+Either:
+- reuse the exact same branding component/styles from sign-in/auth screens
+or
+- match them very closely with the same visual scale
+
+TECHNICAL NOTES
+- The fix should be based on the actual auth/sign-in branding implementation already in the app
+- If sign-in uses a shared branding component, use that here
+- If sign-in uses specific classes, mirror them here
+- Keep aspect ratio correct
+- Use `object-contain`
+- No stretching/cropping
+- Subtitle should remain directly under the logo with clean spacing
+- The logo should feel like a hero/header brand block, not a nav logo
+
+EXPECTED RESULT
+The Public Invoice Pay page should have:
+- a big EcoLogic logo, like sign-in
+- visible and crisp on the light background
+- subtitle underneath
+- no more tiny header look
+
+DELIVERABLES
+1. Exact file changed
+2. Exact sign-in branding asset/component/classes reused
+3. Exact before/after sizing values
+4. Confirmation that:
+   - the dark visible wordmark asset is used
+   - the logo is now large like sign-in
+   - subtitle remains underneath
+   - invoice card layout still works
+
+Please fix the size properly now by matching the sign-in branding, not by using a tiny top header.
