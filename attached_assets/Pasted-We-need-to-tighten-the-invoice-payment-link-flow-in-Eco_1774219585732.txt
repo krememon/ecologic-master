@@ -1,0 +1,98 @@
+We need to tighten the invoice payment-link flow in EcoLogic when Stripe is not connected.
+
+CURRENT STATUS
+Right now:
+- if the contractor/user does NOT have Stripe connected
+- the copied/pasted public payment link does NOT let the client pay
+
+That part is good.
+
+BUT the UX is still wrong, because the contractor can still copy the link in the first place.
+
+GOAL
+If the contractor/company does NOT have Stripe connected, they should NOT be able to copy the invoice payment link at all.
+
+Instead:
+- block the copy-link action immediately
+- show a popup/modal telling them they need to connect Stripe to use this feature
+
+DESIRED BEHAVIOR
+When user taps the invoice payment-link action (Pay / Send Invoice / whichever button currently copies the link):
+
+1. If Stripe IS connected:
+   - keep current behavior
+   - copy the payment link normally
+   - show normal success feedback
+
+2. If Stripe is NOT connected:
+   - do NOT copy the link
+   - do NOT generate a usable payment link flow
+   - show a popup/modal message explaining they must connect Stripe first
+
+POPUP REQUIREMENTS
+Use the app’s existing modal/dialog/alert pattern if one exists.
+
+Suggested copy:
+Title:
+Connect Stripe to use online payments
+
+Body:
+You need to connect your Stripe account before you can send customers a payment link for online invoice payments.
+
+Primary action:
+Connect Stripe
+
+Secondary action:
+Cancel
+
+Primary action should take them to the existing Stripe payouts/connect page in Customize (or the exact existing Stripe connection flow already in the app).
+
+IMPORTANT
+- Do NOT redesign the whole invoice flow
+- Do NOT change the actual payment-link behavior for connected users
+- Do NOT allow disconnected users to copy the link
+- Do NOT rely only on the public payment page to block payment; block it earlier at the source too
+- Preserve the backend safety block that already prevents client payment if Stripe is missing
+- This is a UX + gating fix on the contractor side
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact UI action(s) that currently copy the invoice payment link.
+2. Before copying, check whether the company/user has a connected Stripe account.
+3. If no Stripe connection exists:
+   - block the copy action
+   - open the popup/modal
+4. Wire the popup primary button to the existing Stripe connect/payouts setup screen.
+5. Preserve the existing connected-company path exactly.
+6. Apply this to every place the invoice payment link can be copied from, not just one button, if there are multiple entry points.
+7. Keep the backend payment blocking in place as defense in depth.
+
+TECHNICAL NOTES
+- Reuse the same Stripe-connected source of truth already used for billing/payout readiness
+- Prefer checking the real company payouts/connect status, not a duplicated local guess
+- Reuse existing dialog components and navigation patterns
+- If there is already a “connect Stripe first” modal elsewhere, reuse that pattern/copy where appropriate
+- Make sure disconnected users do not get misleading “link copied” success toasts
+
+VALIDATION
+Please verify:
+1. Connected company taps Send Invoice / Pay link copy action
+2. Link copies normally
+
+3. Disconnected company taps the same action
+4. Link does NOT copy
+5. Popup appears explaining Stripe must be connected
+6. Tapping Connect Stripe routes to the correct payouts/connect setup page
+7. Public payment link block still remains in place as backup
+
+DELIVERABLES
+1. Exact files changed
+2. What copy-link action(s) were gated
+3. What Stripe-connected check was used
+4. What popup/modal copy and actions were added
+5. Confirmation that:
+   - disconnected users can no longer copy payment links
+   - connected users still can
+   - popup routes to Stripe connect setup
+   - backend safety block still remains
+
+Please implement it now.

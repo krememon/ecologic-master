@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus, Send } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -171,6 +171,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndTime, setScheduleEndTime] = useState("");
+  const [showStripeGateDialog, setShowStripeGateDialog] = useState(false);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   const canEditJob = role === 'OWNER' || role === 'SUPERVISOR';
@@ -199,6 +200,12 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       return res.json();
     },
     enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: stripeConnectStatus } = useQuery<{ chargesEnabled: boolean; hasAccount: boolean }>({
+    queryKey: ['/api/stripe-connect/status'],
+    enabled: isAuthenticated && canCreatePaymentLink,
+    staleTime: 60_000,
   });
 
   const { data: legacyPhotos = [] } = useQuery<JobPhoto[]>({
@@ -419,6 +426,10 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   // Handle Send Invoice button click - ensures invoice exists, then copies payment link to clipboard
   const [sendLinkLoading, setSendLinkLoading] = useState(false);
   const handleSendInvoiceLink = async () => {
+    if (!stripeConnectStatus?.chargesEnabled) {
+      setShowStripeGateDialog(true);
+      return;
+    }
     setSendLinkLoading(true);
     try {
       const inv = await ensureInvoice();
@@ -1839,6 +1850,42 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stripe Connect Gate Dialog — shown when user tries to copy payment link without Stripe connected */}
+      <Dialog open={showStripeGateDialog} onOpenChange={setShowStripeGateDialog}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 mx-auto mb-2">
+              <CreditCard className="h-6 w-6 text-blue-600" />
+            </div>
+            <DialogTitle className="text-center">Connect Stripe to use online payments</DialogTitle>
+            <DialogDescription className="text-center">
+              You need to connect your Stripe account before you can send customers a payment link for online invoice payments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            {(role === 'OWNER') && (
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setShowStripeGateDialog(false);
+                  navigate('/settings/stripe-connect');
+                }}
+              >
+                Connect Stripe
+              </Button>
+            )}
+            {(role !== 'OWNER') && (
+              <p className="text-sm text-center text-muted-foreground px-2">
+                Please ask your company owner to connect a Stripe account in Settings to enable online invoice payments.
+              </p>
+            )}
+            <Button variant="outline" className="w-full" onClick={() => setShowStripeGateDialog(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
