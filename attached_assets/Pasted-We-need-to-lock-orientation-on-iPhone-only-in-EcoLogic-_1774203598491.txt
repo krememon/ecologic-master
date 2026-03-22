@@ -1,0 +1,54 @@
+We need to lock orientation on iPhone only in EcoLogic.
+
+GOAL
+The iPhone app should be portrait-only. Users on iPhone should NOT be able to rotate the app into landscape at all.
+
+At the same time:
+- iPad should still support rotation
+- iPad can remain portrait + landscape
+- Only iPhone should be locked to vertical/portrait
+
+IMPORTANT
+- Do NOT change UI layouts
+- Do NOT redesign any screens
+- Do NOT affect web browser behavior unnecessarily
+- This is specifically for the native mobile app behavior
+- Preserve iPad rotation support
+
+REQUIRED BEHAVIOR
+- On iPhone: app is portrait only
+- On iPhone: rotating the device should not rotate the UI
+- On iPad: rotation should still work normally
+- On iPad: portrait and landscape should still be allowed
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where native iOS orientation support is configured for the app.
+2. Update the iOS native configuration so iPhone supports portrait only.
+3. Keep iPad orientation support enabled.
+4. Make sure this is done the correct native way, not a hacky CSS/JS workaround.
+5. Do NOT rely on frontend rotation listeners to fake this.
+6. Confirm this works in the built iOS app, not just browser simulation.
+
+TECHNICAL NOTES
+- This is likely in the iOS native project / Xcode configuration / plist / deployment settings / orientation masks
+- The correct setup should differentiate iPhone vs iPad supported interface orientations
+- Preserve safe behavior for all existing screens
+- Do NOT break status bar / modal / auth / camera / document preview flows if they depend on orientation settings
+- If any Capacitor/native wrapper config also needs updating, do that too
+
+VALIDATION
+Please verify:
+- iPhone stays portrait only across the whole app
+- iPad still rotates
+- No layout regressions were introduced
+- No special page-level orientation override is fighting the app-level config
+
+DELIVERABLES
+1. Exact files changed
+2. Exact native iOS orientation settings before and after
+3. Confirmation that:
+   - iPhone is portrait only
+   - iPad still supports rotation
+   - no frontend hack was used
+
+Please implement it now.
