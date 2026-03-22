@@ -1696,6 +1696,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "manual_payment_recorded",
   "estimate_created",
   "estimate_updated",
+  "estimate_assigned",
   "estimate_status_changed",
   "estimate_converted",
   "job_unassigned",
@@ -1755,6 +1756,7 @@ export type NotificationType =
   | "manual_payment_recorded"
   | "estimate_created"
   | "estimate_updated"
+  | "estimate_assigned"
   | "estimate_status_changed"
   | "estimate_converted"
   | "job_unassigned"

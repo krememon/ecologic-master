@@ -44,6 +44,7 @@ const PRIORITY_MAP: Record<string, NotificationPriority> = {
   manual_payment_recorded: 'update',
   refund_issued: 'update',
   estimate_created: 'update',
+  estimate_assigned: 'update',
   job_status_changed: 'update',
   tech_clocked_in: 'activity',
   tech_clocked_out: 'activity',
@@ -89,6 +90,7 @@ const getNotificationIcon = (type: string) => {
       return <RefreshCw className="h-4 w-4 text-indigo-500" />;
     case 'estimate_created':
     case 'estimate_updated':
+    case 'estimate_assigned':
     case 'estimate_status_changed':
       return <FileText className="h-4 w-4 text-blue-600" />;
     case 'estimate_converted':

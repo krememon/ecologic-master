@@ -1,0 +1,103 @@
+We need to implement 2 estimate-assignment fixes in EcoLogic.
+
+GOAL
+When an employee is assigned to an estimate:
+1. The assigned employee should receive a push notification
+2. The estimate should actually appear in that employee’s app/views where it is supposed to show up
+
+RIGHT NOW THE BUGS ARE
+- Assigning an employee to an estimate does NOT send that employee a push notification
+- After assigning an employee to an estimate, it does NOT show up on their app
+
+IMPORTANT
+- Do NOT redesign UI
+- Do NOT change the assigning flow unless needed for the backend/data wiring
+- Preserve RBAC and current estimate permissions
+- Keep this focused on estimate assignment behavior
+- Make sure this works in the real app flow, not just visually
+
+FEATURE 1 — PUSH NOTIFICATION ON ESTIMATE ASSIGNMENT
+REQUIRED BEHAVIOR
+When an employee is assigned to an estimate, that assigned employee should get a push notification.
+
+Notification should be sent when:
+- an employee is newly assigned to an estimate
+- ideally only newly added assignees get notified, not every already-assigned person on every save
+
+Notification content can be something like:
+Title: New Estimate Assignment
+Body: You were assigned to estimate EST-xxxxx
+If customer name is available and fits current notification style, even better:
+Body: You were assigned to estimate EST-xxxxx for [Customer Name]
+
+IMPLEMENTATION REQUIREMENTS FOR NOTIFICATIONS
+1. Find the exact estimate assignment save/update flow.
+2. Detect which employees were newly assigned.
+3. Send push notifications only to those newly assigned employees.
+4. Reuse the app’s existing push notification infrastructure/token storage if it already exists.
+5. If there is already a notification service/helper, use it.
+6. Make sure notifications are not sent to:
+   - unassigned users
+   - removed assignees
+   - the assigning user unless they were also newly assigned and current logic intentionally allows that
+7. Avoid duplicate notifications on repeated saves where assignees did not change.
+8. If estimate number/customer name exists, include it cleanly in the payload.
+
+FEATURE 2 — ASSIGNED ESTIMATE MUST SHOW UP IN EMPLOYEE APP
+REQUIRED BEHAVIOR
+After an employee is assigned to an estimate, that estimate should appear in the employee’s app wherever assigned estimates are supposed to appear.
+
+This likely means:
+- estimate lists relevant to assigned users
+- dashboard/home upcoming/assigned work if estimates are meant to surface there
+- any role-filtered estimate/job views that should include assigned estimates
+
+IMPLEMENTATION REQUIREMENTS FOR VISIBILITY
+1. Find how estimate assignees are stored.
+2. Find the employee-facing queries/selectors/endpoints for loading estimates.
+3. Fix the source of truth so assigned estimates are included for the assigned employee.
+4. Make sure the employee can actually see the assigned estimate in their app after assignment.
+5. If the employee must be assigned via a relation table or field that current queries are not reading, fix that properly.
+6. If the estimate list is cached on the client, make sure it refreshes correctly after assignment/login/app reopen.
+7. Preserve role rules:
+   - technicians/employees should only see estimates they should actually have access to
+   - do not accidentally expose all company estimates unless that is already intended
+8. Make sure this works on:
+   - fresh login as assigned employee
+   - app refresh
+   - returning to estimates/dashboard after assignment
+
+TECHNICAL NOTES
+- This is likely a combination of:
+  - assignment persistence issue
+  - employee-facing estimate query/filter not including assigned estimates
+  - no push hook firing on estimate assignee delta
+- Reuse the same pattern we use for assigned jobs if there is one
+- If jobs already notify assigned crew and appear in employee views, mirror that architecture for estimates
+- Make sure assignment updates are using the actual source-of-truth membership/user IDs
+- Ensure push tokens are resolved for the correct employee user IDs
+- Avoid frontend-only fake state; fix backend + query + notification flow properly
+
+VALIDATION
+Please verify all of this:
+1. Assign employee A to estimate
+2. Employee A receives a push notification
+3. Employee A opens the app and can see the estimate
+4. Re-saving the estimate without assignment changes does NOT send duplicate notification
+5. Adding another employee later only notifies the newly added employee
+6. Removing an assignee does not notify them as newly assigned
+7. No RBAC leakage occurs
+
+DELIVERABLES
+1. Exact files changed
+2. Where estimate assignment is persisted
+3. How newly added assignees are detected
+4. What push notification path/service is used
+5. What employee-facing estimate query/visibility logic was fixed
+6. Confirmation that:
+   - newly assigned employees get push notifications
+   - assigned estimates now appear in the employee app
+   - duplicate notifications are avoided
+   - RBAC/visibility rules still work
+
+Please implement it now.

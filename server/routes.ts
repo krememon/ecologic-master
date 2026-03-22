@@ -9315,14 +9315,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      
-      // RBAC: Technician cannot access estimates
-      if (!canAccessEstimates(userRole)) {
-        return res.status(403).json({ message: "You do not have permission to view estimates" });
-      }
 
       const includeArchived = req.query.includeArchived === 'true';
-      const allEstimates = await storage.getEstimatesByCompany(company.id);
+
+      let allEstimates;
+      if (canAccessEstimates(userRole)) {
+        // OWNER / SUPERVISOR see all company estimates
+        allEstimates = await storage.getEstimatesByCompany(company.id);
+      } else {
+        // TECHNICIAN / DISPATCHER see only estimates they are assigned to
+        allEstimates = await storage.getEstimatesByAssignee(company.id, userId);
+      }
 
       let filtered = allEstimates;
       if (!includeArchived) {
@@ -9348,11 +9351,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      
-      // RBAC: Technician cannot access estimates
-      if (!canAccessEstimates(userRole)) {
-        return res.status(403).json({ message: "You do not have permission to view estimates" });
-      }
 
       const jobId = parseInt(req.params.jobId);
       
@@ -9362,9 +9360,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const estimates = await storage.getEstimatesByJob(jobId);
-      console.log(`[Estimates] list jobId=${jobId} userId=${userId} companyId=${company.id} count=${estimates.length}`);
-      res.json(estimates);
+      const jobEstimates = await storage.getEstimatesByJob(jobId);
+
+      // OWNER / SUPERVISOR see all; others only see ones they are assigned to
+      const visibleEstimates = canAccessEstimates(userRole)
+        ? jobEstimates
+        : jobEstimates.filter(est => {
+            const ids: string[] = Array.isArray(est.assignedEmployeeIds) ? (est.assignedEmployeeIds as string[]) : [];
+            return ids.includes(userId);
+          });
+
+      console.log(`[Estimates] list jobId=${jobId} userId=${userId} companyId=${company.id} count=${visibleEstimates.length}`);
+      res.json(visibleEstimates);
     } catch (error) {
       console.error("Error fetching estimates:", error);
       res.status(500).json({ message: "Failed to fetch estimates" });
@@ -9492,6 +9499,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         linkUrl: `/estimates/${estimate.id}`,
       });
 
+      // Notify newly assigned employees (all are new on create)
+      const assigneesOnJobCreate: string[] = Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [];
+      if (assigneesOnJobCreate.length > 0) {
+        const estNum = (estimate as any).estimateNumber || `#${estimate.id}`;
+        await notifyUsers(assigneesOnJobCreate, {
+          companyId,
+          type: 'estimate_assigned',
+          title: 'New Estimate Assignment',
+          body: estClientName ? `You were assigned to estimate ${estNum} for ${estClientName}` : `You were assigned to estimate ${estNum}`,
+          entityType: 'estimate',
+          entityId: estimate.id,
+          linkUrl: `/estimates/${estimate.id}`,
+          excludeUserIds: [userId],
+        });
+      }
+
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating estimate:", error);
@@ -9611,6 +9634,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         linkUrl: `/estimates/${estimate.id}`,
       });
 
+      // Notify newly assigned employees (all are new on create)
+      const assigneesOnCreate: string[] = Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [];
+      if (assigneesOnCreate.length > 0) {
+        const estNum = (estimate as any).estimateNumber || `#${estimate.id}`;
+        await notifyUsers(assigneesOnCreate, {
+          companyId,
+          type: 'estimate_assigned',
+          title: 'New Estimate Assignment',
+          body: estClientName2 ? `You were assigned to estimate ${estNum} for ${estClientName2}` : `You were assigned to estimate ${estNum}`,
+          entityType: 'estimate',
+          entityId: estimate.id,
+          linkUrl: `/estimates/${estimate.id}`,
+          excludeUserIds: [userId], // Don't self-notify the assigner
+        });
+      }
+
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating standalone estimate:", error);
@@ -9630,17 +9669,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      
-      // RBAC: Technician cannot access estimates
-      if (!canAccessEstimates(userRole)) {
-        return res.status(403).json({ message: "You do not have permission to view estimates" });
-      }
 
       const estimateId = parseInt(req.params.id);
       const estimate = await storage.getEstimate(estimateId);
       
       if (!estimate || estimate.companyId !== company.id) {
         return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // OWNER / SUPERVISOR can see any estimate; others only if they are assigned
+      if (!canAccessEstimates(userRole)) {
+        const assignedIds: string[] = Array.isArray(estimate.assignedEmployeeIds) ? (estimate.assignedEmployeeIds as string[]) : [];
+        if (!assignedIds.includes(userId)) {
+          return res.status(403).json({ message: "You do not have permission to view this estimate" });
+        }
       }
 
       console.log(`[Estimates] get estimateId=${estimateId} jobId=${estimate.jobId} companyId=${company.id} requestedStartAt=${(estimate as any).requestedStartAt}`);
@@ -9741,11 +9783,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "employeeIds must be an array" });
       }
 
+      const oldAssignedIds: string[] = Array.isArray(existingEstimate.assignedEmployeeIds) ? (existingEstimate.assignedEmployeeIds as string[]) : [];
+      const newlyAssigned = employeeIds.filter((id: string) => !oldAssignedIds.includes(id));
+
       const updated = await storage.updateEstimate(estimateId, {
         assignedEmployeeIds: employeeIds,
       });
 
-      console.log(`[Estimates] update assignees estimateId=${estimateId} count=${employeeIds.length}`);
+      // Notify newly assigned employees
+      if (newlyAssigned.length > 0) {
+        const estNum = existingEstimate.estimateNumber || `#${estimateId}`;
+        const custName = (existingEstimate as any).customerName || '';
+        await notifyUsers(newlyAssigned, {
+          companyId,
+          type: 'estimate_assigned',
+          title: 'New Estimate Assignment',
+          body: custName ? `You were assigned to estimate ${estNum} for ${custName}` : `You were assigned to estimate ${estNum}`,
+          entityType: 'estimate',
+          entityId: estimateId,
+          linkUrl: `/estimates/${estimateId}`,
+        });
+      }
+
+      console.log(`[Estimates] update assignees estimateId=${estimateId} count=${employeeIds.length} newlyAssigned=${newlyAssigned.length}`);
       res.json(updated);
     } catch (error) {
       console.error("Error updating estimate assignees:", error);
@@ -9771,8 +9831,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Validation error", errors: parsed.error.flatten() });
       }
 
+      // Detect newly assigned employees before updating
+      const oldAssignedIds: string[] = Array.isArray(existing.assignedEmployeeIds) ? (existing.assignedEmployeeIds as string[]) : [];
+      const incomingIds: string[] = Array.isArray(parsed.data.assignedEmployeeIds) ? (parsed.data.assignedEmployeeIds as string[]) : oldAssignedIds;
+      const newlyAssigned = incomingIds.filter(id => !oldAssignedIds.includes(id));
+
       const updated = await storage.updateEstimate(estimateId, parsed.data);
-      console.log(`[Estimates] full update estimateId=${estimateId} companyId=${companyId}`);
+
+      // Notify newly assigned employees
+      if (newlyAssigned.length > 0) {
+        const estNum = (existing as any).estimateNumber || `#${estimateId}`;
+        const custName = (existing as any).customerName || parsed.data.customerName || '';
+        await notifyUsers(newlyAssigned, {
+          companyId,
+          type: 'estimate_assigned',
+          title: 'New Estimate Assignment',
+          body: custName ? `You were assigned to estimate ${estNum} for ${custName}` : `You were assigned to estimate ${estNum}`,
+          entityType: 'estimate',
+          entityId: estimateId,
+          linkUrl: `/estimates/${estimateId}`,
+        });
+      }
+
+      console.log(`[Estimates] full update estimateId=${estimateId} companyId=${companyId} newlyAssigned=${newlyAssigned.length}`);
       res.json(updated);
     } catch (error) {
       console.error("Error updating estimate:", error);

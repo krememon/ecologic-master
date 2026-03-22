@@ -357,6 +357,7 @@ export interface IStorage {
   getEstimatesByJob(jobId: number): Promise<Estimate[]>;
   getEstimateApprovalSignaturesByJobId(jobId: number): Promise<Pick<Estimate, 'id' | 'estimateNumber' | 'title' | 'signatureDataUrl' | 'approvedAt' | 'totalCents' | 'status'>[]>;
   getEstimatesByCompany(companyId: number): Promise<Estimate[]>;
+  getEstimatesByAssignee(companyId: number, userId: string): Promise<Estimate[]>;
   getEstimate(id: number): Promise<EstimateWithItems | undefined>;
   getEstimateSecure(id: number, companyId: number): Promise<EstimateWithItems | undefined>;
   createEstimate(payload: CreateEstimatePayload, companyId: number, userId: string): Promise<EstimateWithItems>;
@@ -3066,6 +3067,20 @@ export class DatabaseStorage implements IStorage {
       });
     }
     
+    return results;
+  }
+
+  async getEstimatesByAssignee(companyId: number, userId: string): Promise<Estimate[]> {
+    const results = await db
+      .select()
+      .from(estimates)
+      .where(
+        and(
+          eq(estimates.companyId, companyId),
+          sql`${estimates.assignedEmployeeIds} @> ${JSON.stringify([userId])}::jsonb`
+        )
+      )
+      .orderBy(desc(estimates.updatedAt));
     return results;
   }
 
