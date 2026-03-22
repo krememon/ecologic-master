@@ -1,0 +1,57 @@
+We need to fix the post-signup redirect behavior in EcoLogic for BOTH owner and employee signup flows.
+
+GOAL
+After a user successfully finishes account creation / company join, they should land on the Home / Dashboard page — NOT the Jobs/Estimates page.
+
+IMPORTANT
+- Do NOT change any UI
+- Do NOT change the signup/join flow itself unless needed for the redirect
+- Preserve all auth/session/bootstrap logic
+- This should apply to both:
+  - new owner account/company creation flow
+  - employee signup / join-company flow
+- Do NOT unintentionally change normal returning-user login behavior unless it is clearly using the same incorrect redirect and should also go to Dashboard
+
+REQUIRED BEHAVIOR
+Current issue:
+- After successful signup, user is being brought into Jobs/Estimates first
+
+Correct behavior:
+- After successful owner account/company creation → land on Home / Dashboard
+- After successful employee signup / company join → land on Home / Dashboard
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact success redirect path for the owner signup/company creation flow.
+2. Find the exact success redirect path for the employee signup/join-company flow.
+3. Change both so they land on the app’s actual Home / Dashboard route.
+4. Preserve any required session initialization, company bootstrap, membership bootstrap, onboarding completion, and billing/paywall checks before redirect.
+5. Do NOT break:
+   - returning user login
+   - invite acceptance flow
+   - paywall / subscription flow
+   - onboarding completion logic
+   - protected route behavior
+6. If a shared post-auth redirect helper exists, update it carefully so both new owner + employee first-entry flows land on Dashboard.
+7. If Jobs/Estimates is opening because of a default tab state instead of an explicit redirect, fix the root cause.
+
+TECHNICAL NOTES
+- Reuse the real Dashboard/Home route already used in the app
+- Do NOT invent a new route
+- Avoid redirect flicker / double navigation
+- Make sure refresh after signup still keeps the user in the authenticated app properly
+- If owner and employee flows currently go through separate success handlers, update both explicitly
+- If one of these flows was already correct, leave it alone and only fix the incorrect one — but verify both
+
+DELIVERABLES
+1. Exact files changed
+2. Exact redirect path before and after
+3. Where the redirect was triggered for:
+   - owner signup
+   - employee signup/join flow
+4. Confirmation that:
+   - owner signup now lands on Home / Dashboard
+   - employee signup/join flow now lands on Home / Dashboard
+   - Jobs/Estimates no longer opens first after signup
+   - returning-user login and other auth flows were not unintentionally changed
+
+Please implement it now.
