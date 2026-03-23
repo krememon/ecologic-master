@@ -30,31 +30,51 @@ function isNativeMobile(): boolean {
   }
 }
 
+// Mirrors the shouldAttachBearer() logic in main.tsx.
+// Returns true on native platforms and cross-domain web previews (canvas / picard origin).
+// Returns false on same-origin production web — session cookies are used there instead.
+function shouldAttachBearer(): boolean {
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap?.getPlatform?.() && cap.getPlatform() !== "web") return true;
+    const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
+    if (!prodBase) return false;
+    return window.location.origin !== prodBase;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchAuthUser(): Promise<AuthUser | null> {
-  const attempt = async (): Promise<Response> => {
-    // Include the native Bearer token when it is stored in localStorage.
-    // This is required because Capacitor WebViews always carry a stale
-    // connect.sid cookie, so we cannot rely on cookie-based session auth
-    // after a cross-domain Google OAuth exchange on the production server.
+  const doFetch = (withBearer: boolean): Promise<Response> => {
     const headers: Record<string, string> = {};
-    try {
-      const sid = typeof localStorage !== "undefined"
-        ? localStorage.getItem("nativeSessionId")
-        : null;
-      if (sid) headers["Authorization"] = `Bearer ${sid}`;
-    } catch {}
-    return fetch("/api/auth/user", {
-      credentials: "include",
-      cache: "no-store",
-      headers,
-    });
+    if (withBearer) {
+      try {
+        const sid = typeof localStorage !== "undefined"
+          ? localStorage.getItem("nativeSessionId")
+          : null;
+        if (sid) headers["Authorization"] = `Bearer ${sid}`;
+      } catch {}
+    }
+    return fetch("/api/auth/user", { credentials: "include", cache: "no-store", headers });
   };
 
-  let res = await attempt();
+  const useBearer = shouldAttachBearer();
+  let res = await doFetch(useBearer);
 
   if (res.status === 401) {
-    await new Promise((r) => setTimeout(r, 600));
-    res = await attempt();
+    if (useBearer && !isNativeMobile()) {
+      // Cross-domain web (canvas / preview): Bearer returned 401 → the stored session is
+      // stale or expired. Clear it so subsequent requests don't keep sending the dead token,
+      // then retry with cookie auth (works on same-domain web; returns 401 on cross-domain,
+      // which correctly shows the sign-in page).
+      try { localStorage.removeItem("nativeSessionId"); } catch {}
+      res = await doFetch(false);
+    } else {
+      // Native: wait briefly and retry — Capacitor WebViews may lag before the session is ready.
+      await new Promise((r) => setTimeout(r, 600));
+      res = await doFetch(isNativeMobile());
+    }
   }
 
   if (res.status === 401) {

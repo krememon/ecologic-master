@@ -1,19 +1,27 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /**
- * Returns Authorization header if a native session token is stored in
- * localStorage (set after a successful Google OAuth exchange on the
- * production server). The token lets the dev / preview server authenticate
- * the request against the shared PostgreSQL session store.
+ * Returns Authorization header if a native session token is stored in localStorage AND
+ * we're in a context that actually requires Bearer auth:
+ *   • Capacitor native (iOS / Android)
+ *   • Cross-domain web preview (canvas / picard origin ≠ production origin)
+ * On same-origin production web, session cookies handle auth — attaching a stale
+ * nativeSessionId as Bearer would force every request through the MobileAuth path and
+ * return 401 if that session expired, breaking all API calls.
  */
 function getNativeAuthHeaders(): Record<string, string> {
   try {
+    const cap = (window as any).Capacitor;
+    const isNative = cap?.getPlatform?.() && cap.getPlatform() !== "web";
+    if (!isNative) {
+      // On web: only attach Bearer when the current origin differs from the production server.
+      const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
+      if (!prodBase || window.location.origin === prodBase) return {};
+    }
     const sessionId = typeof localStorage !== "undefined"
       ? localStorage.getItem("nativeSessionId")
       : null;
-    if (sessionId) {
-      return { Authorization: `Bearer ${sessionId}` };
-    }
+    if (sessionId) return { Authorization: `Bearer ${sessionId}` };
   } catch {
     // localStorage not available (e.g. SSR context)
   }

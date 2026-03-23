@@ -12,8 +12,27 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[UnhandledRejection]", e.reason);
 });
 
+// Returns true only when we're on a context that requires Bearer auth:
+//   • Capacitor native app (iOS / Android) — session cookies are unreliable in WebViews
+//   • Web preview / canvas on a DIFFERENT origin than the production server — the production
+//     session cookie's domain doesn't match, so we must use Bearer from localStorage instead.
+// On same-origin production web, session cookies work fine and Bearer must NOT be attached
+// (stale or expired tokens in localStorage would poison every request and break auth).
+function shouldAttachBearer(): boolean {
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap?.getPlatform?.() && cap.getPlatform() !== "web") return true; // native iOS/Android
+    const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
+    if (!prodBase) return false; // no production URL configured → same-domain dev
+    return window.location.origin !== prodBase; // cross-domain canvas/preview
+  } catch {
+    return false;
+  }
+}
+
 // Global fetch interceptor — automatically attaches Bearer token to every
 // same-origin API request so native sessions work without modifying each fetch call.
+// Only fires when shouldAttachBearer() is true (native or cross-domain web preview).
 (function installFetchInterceptor() {
   const _fetch = window.fetch.bind(window);
   window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -24,7 +43,7 @@ window.addEventListener("unhandledrejection", (e) => {
           ? input.toString()
           : (input as Request).url;
       const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
-      if (isSameOrigin) {
+      if (isSameOrigin && shouldAttachBearer()) {
         const sid = localStorage.getItem("nativeSessionId");
         if (sid) {
           const existingHeaders = (init?.headers || {}) as Record<string, string>;
