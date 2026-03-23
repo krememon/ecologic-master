@@ -13451,9 +13451,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (e) {}
 
       const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+      // Only count payments with terminal statuses — matches recomputeInvoiceTotalsFromPayments.
+      // This prevents abandoned 'processing' rows (created by create-intent but never confirmed)
+      // from doubling the displayed total relative to the list/ledger view.
+      const SETTLED_STATUSES = new Set(['paid', 'succeeded', 'completed']);
       let totalPaymentsCents = 0;
       let totalRefundedOnPayments = 0;
       for (const p of invoicePayments) {
+        const pStatus = ((p as any).status || '').toLowerCase();
+        if (!SETTLED_STATUSES.has(pStatus)) continue;
         const pAmt = (p as any).amountCents || Math.round(parseFloat((p as any).amount || '0') * 100);
         totalPaymentsCents += pAmt;
         totalRefundedOnPayments += ((p as any).refundedAmountCents || 0);
@@ -13569,13 +13575,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.log(`[pay-perms] invoiceId=${invoiceId} isSplitPayment=${isSplitPayment} isReferredIn=${isReferredIn} isSenderViewing=${isSenderViewing} role=${userRole} canRecordManualPayment=${canRecordManualPayment}`);
 
+      // Filter history to settled payments only — keeps display in sync with totals calculation
+      // and hides abandoned 'processing' rows from the Payment History section.
+      const settledEnrichedPayments = enrichedPayments.filter(
+        (p: any) => SETTLED_STATUSES.has(((p as any).status || '').toLowerCase())
+      );
       const shareEnrichedPayments = isSplitPayment
-        ? enrichedPayments.map((p: any) => ({
+        ? settledEnrichedPayments.map((p: any) => ({
             ...p,
             amountCents: p.originalAmountCents ? p.amountCents : Math.round((p.amountCents || 0) * companySharePct),
             originalAmountCents: p.originalAmountCents || p.amountCents,
           }))
-        : enrichedPayments;
+        : settledEnrichedPayments;
 
       res.json({
         invoiceId,

@@ -1,0 +1,77 @@
+We need to fix a payment detail display bug in EcoLogic.
+
+BUG
+I processed an online payment and the Payments list shows the correct amount.
+
+But when I tap into that payment card/detail screen, it shows the payment as DOUBLE the real amount.
+
+IMPORTANT CONTEXT
+- I checked Stripe
+- Stripe shows the correct amount
+- The contractor received the correct amount
+- So this is NOT a real charge/Stripe routing bug
+- This is a payment detail display/calculation bug inside EcoLogic’s payment detail screen
+
+GOAL
+Fix the inside of the payment card/detail view so it shows the correct payment totals and does NOT double-count the payment.
+
+CURRENT EXAMPLE
+- Payments list amount is correct
+- Payment detail screen top total / total payments area is showing double
+- Payment history is likely counting the same payment twice or using the wrong aggregation logic
+
+IMPORTANT
+- Do NOT redesign the Payments UI
+- Do NOT change real payment processing
+- Do NOT change Stripe logic if the Stripe charge amount is already correct
+- This is a data/query/display fix for the payment detail screen
+- Preserve refunds/history behavior unless they are part of the bug
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the payment detail screen/card view that opens when tapping a payment from the Payments page.
+2. Find why the detail screen is showing double the real amount.
+3. Check for likely causes such as:
+   - duplicate aggregation of the same payment row
+   - joining both invoice payment records and Stripe payment records and summing both
+   - summing payment history rows incorrectly
+   - counting both gross and display amounts together
+   - duplicate records in the detail query serialization
+   - using total invoice paid twice in header calculation
+4. Fix the detail screen so it shows the real correct amount only once.
+5. Preserve the correct list-page amount.
+6. Preserve Stripe as source of truth for actual collected amount.
+7. Make sure payment history rows and summary totals stay in sync.
+8. Validate for:
+   - one online payment
+   - multiple online payments
+   - partial payments
+   - refunded payments if supported
+9. If the issue is only on invoice-linked online payments, fix that specifically without breaking manual cash/check/card recorded payments.
+
+TECHNICAL NOTES
+- Since Stripe amount is correct and the payment list amount is correct, the bug is almost certainly in the detail view query/aggregation/render logic
+- Check the endpoint feeding the payment detail page
+- Check whether it is combining:
+  - invoice.totalPaid
+  - payment rows
+  - payment summary
+  in a way that duplicates the same payment
+- The correct result should be one source of truth for the displayed collected amount
+
+EXPECTED RESULT
+- Payment list still shows correct amount
+- Payment detail screen now also shows the correct amount
+- No doubling
+- Stripe-paid invoice amounts remain accurate
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why the detail view was doubling the amount
+3. What query/aggregation/display logic was fixed
+4. Confirmation that:
+   - payment detail now shows the correct amount
+   - payment list still shows the correct amount
+   - Stripe processing was untouched
+   - no duplicate counting remains
+
+Please implement it now.
