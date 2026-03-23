@@ -141,7 +141,7 @@ export default function Taxes() {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="New York Sales Tax"
+                placeholder="Enter name"
                 className="mt-1"
               />
             </div>
@@ -156,7 +156,7 @@ export default function Taxes() {
                   max="20"
                   value={ratePercent}
                   onChange={(e) => setRatePercent(e.target.value)}
-                  placeholder="8.625"
+                  placeholder="Enter percent"
                   className="pr-8"
                 />
                 <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

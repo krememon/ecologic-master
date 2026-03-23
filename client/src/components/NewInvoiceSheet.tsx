@@ -770,7 +770,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                     id="newTaxName"
                     value={newTaxName}
                     onChange={(e) => setNewTaxName(e.target.value)}
-                    placeholder="e.g., NY State Tax"
+                    placeholder="Enter name"
                     className="mt-1"
                   />
                 </div>
@@ -785,7 +785,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                       max="20"
                       value={newTaxRate}
                       onChange={(e) => setNewTaxRate(e.target.value)}
-                      placeholder="8.625"
+                      placeholder="Enter percent"
                       className="pr-8"
                     />
                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
