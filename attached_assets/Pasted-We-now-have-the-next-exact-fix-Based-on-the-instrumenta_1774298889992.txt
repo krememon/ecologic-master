@@ -1,0 +1,52 @@
+We now have the next exact fix.
+
+Based on the instrumentation, the likely problem is one of these:
+
+the deep-link path is losing time on await import("@/lib/capacitor"), letting poll win first
+the deep-link path and poll path are not sharing the exact same module instance / in-flight guard state because the deep-link uses dynamic import
+
+I want the smallest direct fix now.
+
+Do this:
+
+In client/src/App.tsx, remove the dynamic import for the auth deep-link handling path.
+Do NOT use await import("@/lib/capacitor") inside the deep-link callback anymore.
+Replace it with a static top-level import from @/lib/capacitor.
+Make sure both paths use the same shared symbols from the same module instance:
+exchangeNativeAuthCode
+any _inFlightCodes
+any _authHandled
+any consumed-code helpers / dedupe helpers
+Eagerly load the capacitor auth helpers before auth callbacks can fire.
+static import at top of file is preferred
+no lazy auth import inside handleAuthCallbackUrl
+Keep the instrumentation logs in place for this test.
+Then test one fresh auth run and tell me:
+which source posted first: deep-link or poll
+whether both sources still posted
+whether only one /api/auth/exchange-code request reached server with hadInStore=true
+whether any second request reached with hadInStore=false
+whether the user landed signed in without bouncing to login
+
+Reply in this exact format:
+
+Exact file changed
+Exact dynamic import removed
+Exact static import added
+Whether deep-link and poll now share the same module state
+Which source hit exchange first after the fix
+Whether the losing path still reached exchange
+Final test result
+
+Important:
+Do NOT add more workaround logic first.
+Do this smallest direct fix first:
+remove the deep-link dynamic import and make both completion paths share the exact same guard state.
+
+And here’s what you do after that:
+
+publish
+test exactly once from a fully closed app
+send me the new logs/result
+
+If that still loops, the next step is to disable polling entirely on iOS and make deep-link the only completion path.

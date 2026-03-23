@@ -84,6 +84,22 @@ import JobOfferInvite from "@/pages/JobOfferInvite";
 import JobOffer from "@/pages/JobOffer";
 import UpgradePlan from "@/pages/UpgradePlan";
 
+// Static top-level import so that both the deep-link path (appUrlOpen /
+// handleAuthCallbackUrl) and the polling path (startGoogleAuthNative interval)
+// share the EXACT same module instance and therefore the same _inFlightCodes
+// Set and _authHandled boolean.  A dynamic await import() is cached by the
+// module loader but the cache lookup itself takes a microtask tick — wide
+// enough for the poll to win the Set.add() race before the deep-link path
+// even reaches the guard.
+import {
+  isNativePlatform,
+  closeSystemBrowser,
+  stopPolling,
+  exchangeNativeAuthCode,
+  _inFlightCodes_debug,
+  _authHandled_debug,
+} from "@/lib/capacitor";
+
 let _nativeLaunchUrlChecked = false;
 let _nativeLaunchUrlPromise: Promise<void> | null = null;
 
@@ -704,11 +720,7 @@ async function handleAuthCallbackUrl(
 
   if (error) {
     console.error("[google-auth] Deep link error param:", error);
-    // Stop polling too
-    try {
-      const { stopPolling } = await import("@/lib/capacitor");
-      stopPolling();
-    } catch {}
+    stopPolling(); // statically imported — no await, no microtask delay
     window.location.href = "/login?error=" + encodeURIComponent(error);
     return true;
   }
@@ -720,27 +732,21 @@ async function handleAuthCallbackUrl(
   }
 
   const codePrefix = code.substring(0, 8);
-  console.log(`[deep-link] received code=${codePrefix}… — importing capacitor for guards check`);
+  // Log guard state synchronously — statically imported functions, zero latency
+  const guardA = localStorage.getItem("nativeAuthCodeConsumed") === code;
+  const guardB = _inFlightCodes_debug(code);
+  const guardC = _authHandled_debug();
+  const sess   = !!localStorage.getItem("nativeSessionId");
+  console.log(
+    `[deep-link] received code=${codePrefix}… ` +
+    `guardA_consumed=${guardA} ` +
+    `guardB_inFlight=${guardB} ` +
+    `guardC_authHandled=${guardC} ` +
+    `existingSession=${sess}`,
+  );
+  console.log(`[deep-link] calling exchangeNativeAuthCode source=deep-link code=${codePrefix}…`);
   try {
-    const { exchangeNativeAuthCode, _inFlightCodes_debug, _authHandled_debug }
-      = await import("@/lib/capacitor") as any;
-
-    // Log all guard states before handing off — mirrors the server-side audit
-    const guardA = localStorage.getItem("nativeAuthCodeConsumed") === code;
-    const guardB = typeof _inFlightCodes_debug === "function"
-      ? _inFlightCodes_debug(code) : "(unavailable)";
-    const guardC = typeof _authHandled_debug === "function"
-      ? _authHandled_debug() : "(unavailable)";
-    const sess   = !!localStorage.getItem("nativeSessionId");
-    console.log(
-      `[deep-link] pre-exchange code=${codePrefix}… ` +
-      `guardA_consumed=${guardA} ` +
-      `guardB_inFlight=${guardB} ` +
-      `guardC_authHandled=${guardC} ` +
-      `existingSession=${sess}`,
-    );
-    console.log(`[deep-link] calling exchangeNativeAuthCode source=deep-link code=${codePrefix}…`);
-    await exchangeNativeAuthCode(code, "deep-link");
+    await exchangeNativeAuthCode(code, "deep-link"); // statically imported
   } catch (err) {
     console.error("[google-auth] Deep link exchange error:", err);
     window.location.href = "/login?error=exchange_failed";
@@ -754,7 +760,8 @@ function useCapacitorDeepLinks() {
 
     async function setup() {
       try {
-        const { isNativePlatform, closeSystemBrowser } = await import("@/lib/capacitor");
+        // isNativePlatform and closeSystemBrowser are statically imported at the
+        // top of this file — no dynamic import needed here.
         if (!isNativePlatform()) {
           console.log("[deep-link] Web platform detected, skipping deep link setup");
           return;
