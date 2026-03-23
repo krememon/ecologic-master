@@ -147,69 +147,18 @@ export async function startGoogleAuthNative(): Promise<void> {
     return;
   }
 
-  const nonce = generateNonce();
   const baseUrl = getApiBaseUrl();
-  const authUrl = `${baseUrl}/api/auth/google?platform=ios&nonce=${nonce}`;
-  console.log("[capacitor] Starting native Google auth, nonce:", nonce.substring(0, 8) + "...");
+  const authUrl = `${baseUrl}/api/auth/google?platform=ios`;
+  console.log("[capacitor] Starting native Google auth via deep link flow");
 
   try {
     const { Browser } = await import("@capacitor/browser");
+    // Open the system browser for Google sign-in. When the OAuth callback
+    // completes on the server, it redirects to ecologic://auth/callback?code=...
+    // which iOS intercepts and fires the appUrlOpen listener in App.tsx.
+    // That listener calls Browser.close(), exchanges the code, stores the
+    // nativeSessionId, and navigates into the app. No polling needed.
     await Browser.open({ url: authUrl, presentationStyle: "popover" as any });
-
-    stopPolling();
-    activePollInterval = setInterval(async () => {
-      if (pollInFlight) return;
-      pollInFlight = true;
-      try {
-        const res = await fetch(`${baseUrl}/api/auth/poll-code?nonce=${nonce}`, { credentials: "include" });
-        const data = await res.json();
-        console.log("[capacitor] Poll result:", data.status);
-
-        if (data.status === "ready" && data.code) {
-          stopPolling();
-          try { await Browser.close(); } catch {}
-          console.log("[capacitor] Got auth code, exchanging...");
-
-          const exchangeRes = await fetch(`${baseUrl}/api/auth/exchange-code`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: data.code }),
-            credentials: "include",
-          });
-
-          if (exchangeRes.ok) {
-            const exchangeData = await exchangeRes.json().catch(() => ({}));
-            if (exchangeData.sessionId) {
-              // Store the sessionId so the native API client can attach it as a
-              // Bearer token. The preview dev server (WebView's domain) will then
-              // look up this session from the shared DB and authenticate the user
-              // without needing a same-domain cookie.
-              localStorage.setItem("nativeSessionId", exchangeData.sessionId);
-              console.log("[capacitor] Stored nativeSessionId in localStorage");
-            }
-            console.log("[capacitor] Auth exchange successful, returning to app...");
-            // Navigate relative — keeps the WebView on its current domain so
-            // Capacitor does NOT open Safari. Auth is handled via Bearer token.
-            window.location.href = "/";
-          } else {
-            console.error("[capacitor] Auth exchange failed:", exchangeRes.status);
-            window.location.href = "/login?error=exchange_failed";
-          }
-        }
-      } catch (err) {
-        console.error("[capacitor] Poll error:", err);
-      } finally {
-        pollInFlight = false;
-      }
-    }, 2000);
-
-    activePollTimeout = setTimeout(async () => {
-      stopPolling();
-      console.error("[capacitor] Auth polling timed out after 5 minutes");
-      try { await Browser.close(); } catch {}
-      window.location.href = "/login?error=timeout";
-    }, 5 * 60 * 1000);
-
   } catch (err) {
     console.error("[capacitor] Browser.open failed:", err);
     throw err;

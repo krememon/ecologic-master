@@ -776,7 +776,12 @@ function useCapacitorDeepLinks() {
               });
 
               if (res.ok) {
-                console.log("[deep-link] Auth code exchanged successfully");
+                const data = await res.json().catch(() => ({}));
+                if (data.sessionId) {
+                  localStorage.setItem("nativeSessionId", data.sessionId);
+                  console.log("[deep-link] Stored nativeSessionId for Bearer auth");
+                }
+                console.log("[deep-link] Auth code exchanged successfully, user signed in");
                 queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
                 const pendingLink = sessionStorage.getItem("pendingDeepLink");
                 if (pendingLink) {

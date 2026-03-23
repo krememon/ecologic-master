@@ -1240,7 +1240,10 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 
       if (err) {
         console.error("[google-auth] Error:", err);
-        if (isIos) return res.redirect("/api/auth/google-complete");
+        if (isIos) {
+          console.log("[google-auth] iOS: error, firing deep link with error");
+          return res.redirect("ecologic://auth/callback?error=oauth_error");
+        }
         if (isPopup) {
           console.log("[google-auth] Popup: error, sending postMessage error");
           return res.send(buildPopupResponseHtml(false, "oauth_error"));
@@ -1257,7 +1260,7 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 
       if (info) {
         if (info.error === 'account_inactive') {
-          if (isIos) return res.redirect("/api/auth/google-complete");
+          if (isIos) return res.redirect("ecologic://auth/callback?error=account_inactive");
           if (isPopup) return res.send(buildPopupResponseHtml(false, "account_inactive"));
           if (returnTo) return res.redirect(`${returnTo}/?error=account_inactive`);
           return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
@@ -1274,7 +1277,7 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 
       if (!user) {
         console.error("[google-auth] No user returned, info:", info);
-        if (isIos) return res.redirect("/api/auth/google-complete");
+        if (isIos) return res.redirect("ecologic://auth/callback?error=oauth_cancelled");
         if (isPopup) {
           console.log("[google-auth] Popup: no user, sending postMessage error");
           return res.send(buildPopupResponseHtml(false, "oauth_cancelled"));
@@ -1286,17 +1289,12 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       if (isIos) {
         const fullUser = await storage.getUser(user.id);
         if (fullUser?.twoFactorEnabled) {
-          console.log("[google-auth] iOS: 2FA required, skipping (not supported in wrapper)");
-          return res.redirect("/api/auth/google-complete");
+          console.log("[google-auth] iOS: 2FA not supported in native wrapper");
+          return res.redirect("ecologic://auth/callback?error=2fa_not_supported");
         }
-        if (nonce) {
-          storeAuthCodeForNonce(nonce, user.id);
-          console.log("[google-auth] iOS: stored auth code for nonce, redirecting to complete page");
-        } else {
-          const code = storeAuthCode(user.id);
-          console.log("[google-auth] iOS: no nonce, stored auth code:", code.substring(0, 8) + "...");
-        }
-        return res.redirect("/api/auth/google-complete");
+        const code = storeAuthCode(user.id);
+        console.log("[google-auth] iOS: auth code stored, firing deep link");
+        return res.redirect(`ecologic://auth/callback?code=${encodeURIComponent(code)}`);
       }
 
       // Popup flow: log user in, save session, then return postMessage HTML
