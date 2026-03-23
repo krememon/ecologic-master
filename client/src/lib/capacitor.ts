@@ -228,6 +228,7 @@ const RESUME_REFRESH_THROTTLE_MS = 20_000;
 
 const RESUME_QUERY_KEYS = [
   "/api/jobs",
+  "/api/time/my-assignments",
   "/api/estimates",
   "/api/leads",
   "/api/notifications",

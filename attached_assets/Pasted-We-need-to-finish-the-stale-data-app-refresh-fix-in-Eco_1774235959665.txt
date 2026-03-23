@@ -1,0 +1,85 @@
+We need to finish the stale-data / app-refresh fix in EcoLogic for the employee Home page.
+
+CURRENT STATUS
+The previous fix partially worked:
+- assigned job appeared on Schedule
+- notification appeared
+
+BUT:
+- it still did NOT appear in the Home page “Today / Upcoming Jobs” area
+
+So the app-resume / notification refresh is only partially fixed.
+
+GOAL
+When a job is dispatched/assigned to an employee, and the employee app resumes or opens from notification, the Home page should also refresh and show that assigned job in the Today / Upcoming Jobs section.
+
+CURRENT BUG
+Employee flow right now:
+- owner/supervisor dispatches employee to a job
+- employee app gets notification
+- employee app Schedule updates
+- BUT Home page still shows “No jobs scheduled today” / stale today-upcoming section
+
+That is incorrect.
+
+IMPORTANT
+- Do NOT redesign the Home page
+- Do NOT change Schedule behavior if it is already correct
+- Do NOT break notifications
+- This is specifically about the Home page’s Today / Upcoming jobs data not refreshing or not using the correct source
+- Preserve RBAC and assigned-only visibility rules
+
+REQUIRED BEHAVIOR
+After a job is assigned/dispatched to an employee:
+1. Schedule should continue to show it
+2. Home page Today / Upcoming Jobs should ALSO show it
+3. This should work when:
+   - app resumes from background
+   - app is already open and regains focus
+   - user taps the push notification
+   - user navigates back to Home
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Home page query/data source for the Today / Upcoming Jobs section.
+2. Find why that query is not picking up the newly assigned job even though Schedule is.
+3. Compare the Home page data source against the Schedule data source.
+4. Fix the Home page so it uses the correct fresh source of truth for assigned jobs.
+5. Ensure the Home page query is invalidated/refetched on:
+   - app resume / foreground
+   - push notification open
+   - relevant assignment/dispatched refresh events
+6. If Home is using a different endpoint/filter than Schedule, update it so assigned jobs for that employee are included correctly.
+7. Preserve sorting/date logic for what counts as “today” vs “upcoming”.
+8. Preserve existing Home page time card / clock-in behavior.
+
+TECHNICAL NOTES
+- Since Schedule is already correct, the backend assignment persistence is likely fine
+- The remaining bug is probably one of:
+  - Home page uses a different endpoint than Schedule
+  - Home page cache is not being invalidated
+  - Home page filter excludes assigned jobs incorrectly
+  - Home page “today/upcoming” logic is using stale or wrong date-bucket logic
+- Reuse the same assigned-job visibility logic that Schedule is already using successfully
+- Do NOT require force-closing the app
+
+VALIDATION
+Please verify:
+1. Employee app in background/open
+2. Owner dispatches employee to a job
+3. Employee receives notification
+4. Schedule shows the job
+5. Home page Today / Upcoming also shows the job
+6. Tapping the notification and opening the app shows fresh Home data
+7. No force quit is required
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why Home page Today / Upcoming was not updating
+3. What Home query/filter/refresh logic was fixed
+4. Confirmation that:
+   - Schedule still works
+   - notifications still work
+   - Home Today / Upcoming now also updates correctly
+   - force-closing is no longer required
+
+Please implement it now.
