@@ -1438,10 +1438,16 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         return res.status(400).json({ message: "Auth code is required" });
       }
 
+      const codePrefix    = code.substring(0, 8);
+      const hadCodeBefore = authCodeStore.has(code);
+      console.log(`[exchange-code] RECEIVED code=${codePrefix}… hadInStore=${hadCodeBefore}`);
+
       const userId = consumeAuthCode(code);
       if (!userId) {
+        console.log(`[exchange-code] 401 code=${codePrefix}… — hadInStore=${hadCodeBefore} (already consumed or expired)`);
         return res.status(401).json({ message: "Invalid or expired auth code" });
       }
+      console.log(`[exchange-code] CONSUMED code=${codePrefix}… userId=${userId}`);
 
       const user = await storage.getUser(userId);
       if (!user) {

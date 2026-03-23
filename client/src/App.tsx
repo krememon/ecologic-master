@@ -719,10 +719,28 @@ async function handleAuthCallbackUrl(
     return true;
   }
 
-  console.log("[google-auth] Deep link has code — handing off to exchange");
+  const codePrefix = code.substring(0, 8);
+  console.log(`[deep-link] received code=${codePrefix}… — importing capacitor for guards check`);
   try {
-    const { exchangeNativeAuthCode } = await import("@/lib/capacitor");
-    await exchangeNativeAuthCode(code);
+    const { exchangeNativeAuthCode, _inFlightCodes_debug, _authHandled_debug }
+      = await import("@/lib/capacitor") as any;
+
+    // Log all guard states before handing off — mirrors the server-side audit
+    const guardA = localStorage.getItem("nativeAuthCodeConsumed") === code;
+    const guardB = typeof _inFlightCodes_debug === "function"
+      ? _inFlightCodes_debug(code) : "(unavailable)";
+    const guardC = typeof _authHandled_debug === "function"
+      ? _authHandled_debug() : "(unavailable)";
+    const sess   = !!localStorage.getItem("nativeSessionId");
+    console.log(
+      `[deep-link] pre-exchange code=${codePrefix}… ` +
+      `guardA_consumed=${guardA} ` +
+      `guardB_inFlight=${guardB} ` +
+      `guardC_authHandled=${guardC} ` +
+      `existingSession=${sess}`,
+    );
+    console.log(`[deep-link] calling exchangeNativeAuthCode source=deep-link code=${codePrefix}…`);
+    await exchangeNativeAuthCode(code, "deep-link");
   } catch (err) {
     console.error("[google-auth] Deep link exchange error:", err);
     window.location.href = "/login?error=exchange_failed";
