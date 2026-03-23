@@ -1181,14 +1181,56 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
     return res.json({ status: "pending" });
   });
 
-  app.get("/api/auth/google-complete", (_req, res) => {
+  // Native iOS OAuth bridge page.
+  // SFSafariViewController (Capacitor Browser plugin) cannot follow a server-side
+  // 302 redirect to a custom URL scheme directly. Instead, we serve this HTTPS page
+  // which immediately fires window.location = 'ecologic://auth/callback?...' via JS.
+  // iOS intercepts the custom scheme, brings the app to the foreground, and fires
+  // appUrlOpen. The app then calls Browser.close() and exchanges the code.
+  app.get("/api/auth/google-complete", (req, res) => {
+    const code  = (req.query.code  as string) || "";
+    const error = (req.query.error as string) || "";
+
+    // Build the deep link the JS will navigate to
+    const deepLink = code
+      ? `ecologic://auth/callback?code=${encodeURIComponent(code)}`
+      : `ecologic://auth/callback?error=${encodeURIComponent(error || "unknown")}`;
+
+    console.log(`[google-complete] Bridge page loaded — ${code ? "success" : "error"}, firing deep link`);
+
     res.setHeader("Content-Type", "text/html");
     return res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign In Complete</title>
-<style>body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;color:#166534}
-.card{text-align:center;padding:2rem}.check{font-size:3rem;margin-bottom:1rem}p{font-size:1.1rem;margin:0.5rem 0}</style></head>
-<body><div class="card"><div class="check">&#10003;</div><p><strong>Sign in complete!</strong></p><p>Return to the EcoLogic app.</p></div></body></html>`);
+<title>Signing in to EcoLogic…</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0fdf4;color:#166534}
+.card{text-align:center;padding:2rem;max-width:320px}
+.spinner{width:48px;height:48px;border:4px solid #bbf7d0;border-top-color:#16a34a;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 1.25rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+h2{font-size:1.1rem;font-weight:600;margin-bottom:.5rem}
+p{font-size:.875rem;color:#4ade80;margin-bottom:1.5rem}
+a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem}
+</style></head>
+<body><div class="card">
+<div class="spinner"></div>
+<h2>Signing you in…</h2>
+<p>Returning to EcoLogic</p>
+<a href="${deepLink}" id="manual" style="display:none">Open EcoLogic</a>
+</div>
+<script>
+(function(){
+  var dl=${JSON.stringify(deepLink)};
+  // Fire immediately — iOS intercepts ecologic:// and opens the app
+  try{ window.location.href = dl; }catch(e){}
+  // Show a manual fallback button after 2.5 s in case deep link didn't fire
+  setTimeout(function(){
+    var btn=document.getElementById('manual');
+    if(btn){ btn.style.display='inline-block'; }
+  }, 2500);
+})();
+</script>
+</body></html>`);
   });
 
   // Helper: build the tiny HTML page that posts a message back to the popup opener
@@ -1241,8 +1283,8 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       if (err) {
         console.error("[google-auth] Error:", err);
         if (isIos) {
-          console.log("[google-auth] iOS: error, firing deep link with error");
-          return res.redirect("ecologic://auth/callback?error=oauth_error");
+          console.log("[google-auth] iOS: error — redirecting to bridge page");
+          return res.redirect("/api/auth/google-complete?error=oauth_error");
         }
         if (isPopup) {
           console.log("[google-auth] Popup: error, sending postMessage error");
@@ -1260,7 +1302,7 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 
       if (info) {
         if (info.error === 'account_inactive') {
-          if (isIos) return res.redirect("ecologic://auth/callback?error=account_inactive");
+          if (isIos) return res.redirect("/api/auth/google-complete?error=account_inactive");
           if (isPopup) return res.send(buildPopupResponseHtml(false, "account_inactive"));
           if (returnTo) return res.redirect(`${returnTo}/?error=account_inactive`);
           return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated.')}`);
@@ -1277,7 +1319,7 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
 
       if (!user) {
         console.error("[google-auth] No user returned, info:", info);
-        if (isIos) return res.redirect("ecologic://auth/callback?error=oauth_cancelled");
+        if (isIos) return res.redirect("/api/auth/google-complete?error=oauth_cancelled");
         if (isPopup) {
           console.log("[google-auth] Popup: no user, sending postMessage error");
           return res.send(buildPopupResponseHtml(false, "oauth_cancelled"));
@@ -1290,11 +1332,11 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
         const fullUser = await storage.getUser(user.id);
         if (fullUser?.twoFactorEnabled) {
           console.log("[google-auth] iOS: 2FA not supported in native wrapper");
-          return res.redirect("ecologic://auth/callback?error=2fa_not_supported");
+          return res.redirect("/api/auth/google-complete?error=2fa_not_supported");
         }
         const code = storeAuthCode(user.id);
-        console.log("[google-auth] iOS: auth code stored, firing deep link");
-        return res.redirect(`ecologic://auth/callback?code=${encodeURIComponent(code)}`);
+        console.log(`[google-auth] iOS: auth code stored (${code.substring(0, 8)}…), redirecting to bridge page`);
+        return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(code)}`);
       }
 
       // Popup flow: log user in, save session, then return postMessage HTML

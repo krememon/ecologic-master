@@ -1,0 +1,158 @@
+So the actual bug is BOTH:
+
+Google sign-in success screen is NOT auto-closing
+Google sign-in is also NOT actually signing the user into EcoLogic
+
+We need to fix both at the same time and make the native Google auth flow production-correct.
+
+What is happening now:
+
+User taps Continue with Google
+Google auth runs
+Browser lands on “Sign in complete! Return to the EcoLogic app.”
+That screen just sits there
+User has to manually close it
+After closing it, user is still not signed in
+
+That means:
+
+The callback/success page is not triggering the app handoff correctly
+The auth browser is not being closed automatically
+The backend/native auth state is not being finalized in a way the app actually recognizes
+
+We need a real end-to-end native OAuth completion flow.
+
+GOAL
+After Google sign-in completes:
+
+The app should automatically receive the callback
+The auth browser should automatically close
+EcoLogic should finalize the login session
+The app should refresh auth state
+The user should land inside the app already authenticated
+No manual close
+No stuck success page
+
+Implement this properly.
+
+Backend requirements
+
+Audit the current Google auth start route and callback route
+Ensure the OAuth callback does NOT end on a dead-end browser success page
+On successful Google callback:
+find or create the user
+fully establish EcoLogic auth
+create the same real authenticated session used by normal login
+generate a short-lived one-time auth handoff token/code for native completion
+redirect immediately to the app deep link, something like:
+ecologic://auth/callback?status=success&handoff=ONE_TIME_CODE
+On failure:
+redirect to deep link error route, something like:
+ecologic://auth/callback?status=error&reason=google_auth_failed
+
+Critical:
+
+Do NOT leave the user on a plain “Sign in complete” HTML page as the final step
+The final successful destination must be the EcoLogic deep link
+If you need a tiny HTML bridge page, it should only exist to instantly trigger the deep link and never just sit there
+
+Native app requirements
+
+In the native app, wire the Google login flow so it listens for deep link completion
+If using Capacitor, use:
+App.addListener('appUrlOpen', ...)
+Browser.close()
+When the auth callback deep link is received:
+immediately call Browser.close()
+extract the handoff code
+call backend endpoint to exchange the handoff code for the real EcoLogic session/auth state
+after exchange succeeds, immediately call /api/auth/me (or equivalent current-user endpoint)
+update the app’s auth context/store/state from the response
+navigate into the authenticated app
+If deep link status=error:
+close browser
+show a clean error toast/message
+stay on sign-in
+
+Important implementation fix
+Right now, browser OAuth success is not enough. We need explicit native finalization.
+
+Create a dedicated backend exchange endpoint if needed, for example:
+
+POST /api/auth/google/mobile-exchange
+Body:
+handoffToken
+
+This endpoint should:
+
+validate token/code
+ensure it is short-lived and one-time use
+load the user tied to the OAuth success
+finalize the real EcoLogic authenticated session
+return authenticated user/session payload needed by the app
+
+Success page / bridge page behavior
+If the OAuth provider requires an HTTPS callback page first, that page must:
+
+immediately attempt to open the deep link automatically via JS
+show fallback text only briefly
+not require manual action in the common case
+after deep link is triggered, the native app should close the browser itself
+
+Something like this conceptually:
+
+callback hits server
+server validates Google auth
+server redirects to /auth/mobile-complete?handoff=...
+that page instantly runs window.location = 'ecologic://auth/callback?...'
+app receives it
+app calls Browser.close()
+app exchanges handoff token
+app refreshes auth state
+app routes inside authenticated area
+
+Investigate these likely failure points
+
+callback route may be rendering success HTML instead of deep linking
+deep link scheme may not be registered correctly in native config
+app may not be listening for appUrlOpen at the correct place
+Browser.close() may never be called because the callback listener is missing or not firing
+auth session may only exist in browser cookie context and not be translated into app auth state
+/api/auth/me may not be refreshed after OAuth success
+SameSite/Secure cookie settings may be preventing expected session persistence in native flow
+auth context may not be rehydrating after external browser return
+
+Exact deliverables
+
+Exact files changed
+Exact root cause(s) found
+Exact flow after fix, step by step
+Confirmation that these now all work:
+Google auth success automatically returns to app
+auth browser closes automatically
+user is truly signed in
+app lands in authenticated state, not sign-in screen
+Add targeted logs for this exact chain:
+Google auth start
+Google callback success
+handoff token created
+deep link redirect fired
+appUrlOpen received
+Browser.close called
+handoff exchange called
+auth/me success
+auth store/context updated
+Remove noisy logs after verifying and keep only minimal useful logs
+
+Acceptance test
+
+Tap Continue with Google
+Select Google account
+Browser does NOT stay open
+No manual close required
+App comes back to foreground
+User is authenticated immediately
+App does not show sign-in screen after success
+
+Do not stop at a partial fix.
+I want the full native Google auth loop completed properly end-to-end.
