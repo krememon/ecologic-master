@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
+import { useStripeConnectGate } from "@/hooks/useStripeConnectGate";
 
 interface ConnectStatus {
   hasAccount: boolean;
@@ -45,7 +46,8 @@ export default function StripeConnectSettings() {
   const { user } = useAuth();
   const isTechnician = user?.role === 'TECHNICIAN';
 
-  // Redirect technicians away — effect fires after render, guard below stops them rendering content
+  const { startOnboarding, isProcessing } = useStripeConnectGate();
+
   useEffect(() => {
     if (isTechnician) setLocation('/');
   }, [isTechnician, setLocation]);
@@ -53,44 +55,6 @@ export default function StripeConnectSettings() {
   const { data: statusData, isLoading } = useQuery<ConnectStatus>({
     queryKey: ["/api/stripe-connect/status"],
     enabled: !isTechnician,
-  });
-
-  const createAccountMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/stripe-connect/create-account");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stripe-connect/status"] });
-      toast({ title: "Stripe account created", description: "Now complete onboarding to start receiving payouts." });
-      startOnboarding();
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message || "Failed to create Stripe account", variant: "destructive" });
-    },
-  });
-
-  const onboardingLinkMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/stripe-connect/onboarding-link");
-      return res.json();
-    },
-    onSuccess: async (data) => {
-      if (data.url) {
-        try {
-          const { isNativePlatform } = await import("@/lib/capacitor");
-          if (isNativePlatform()) {
-            const { Browser } = await import("@capacitor/browser");
-            await Browser.open({ url: data.url, presentationStyle: "fullscreen" });
-            return;
-          }
-        } catch {}
-        window.open(data.url, "_blank");
-      }
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message || "Failed to create onboarding link", variant: "destructive" });
-    },
   });
 
   const syncMutation = useMutation({
@@ -107,11 +71,6 @@ export default function StripeConnectSettings() {
     },
   });
 
-  function startOnboarding() {
-    onboardingLinkMutation.mutate();
-  }
-
-  // Render nothing while redirect is in-flight for technicians
   if (isTechnician) return null;
 
   if (isLoading) {
@@ -182,22 +141,22 @@ export default function StripeConnectSettings() {
           <div className="flex gap-2 pt-2">
             {!hasAccount && (
               <Button
-                onClick={() => createAccountMutation.mutate()}
-                disabled={createAccountMutation.isPending}
+                onClick={() => startOnboarding("/settings/stripe-connect")}
+                disabled={isProcessing}
                 className="flex-1 gap-2"
               >
-                {createAccountMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
                 Connect Stripe
               </Button>
             )}
 
             {hasAccount && status !== "active" && (
               <Button
-                onClick={startOnboarding}
-                disabled={onboardingLinkMutation.isPending}
+                onClick={() => startOnboarding("/settings/stripe-connect")}
+                disabled={isProcessing}
                 className="flex-1 gap-2"
               >
-                {onboardingLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                 {status === "pending_onboarding" ? "Complete Onboarding" : status === "not_started" ? "Connect" : "Update Information"}
               </Button>
             )}

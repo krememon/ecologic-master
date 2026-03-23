@@ -1,0 +1,116 @@
+We need to fix the Stripe onboarding return flow in EcoLogic so native users come back into the native app, while web users return to the web app.
+
+CURRENT ISSUE
+Right now after Stripe onboarding finishes, it brings the user to the Safari/web version of EcoLogic.
+
+That is wrong for native users.
+
+GOAL
+Make the Stripe return flow platform-aware:
+
+1. If user started Stripe onboarding from the native iPhone/iPad app:
+   - after Stripe onboarding completes, it should return them back into the EcoLogic native app
+
+2. If user started Stripe onboarding from the web app:
+   - after Stripe onboarding completes, it should return them back to the EcoLogic web app
+
+In short:
+- native → back into native app
+- web → back into web
+
+IMPORTANT
+- Do NOT change the decision that Stripe onboarding itself opens externally in Safari
+- We still want Stripe onboarding hosted by Stripe
+- The fix is the RETURN URL / handoff behavior after onboarding completes
+- Do NOT break Stripe onboarding itself
+- Do NOT break web flow while fixing native
+- This needs to work cleanly for both iPhone and iPad native builds
+
+REQUIRED BEHAVIOR
+When user taps Connect Stripe:
+
+NATIVE APP FLOW
+- EcoLogic generates/connects using a native-aware return URL
+- Stripe opens in Safari
+- user completes onboarding
+- Stripe redirects to a deep link / app link that reopens the EcoLogic native app
+- EcoLogic lands the user in the correct place (Stripe Payouts page or equivalent)
+- EcoLogic refreshes Stripe status automatically after return
+
+WEB FLOW
+- EcoLogic generates/connects using the normal web return URL
+- Stripe opens in browser
+- user completes onboarding
+- Stripe redirects back to the EcoLogic web page
+- EcoLogic refreshes Stripe status automatically after return
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where Stripe onboarding/account-link URLs are created.
+2. Make the refresh_url and return_url platform-aware.
+3. If request originates from native app, use a native deep-link/app-link return target instead of the normal web URL.
+4. If request originates from web, keep using the normal web return target.
+5. Configure the native return path so Safari can reopen EcoLogic correctly after Stripe completes.
+6. On app reopen, route user to the Stripe Payouts/connect status page and refresh account status automatically.
+7. Preserve the ability to retry/update onboarding if Stripe returns incomplete requirements.
+8. Make sure disconnect/reconnect flow also uses the correct platform-aware return target.
+
+TECHNICAL NOTES
+- This is likely a combination of:
+  - backend Stripe account link creation logic
+  - platform detection from client → backend
+  - Capacitor deep link/app URL handling on iOS
+  - return_url / refresh_url generation
+- Native flow should NOT use the same plain web return URL as browser flow
+- Use the app’s existing custom scheme / universal link setup if already present
+- If no deep-link handling exists yet, implement it properly
+- On native, after redirect back into app, trigger a status refresh so the screen updates from Disabled/Pending to current Stripe state
+- Do NOT leave the user stranded in Safari after completion
+
+SUGGESTED NATIVE FLOW
+- user taps Connect Stripe in native app
+- frontend tells backend/native handler that source is native
+- backend creates Stripe account link with native deep-link return URL
+- Safari opens Stripe
+- Stripe completes and redirects to EcoLogic deep link
+- iOS reopens EcoLogic app
+- app routes to Stripe Payouts page
+- app auto-refreshes connected account status
+
+SUGGESTED WEB FLOW
+- user taps Connect Stripe on web
+- backend creates Stripe account link with normal https web return URL
+- browser completes Stripe
+- browser redirects back to web Stripe Payouts page
+- page refreshes status
+
+VALIDATION
+Please verify all of this:
+1. Native iPhone user taps Connect Stripe
+2. Stripe opens in Safari
+3. User completes onboarding
+4. EcoLogic native app reopens automatically
+5. User lands back in Stripe Payouts/connect area
+6. Status refreshes correctly
+
+7. Web user taps Connect Stripe
+8. Stripe opens in browser
+9. User completes onboarding
+10. User returns to EcoLogic web page
+11. Status refreshes correctly
+
+12. Incomplete onboarding / refresh_url path still works for both native and web
+
+DELIVERABLES
+1. Exact files changed
+2. Where Stripe account-link return URLs are generated
+3. How native vs web is detected
+4. What deep link / return URL is used for native
+5. What normal return URL is used for web
+6. How the app handles the deep link on return
+7. Confirmation that:
+   - native users return to the app
+   - web users return to web
+   - Stripe status refresh works after return
+   - onboarding flow itself still works
+
+Please implement it now.
