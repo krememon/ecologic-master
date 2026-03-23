@@ -126,11 +126,28 @@ export function resetAuthHandled(): void {
   _authHandled = false;
 }
 
+// Key used to persist which auth code was last successfully consumed.
+// Survives window.location.href reloads; prevents getLaunchUrl() from
+// re-exchanging the same one-time code after the page reloads.
+const AUTH_CODE_CONSUMED_KEY = "nativeAuthCodeConsumed";
+
 export async function exchangeNativeAuthCode(code: string): Promise<void> {
+  // Guard 1: in-process dedup (same JS runtime, e.g. appUrlOpen + poll both fire)
   if (_authHandled) {
-    console.log("[google-auth] exchangeNativeAuthCode: already handled, skipping");
+    console.log("[google-auth] exchangeNativeAuthCode: already handled in this session, skipping");
     return;
   }
+
+  // Guard 2: cross-reload dedup — iOS getLaunchUrl() returns the same
+  // ecologic://auth/callback?code=XYZ on every cold start even after a successful
+  // exchange + window.location.href = "/" reload. Check localStorage so we
+  // never try to exchange a code that was already consumed.
+  if (localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === code) {
+    console.log("[google-auth] Code already consumed on a previous load — navigating to /");
+    window.location.href = "/";
+    return;
+  }
+
   _authHandled = true;
   stopPolling();
 
@@ -151,8 +168,10 @@ export async function exchangeNativeAuthCode(code: string): Promise<void> {
       } else {
         console.warn("[google-auth] Exchange OK but no sessionId in response");
       }
-      // Invalidate cached auth state so the app re-fetches /api/auth/user
-      // with the new Bearer token attached by the global fetch interceptor.
+      // Mark code as consumed BEFORE reloading so the next getLaunchUrl() call
+      // on the same code is skipped immediately (Guard 2 above).
+      localStorage.setItem(AUTH_CODE_CONSUMED_KEY, code);
+
       const { queryClient } = await import("@/lib/queryClient");
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       console.log("[google-auth] Auth complete — navigating into app");
@@ -166,12 +185,29 @@ export async function exchangeNativeAuthCode(code: string): Promise<void> {
     } else {
       const body = await res.text().catch(() => "");
       console.error("[google-auth] Exchange failed:", res.status, body);
-      _authHandled = false; // allow retry
+      _authHandled = false;
+
+      // Guard 3: if exchange returned 401 ("Invalid or expired auth code") but
+      // nativeSessionId is already stored, the code was already consumed by a
+      // previous exchange (race between poll path and deep-link path, or
+      // getLaunchUrl() re-fired after reload). The user IS authenticated —
+      // do not bounce them to login.
+      const existingSession = localStorage.getItem("nativeSessionId");
+      if (existingSession) {
+        console.log("[google-auth] 401 on exchange but nativeSessionId exists — already authenticated, going to /");
+        window.location.href = "/";
+        return;
+      }
       window.location.href = "/login?error=exchange_failed";
     }
   } catch (err) {
     console.error("[google-auth] Exchange fetch error:", err);
     _authHandled = false;
+    const existingSession = localStorage.getItem("nativeSessionId");
+    if (existingSession) {
+      window.location.href = "/";
+      return;
+    }
     window.location.href = "/login?error=exchange_failed";
   }
 }

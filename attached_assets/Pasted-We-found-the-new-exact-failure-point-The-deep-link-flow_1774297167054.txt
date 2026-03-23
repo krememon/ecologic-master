@@ -1,0 +1,100 @@
+We found the new exact failure point.
+
+The deep link flow is now working, but the auth-code exchange is failing.
+
+What the logs prove:
+
+ecologic://auth/callback?code=... is firing
+appUrlOpen is firing
+the app is trying to exchange the code
+/api/auth/exchange-code is returning:
+401 {"message":"Invalid or expired auth code"}
+
+So the current problem is NO LONGER the browser/deep-link handoff.
+
+The current problem is:
+the auth code generated during Google callback is not matching what the exchange endpoint expects, or it is being consumed/cleared too early, or the stores are still inconsistent somewhere.
+
+What I need you to inspect right now:
+
+Find where the auth code is created after successful Google callback
+exact function name
+exact file
+exact data structure used
+what key it is stored under
+whether it is tied to nonce, code, or userId
+Find the exact code path for:
+POST /api/auth/exchange-code
+Verify these three things match EXACTLY:
+where the code is written
+where the code is read
+when the code is deleted
+Tell me if any of these are happening:
+code is stored in one Map but read from another
+code is deleted before exchange
+code is being exchanged twice
+app startup is reprocessing the same launch URL multiple times
+getLaunchUrl() plus appUrlOpen are both handling the same code and causing double-consume
+exchange endpoint expects nonce but receives code
+exchange endpoint expects different key format than callback created
+code expires too fast
+session save happens after redirect instead of before redirect
+
+The logs strongly suggest double-processing may be happening too:
+
+deep link is handled once
+then app reloads
+then getLaunchUrl() returns the same auth callback URL again
+then it tries exchange again
+Browser.close fails with “No active window to close!”
+then exchange fails again with the same 401
+
+So I want you to specifically inspect whether the same auth code is being handled multiple times by both:
+
+early getLaunchUrl()
+appUrlOpen
+and whether the first attempt consumes/deletes the code before the second attempt.
+
+What to fix:
+
+Make auth-code exchange single-source-of-truth
+Ensure callback and exchange use the exact same store
+Ensure code is only consumed once
+Ensure the client only processes a given auth callback code once
+Clear or ignore the launch URL after successful handling so it does not re-run on app boot
+
+I want you to inspect and report back in this exact format:
+
+Exact file/function where auth code is created
+Exact file/function where auth code is exchanged
+Exact storage structure used for auth codes
+Whether code is deleted on read, and where
+Whether the same code is being processed twice by the client
+Exact root cause of the 401 invalid/expired auth code
+Smallest correct fix
+
+If you already know the fix, implement it.
+
+My strongest suspicion from the logs:
+
+the same callback code is being processed more than once, and/or
+the exchange endpoint is not reading the same in-memory store the callback wrote to.
+
+Also inspect the client flow around:
+
+getLaunchUrl()
+App.addListener("appUrlOpen", ...)
+the deep-link auth handler
+any dedupe flag / “already processing code” guard
+
+Acceptance criteria for the fix:
+
+deep link fires once
+code exchanges once
+/api/auth/user succeeds after exchange
+app stops bouncing
+user lands signed in
+reopening the app does NOT retry the old auth callback again
+
+What I think is happening, in plain English:
+the app is now receiving the Google success callback, but the one-time auth code is either invalid by the time exchange runs, or it is being consumed by the first handler and then retried by a second handler during app reload, which is why it looks like it is going in and out.
