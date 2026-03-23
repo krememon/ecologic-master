@@ -1,0 +1,149 @@
+We are moving to the WEB version of EcoLogic Google sign-in now.
+
+Current web bug:
+
+On web, Google sign-in flow opens
+User completes Google sign-in
+The auth window closes
+But the app does NOT actually move forward
+It just stays on the sign-in page
+So web Google auth is completing partially, but the web app is not entering the authenticated state
+
+CRITICAL REQUIREMENT:
+Do NOT break or change the iOS native Google sign-in flow we just fixed.
+I do NOT want any risky shared-auth refactors.
+I want this debugged and fixed in a web-only-safe way.
+
+====================
+GUARDRAILS
+
+Before making any change:
+
+Identify exactly which parts of the Google auth flow are:
+web-only
+native-only
+shared
+Do NOT change native iOS completion flow unless absolutely necessary.
+Do NOT change:
+native deep-link behavior
+native exchange-code behavior
+native polling/deep-link race protections
+anything related to the iOS fix unless you can prove it is untouched
+
+Preferred approach:
+
+isolate the web sign-in bug to the web callback/session/auth-refresh/routing path
+make the smallest correct fix only for web
+====================
+WHAT I NEED INVESTIGATED
+
+Trace the WEB Google sign-in flow end-to-end:
+
+User clicks Continue with Google on web
+Google auth opens
+Google callback returns
+Session is supposedly created
+Popup/window closes
+Main web app should detect authenticated state and move into app
+Right now it does not
+
+Find exactly where the web flow breaks.
+
+Inspect all of these:
+
+/api/auth/google
+/api/auth/google/callback
+any branching for platform=ios vs normal web
+popup-based auth completion logic
+postMessage / opener logic if used
+session cookie creation for web
+/api/auth/user fetch after web Google sign-in
+auth context/store update
+redirect logic from login screen into dashboard/app
+whether the web app is waiting on stale auth state after popup closes
+====================
+QUESTIONS I NEED ANSWERED
+On web, after successful Google callback:
+does the backend create the session correctly?
+does it redirect to a web completion page?
+does it call window.opener.postMessage(...)?
+does it close the popup?
+does the main window listen for that message?
+After popup closes:
+does the main window re-fetch /api/auth/user?
+does auth context/store update?
+does routing still think the user is logged out?
+Is this a cookie/session issue on web?
+session created but not visible to main window?
+wrong domain/path/samesite/secure behavior?
+popup has session but parent page does not refresh auth?
+Is this a frontend state issue?
+auth succeeded, but login page never re-checks auth
+popup closes without notifying opener
+/api/auth/user query is cached stale
+route guard doesn’t re-run
+====================
+WHAT I WANT FIXED
+
+Fix the web Google sign-in flow so that:
+
+User clicks Continue with Google on web
+Google auth completes
+Web session is actually established
+Popup/window closes
+Main web app immediately detects authenticated state
+/api/auth/user refreshes if needed
+User leaves sign-in page and enters EcoLogic
+====================
+IMPORTANT SAFETY RULE
+
+Do NOT make broad auth changes.
+Do NOT rewrite shared auth flow unless necessary.
+Do NOT touch the native iOS fix path unless you clearly prove the change is web-only-safe.
+
+If a shared file must be changed:
+
+explain exactly why
+explain exactly why it does NOT affect native iOS flow
+keep the change minimal
+====================
+DELIVERABLES
+
+Reply in this exact format:
+
+Exact files inspected
+Exact files changed
+Exact root cause of WEB Google sign-in staying on sign-in page
+Exact flow before fix
+Exact flow after fix
+Why this does NOT affect iOS native Google sign-in
+Final test result for web Google sign-in
+====================
+IF YOU NEED LOGS
+
+Add targeted WEB-only logs for:
+
+Google popup opened
+Google callback success on web
+web session created
+popup postMessage sent
+popup close called
+opener message received
+/api/auth/user refetched
+auth context/store updated
+login screen redirected into app
+
+Then remove noisy temporary logs after verifying.
+
+Acceptance criteria:
+
+On web, click Continue with Google
+Complete Google sign-in
+Popup closes
+Main web app updates
+User leaves sign-in page
+User lands inside EcoLogic authenticated
+
+Again:
+Protect the iOS native Google sign-in flow.
+This fix must be web-safe and must not undo what we just solved.

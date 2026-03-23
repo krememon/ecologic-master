@@ -108,8 +108,12 @@ async function openGoogleAuthPopup(): Promise<void> {
     const closedPoll = setInterval(() => {
       try {
         if (popup.closed) {
-          console.log("[google-auth] Popup closed by user");
           settle();
+          // Safety net: attempt an auth refetch even when the popup closes without a
+          // postMessage (e.g. cross-domain delivery failure or user-dismissed popup).
+          // If auth actually succeeded the session/Bearer token is now available and
+          // the refetch will pick it up. If the user cancelled it returns 401 — no change.
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
           resolve();
         }
       } catch {}

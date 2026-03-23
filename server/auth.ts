@@ -1099,6 +1099,11 @@ export function setupAuth(app: Express) {
       state = `ios:${nonce}`;
     } else if (platform === "ios") {
       state = "ios";
+    } else if (platform === "popup" && returnTo) {
+      // Cross-domain popup (via trampoline): encode returnTo so the callback can
+      // redirect the popup back to the opener's origin using the webAuthCode flow,
+      // avoiding the postMessage cross-origin delivery failure.
+      state = `popup:${Buffer.from(returnTo).toString("base64url")}`;
     } else if (platform === "popup") {
       state = "popup";
     } else if (returnTo) {
@@ -1261,8 +1266,19 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
     console.log("[auth/google/callback] hit, rawState:", rawState.substring(0, 20));
     passport.authenticate("google", async (err: any, user: any, info: any) => {
       const isIos = rawState === "ios" || rawState.startsWith("ios:");
-      const isPopup = rawState === "popup";
+      const isPopup = rawState === "popup" || rawState.startsWith("popup:");
       const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
+
+      // Cross-domain popup: returnTo is base64url-encoded in the "popup:<b64>" state.
+      // This fires when the popup went through the cross-domain trampoline.
+      let popupReturnTo: string | null = null;
+      if (rawState.startsWith("popup:")) {
+        try {
+          const decoded = Buffer.from(rawState.substring(6), "base64url").toString("utf8");
+          const parsed = new URL(decoded);
+          if (["http:", "https:"].includes(parsed.protocol)) popupReturnTo = decoded;
+        } catch { /* ignore malformed */ }
+      }
 
       // Decode optional returnTo (set when request came from a preview domain)
       let returnTo: string | null = null;
@@ -1277,7 +1293,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         }
       }
 
-      console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} isPopup=${isPopup} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} err=${!!err} user=${!!user} info=${JSON.stringify(info || null)}`);
+      console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} isPopup=${isPopup} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} popupReturnTo=${popupReturnTo ? "set" : "(none)"} err=${!!err} user=${!!user}`);
 
       if (err) {
         console.error("[google-auth] Error:", err);
@@ -1345,14 +1361,38 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(code)}`);
       }
 
-      // Popup flow: log user in, save session, then return postMessage HTML
+      // Popup flow: log user in, save session, then return postMessage HTML (same-domain)
+      // OR redirect popup back to opener's origin with a webAuthCode (cross-domain).
       if (isPopup) {
         const fullUser = await storage.getUser(user.id);
         if (fullUser?.twoFactorEnabled) {
-          // 2FA required — popup can't handle 2FA flow; send error back
           console.log("[google-auth] Popup: 2FA required, sending error to opener");
           return res.send(buildPopupResponseHtml(false, "2fa_required"));
         }
+
+        // Cross-domain popup (came via trampoline): the popup is on the production domain
+        // but the opener/main window is on a different origin (dev URL, custom domain, etc.).
+        // postMessage won't reach the opener because targetOrigin won't match.
+        // Instead, redirect the popup to the opener's origin with a one-time webAuthCode.
+        // The app at the opener's origin will exchange it for a Bearer token, store it in
+        // localStorage, and close the popup. The main window gets the storage event and
+        // refetches auth using the Bearer token — same path as the Replit preview iframe flow.
+        if (popupReturnTo) {
+          const code = storeAuthCode(user.id);
+          return req.login(user, (loginErr) => {
+            if (loginErr) {
+              console.error("[google-auth] Popup/cross-domain: login error:", loginErr);
+              return res.send(buildPopupResponseHtml(false, "login_failed"));
+            }
+            req.session.save(() => {
+              const redirectUrl = `${popupReturnTo}/?webAuthCode=${encodeURIComponent(code)}`;
+              console.log(`[google-auth] Popup/cross-domain: redirecting popup to opener origin`);
+              return res.redirect(redirectUrl);
+            });
+          });
+        }
+
+        // Same-domain popup: postMessage flow works because opener and popup share the origin.
         return req.login(user, (loginErr) => {
           if (loginErr) {
             console.error("[google-auth] Popup: login error:", loginErr);
