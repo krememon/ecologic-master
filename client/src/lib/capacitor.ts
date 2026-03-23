@@ -89,15 +89,34 @@ async function openGoogleAuthPopup(): Promise<void> {
       clearInterval(closedPoll);
     };
 
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+    // Accept messages from same origin OR the production server.
+    // The production origin sends messages when the popup is cross-domain (custom domain / iframe case).
+    const prodOrigin = ((import.meta.env.VITE_APP_BASE_URL as string) || "").replace(/\/$/, "");
+    const onMessage = async (event: MessageEvent) => {
+      const isSameOrigin = event.origin === window.location.origin;
+      const isProdOrigin = prodOrigin && event.origin === prodOrigin;
+      if (!isSameOrigin && !isProdOrigin) return;
       if (event.data?.type === "google-auth-success") {
-        console.log("[google-auth] Received auth success from popup — refreshing user");
         settle();
+        const code = event.data.webAuthCode as string | undefined;
+        if (code && prodOrigin) {
+          // Cross-domain completion: exchange the one-time code for a Bearer token
+          try {
+            const res = await fetch(`${prodOrigin}/api/auth/exchange-code`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code }),
+              credentials: "include",
+            });
+            if (res.ok) {
+              const data = await res.json().catch(() => ({}));
+              if (data.sessionId) localStorage.setItem("nativeSessionId", data.sessionId);
+            }
+          } catch { /* ignore */ }
+        }
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         resolve();
       } else if (event.data?.type === "google-auth-error") {
-        console.log("[google-auth] Received auth error from popup:", event.data.error);
         settle();
         resolve();
       }
@@ -229,21 +248,52 @@ export async function startGoogleAuthNative(): Promise<void> {
     if (isInsideIframe()) {
       const appBaseUrl = (import.meta.env.VITE_APP_BASE_URL as string) || "";
       if (appBaseUrl) {
+        const prodOrigin = appBaseUrl.replace(/\/$/, "");
         const returnTo = encodeURIComponent(window.location.origin);
-        const target = `${appBaseUrl}/api/auth/google?platform=web&returnTo=${returnTo}`;
-        console.log("[auth] In iframe — navigating top frame to production:", target);
+        // Use platform=popup so the server sends a postMessage completion page (with webAuthCode)
+        // rather than redirecting back to the picard/dev origin (which shows a blank page because
+        // that URL requires Replit workspace context that the standalone popup window doesn't have).
+        const target = `${appBaseUrl}/api/auth/google?platform=popup&returnTo=${returnTo}`;
+
+        // Set up listener BEFORE opening the popup so no messages are missed.
+        // The completion page (on the production domain) posts {type:"google-auth-success", webAuthCode}
+        // with targetOrigin="*", so this listener receives it cross-origin.
+        const onIframePopupMsg = async (event: MessageEvent) => {
+          if (event.origin !== prodOrigin) return;
+          if (event.data?.type !== "google-auth-success") return;
+          window.removeEventListener("message", onIframePopupMsg);
+          const code = event.data.webAuthCode as string | undefined;
+          if (code) {
+            try {
+              const res = await fetch(`${prodOrigin}/api/auth/exchange-code`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code }),
+                credentials: "include",
+              });
+              if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                if (data.sessionId) localStorage.setItem("nativeSessionId", data.sessionId);
+              }
+            } catch { /* ignore */ }
+          }
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        };
+
         try {
           window.top!.location.href = target;
           return;
         } catch (e) {
-          console.log("[auth] Top navigation blocked, trying popup");
+          // top-frame navigation blocked (cross-origin canvas) — fall through to popup
         }
+
         const popup = window.open(target, "ecologic_google_auth", "popup,width=500,height=650");
         if (popup) {
-          console.log("[auth] Popup opened successfully");
+          window.addEventListener("message", onIframePopupMsg);
           return;
         }
-        console.log("[auth] Popup also blocked — navigating iframe to server trampoline");
+        // Popup also blocked — clean up listener and fall back to full-page navigation
+        window.removeEventListener("message", onIframePopupMsg);
       }
       window.location.href = "/api/auth/google";
       return;

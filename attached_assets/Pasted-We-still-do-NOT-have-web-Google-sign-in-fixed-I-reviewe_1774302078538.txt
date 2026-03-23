@@ -1,0 +1,140 @@
+We still do NOT have web Google sign-in fixed.
+
+I reviewed the recording. The flow is:
+
+Main web app opens Google sign-in popup
+Google account chooser appears
+User selects account
+Popup then lands on a blank white page
+The popup URL is on the Replit preview/picard origin
+The popup never hands auth back to the main app
+Main app stays on the sign-in page
+
+So the current web bug is:
+the popup is getting stranded on the preview/trampoline origin instead of completing the opener handoff / auth refresh flow.
+
+CRITICAL:
+Do NOT break iOS native Google sign-in.
+Do NOT refactor shared auth broadly.
+Keep this web-only-safe.
+
+====================
+WHAT I NEED INVESTIGATED NOW
+
+Trace the popup web flow step-by-step and find exactly where it gets stuck.
+
+Inspect:
+
+The popup start URL generated on web
+exact URL opened
+exact query params
+exact platform
+exact returnTo
+The trampoline/cross-domain behavior
+where does the popup go first
+where does it redirect after Google callback
+why does it end up on the preview/picard origin blank page
+The callback completion logic on web
+does callback redirect to:
+production origin
+returnTo origin
+popup completion page
+/?webAuthCode=...
+does that final page contain any code that:
+exchanges auth
+posts to opener
+closes popup
+The blank page itself
+what exact route is that blank page on
+what code/component/page is rendering there
+is JS crashing
+is it waiting for window.opener
+is it on the wrong origin so it cannot talk to opener
+is it missing webAuthCode
+is it missing the exchange step
+====================
+MOST LIKELY ROOT CAUSES
+
+Check these first:
+
+popup is being redirected back to the preview/picard origin instead of the opener origin
+returnTo is wrong, dropped, or not preserved through callback
+callback redirects to a blank route that does nothing
+the page expecting to handle webAuthCode is not mounted on that origin
+popup completion relies on postMessage, but opener origin mismatch prevents delivery
+popup completion page closes too early or never runs
+webAuthCode is never appended to the final redirect URL
+the trampoline page exists, but its final redirect target is wrong
+====================
+WHAT I WANT FIXED
+
+Fix web Google sign-in so this is the final flow:
+
+User clicks Continue with Google on web
+Popup opens
+User completes Google auth
+Popup is redirected to the CORRECT final web completion URL
+Main web app is notified / or webAuthCode is returned to the correct origin
+Auth exchange runs
+/api/auth/user refreshes
+Main app leaves sign-in page
+Popup closes
+====================
+IMPORTANT SAFETY RULE
+
+Do NOT alter:
+
+iOS native platform=ios
+iOS nonce/deep-link flow
+native exchange-code flow
+native Browser/appUrlOpen logic
+
+If you touch shared files:
+
+explain exactly why the change is web-only-safe
+keep the change minimal
+====================
+DELIVERABLES
+
+Reply in this exact format:
+
+Exact files inspected
+Exact final popup URL where it gets stuck
+Exact route/page/component rendering the blank page
+Exact root cause
+Exact files changed
+Exact flow before fix
+Exact flow after fix
+Why this does NOT affect iOS native Google sign-in
+Final web test result
+====================
+IF YOU NEED LOGS
+
+Add targeted web-only logs for:
+
+popup open URL
+popup returnTo
+Google callback success
+final redirect target after callback
+whether webAuthCode is present
+popup completion page loaded
+opener notification sent
+/api/auth/user refetched
+auth context updated
+popup close called
+
+Then remove noisy logs after verification.
+
+ACCEPTANCE CRITERIA
+
+This is only fixed if:
+
+click Continue with Google on web
+choose account
+popup does NOT get stranded on blank page
+main app updates
+user leaves sign-in page
+popup closes
+user lands inside EcoLogic authenticated
+
+The recording strongly suggests the popup completion redirect target is wrong or incomplete.

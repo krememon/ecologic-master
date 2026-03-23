@@ -1237,10 +1237,16 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
 </body></html>`);
   });
 
-  // Helper: build the tiny HTML page that posts a message back to the popup opener
-  function buildPopupResponseHtml(success: boolean, errorCode?: string): string {
+  // Helper: build the tiny HTML page that posts a message back to the popup opener.
+  // Uses "*" as the postMessage targetOrigin so the message is delivered even when
+  // the opener is on a different origin (cross-domain canvas/iframe scenario).
+  // The optional authCode is a one-time webAuthCode the client exchanges for a Bearer token.
+  function buildPopupResponseHtml(success: boolean, errorCode?: string, authCode?: string): string {
+    const successPayload = authCode
+      ? { type: "google-auth-success", webAuthCode: authCode }
+      : { type: "google-auth-success" };
     const payload = success
-      ? JSON.stringify({ type: "google-auth-success" })
+      ? JSON.stringify(successPayload)
       : JSON.stringify({ type: "google-auth-error", error: errorCode || "unknown" });
     return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Signing in…</title>
@@ -1253,8 +1259,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
 <script>
 (function(){
   var msg=${payload};
-  var origin=window.location.origin;
-  try{ if(window.opener){ window.opener.postMessage(msg,origin); } }catch(e){}
+  try{ if(window.opener){ window.opener.postMessage(msg,"*"); } }catch(e){}
   setTimeout(function(){ try{ window.close(); }catch(e){} },400);
 })();
 </script>
@@ -1378,6 +1383,13 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         // localStorage, and close the popup. The main window gets the storage event and
         // refetches auth using the Bearer token — same path as the Replit preview iframe flow.
         if (popupReturnTo) {
+          // The opener is on a different origin (dev/picard/custom domain).
+          // We MUST NOT redirect the popup to that origin because:
+          //   • picard.replit.dev requires Replit workspace context — a standalone popup gets a blank page
+          //   • custom domains may also fail to serve the app in a popup redirect context
+          // Instead, keep the popup on the production domain and send a completion page that
+          // postMessages the webAuthCode to the opener using "*" (cross-origin delivery).
+          // The opener exchanges the code for a Bearer token.
           const code = storeAuthCode(user.id);
           return req.login(user, (loginErr) => {
             if (loginErr) {
@@ -1385,9 +1397,8 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
               return res.send(buildPopupResponseHtml(false, "login_failed"));
             }
             req.session.save(() => {
-              const redirectUrl = `${popupReturnTo}/?webAuthCode=${encodeURIComponent(code)}`;
-              console.log(`[google-auth] Popup/cross-domain: redirecting popup to opener origin`);
-              return res.redirect(redirectUrl);
+              console.log(`[google-auth] Popup/cross-domain: sending webAuthCode via postMessage to opener`);
+              return res.send(buildPopupResponseHtml(true, undefined, code));
             });
           });
         }
