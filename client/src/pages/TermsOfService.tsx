@@ -8,7 +8,7 @@ export default function TermsOfService() {
         <Link href="/settings/legal">
           <button className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors mb-3">
             <ChevronLeft className="h-4 w-4" />
-            Legal
+            Back
           </button>
         </Link>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Terms of Service</h1>
