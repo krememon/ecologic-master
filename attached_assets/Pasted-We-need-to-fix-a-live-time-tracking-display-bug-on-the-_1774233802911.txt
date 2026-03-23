@@ -1,0 +1,93 @@
+We need to fix a live time-tracking display bug on the Home page in EcoLogic.
+
+CURRENT BUG
+I clocked in around 3:00 and clocked out at 10:24.
+
+What happened:
+- while I was clocked in, the Home page did NOT show how long I had been clocked in for
+- after I clocked out, the Timesheets page showed the correct total time
+
+So the recorded time data is correct, but the live Home page display is not updating properly while the shift is active.
+
+GOAL
+While a user is actively clocked in, the Home page should show the live running elapsed time for the current shift.
+
+EXACT EXPECTED BEHAVIOR
+- user clocks in
+- Home page starts showing live elapsed time
+- that timer keeps updating while the user is clocked in
+- when the user clocks out, the final time remains correct in Timesheets
+- Home page and Timesheets should stay consistent
+
+IMPORTANT
+- Do NOT redesign the Home page
+- Do NOT change Timesheets calculations if they are already correct
+- Do NOT break clock-in / clock-out behavior
+- This is a live display/state bug on the Home page
+- Preserve the real stored duration logic that Timesheets is already using correctly
+
+REQUIRED BEHAVIOR
+On the Home page:
+1. If user is clocked out:
+   - show normal clocked-out state
+
+2. If user is clocked in:
+   - show current running time for today/current shift
+   - update live without needing manual refresh
+   - keep the display accurate while the session is active
+
+3. On clock out:
+   - live timer stops
+   - final recorded duration remains correct
+   - Timesheets still shows the correct saved duration
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Home page card/widget that shows today’s time / clock-in status.
+2. Find why it is not showing the running elapsed time during an active shift.
+3. Use the active clock-in start time as the source of truth and compute/display a live elapsed duration while the shift is open.
+4. Make sure the Home page updates on an interval while clocked in.
+5. Make sure it initializes correctly on:
+   - fresh clock-in
+   - page refresh while already clocked in
+   - app reopen while already clocked in
+6. Stop the live timer cleanly when the user clocks out.
+7. Preserve Timesheets logic exactly if that part is already correct.
+8. Avoid timezone/math bugs.
+9. Make sure it works in native iPhone/iPad and web.
+
+TECHNICAL NOTES
+- This sounds like the backend is correctly storing start/end times, but the Home page is not computing the in-progress duration for an open time entry
+- Likely causes:
+  - Home page only reads saved completed durations
+  - active time entry start timestamp is not being used
+  - missing interval/tick update on the client
+  - stale query/cache not reflecting current active shift state
+- Fix should use:
+  - active clock-in record start timestamp
+  - current time while still clocked in
+  - live recompute until clock-out
+- Do NOT wait until clock-out to show duration
+
+VALIDATION
+Please verify:
+1. Clock in
+2. Home page immediately shows a running duration
+3. Let time pass
+4. Home page updates live
+5. Refresh app while still clocked in
+6. Home page still shows correct running duration
+7. Clock out
+8. Timesheets still shows the correct final amount
+9. Home page no longer runs as if still clocked in
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why Home was not showing live elapsed time
+3. What live timer/state logic was added or fixed
+4. Confirmation that:
+   - Home page now shows running time while clocked in
+   - it updates live
+   - Timesheets still remains correct
+   - clock-in / clock-out flow was not broken
+
+Please implement it now.

@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -141,8 +141,34 @@ export default function Home() {
   const { data: timeData, isLoading: timeLoading, isError: timeError } = useQuery<TimeData>({
     queryKey: ["/api/time/today"],
     enabled: isAuthenticated,
-    refetchInterval: 60000,
+    refetchInterval: 30000,
   });
+
+  // Live timer: record the moment server data arrives so we can add elapsed ms locally
+  const snapshotAtRef = useRef<number>(Date.now());
+  const [liveOffsetMs, setLiveOffsetMs] = useState(0);
+
+  useEffect(() => {
+    snapshotAtRef.current = Date.now();
+    setLiveOffsetMs(0);
+  }, [timeData]);
+
+  useEffect(() => {
+    if (!timeData?.isClockedIn) {
+      setLiveOffsetMs(0);
+      return;
+    }
+    const tick = () => setLiveOffsetMs(Date.now() - snapshotAtRef.current);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timeData?.isClockedIn]);
+
+  // Live hours today = server snapshot + seconds elapsed since that snapshot
+  const liveTechHoursToday =
+    timeData?.role === 'technician' && timeData.isClockedIn
+      ? timeData.hoursToday + liveOffsetMs / 3600000
+      : (timeData?.role === 'technician' ? timeData.hoursToday : 0);
 
   const { data: assignmentsData } = useQuery<{ assignedJobIds: number[] }>({
     queryKey: ["/api/time/my-assignments"],
@@ -549,7 +575,7 @@ export default function Home() {
                         <div>
                           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Time Today</p>
                           <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                            {timeData.hoursToday.toFixed(1)} <span className="text-base font-medium text-slate-400 dark:text-slate-500">hrs</span>
+                            {Math.floor(liveTechHoursToday)}<span className="text-base font-medium text-slate-400 dark:text-slate-500">h </span>{String(Math.floor((liveTechHoursToday % 1) * 60)).padStart(2, '0')}<span className="text-base font-medium text-slate-400 dark:text-slate-500">m</span>
                           </p>
                         </div>
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
@@ -1111,7 +1137,7 @@ function ElapsedTime({ startTime }: { startTime: string }) {
     };
     
     calculateElapsed();
-    const interval = setInterval(calculateElapsed, 60000);
+    const interval = setInterval(calculateElapsed, 10000);
     
     return () => clearInterval(interval);
   }, [startTime]);
