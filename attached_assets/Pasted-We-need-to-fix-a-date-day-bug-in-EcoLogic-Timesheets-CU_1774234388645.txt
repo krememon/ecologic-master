@@ -1,0 +1,77 @@
+We need to fix a date/day bug in EcoLogic Timesheets.
+
+CURRENT BUG
+All of the clock-in / clock-out entries are showing up under TOMORROW’S date instead of TODAY.
+
+Example from what I’m seeing:
+- the entries happened on March 22 (today)
+- but the Timesheets screen is placing them under March 23
+
+That is incorrect.
+
+GOAL
+Timesheet entries must appear under the correct local day/date that the user actually worked.
+
+IMPORTANT
+- Do NOT redesign the Timesheets UI
+- Do NOT change the correct duration calculations unless needed for the date bug
+- Do NOT break clock-in / clock-out
+- This is a date/timezone/day-grouping bug
+- Must use the user/device/local company day correctly, not shift entries into tomorrow
+
+REQUIRED BEHAVIOR
+If a user clocks in and out on March 22 local time, the entries should appear under March 22 in Timesheets.
+
+This includes:
+- day header
+- selected date bucket
+- week/day grouping
+- day total card
+
+IMPLEMENTATION REQUIREMENTS
+1. Find how clock-in/out timestamps are stored and how Timesheets groups them by day.
+2. Identify why entries from today are being bucketed into tomorrow.
+3. Check for likely causes such as:
+   - UTC vs local-time conversion bug
+   - parsing timestamps as UTC when they should be shown in local time
+   - off-by-one-day logic in day grouping
+   - week/day selector using one timezone while entries use another
+   - server date bucket being returned in UTC midnight instead of local date
+4. Fix the day-grouping logic so entries render under the correct LOCAL date for the user.
+5. Preserve the actual underlying timestamps and duration math.
+6. Make sure this works on:
+   - Home page
+   - Timesheets page
+   - clock-in / clock-out flow
+   - app refresh
+   - native iPhone/iPad and web
+
+TECHNICAL NOTES
+- This is very likely a timezone/local-date formatting bug, not a raw timesheet-duration bug
+- The core fix should be:
+  - store timestamps consistently
+  - convert/group by local day correctly when rendering or when building daily buckets
+- Avoid string-splitting ISO dates in a way that forces UTC day
+- Use one source of truth for local date grouping
+- Make sure the week strip and the rendered entries are using the same timezone basis
+
+VALIDATION
+Please verify:
+1. Clock in today
+2. Clock out today
+3. Open Timesheets
+4. Entries appear under today’s actual date, not tomorrow
+5. Day total appears under the correct day
+6. Existing durations still remain correct
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why entries were being grouped into tomorrow
+3. What timezone/date-grouping logic was fixed
+4. Confirmation that:
+   - today’s entries now appear under today
+   - day totals are under the correct date
+   - duration math still works
+   - clock-in / clock-out flow was not broken
+
+Please implement it now.

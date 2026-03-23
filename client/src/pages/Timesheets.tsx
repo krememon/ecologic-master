@@ -143,9 +143,12 @@ function getWeekDays(weekBaseDate: Date): Date[] {
 function getWeekDateRange(weekBaseDate: Date): { startDate: string; endDate: string } {
   const sunday = startOfWeek(weekBaseDate, { weekStartsOn: 0 });
   const saturday = addDays(sunday, 6);
+  // Extend endDate by 1 day: entries clocked-in late Saturday (local time) are stored
+  // with the next UTC day as their date field — the extra day ensures they are fetched.
+  const endBuffer = addDays(saturday, 1);
   return {
     startDate: format(sunday, "yyyy-MM-dd"),
-    endDate: format(saturday, "yyyy-MM-dd"),
+    endDate: format(endBuffer, "yyyy-MM-dd"),
   };
 }
 
@@ -230,8 +233,10 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
     if (!entry) return;
     setError("");
     if (!reason.trim()) { setError("A reason is required for editing time entries"); return; }
-    const clockInAt = combineDateTime(entry.date, startTime);
-    const clockOutAt = combineDateTime(entry.date, endTime);
+    // Use the local date of the original clockInAt, not entry.date (which is a UTC date)
+    const localEntryDate = format(new Date(entry.clockInAt), "yyyy-MM-dd");
+    const clockInAt = combineDateTime(localEntryDate, startTime);
+    const clockOutAt = combineDateTime(localEntryDate, endTime);
     const s = new Date(clockInAt), e = new Date(clockOutAt);
     if (s >= e) { setError("Start time must be before end time"); return; }
     if ((e.getTime() - s.getTime()) / 3600000 > 16) { setError("Duration cannot exceed 16 hours"); return; }
@@ -248,7 +253,7 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{employeeName || "Employee"}</p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {getJobOrCategory(entry).title} · {format(parseISO(entry.date), "EEE, MMM d")}
+              {getJobOrCategory(entry).title} · {format(new Date(entry.clockInAt), "EEE, MMM d")}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -520,10 +525,14 @@ export default function Timesheets() {
   const isTechnician = data?.role === "technician";
   const selectedDate = format(weekDays[selectedDayIdx], "yyyy-MM-dd");
 
-  // Entries for the selected day
+  // Entries for the selected day — use the clockInAt timestamp converted to LOCAL date
+  // so entries are grouped by the day the user actually worked, not the UTC calendar day.
   const dayEntries = useMemo(() => {
     if (!data?.entries) return [];
-    return data.entries.filter((e) => e.date === selectedDate);
+    return data.entries.filter((e) => {
+      const localDate = format(new Date(e.clockInAt), "yyyy-MM-dd");
+      return localDate === selectedDate;
+    });
   }, [data?.entries, selectedDate]);
 
   // All employees who have entries today (for filter dropdown)
