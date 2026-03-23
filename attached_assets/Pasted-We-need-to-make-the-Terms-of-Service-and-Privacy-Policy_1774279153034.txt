@@ -1,0 +1,77 @@
+We need to make the Terms of Service and Privacy Policy accessible BEFORE sign-in / onboarding in EcoLogic.
+
+GOAL
+Right now the sign-in/onboarding screen shows:
+“By continuing, you agree to our Terms of Service and Privacy Policy”
+
+But the actual TOS and Privacy Policy are only accessible after getting into the app.
+That is incorrect.
+
+We need those links to be accessible to anybody, including users who are not signed in yet.
+
+DESIRED RESULT
+On the onboarding / sign-in flow:
+- Terms of Service link should work for logged-out users
+- Privacy Policy link should work for logged-out users
+- anybody should be able to open/read both documents before creating an account or signing in
+
+IMPORTANT
+- Do NOT redesign the auth screen
+- Keep the current sentence and link placement/style if possible
+- Do NOT require login to view TOS or Privacy Policy
+- These should be public-accessible pages/routes
+- Preserve existing in-app versions if they already exist, but expose them publicly too
+
+REQUIRED BEHAVIOR
+1. On the auth/onboarding screen, tapping Terms of Service opens the public TOS page
+2. Tapping Privacy Policy opens the public Privacy Policy page
+3. These pages must be viewable without authentication
+4. They should work on:
+   - web
+   - native wrapper app
+   - logged-out state
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where the current auth/onboarding screen renders the TOS / Privacy Policy links.
+2. Find where the current TOS and Privacy Policy content currently lives inside the app.
+3. Expose those documents through public-accessible routes/pages that do NOT require auth.
+4. Update the auth/onboarding links to point to those public routes.
+5. Preserve the current logged-in access too if it already exists.
+6. If the existing TOS/Privacy pages are inside authenticated settings/help/legal screens, either:
+   - move them to shared public routes, or
+   - reuse the same content in public wrappers
+7. Make sure direct navigation to the public routes works without bouncing to login.
+8. Keep the pages clean/readable and consistent with EcoLogic branding.
+
+TECHNICAL NOTES
+- This is likely a routing/access-control fix
+- The main issue is probably that current legal pages are behind protected routes
+- Best approach:
+  - create public routes like `/terms` and `/privacy`
+  - reuse the same document content component if possible
+- Do NOT duplicate legal text in multiple places if it can be shared cleanly
+- Make sure native wrapper can open these routes properly too
+
+VALIDATION
+Please verify:
+1. Logged-out user opens auth/onboarding screen
+2. Taps Terms of Service
+3. Terms page opens without login
+
+4. Logged-out user taps Privacy Policy
+5. Privacy page opens without login
+
+6. Directly opening the public terms/privacy routes while logged out also works
+7. Existing logged-in access, if any, still works
+
+DELIVERABLES
+1. Exact files changed
+2. What public routes/pages were added or exposed
+3. What existing legal content was reused
+4. Confirmation that:
+   - TOS is accessible before sign-in
+   - Privacy Policy is accessible before sign-in
+   - no auth is required to view them
+   - auth screen UI stays clean
+
+Please implement it now.

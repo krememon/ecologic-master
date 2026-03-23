@@ -421,6 +421,8 @@ function AuthenticatedRouter() {
     return (
       <Switch>
         <Route path="/billing/success" component={BillingSuccess} />
+        <Route path="/terms" component={TermsOfService} />
+        <Route path="/privacy" component={PrivacyPolicy} />
         <Route path="/" component={Welcome} />
         <Route path="/welcome" component={Welcome} />
         <Route path="/auth">{() => <Redirect to="/login" />}</Route>
@@ -438,6 +440,8 @@ function AuthenticatedRouter() {
   if (nextRoute) {
     return (
       <Switch>
+        <Route path="/terms" component={TermsOfService} />
+        <Route path="/privacy" component={PrivacyPolicy} />
         <Route path="/onboarding/choice" component={OnboardingChoice} />
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
@@ -523,6 +527,8 @@ function AuthenticatedRouter() {
         <Route path="/settings/legal" component={Legal} />
         <Route path="/settings/legal/terms" component={TermsOfService} />
         <Route path="/settings/legal/privacy" component={PrivacyPolicy} />
+        <Route path="/terms" component={TermsOfService} />
+        <Route path="/privacy" component={PrivacyPolicy} />
         <Route path="/customize" component={Customize} />
         <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
