@@ -1,0 +1,67 @@
+We need one small follow-up fix on the Payments detail screen in EcoLogic.
+
+CURRENT STATUS
+- The main dollar amount is now correct
+- But it is still incorrectly showing:
+  Payments Made: 2 payments
+
+That is wrong for this case.
+
+GOAL
+Fix the Payments Made count / payment history display so it shows the correct number of actual payments and does not duplicate the same online payment entry.
+
+CURRENT BUG
+On the payment detail screen:
+- header total is correct now
+- but the screen still shows 2 payments
+- and the history is still rendering the same Stripe payment twice
+
+IMPORTANT
+- Do NOT redesign the page
+- Do NOT change Stripe processing
+- Do NOT change the now-correct main total
+- This is just fixing the duplicate payment count/history display
+- Preserve refunds/history behavior unless part of the same duplication bug
+
+REQUIRED BEHAVIOR
+For this payment detail screen:
+- Payments Made should reflect the real number of unique payments
+- Payment History should only show the real unique payment entries
+- The same Stripe payment should not appear twice
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the data source feeding:
+   - Payments Made count
+   - Payment History list
+2. Identify why the same payment is still being duplicated there.
+3. Fix the dedupe / query / serializer / merge logic so only unique real payments are shown.
+4. Make sure the count matches the history rows exactly.
+5. Preserve the correct amount already fixed in the header.
+6. Validate for:
+   - single Stripe online payment
+   - multiple true separate payments
+   - partial payments
+   - refunds if applicable
+
+TECHNICAL NOTES
+- This is likely still a duplicate-row issue in the detail query or frontend normalization
+- Check whether the screen is combining two sources for the same Stripe payment
+- Use a true unique payment identifier when building the history/count
+- Do NOT hide legitimate multiple payments — only remove accidental duplicates
+
+EXPECTED RESULT
+For this case:
+- Payments Made should show 1 payment
+- Payment History should show only 1 Stripe payment row
+- main total remains correct
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why payment history/count still showed duplicates
+3. What dedupe/query logic was fixed
+4. Confirmation that:
+   - Payments Made now shows the correct count
+   - duplicate history rows are gone
+   - main total remains correct
+
+Please implement it now.

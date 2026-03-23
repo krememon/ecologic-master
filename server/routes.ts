@@ -13418,7 +13418,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const invoicePayments = await storage.getPaymentsByInvoiceId(invoiceId);
+      const invoicePaymentsRaw = await storage.getPaymentsByInvoiceId(invoiceId);
+
+      // Deduplicate by stripePaymentIntentId: if two rows share the same PI ID
+      // (e.g. a lingering 'processing' row alongside an updated 'succeeded' row),
+      // keep only the best-status one so the history never shows duplicate entries.
+      const STATUS_RANK: Record<string, number> = { succeeded: 0, paid: 1, completed: 2, posted: 3, settled: 4, processing: 5, pending: 6, failed: 7 };
+      const piMap = new Map<string, any>();
+      const nonStripePayments: any[] = [];
+      for (const p of invoicePaymentsRaw) {
+        const piId: string | null = (p as any).stripePaymentIntentId || null;
+        if (!piId) { nonStripePayments.push(p); continue; }
+        const existing = piMap.get(piId);
+        if (!existing) { piMap.set(piId, p); continue; }
+        const rankNew = STATUS_RANK[((p as any).status || '').toLowerCase()] ?? 99;
+        const rankExisting = STATUS_RANK[((existing as any).status || '').toLowerCase()] ?? 99;
+        if (rankNew < rankExisting) piMap.set(piId, p);
+      }
+      const invoicePayments = [...nonStripePayments, ...piMap.values()];
 
       let customerName: string | null = null;
       if (invoice.customerId) {
