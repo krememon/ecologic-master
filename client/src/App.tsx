@@ -752,25 +752,32 @@ function useCapacitorDeepLinks() {
           const coldUrl   = launchUrl.url;
           const coldPath  = resolveDeepLinkPath(coldUrl);
 
-          // Auth callback (cold start) — unlikely but handle it
-          const handled = await handleAuthCallbackUrl(coldUrl, closeSystemBrowser);
-          if (handled) return;
+          // Auth callback (cold start) — handle it, then fall through to the
+          // appUrlOpen listener setup. We must NOT return early here: doing so
+          // would skip registering the listener, breaking all subsequent deep
+          // links (job offers, QuickBooks OAuth, etc.) for this session.
+          const coldIsAuthCallback = coldUrl.includes("/auth/callback");
+          await handleAuthCallbackUrl(coldUrl, closeSystemBrowser);
 
-          if (coldPath.includes("stripe_connect_return=")) {
-            console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
-            window.location.href = coldPath;
-            return;
-          }
+          // Only try non-auth deep-link handling when the cold-start URL is not
+          // an auth callback (auth callbacks have no navigable "target").
+          if (!coldIsAuthCallback) {
+            if (coldPath.includes("stripe_connect_return=")) {
+              console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
+              window.location.href = coldPath;
+              return;
+            }
 
-          const coldTarget = extractDeepLinkTarget(coldPath);
-          if (coldTarget) {
-            const alreadyPending = sessionStorage.getItem("pendingDeepLink");
-            if (!alreadyPending) {
-              const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
-              console.log("[deep-link] getLaunchUrl token=", tokenSnippet + "..., target=", coldTarget);
-              saveDeepLink(coldTarget, true);
-            } else {
-              console.log("[deep-link] getLaunchUrl: pendingDeepLink already set, skipping");
+            const coldTarget = extractDeepLinkTarget(coldPath);
+            if (coldTarget) {
+              const alreadyPending = sessionStorage.getItem("pendingDeepLink");
+              if (!alreadyPending) {
+                const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
+                console.log("[deep-link] getLaunchUrl token=", tokenSnippet + "..., target=", coldTarget);
+                saveDeepLink(coldTarget, true);
+              } else {
+                console.log("[deep-link] getLaunchUrl: pendingDeepLink already set, skipping");
+              }
             }
           }
         }

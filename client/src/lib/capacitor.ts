@@ -118,38 +118,61 @@ async function openGoogleAuthPopup(): Promise<void> {
   });
 }
 
-// Shared exchange helper — called by both the polling path and the
-// deep-link (appUrlOpen) path. Whichever fires first wins.
-let _authHandled = false;
+// ─── Native Google auth completion state ─────────────────────────────────────
+//
+// Two completion paths can fire for the same sign-in attempt:
+//   A) ecologic:// deep link  → appUrlOpen → handleAuthCallbackUrl (App.tsx)
+//   B) background poll        → interval → exchangeNativeAuthCode (here)
+//
+// Both ultimately call exchangeNativeAuthCode(code). We must ensure the code
+// is exchanged EXACTLY ONCE. We use a per-code Set (not a boolean flag) so
+// that even if both paths race past "am I already handling this?" at the same
+// tick — whichever inserts into the Set first wins; the other returns immediately.
+//
+// localStorage key survives window.location.href reloads so that iOS's
+// getLaunchUrl() — which permanently returns the original launch URL — cannot
+// re-trigger an already-consumed one-time code.
+
+const AUTH_CODE_CONSUMED_KEY = "nativeAuthCodeConsumed";
+const _inFlightCodes = new Set<string>(); // per-code in-flight dedup
+let _authHandled = false;                 // session-level flag (belt + suspenders)
 
 export function resetAuthHandled(): void {
   _authHandled = false;
+  // _inFlightCodes intentionally NOT cleared — a code in flight must stay locked
 }
 
-// Key used to persist which auth code was last successfully consumed.
-// Survives window.location.href reloads; prevents getLaunchUrl() from
-// re-exchanging the same one-time code after the page reloads.
-const AUTH_CODE_CONSUMED_KEY = "nativeAuthCodeConsumed";
-
 export async function exchangeNativeAuthCode(code: string): Promise<void> {
-  // Guard 1: in-process dedup (same JS runtime, e.g. appUrlOpen + poll both fire)
-  if (_authHandled) {
-    console.log("[google-auth] exchangeNativeAuthCode: already handled in this session, skipping");
-    return;
-  }
-
-  // Guard 2: cross-reload dedup — iOS getLaunchUrl() returns the same
-  // ecologic://auth/callback?code=XYZ on every cold start even after a successful
-  // exchange + window.location.href = "/" reload. Check localStorage so we
-  // never try to exchange a code that was already consumed.
+  // ── Guard A: cross-reload dedup ────────────────────────────────────────────
+  // iOS getLaunchUrl() permanently returns the same ecologic://auth/callback URL
+  // on every cold start. After a successful exchange we write to localStorage so
+  // any future call with the same code is silently dropped (no navigation — the
+  // React app is already mounted and will route based on auth state).
   if (localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === code) {
-    console.log("[google-auth] Code already consumed on a previous load — navigating to /");
-    window.location.href = "/";
-    return;
+    console.log("[google-auth] Code already consumed on a previous load, ignoring stale getLaunchUrl");
+    return; // do NOT navigate — React routing handles the authenticated state
   }
 
+  // ── Guard B: per-code concurrent dedup ─────────────────────────────────────
+  // Both the deep-link path and the poll path can call this function at the same
+  // time in the same page load. The first caller adds the code to the Set; any
+  // subsequent caller for the same code returns immediately. Unlike the boolean
+  // _authHandled flag, a Set survives the timing window between the guard check
+  // and the first await.
+  if (_inFlightCodes.has(code)) {
+    console.log("[google-auth] Exchange already in flight for this code, ignoring duplicate");
+    return;
+  }
+  _inFlightCodes.add(code);
+
+  // ── Guard C: session-level flag (belt + suspenders) ─────────────────────────
+  if (_authHandled) {
+    console.log("[google-auth] Auth already handled this session, ignoring");
+    _inFlightCodes.delete(code);
+    return;
+  }
   _authHandled = true;
-  stopPolling();
+  stopPolling(); // stop polling immediately so it doesn't also try to exchange
 
   console.log("[google-auth] Exchanging auth code for session…");
   try {
@@ -168,8 +191,7 @@ export async function exchangeNativeAuthCode(code: string): Promise<void> {
       } else {
         console.warn("[google-auth] Exchange OK but no sessionId in response");
       }
-      // Mark code as consumed BEFORE reloading so the next getLaunchUrl() call
-      // on the same code is skipped immediately (Guard 2 above).
+      // Write BEFORE reloading so Guard A blocks any concurrent/post-reload re-attempt.
       localStorage.setItem(AUTH_CODE_CONSUMED_KEY, code);
 
       const { queryClient } = await import("@/lib/queryClient");
@@ -186,15 +208,14 @@ export async function exchangeNativeAuthCode(code: string): Promise<void> {
       const body = await res.text().catch(() => "");
       console.error("[google-auth] Exchange failed:", res.status, body);
       _authHandled = false;
+      _inFlightCodes.delete(code);
 
-      // Guard 3: if exchange returned 401 ("Invalid or expired auth code") but
-      // nativeSessionId is already stored, the code was already consumed by a
-      // previous exchange (race between poll path and deep-link path, or
-      // getLaunchUrl() re-fired after reload). The user IS authenticated —
-      // do not bounce them to login.
+      // If nativeSessionId already exists the code was consumed by the other
+      // completion path that raced us. The user IS authenticated — don't bounce
+      // them to the login screen.
       const existingSession = localStorage.getItem("nativeSessionId");
       if (existingSession) {
-        console.log("[google-auth] 401 on exchange but nativeSessionId exists — already authenticated, going to /");
+        console.log("[google-auth] 401 but nativeSessionId exists — already authenticated, going to /");
         window.location.href = "/";
         return;
       }
@@ -203,6 +224,7 @@ export async function exchangeNativeAuthCode(code: string): Promise<void> {
   } catch (err) {
     console.error("[google-auth] Exchange fetch error:", err);
     _authHandled = false;
+    _inFlightCodes.delete(code);
     const existingSession = localStorage.getItem("nativeSessionId");
     if (existingSession) {
       window.location.href = "/";
@@ -287,6 +309,14 @@ export async function startGoogleAuthNative(): Promise<void> {
         });
         const d = await r.json().catch(() => ({}));
         if (d.status === "ready" && d.code) {
+          // Re-check AFTER the async fetch — the deep-link path may have
+          // already started exchanging during the await above.
+          if (_authHandled || _inFlightCodes.has(d.code) ||
+              localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === d.code) {
+            console.log("[google-auth] Poll found code but deep-link already handled it, ignoring");
+            stopPolling();
+            return;
+          }
           console.log("[google-auth] Poll found code — closing browser");
           stopPolling();
           await Browser.close();

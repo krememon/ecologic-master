@@ -1,0 +1,122 @@
+We found the next exact bug.
+
+The native Google flow is still broken because BOTH auth completion paths are running at the same time:
+
+deep-link completion path
+polling completion path
+
+The logs prove this.
+
+In the same sequence we have:
+
+appUrlOpen raw= ecologic://auth/callback?code=...
+Deep link received — closing browser
+Deep link has code — handing off to exchange
+also Poll found code — closing browser
+then Exchange failed: 401 {"message":"Invalid or expired auth code"}
+
+That means one path is consuming the one-time code and the other path is still trying to exchange it after it has already been used.
+
+We also still see repeated getLaunchUrl= ecologic://auth/callback?code=... on reload, which is causing the same callback URL to keep reappearing after the app returns to /login.
+
+WHAT TO FIX
+
+Make native Google completion use exactly ONE completion path.
+
+The deep-link path is the correct one now.
+The polling path must not also run for the same login attempt.
+
+Required fix:
+
+If a deep link with code= is received, disable/abort the polling flow immediately.
+Ensure only one call to exchangeNativeAuthCode(code) can ever happen for a given auth attempt.
+Add a single in-flight guard so concurrent calls cannot both try to exchange.
+Do not let polling consume or compete for the same auth code once deep link handling has started.
+Do not redirect to /login?error=exchange_failed if another path already completed or if this code was already handled.
+Keep the cross-reload dedupe for getLaunchUrl(), but also fix same-session concurrency.
+
+WHAT THE LOGS SHOW
+
+Deep link is firing correctly.
+appUrlOpen is firing correctly.
+Browser.close() is being attempted, though sometimes there is no active window left to close. That error is secondary.
+The real bug is that polling and deep-link completion are both active.
+The app keeps re-reading the same launch URL on startup.
+
+WHAT I WANT YOU TO INSPECT
+Find every place that can complete native Google auth:
+
+polling loop start
+polling success handler
+deep-link handler
+exchangeNativeAuthCode
+any _authHandled, isExchanging, or similar flags
+
+Then implement this exact behavior:
+
+On Google auth start: choose ONE strategy only
+preferred: deep link
+polling only as fallback if deep link is unavailable
+If deep link arrives first:
+set a global/in-memory “native auth completion locked” flag immediately
+stop polling immediately
+ignore any later poll result
+run exchange exactly once
+If polling somehow completes first:
+mark completion locked
+ignore later deep-link callback for that same attempt
+If getLaunchUrl() returns a code that was already handled:
+do nothing
+do not exchange again
+do not navigate to login
+
+SMALLEST CORRECT FIX
+I suspect the smallest correct fix is:
+
+In startGoogleAuthNative() / polling logic:
+create a per-attempt auth state object or module flag like:
+nativeGoogleAuthAttemptId
+nativeGoogleAuthCompleted
+nativeGoogleAuthExchangeInFlight
+In the deep-link handler:
+before calling exchange:
+set nativeGoogleAuthCompleted = true
+stop/cancel polling
+if exchange already in flight, return
+if this code already handled, return
+In the polling success handler:
+if nativeGoogleAuthCompleted is already true, do nothing
+do NOT call browser close or exchange
+do NOT continue if deep-link flow already started
+In exchangeNativeAuthCode(code):
+add a hard in-flight dedupe map by code:
+if same code is already exchanging, return the same promise or skip
+do not allow parallel exchanges of the same one-time code
+In the failure path:
+if exchange returns 401 but this code is already marked handled or a valid native session already exists, do not send user to login
+go to / or stay in authenticated flow
+
+REPLY IN THIS EXACT FORMAT
+
+Exact files changed
+Exact places where polling and deep-link completion were both active
+Exact lock/dedupe logic added
+Exact code path now used as the single source of truth
+Confirmation that:
+only one completion path runs
+code is exchanged once
+browser closes or safely ignores “no active window”
+app no longer bounces to login
+repeated getLaunchUrl() does not break login
+
+ACCEPTANCE TEST
+This is only fixed if:
+
+user taps Continue with Google
+chooses account
+deep link returns to app
+polling does NOT race the deep-link handler
+auth code is exchanged exactly once
+app lands signed in
+app does not bounce back to login
+reopening the app does not retry the old callback destructively
