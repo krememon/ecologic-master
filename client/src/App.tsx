@@ -811,10 +811,19 @@ function useNativeSafeArea() {
   }, []);
 }
 
+function useAppResumeRefresh() {
+  React.useEffect(() => {
+    import("@/lib/capacitor").then(({ setupAppResumeRefresh }) => {
+      setupAppResumeRefresh();
+    });
+  }, []);
+}
+
 function App() {
   usePreventScrollbarShift();
   useCapacitorDeepLinks();
   useNativeSafeArea();
+  useAppResumeRefresh();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">

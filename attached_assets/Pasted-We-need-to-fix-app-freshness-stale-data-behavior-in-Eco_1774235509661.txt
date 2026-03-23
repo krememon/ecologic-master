@@ -1,0 +1,140 @@
+We need to fix app freshness / stale-data behavior in EcoLogic across native mobile so new information appears when the app resumes or is opened from a push notification.
+
+CORE PROBLEM
+Right now the app gets stale if it is already open or sitting in the background.
+
+Examples:
+- Employee has EcoLogic open on phone
+- Owner/Supervisor has EcoLogic open on iPad
+- Owner schedules/dispatches a job to that employee
+- Employee app does NOT update with the new job unless they fully close and reopen the app
+
+Another example:
+- Employee app is in background
+- Employee gets a push notification about job dispatch / assignment
+- They tap the notification
+- App opens
+- But the newly assigned job still does NOT appear right away
+
+That is wrong.
+
+GOAL
+Make EcoLogic refresh important data automatically when:
+1. the app comes back to foreground
+2. the app is opened from a push notification
+3. the user returns to a screen that depends on fresh assignments/schedules/jobs/estimates
+4. ideally, important list/detail screens stay fresh without needing a full app kill
+
+IMPORTANT
+- Do NOT redesign UI
+- Do NOT require users to force-close the app
+- Do NOT break current navigation
+- Do NOT spam the backend with reckless polling everywhere
+- This should be a smart freshness/invalidation/refetch fix
+- Focus especially on native iPhone/iPad behavior
+- Preserve RBAC and visibility rules
+
+WHAT I WANT
+If the app is in the background and then reopened, new information should appear.
+If the user taps a push notification, the app should open and show the new assignment/schedule/job data.
+If owner/supervisor dispatches me to a job, my app should reflect it without requiring a full restart.
+
+REQUIRED BEHAVIOR
+1. App resume / foreground
+   - when EcoLogic returns from background to foreground, refetch/invalidate the important data sources
+   - newly assigned jobs/estimates/schedules should appear
+
+2. Push notification open
+   - when the user taps a relevant push notification, app should:
+     - navigate appropriately if that already exists
+     - and refresh the related data before/while rendering
+   - no stale screen after tapping notification
+
+3. Important screens should refresh when resumed
+   At minimum check and fix refresh behavior for:
+   - Home / Dashboard
+   - Schedule
+   - Jobs list
+   - Job detail if affected
+   - Estimates list / assigned estimates
+   - Clock-in available work items if affected
+   - Notifications-related destination screens
+
+4. Background-opened app
+   - if app was sitting open in memory and then user comes back later, fresh data should load
+   - not just cached old state
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the app shell / native lifecycle handling for:
+   - app foreground/resume
+   - app opened from push notification
+2. Add a centralized freshness strategy for mobile:
+   - invalidate/refetch key queries on app resume
+   - invalidate/refetch relevant data on notification tap
+3. Use the app’s existing data layer correctly:
+   - React Query / query client / whatever current cache layer exists
+   - do NOT hack random full page reloads unless absolutely necessary
+4. Make sure the screens reading assignments/schedules/jobs are actually subscribed to refreshed data and not stale local snapshots
+5. Fix notification-open flow so tapping a push notification does not land on stale data
+6. Preserve efficient behavior:
+   - refresh important query groups, not everything blindly every second
+7. If certain key mutations already happen inside the same company on another device, ensure the receiving device sees the updated server state when resumed
+8. If websocket/live subscriptions already exist, verify whether they are disconnected/background-paused and whether resume logic needs to compensate
+9. Make sure this works if:
+   - owner dispatches employee to a job
+   - owner assigns employee to estimate
+   - schedule changes
+   - notifications are received while app is backgrounded
+10. Do NOT require manual pull-to-refresh for critical assignment visibility
+
+TECHNICAL NOTES
+- This sounds like a stale cache / missing app-resume invalidation problem
+- Likely fix is in shared native app lifecycle handling + push-open handling
+- Check for Capacitor appStateChange listeners
+- Check whether push notification tap handlers only navigate but do not invalidate/refetch
+- Check whether Home/Schedule/Jobs queries have overly long staleTime or never refetch on focus/resume in native wrapper
+- If using React Query, likely need targeted query invalidation on:
+  - appStateChange to active
+  - push notification action performed
+  - relevant mutation success hooks where possible
+- Native mobile does not always behave like browser focus/refetch, so implement explicit resume handling
+- Avoid full hard reload if proper query invalidation can solve it
+
+IDEAL RESULT
+- employee app in background → owner dispatches job → employee opens app → job is there
+- employee taps notification → app opens → job data is visible immediately
+- app does not need to be force-closed to see current company data
+
+VALIDATION
+Please verify these exact scenarios:
+1. Employee app open/in background on phone
+2. Owner dispatches employee to a job from iPad
+3. Employee resumes app
+4. Assigned job appears without force quitting
+
+5. Employee app in background
+6. Owner dispatches employee to a job
+7. Employee taps push notification
+8. App opens and shows fresh job data
+
+9. Repeat for:
+   - schedule change
+   - estimate assignment if applicable
+   - home/dashboard summary cards if affected
+
+10. Confirm no major stale-cache issues remain on core screens
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why data stayed stale until force-close
+3. What app resume / foreground logic was added
+4. What push-notification-open refresh logic was added
+5. What query invalidation/refetch strategy was used
+6. Confirmation that:
+   - app now refreshes important data on resume
+   - tapping notifications opens fresh data
+   - force-closing is no longer required
+   - core screens like Home/Schedule/Jobs stay current
+   - iPhone/iPad native behavior is fixed
+
+Please implement it now.

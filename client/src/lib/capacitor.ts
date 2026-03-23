@@ -222,6 +222,47 @@ export function resetPushRegistration(): void {
   pushListenersAdded = false;
 }
 
+let _resumeListenerAdded = false;
+let _lastResumeRefreshAt = 0;
+const RESUME_REFRESH_THROTTLE_MS = 20_000;
+
+const RESUME_QUERY_KEYS = [
+  "/api/jobs",
+  "/api/estimates",
+  "/api/leads",
+  "/api/notifications",
+  "/api/notifications/unread-count",
+  "/api/time/today",
+  "/api/time/entries",
+  "/api/schedule",
+  "/api/org/users",
+  "/api/dashboard/stats",
+  "/api/company",
+];
+
+export async function setupAppResumeRefresh(): Promise<void> {
+  if (!isNativePlatform()) return;
+  if (_resumeListenerAdded) return;
+  _resumeListenerAdded = true;
+
+  try {
+    const { App } = await import("@capacitor/app");
+    App.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) return;
+      const now = Date.now();
+      if (now - _lastResumeRefreshAt < RESUME_REFRESH_THROTTLE_MS) return;
+      _lastResumeRefreshAt = now;
+      console.log("[app-resume] App foregrounded — refreshing data");
+      RESUME_QUERY_KEYS.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      });
+    });
+    console.log("[app-resume] appStateChange listener registered");
+  } catch (e) {
+    console.error("[app-resume] Failed to register appStateChange listener:", e);
+  }
+}
+
 function isUnimplemented(err: any): boolean {
   return err && (err.code === "UNIMPLEMENTED" || (typeof err.message === "string" && err.message.includes("UNIMPLEMENTED")));
 }
@@ -327,6 +368,10 @@ export async function registerPushNotifications(): Promise<PushResult> {
 
       PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
         console.log("[push] Notification tapped:", action);
+        _lastResumeRefreshAt = Date.now();
+        RESUME_QUERY_KEYS.forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        });
         const data = action.notification.data;
         if (data?.linkUrl) {
           window.location.href = data.linkUrl;
