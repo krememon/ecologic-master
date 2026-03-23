@@ -1,0 +1,95 @@
+We need to fix a Home page / date-bucketing bug in EcoLogic.
+
+CURRENT BUG
+On the Home page, it is showing:
+- Time Today: 0.1 hrs
+
+for March 23, even though I did NOT clock in at all on March 23.
+
+At the same time, the Timesheets page for March 23 correctly shows:
+- No entries
+
+So the Home page “Time Today” card is using the wrong date bucket or stale carry-over data.
+
+GOAL
+The Home page “Time Today” card must only show time for the actual current local day.
+
+If there are no clock-ins for today, it should show:
+- 0.0 hrs
+- and the normal clocked-out state
+
+IMPORTANT
+- Do NOT redesign the Home page
+- Do NOT break Timesheets, since Timesheets appears correct here
+- Do NOT break live running time while clocked in
+- This is a Home-page-specific date/filter/source-of-truth bug
+- Must use the correct local date and not carry yesterday’s time into today
+
+REQUIRED BEHAVIOR
+For the Home page “Time Today” card:
+1. If user has no entries today:
+   - show 0.0 hrs
+   - do not carry over yesterday’s hours
+
+2. If user has entries today:
+   - show only today’s total hours
+
+3. If user is currently clocked in today:
+   - show the live running duration for today’s active shift
+   - plus any earlier completed time from today if applicable
+
+CURRENT EVIDENCE
+- Home page says 0.1 hrs on March 23
+- Timesheets for March 23 says No entries
+That means the Home page is likely:
+- using stale cached total
+- using yesterday’s data
+- using wrong timezone/local-day grouping
+- or not filtering by the selected/current day correctly
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Home page query/computation for the “Time Today” card.
+2. Identify why it is showing 0.1 hrs for March 23 when Timesheets has no entries for March 23.
+3. Fix the Home page so it uses the correct local-day bucket only.
+4. Make sure Home and Timesheets use the same source-of-truth logic for what counts as “today”.
+5. Verify the Home page does NOT carry over yesterday’s total into the new day.
+6. Verify this works across:
+   - app staying open past midnight
+   - app reopened on a new day
+   - native iPhone/iPad
+   - web
+7. If the Home card currently relies on stale cached totals, invalidate/recompute correctly at day boundaries and on app resume.
+8. Preserve live active-shift timer behavior if user is actually clocked in today.
+
+TECHNICAL NOTES
+- Since Timesheets is correct and Home is wrong, the bug is probably in Home-specific aggregation logic
+- Likely causes:
+  - Home is using “most recent entry” instead of “today’s entries”
+  - Home total is cached and not reset when day changes
+  - UTC/local-date mismatch
+  - app resume/day rollover does not recompute “today”
+- Reuse the same local-day filtering logic as Timesheets if possible
+- Make sure midnight rollover is handled cleanly
+
+VALIDATION
+Please verify:
+1. User has entries yesterday but none today
+2. Open Home on the new day
+3. Time Today shows 0.0 hrs
+
+Also verify:
+4. Timesheets for today still shows no entries
+5. Home and Timesheets now match
+6. If user clocks in today, Home updates correctly for today only
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why Home was showing time for a day with no entries
+3. What Home “today” filtering/date logic was fixed
+4. Confirmation that:
+   - Home no longer carries over yesterday’s time
+   - Time Today only reflects today’s entries
+   - Timesheets remains correct
+   - live timer behavior still works when actually clocked in
+
+Please implement it now.

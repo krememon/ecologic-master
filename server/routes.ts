@@ -3074,12 +3074,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Auto-close any expired time entries before returning data
       await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
       
-      const today = new Date().toISOString().split('T')[0];
       const role = member.role as UserRole;
       const now = Date.now();
+
+      // Prefer client-supplied local-day boundaries (ISO strings) to avoid UTC date mismatch.
+      // The client sends start/end = midnight..23:59:59 in its local timezone expressed as UTC ISO.
+      // Fall back to server UTC date when params are absent (e.g. old clients / non-browser callers).
+      let dayStart: Date;
+      let dayEnd: Date;
+      if (req.query.start && req.query.end) {
+        dayStart = new Date(req.query.start as string);
+        dayEnd   = new Date(req.query.end   as string);
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        dayStart = new Date(today + 'T00:00:00.000Z');
+        dayEnd   = new Date(today + 'T23:59:59.999Z');
+      }
       
       if (role === 'TECHNICIAN') {
-        const logs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
+        const logs = await storage.getUserTimeLogsByRange(userId, member.companyId, dayStart, dayEnd);
         const activeLogWithJob = await storage.getActiveTimeLogWithJob(userId, member.companyId);
         
         let totalMinutes = 0;
@@ -3101,7 +3114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const allLogs = await storage.getCompanyTimeLogsToday(member.companyId, today);
+      const allLogs = await storage.getCompanyTimeLogsByRange(member.companyId, dayStart, dayEnd);
       
       const clockedInUsers = new Set<string>();
       let totalMinutes = 0;
@@ -3117,7 +3130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const myActiveLogWithJob = await storage.getActiveTimeLogWithJob(userId, member.companyId);
-      const myLogs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
+      const myLogs = await storage.getUserTimeLogsByRange(userId, member.companyId, dayStart, dayEnd);
       let myMinutes = 0;
       for (const log of myLogs) {
         const start = new Date(log.clockInAt).getTime();

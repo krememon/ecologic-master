@@ -427,6 +427,8 @@ export interface IStorage {
   getActiveTimeLogWithJob(userId: string, companyId: number): Promise<(TimeLog & { job?: { id: number; title: string | null } }) | undefined>;
   getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]>;
   getCompanyTimeLogsToday(companyId: number, date: string): Promise<TimeLog[]>;
+  getUserTimeLogsByRange(userId: string, companyId: number, start: Date, end: Date): Promise<TimeLog[]>;
+  getCompanyTimeLogsByRange(companyId: number, start: Date, end: Date): Promise<TimeLog[]>;
   clockIn(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<TimeLog>;
   clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
   switchJob(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<{ ended: TimeLog; started: TimeLog }>;
@@ -3813,7 +3815,36 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(timeLogs.clockInAt));
   }
-  
+
+  async getUserTimeLogsByRange(userId: string, companyId: number, start: Date, end: Date): Promise<TimeLog[]> {
+    return await db
+      .select()
+      .from(timeLogs)
+      .where(
+        and(
+          eq(timeLogs.userId, userId),
+          eq(timeLogs.companyId, companyId),
+          gte(timeLogs.clockInAt, start),
+          lte(timeLogs.clockInAt, end)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+  }
+
+  async getCompanyTimeLogsByRange(companyId: number, start: Date, end: Date): Promise<TimeLog[]> {
+    return await db
+      .select()
+      .from(timeLogs)
+      .where(
+        and(
+          eq(timeLogs.companyId, companyId),
+          gte(timeLogs.clockInAt, start),
+          lte(timeLogs.clockInAt, end)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+  }
+
   async clockIn(userId: string, companyId: number, jobId?: number, category?: string, estimateId?: number): Promise<TimeLog> {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];

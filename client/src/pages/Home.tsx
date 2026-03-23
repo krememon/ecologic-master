@@ -140,6 +140,21 @@ export default function Home() {
   
   const { data: timeData, isLoading: timeLoading, isError: timeError } = useQuery<TimeData>({
     queryKey: ["/api/time/today"],
+    queryFn: async () => {
+      // Compute local-day boundaries at fetch time so they update correctly
+      // after midnight without needing a page reload.
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const params = new URLSearchParams({
+        start: start.toISOString(),
+        end:   end.toISOString(),
+      });
+      const res = await fetch(`/api/time/today?${params}`, { credentials: "include" });
+      if (res.status === 401) throw new Error("Unauthorized");
+      if (!res.ok) throw new Error("Failed to fetch time data");
+      return res.json() as Promise<TimeData>;
+    },
     enabled: isAuthenticated,
     refetchInterval: 30000,
   });
