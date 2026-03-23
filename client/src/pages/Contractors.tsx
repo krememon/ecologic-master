@@ -607,7 +607,7 @@ export default function Contractors() {
                 className="h-[42px] rounded-xl border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-[13px] font-medium shadow-none w-full"
               >
                 <Send className="w-4 h-4 mr-2 opacity-60" />
-                Send Job
+                Subcontract Job
               </Button>
             )}
             <Button
@@ -904,7 +904,7 @@ export default function Contractors() {
               <button onClick={() => { setSendModalOpen(false); resetSendForm(); }} className="absolute right-4 top-1/2 -translate-y-1/2">
                 <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
               </button>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Send Job Offer</h3>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Subcontract Job</h3>
             </div>
 
             <div className="px-4 pt-3 pb-4 space-y-3 overflow-y-auto flex-1">
