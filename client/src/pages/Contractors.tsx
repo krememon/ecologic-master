@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDollarAmount } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X,
   Send, Inbox, ArrowUpRight, Briefcase, DollarSign, Loader2,
-  CheckCircle, XCircle, Clock, Share2, Copy, MapPin,
+  CheckCircle, XCircle, Clock, Share2, Copy, MapPin, CreditCard,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -262,6 +262,13 @@ export default function Contractors() {
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [feeError, setFeeError] = useState<string>("");
   const [isSharing, setIsSharing] = useState(false);
+  const [showStripeGateDialog, setShowStripeGateDialog] = useState(false);
+
+  const { data: stripeConnectStatus } = useQuery<{ chargesEnabled: boolean; hasAccount: boolean }>({
+    queryKey: ['/api/stripe-connect/status'],
+    enabled: true,
+    staleTime: 60_000,
+  });
 
   const { data: membership } = useQuery<{ role: string }>({
     queryKey: ["/api/user/membership"],
@@ -588,7 +595,14 @@ export default function Contractors() {
           <div className={`grid gap-2.5 pt-1 pb-1 ${canSend ? "grid-cols-2" : "grid-cols-1"}`}>
             {canSend && (
               <Button
-                onClick={() => { resetSendForm(); setSendModalOpen(true); }}
+                onClick={() => {
+                  if (!stripeConnectStatus?.chargesEnabled) {
+                    setShowStripeGateDialog(true);
+                    return;
+                  }
+                  resetSendForm();
+                  setSendModalOpen(true);
+                }}
                 variant="outline"
                 className="h-[42px] rounded-xl border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-[13px] font-medium shadow-none w-full"
               >
@@ -1227,6 +1241,35 @@ export default function Contractors() {
                 </div>
               );
             })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stripe Connect Gate Dialog — shown when Send Job is tapped without Stripe connected */}
+      <Dialog open={showStripeGateDialog} onOpenChange={setShowStripeGateDialog}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 mx-auto mb-2">
+              <CreditCard className="h-6 w-6 text-blue-600" />
+            </div>
+            <DialogTitle className="text-center">Connect Stripe to send subcontract jobs</DialogTitle>
+            <DialogDescription className="text-center">
+              You need to connect your Stripe account before you can send jobs to subcontractors and receive payouts through EcoLogic.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              className="w-full"
+              onClick={() => {
+                setShowStripeGateDialog(false);
+                navigate('/settings/stripe-connect');
+              }}
+            >
+              Connect Stripe
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowStripeGateDialog(false)}>
+              Cancel
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

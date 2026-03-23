@@ -1,0 +1,85 @@
+We need to add Stripe-connect gating to the subcontracting “Send Job” feature in EcoLogic.
+
+GOAL
+If the contractor/company has NOT connected their Stripe account, they should NOT be able to use the “Send Job” subcontracting feature.
+
+WHY
+Since subcontracting payouts depend on Stripe, users should be blocked from sending subcontract jobs until their Stripe payouts account is connected.
+
+REQUIRED BEHAVIOR
+When user tries to use “Send Job”:
+
+1. If Stripe IS connected:
+   - keep current Send Job flow exactly as-is
+
+2. If Stripe is NOT connected:
+   - block the Send Job action
+   - do NOT let them continue into the subcontract-send flow
+   - show a popup/modal explaining they must connect Stripe first
+   - primary button should take them to the Stripe Payouts / connect page
+   - secondary action should cancel/close
+
+POPUP COPY
+Use the existing modal/dialog pattern already used for Stripe-required gating if possible.
+
+Suggested copy:
+Title:
+Connect Stripe to send subcontract jobs
+
+Body:
+You need to connect your Stripe account before you can send jobs to subcontractors and receive payouts through EcoLogic.
+
+Primary button:
+Connect Stripe
+
+Secondary button:
+Cancel
+
+IMPORTANT
+- Do NOT redesign the Send Job UI
+- Do NOT change the subcontracting flow for connected users
+- Do NOT allow unconnected users to proceed partway through the flow
+- Reuse the same Stripe-connected source of truth already used elsewhere in the app
+- Reuse the same existing Stripe-required popup pattern if available
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact entry point(s) for the “Send Job” subcontracting action.
+2. Before opening/continuing that flow, check whether the company has a connected Stripe payouts account.
+3. If not connected:
+   - block the action immediately
+   - open the Stripe-required popup
+4. Wire the primary action to the existing Stripe Payouts / connect screen.
+5. Preserve the current Send Job behavior for connected users.
+6. Apply this check to all relevant Send Job entry points if there is more than one.
+7. Keep backend safety in mind too — disconnected companies should not be able to create a subcontract send flow through any side path if Stripe is required.
+
+TECHNICAL NOTES
+- Reuse existing Stripe connection status logic from invoice payment-link gating if possible
+- Avoid duplicating different Stripe-status checks in multiple places
+- If there is already a shared “requiresStripe” modal/helper, use it
+- Do NOT show misleading success states for disconnected users
+
+VALIDATION
+Please verify:
+1. Connected company taps Send Job
+2. Send Job flow works normally
+
+3. Disconnected company taps Send Job
+4. Flow is blocked immediately
+5. Popup appears
+6. Connect Stripe button routes to Stripe Payouts/connect page
+7. Cancel closes the popup
+8. No subcontract-send flow can proceed without Stripe connected
+
+DELIVERABLES
+1. Exact files changed
+2. What Send Job entry point(s) were gated
+3. What Stripe-connected check was used
+4. What popup/modal was shown
+5. Confirmation that:
+   - disconnected users cannot use Send Job
+   - connected users still can
+   - Connect Stripe routes correctly
+   - no other subcontracting UI was broken
+
+Please implement it now.
