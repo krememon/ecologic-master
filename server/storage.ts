@@ -438,6 +438,7 @@ export interface IStorage {
   updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void>;
   getTimeEntryById(id: number): Promise<TimeLog | null>;
   updateTimeEntry(id: number, data: { clockInAt: Date; clockOutAt: Date; editedByUserId: string; editReason: string }): Promise<TimeLog | null>;
+  deleteTimeEntry(id: number, companyId: number): Promise<boolean>;
 
   // Location ping operations
   createLocationPing(ping: InsertEmployeeLocationPing): Promise<EmployeeLocationPing>;
@@ -4137,6 +4138,13 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return updated || null;
+  }
+
+  async deleteTimeEntry(id: number, companyId: number): Promise<boolean> {
+    const result = await db
+      .delete(timeLogs)
+      .where(and(eq(timeLogs.id, id), eq(timeLogs.companyId, companyId)));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // ============ NOTIFICATIONS ============

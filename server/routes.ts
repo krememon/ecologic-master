@@ -3502,6 +3502,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to update time entry' });
     }
   });
+
+  // Delete a time entry (Managers only)
+  app.delete('/api/time/entries/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const entryId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      const role = member.role as UserRole;
+
+      if (role === 'TECHNICIAN') {
+        return res.status(403).json({ error: 'Only managers can delete time entries' });
+      }
+
+      const entry = await storage.getTimeEntryById(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Time entry not found' });
+      }
+
+      if (entry.companyId !== member.companyId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const deleted = await storage.deleteTimeEntry(entryId, member.companyId);
+      if (!deleted) {
+        return res.status(500).json({ error: 'Failed to delete time entry' });
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting time entry:', error);
+      res.status(500).json({ error: 'Failed to delete time entry' });
+    }
+  });
   
   // POST /api/location/ping - Record a location ping from the mobile app
   app.post('/api/location/ping', isAuthenticated, async (req: any, res) => {

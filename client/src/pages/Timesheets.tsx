@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, MoreHorizontal, Pencil, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, MoreHorizontal, Pencil, Trash2, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { format, startOfWeek, addWeeks, addDays, isToday, parseISO, isFuture } from "date-fns";
 import { useCan } from "@/hooks/useCan";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
@@ -289,9 +289,10 @@ interface EmployeeCardProps {
   isSelected: boolean;
   onSelect: () => void;
   onEdit: (entry: TimeEntry, name: string) => void;
+  onDelete: (entry: TimeEntry, name: string) => void;
 }
 
-function EmployeeCard({ emp, isManager, isSelected, onSelect, onEdit }: EmployeeCardProps) {
+function EmployeeCard({ emp, isManager, isSelected, onSelect, onEdit, onDelete }: EmployeeCardProps) {
   return (
     <div
       className={`rounded-2xl border overflow-hidden transition-all duration-200 ${
@@ -396,6 +397,13 @@ function EmployeeCard({ emp, isManager, isSelected, onSelect, onEdit }: Employee
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit entry
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onDelete(entry, emp.name)}
+                              className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete entry
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -474,6 +482,8 @@ export default function Timesheets() {
   const [filterEmployeeId, setFilterEmployeeId] = useState<string>("all");
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [editEmployeeName, setEditEmployeeName] = useState<string | undefined>(undefined);
+  const [deleteEntry, setDeleteEntry] = useState<TimeEntry | null>(null);
+  const [deleteEmployeeName, setDeleteEmployeeName] = useState<string | undefined>(undefined);
 
   const weekBaseDate = useMemo(() => {
     const now = new Date();
@@ -587,6 +597,37 @@ export default function Timesheets() {
 
   const handleEditSaved = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/time/entries", startDate, endDate] });
+  };
+
+  const { toast } = useToast();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/time/entries/${id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete entry");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time/entries", startDate, endDate] });
+      setDeleteEntry(null);
+      setDeleteEmployeeName(undefined);
+      toast({ title: "Entry deleted", description: "The time entry has been permanently removed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to delete entry", variant: "destructive" });
+    },
+  });
+
+  const handleDeleteEntry = (entry: TimeEntry, name?: string) => {
+    setDeleteEntry(entry);
+    setDeleteEmployeeName(name);
+  };
+
+  const handleDeleteConfirmed = () => {
+    if (!deleteEntry) return;
+    deleteMutation.mutate(deleteEntry.id);
   };
 
   const toggleSelect = (userId: string) => {
@@ -819,6 +860,7 @@ export default function Timesheets() {
                     isSelected={selectedEmployeeId === emp.userId}
                     onSelect={() => toggleSelect(emp.userId)}
                     onEdit={handleEditEntry}
+                    onDelete={handleDeleteEntry}
                   />
                 ))}
               </div>
@@ -834,6 +876,47 @@ export default function Timesheets() {
         onSaved={handleEditSaved}
         employeeName={editEmployeeName}
       />
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteEntry} onOpenChange={(o) => { if (!o && !deleteMutation.isPending) { setDeleteEntry(null); setDeleteEmployeeName(undefined); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete entry?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            {deleteEmployeeName && (
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{deleteEmployeeName}</p>
+            )}
+            {deleteEntry && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {getJobOrCategory(deleteEntry).title} · {format(new Date(deleteEntry.clockInAt), "EEE, MMM d")}
+                {" · "}{formatTime(deleteEntry.clockInAt)} → {formatTime(deleteEntry.clockOutAt)}
+              </p>
+            )}
+            <p className="text-sm text-slate-600 dark:text-slate-400 pt-1">
+              This will permanently remove this timesheet entry.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => { setDeleteEntry(null); setDeleteEmployeeName(undefined); }}
+              disabled={deleteMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirmed}
+              disabled={deleteMutation.isPending}
+              className="w-full sm:w-auto"
+            >
+              {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete entry"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

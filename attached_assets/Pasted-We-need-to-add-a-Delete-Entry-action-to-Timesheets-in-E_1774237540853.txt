@@ -1,0 +1,101 @@
+We need to add a Delete Entry action to Timesheets in EcoLogic.
+
+GOAL
+In Timesheets, when the user taps the 3 dots on a time entry, add a new option:
+- Delete entry
+
+This action should completely remove that timesheet entry.
+
+IMPORTANT
+When deleted, it should not just disappear from the current screen visually — it must actually delete the real entry from the source of truth, including the employee’s record too.
+
+In short:
+- delete the entry for real
+- remove it everywhere it appears
+- update totals accordingly
+
+REQUIRED BEHAVIOR
+On a timesheet entry row:
+1. User taps the 3-dot menu
+2. Menu shows:
+   - Edit entry
+   - Delete entry
+3. Tapping Delete entry should open a confirmation
+4. On confirm:
+   - the entry is permanently deleted
+   - it is removed from the current timesheet view
+   - it is removed from the employee’s timesheet/history too
+   - day totals / user totals / session counts recalculate correctly
+
+IMPORTANT
+- Do NOT redesign the Timesheets page
+- Do NOT break Edit entry
+- Do NOT fake-delete only on the frontend
+- This must be a real backend/source-of-truth delete
+- Preserve other timesheet behavior
+- If there are owner/admin permissions involved, preserve them correctly
+
+DELETE CONFIRMATION
+Use the app’s existing destructive confirmation pattern if one exists.
+
+Suggested copy:
+Title:
+Delete entry?
+
+Body:
+This will permanently remove this timesheet entry.
+
+Buttons:
+- Delete entry
+- Cancel
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the timesheet entry row action menu component.
+2. Add “Delete entry” underneath “Edit entry”.
+3. Wire Delete entry to the real backend delete flow.
+4. If a delete endpoint does not already exist, implement one safely.
+5. Make sure the delete action removes the correct entry by its real unique ID.
+6. Recalculate/update:
+   - entry list
+   - day total
+   - employee total
+   - session count
+   - any grouped summary cards
+7. Ensure the deletion is reflected anywhere else the same entry appears.
+8. Preserve correct permissions:
+   - only users who should be allowed to delete entries can do so
+9. Make sure deleting an entry for an employee removes it from that employee’s actual record too, not just an owner-facing grouped view.
+
+TECHNICAL NOTES
+- This sounds like the current row already has an action menu for Edit entry, so extend that menu instead of redesigning
+- Use the same source-of-truth entry identifier currently used for editing
+- Make sure grouped/aggregated timesheet views refresh after delete
+- Do NOT leave stale cached totals behind
+- Use targeted query invalidation/refetch after delete
+- If this screen groups by employee/day, ensure deletion updates all visible aggregates correctly
+
+VALIDATION
+Please verify:
+1. Open Timesheets
+2. Tap 3 dots on an entry
+3. See Edit entry + Delete entry
+4. Tap Delete entry
+5. Confirm delete
+6. Entry is removed
+7. Day total updates
+8. Employee summary/session count updates
+9. Entry is also gone from the employee’s record everywhere else
+
+DELIVERABLES
+1. Exact files changed
+2. Where Delete entry was added in the menu
+3. What backend delete action/endpoint it triggers
+4. How totals and grouped views refresh after deletion
+5. Confirmation that:
+   - Delete entry now appears in the 3-dot menu
+   - deleting permanently removes the entry
+   - employee record is also updated
+   - day totals/session counts recalculate correctly
+   - Edit entry still works
+
+Please implement it now.
