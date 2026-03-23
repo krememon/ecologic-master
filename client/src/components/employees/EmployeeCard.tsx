@@ -10,22 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { useCan } from "@/hooks/useCan";
 import { formatPhone } from "@shared/phoneUtils";
 
-function EmployeeAvatar({ firstName, lastName, profileImageUrl, role }: {
+function EmployeeAvatar({ firstName, lastName, profileImageUrl }: {
   firstName: string | null;
   lastName: string | null;
   profileImageUrl?: string | null;
-  role: string;
 }) {
   const [imgError, setImgError] = useState(false);
 
   const initials = [firstName?.[0], lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
 
-  const roleColors: Record<string, string> = {
-    OWNER:      "bg-slate-700 text-white",
-    SUPERVISOR: "bg-indigo-600 text-white",
-    TECHNICIAN: "bg-green-600 text-white",
-  };
-  const fallbackClass = roleColors[role] ?? "bg-gray-500 text-white";
+  const fallbackClass = "bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-slate-100";
 
   if (profileImageUrl && !imgError) {
     return (
@@ -136,7 +130,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
             firstName={employee.firstName}
             lastName={employee.lastName}
             profileImageUrl={employee.profileImageUrl}
-            role={employee.role}
           />
           {/* Name + badges — pr-10 reserves space for the single kebab button */}
           <div className="flex-1 min-w-0 pr-10">

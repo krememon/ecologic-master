@@ -3,6 +3,7 @@ import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, Fol
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useCan } from "@/hooks/useCan";
 import type { Permission } from "@shared/permissions";
@@ -141,11 +142,12 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       {/* User Profile */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
         <div className="flex items-center space-x-3 mb-3">
-          <img 
-            src={user?.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.firstName || 'U')}&background=random`}
-            alt="Profile picture" 
-            className="w-10 h-10 rounded-full object-cover"
-          />
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={user?.profileImageUrl ?? undefined} alt="Profile picture" />
+            <AvatarFallback className="bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-slate-100 text-sm font-semibold">
+              {[user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {user?.firstName} {user?.lastName}

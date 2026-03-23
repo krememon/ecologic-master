@@ -1,0 +1,72 @@
+We need to finish the fallback-avatar color change in EcoLogic.
+
+CURRENT ISSUE
+The gray fallback-avatar update only applied in some places.
+
+The remaining places that still did NOT change are:
+1. the sidebar account/avatar area (the one I circled)
+2. the Employees page cards
+
+GOAL
+If a user does NOT have a profile picture, their fallback avatar should be gray everywhere in the app.
+
+IMPORTANT
+- No random colors
+- No green/yellow/blue fallback backgrounds
+- Uploaded profile photos should still display normally
+- This is only for users without a real profile picture
+- We need to fix the remaining spots that are still bypassing the shared gray fallback
+
+CURRENT BUG
+The prompt partially worked, but these places are still using old colored fallback behavior:
+- sidebar/profile area
+- Employees page cards
+
+REQUIRED BEHAVIOR
+If user has:
+1. real profile photo
+   - keep showing photo
+
+2. no photo
+   - show initials on a gray background
+   - same gray everywhere, including:
+     - sidebar account/profile area
+     - Settings profile summary if applicable
+     - Employees page cards
+     - any other remaining user-avatar fallback UI
+
+IMPLEMENTATION REQUIREMENTS
+1. Find why the sidebar/profile avatar is still not using the shared gray fallback.
+2. Find why the Employees page avatars are still not using the shared gray fallback.
+3. Update those remaining places to use the same gray fallback behavior.
+4. If those screens are bypassing the shared avatar component/helper, refactor them to use the shared one or align them with the same fallback logic.
+5. Preserve initials rendering and readability.
+6. Do NOT change uploaded profile pictures.
+7. Do NOT redesign the avatar size/layout.
+
+TECHNICAL NOTES
+- The previous change likely fixed only the shared avatar component, but these remaining places may still be:
+  - using hardcoded color classes
+  - using a local initials-avatar helper
+  - using old per-screen avatar logic instead of the shared component
+- Fix the remaining exceptions so fallback color is fully consistent app-wide
+
+VALIDATION
+Please verify:
+1. Sidebar/profile avatar with no photo is gray
+2. Employees page cards with no photo are gray
+3. Any uploaded real profile images still show correctly
+4. Initials are still readable
+5. No random fallback colors remain
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why sidebar + Employees page did not change
+3. What logic/component usage was updated
+4. Confirmation that:
+   - sidebar fallback avatar is now gray
+   - Employees page fallback avatars are now gray
+   - uploaded profile photos still work
+   - fallback avatar color is now consistent everywhere
+
+Please implement it now.
