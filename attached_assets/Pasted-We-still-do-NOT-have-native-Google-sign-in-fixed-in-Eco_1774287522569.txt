@@ -1,0 +1,221 @@
+We still do NOT have native Google sign-in fixed in EcoLogic.
+
+I just reviewed the Cal AI recording, and that is the exact behavior I want EcoLogic to match.
+
+====================
+TARGET BEHAVIOR
+
+Match Cal AI’s Google sign-in flow:
+
+User taps “Sign in with Google”
+Native Google/account chooser opens cleanly
+User selects Google account
+Auth completes
+Browser/in-app auth sheet auto-closes immediately
+User is returned directly into the app
+User is already authenticated
+No dead-end “Sign in complete, return to app” page
+No manual close required
+No landing back on the sign-in screen
+
+Right now EcoLogic fails both parts:
+
+it does not auto-close
+it does not actually sign the user in
+
+I need you to stop patching around it and rebuild the native Google OAuth completion flow so it behaves like Cal AI.
+
+====================
+WHAT TO INVESTIGATE
+
+Trace the ENTIRE flow end-to-end:
+
+Google auth button tap
+auth launch method
+browser / in-app browser / native sheet opening
+backend Google auth start route
+backend Google callback route
+success redirect behavior
+deep-link handoff into EcoLogic
+app listener for incoming deep link
+browser close call
+session finalization
+auth store/context refresh
+final in-app navigation after auth
+
+Do not assume the callback is enough.
+Do not assume browser success means app auth success.
+Do not assume closing the browser solves login.
+Both pieces must work together.
+
+====================
+WHAT I WANT BUILT
+
+Implement a production-correct native Google OAuth flow that behaves like the Cal AI recording.
+
+Required final flow:
+
+User taps Continue with Google
+Google auth opens in the proper native/browser flow
+User selects account
+Backend Google callback succeeds
+Backend finalizes auth properly for native flow
+Backend redirects into EcoLogic deep link
+App receives deep link
+App immediately closes the auth browser/sheet
+App finalizes login state
+App refreshes current authenticated user
+App routes directly into EcoLogic signed in
+====================
+BACKEND REQUIREMENTS
+
+Audit and fix:
+
+Google auth start route
+Google callback route
+any success HTML page
+redirect destination after callback
+session creation/finalization
+mobile/native auth handoff
+auth/me or current-user endpoint
+
+Important:
+The successful callback must NOT end by leaving the user on a browser success page.
+
+If needed, use a one-time handoff token flow.
+
+Preferred robust architecture:
+
+Google callback succeeds
+find/create user
+create short-lived one-time handoff token
+redirect to deep link like:
+ecologic://auth/callback?status=success&handoff=TOKEN
+
+On failure:
+ecologic://auth/callback?status=error&reason=google_auth_failed
+
+If an HTTPS bridge page is required first, it must only exist to instantly open the deep link and should never sit there waiting for manual action.
+
+If needed, add a dedicated exchange endpoint, for example:
+
+POST /api/auth/google/mobile-exchange
+
+That endpoint should:
+
+validate one-time token
+ensure token is short-lived
+ensure token is single-use
+identify the user
+finalize the real EcoLogic authenticated session
+return the authenticated user/session payload needed by the app
+
+Also verify cookie/session behavior:
+
+SameSite
+Secure
+domain/path
+callback context vs native app context
+whether current auth is stuck only inside the browser context
+====================
+NATIVE APP REQUIREMENTS
+
+Fix the native side so it behaves like Cal AI.
+
+If using Capacitor, confirm proper usage of:
+
+App.addListener('appUrlOpen', ...)
+Browser.close()
+
+Required behavior:
+
+app launches Google auth flow
+app listens for deep-link callback
+when callback arrives:
+immediately call Browser.close()
+parse success/error and handoff token
+if success: call backend exchange/finalization endpoint
+call /api/auth/me or equivalent
+update auth context/store/state
+navigate into authenticated app
+if error:
+close browser
+show clean auth failure message
+stay on sign-in
+
+Do not leave the user on sign-in because auth refresh happened too late.
+Do not navigate before auth finalization completes.
+Do not rely on manual dismissal.
+
+====================
+LIKELY ROOT CAUSES TO CHECK
+
+Check all of these and fix the actual root cause(s):
+
+success page is plain HTML and never deep-links back into app
+deep-link scheme/path is wrong
+native app is not listening for incoming deep link correctly
+listener is mounted too late or in the wrong place
+Browser.close() is never called
+Browser.close() is called but callback never reaches app
+backend callback succeeds but only browser session is set
+native app never exchanges/refreshes auth after callback
+/api/auth/me is not called after return
+auth store/context is not updated after successful callback
+app routing sends user back to sign-in before auth refresh completes
+web and native auth flows are mixed together incorrectly
+callback says success but never creates the real EcoLogic app auth state
+====================
+DELIVERABLES
+
+Reply in this exact format:
+
+Exact files changed
+Exact root cause(s) found
+Exact end-to-end auth flow after fix
+Exact temporary logs added
+Confirmation of final working behavior
+====================
+REQUIRED TEMP LOGS
+
+Add targeted logs for the full chain:
+
+Google auth button tapped
+auth browser launched
+Google auth start hit
+Google callback hit
+Google callback success
+user found/created
+handoff token or session created
+deep-link redirect fired
+appUrlOpen received
+Browser.close called
+exchange endpoint hit
+exchange success
+/api/auth/me success
+auth store/context updated
+final navigation into authenticated app
+
+After verifying, remove noisy logs and keep only minimal useful auth logs.
+
+====================
+ACCEPTANCE TEST
+
+This is only done if all of the below happen consistently:
+
+Tap Continue with Google
+Select a Google account
+Browser/auth sheet closes automatically
+No manual close required
+App returns directly to EcoLogic
+User is actually authenticated
+App lands inside the signed-in experience
+No dead-end success page remains open
+Repeating the flow works consistently
+
+Do not give me a partial fix.
+Do not just change the success page text.
+Do not just make the browser close if login still fails.
+Do not just sign in if the auth sheet still hangs open.
+
+Make EcoLogic’s Google sign-in behave like the Cal AI recording end-to-end.

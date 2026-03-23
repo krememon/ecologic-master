@@ -1334,8 +1334,15 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
           console.log("[google-auth] iOS: 2FA not supported in native wrapper");
           return res.redirect("/api/auth/google-complete?error=2fa_not_supported");
         }
-        const code = storeAuthCode(user.id);
-        console.log(`[google-auth] iOS: auth code stored (${code.substring(0, 8)}…), redirecting to bridge page`);
+        // If the native app provided a nonce, store the code against it so the
+        // background poll (setInterval in startGoogleAuthNative) can retrieve it.
+        // This is the primary completion mechanism because iOS 13+ SFSafariViewController
+        // shows an OS dialog for custom URL scheme redirects; polling avoids that entirely.
+        // The code is ALSO stored by storeAuthCode for direct exchange via deep link fallback.
+        const code = nonce
+          ? storeAuthCodeForNonce(nonce, user.id)
+          : storeAuthCode(user.id);
+        console.log(`[google-auth] iOS: code stored${nonce ? " (nonce=" + nonce.substring(0, 8) + "…)" : ""}, redirecting to bridge page`);
         return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(code)}`);
       }
 

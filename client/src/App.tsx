@@ -684,17 +684,18 @@ function saveDeepLink(target: string, navigate = false) {
   }
 }
 
-// Shared handler for both cold-start (getLaunchUrl) and warm-start (appUrlOpen)
-// Google OAuth deep links. Exchanges the one-time auth code for a session,
-// stores the sessionId as nativeSessionId (Bearer token for future API calls),
-// then hard-navigates into the authenticated app.
+// Handles ecologic://auth/callback?code=... deep links from the Google OAuth
+// bridge page. This is the fast path on iOS versions where SFSafariViewController
+// silently opens the custom URL scheme. The polling path in capacitor.ts
+// is the primary reliable path; this fires whichever comes first.
+// exchangeNativeAuthCode() is idempotent — the second caller is a no-op.
 async function handleAuthCallbackUrl(
   url: string,
   closeSystemBrowser: () => Promise<void>,
 ): Promise<boolean> {
   if (!url.startsWith("ecologic://auth/callback")) return false;
 
-  console.log("[google-auth] appUrlOpen: auth callback received, closing browser");
+  console.log("[google-auth] Deep link received — closing browser");
   try { await closeSystemBrowser(); } catch {}
 
   const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
@@ -702,52 +703,28 @@ async function handleAuthCallbackUrl(
   const error = params.get("error");
 
   if (error) {
-    console.error("[google-auth] Auth callback error param:", error);
+    console.error("[google-auth] Deep link error param:", error);
+    // Stop polling too
+    try {
+      const { stopPolling } = await import("@/lib/capacitor");
+      stopPolling();
+    } catch {}
     window.location.href = "/login?error=" + encodeURIComponent(error);
     return true;
   }
 
   if (!code) {
-    console.error("[google-auth] Auth callback: no code and no error in URL");
+    console.error("[google-auth] Deep link: no code and no error");
     window.location.href = "/login?error=missing_code";
     return true;
   }
 
-  console.log("[google-auth] Exchanging auth code for session…");
+  console.log("[google-auth] Deep link has code — handing off to exchange");
   try {
-    const res = await fetch("/api/auth/exchange-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-      credentials: "include",
-    });
-
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      if (data.sessionId) {
-        localStorage.setItem("nativeSessionId", data.sessionId);
-        console.log("[google-auth] nativeSessionId stored — user authenticated");
-      } else {
-        console.warn("[google-auth] Exchange succeeded but no sessionId in response");
-      }
-      // Hard reload to "/"  — the global fetch interceptor now sends the Bearer
-      // token so /api/auth/user will return the authenticated user.
-      console.log("[google-auth] Auth exchange complete, navigating into app");
-      const pendingLink = sessionStorage.getItem("pendingDeepLink");
-      if (pendingLink) {
-        sessionStorage.removeItem("pendingDeepLink");
-        console.log("[google-auth] Restoring pending deep link:", pendingLink);
-        window.location.href = pendingLink;
-      } else {
-        window.location.href = "/";
-      }
-    } else {
-      const body = await res.text().catch(() => "");
-      console.error("[google-auth] Exchange failed:", res.status, body);
-      window.location.href = "/login?error=exchange_failed";
-    }
+    const { exchangeNativeAuthCode } = await import("@/lib/capacitor");
+    await exchangeNativeAuthCode(code);
   } catch (err) {
-    console.error("[google-auth] Exchange fetch error:", err);
+    console.error("[google-auth] Deep link exchange error:", err);
     window.location.href = "/login?error=exchange_failed";
   }
   return true;

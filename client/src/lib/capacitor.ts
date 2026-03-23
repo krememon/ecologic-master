@@ -118,6 +118,64 @@ async function openGoogleAuthPopup(): Promise<void> {
   });
 }
 
+// Shared exchange helper — called by both the polling path and the
+// deep-link (appUrlOpen) path. Whichever fires first wins.
+let _authHandled = false;
+
+export function resetAuthHandled(): void {
+  _authHandled = false;
+}
+
+export async function exchangeNativeAuthCode(code: string): Promise<void> {
+  if (_authHandled) {
+    console.log("[google-auth] exchangeNativeAuthCode: already handled, skipping");
+    return;
+  }
+  _authHandled = true;
+  stopPolling();
+
+  console.log("[google-auth] Exchanging auth code for session…");
+  try {
+    const res = await fetch("/api/auth/exchange-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      credentials: "include",
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.sessionId) {
+        localStorage.setItem("nativeSessionId", data.sessionId);
+        console.log("[google-auth] nativeSessionId stored — user is authenticated");
+      } else {
+        console.warn("[google-auth] Exchange OK but no sessionId in response");
+      }
+      // Invalidate cached auth state so the app re-fetches /api/auth/user
+      // with the new Bearer token attached by the global fetch interceptor.
+      const { queryClient } = await import("@/lib/queryClient");
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      console.log("[google-auth] Auth complete — navigating into app");
+      const pendingLink = sessionStorage.getItem("pendingDeepLink");
+      if (pendingLink) {
+        sessionStorage.removeItem("pendingDeepLink");
+        window.location.href = pendingLink;
+      } else {
+        window.location.href = "/";
+      }
+    } else {
+      const body = await res.text().catch(() => "");
+      console.error("[google-auth] Exchange failed:", res.status, body);
+      _authHandled = false; // allow retry
+      window.location.href = "/login?error=exchange_failed";
+    }
+  } catch (err) {
+    console.error("[google-auth] Exchange fetch error:", err);
+    _authHandled = false;
+    window.location.href = "/login?error=exchange_failed";
+  }
+}
+
 export async function startGoogleAuthNative(): Promise<void> {
   if (!isNativePlatform()) {
     if (isInsideIframe()) {
@@ -147,20 +205,67 @@ export async function startGoogleAuthNative(): Promise<void> {
     return;
   }
 
+  // ── Native iOS path ──────────────────────────────────────────────────────
+  // SFSafariViewController (Capacitor Browser plugin) cannot auto-redirect
+  // to custom URL schemes on iOS 13+ without showing an OS dialog. Instead
+  // we use a server-side nonce: the app polls the backend every 2 s, and
+  // when OAuth completes the server stores the auth code against the nonce.
+  // The poll finds the code, closes the browser programmatically, then
+  // exchanges the code for a session — no user interaction needed.
+  //
+  // The bridge page also attempts the ecologic:// deep link as a fast path
+  // for iOS versions where it works silently. The appUrlOpen handler in
+  // App.tsx calls stopPolling() + exchangeNativeAuthCode() so whichever
+  // fires first wins without double-processing.
+  resetAuthHandled();
+  stopPolling(); // clear any leftover from a previous attempt
+
   const baseUrl = getApiBaseUrl();
-  const authUrl = `${baseUrl}/api/auth/google?platform=ios`;
-  console.log("[capacitor] Starting native Google auth via deep link flow");
+  const nonce   = generateNonce();
+  const authUrl = `${baseUrl}/api/auth/google?platform=ios&nonce=${nonce}`;
+
+  console.log("[google-auth] Native: opening browser, nonce=", nonce.substring(0, 8) + "…");
 
   try {
     const { Browser } = await import("@capacitor/browser");
-    // Open the system browser for Google sign-in. When the OAuth callback
-    // completes on the server, it redirects to ecologic://auth/callback?code=...
-    // which iOS intercepts and fires the appUrlOpen listener in App.tsx.
-    // That listener calls Browser.close(), exchanges the code, stores the
-    // nativeSessionId, and navigates into the app. No polling needed.
     await Browser.open({ url: authUrl, presentationStyle: "popover" as any });
+
+    // ── Background poll ──────────────────────────────────────────────────
+    // WKWebView timers continue running while SFSafariViewController is
+    // shown (it's presented over the app, not backgrounding the app).
+    let pollAttempts = 0;
+    const MAX_ATTEMPTS = 150; // 5 min at 2 s/poll
+
+    activePollInterval = setInterval(async () => {
+      if (_authHandled || pollInFlight) return;
+      if (pollAttempts++ >= MAX_ATTEMPTS) {
+        console.warn("[google-auth] Poll timeout — giving up");
+        stopPolling();
+        Browser.close().catch(() => {});
+        return;
+      }
+      pollInFlight = true;
+      try {
+        const r = await fetch(`${baseUrl}/api/auth/poll-code?nonce=${nonce}`, {
+          credentials: "include",
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d.status === "ready" && d.code) {
+          console.log("[google-auth] Poll found code — closing browser");
+          stopPolling();
+          await Browser.close();
+          await exchangeNativeAuthCode(d.code);
+        }
+      } catch {
+        // network hiccup — ignore and retry
+      } finally {
+        pollInFlight = false;
+      }
+    }, 2000);
+
   } catch (err) {
-    console.error("[capacitor] Browser.open failed:", err);
+    console.error("[google-auth] Browser.open failed:", err);
+    stopPolling();
     throw err;
   }
 }
