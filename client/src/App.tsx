@@ -684,6 +684,75 @@ function saveDeepLink(target: string, navigate = false) {
   }
 }
 
+// Shared handler for both cold-start (getLaunchUrl) and warm-start (appUrlOpen)
+// Google OAuth deep links. Exchanges the one-time auth code for a session,
+// stores the sessionId as nativeSessionId (Bearer token for future API calls),
+// then hard-navigates into the authenticated app.
+async function handleAuthCallbackUrl(
+  url: string,
+  closeSystemBrowser: () => Promise<void>,
+): Promise<boolean> {
+  if (!url.startsWith("ecologic://auth/callback")) return false;
+
+  console.log("[google-auth] appUrlOpen: auth callback received, closing browser");
+  try { await closeSystemBrowser(); } catch {}
+
+  const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
+  const code  = params.get("code");
+  const error = params.get("error");
+
+  if (error) {
+    console.error("[google-auth] Auth callback error param:", error);
+    window.location.href = "/login?error=" + encodeURIComponent(error);
+    return true;
+  }
+
+  if (!code) {
+    console.error("[google-auth] Auth callback: no code and no error in URL");
+    window.location.href = "/login?error=missing_code";
+    return true;
+  }
+
+  console.log("[google-auth] Exchanging auth code for session…");
+  try {
+    const res = await fetch("/api/auth/exchange-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      credentials: "include",
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data.sessionId) {
+        localStorage.setItem("nativeSessionId", data.sessionId);
+        console.log("[google-auth] nativeSessionId stored — user authenticated");
+      } else {
+        console.warn("[google-auth] Exchange succeeded but no sessionId in response");
+      }
+      // Hard reload to "/"  — the global fetch interceptor now sends the Bearer
+      // token so /api/auth/user will return the authenticated user.
+      console.log("[google-auth] Auth exchange complete, navigating into app");
+      const pendingLink = sessionStorage.getItem("pendingDeepLink");
+      if (pendingLink) {
+        sessionStorage.removeItem("pendingDeepLink");
+        console.log("[google-auth] Restoring pending deep link:", pendingLink);
+        window.location.href = pendingLink;
+      } else {
+        window.location.href = "/";
+      }
+    } else {
+      const body = await res.text().catch(() => "");
+      console.error("[google-auth] Exchange failed:", res.status, body);
+      window.location.href = "/login?error=exchange_failed";
+    }
+  } catch (err) {
+    console.error("[google-auth] Exchange fetch error:", err);
+    window.location.href = "/login?error=exchange_failed";
+  }
+  return true;
+}
+
 function useCapacitorDeepLinks() {
   React.useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -699,10 +768,16 @@ function useCapacitorDeepLinks() {
         console.log("[deep-link] Native platform detected, setting up deep link listener");
         const { App: CapApp } = await import("@capacitor/app");
 
+        // Cold start: app was launched directly from the deep link URL
         const launchUrl = await CapApp.getLaunchUrl();
         if (launchUrl?.url) {
           console.log("[deep-link] getLaunchUrl=", launchUrl.url);
-          const coldPath = resolveDeepLinkPath(launchUrl.url);
+          const coldUrl   = launchUrl.url;
+          const coldPath  = resolveDeepLinkPath(coldUrl);
+
+          // Auth callback (cold start) — unlikely but handle it
+          const handled = await handleAuthCallbackUrl(coldUrl, closeSystemBrowser);
+          if (handled) return;
 
           if (coldPath.includes("stripe_connect_return=")) {
             console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
@@ -723,11 +798,16 @@ function useCapacitorDeepLinks() {
           }
         }
 
+        // Warm start: app was in background, receives the deep link URL
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] appUrlOpen raw=", url);
 
           const pathToMatch = resolveDeepLinkPath(url);
           console.log("[deep-link] pathname=", pathToMatch);
+
+          // Google OAuth callback — handle first before any other check
+          const handled = await handleAuthCallbackUrl(url, closeSystemBrowser);
+          if (handled) return;
 
           if (pathToMatch.includes("stripe_connect_return=")) {
             console.log("[deep-link] Stripe Connect return detected, navigating to:", pathToMatch);
@@ -750,55 +830,6 @@ function useCapacitorDeepLinks() {
             console.log("[deep-link] appUrlOpen token=", tokenMatch?.[1]?.slice(0, 12) + "...");
             saveDeepLink(target, true);
             return;
-          }
-
-          if (!url.startsWith("ecologic://auth/callback")) return;
-
-          await closeSystemBrowser();
-
-          const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
-          const code = params.get("code");
-          const error = params.get("error");
-
-          if (error) {
-            console.error("[deep-link] Auth error:", error);
-            window.location.href = "/login?error=" + error;
-            return;
-          }
-
-          if (code) {
-            try {
-              const res = await fetch("/api/auth/exchange-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code }),
-                credentials: "include",
-              });
-
-              if (res.ok) {
-                const data = await res.json().catch(() => ({}));
-                if (data.sessionId) {
-                  localStorage.setItem("nativeSessionId", data.sessionId);
-                  console.log("[deep-link] Stored nativeSessionId for Bearer auth");
-                }
-                console.log("[deep-link] Auth code exchanged successfully, user signed in");
-                queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-                const pendingLink = sessionStorage.getItem("pendingDeepLink");
-                if (pendingLink) {
-                  sessionStorage.removeItem("pendingDeepLink");
-                  console.log("[deep-link] restored pending=", pendingLink);
-                  window.location.href = pendingLink;
-                } else {
-                  window.location.href = "/";
-                }
-              } else {
-                console.error("[deep-link] Exchange failed:", res.status);
-                window.location.href = "/login?error=exchange_failed";
-              }
-            } catch (err) {
-              console.error("[deep-link] Exchange error:", err);
-              window.location.href = "/login?error=exchange_failed";
-            }
           }
         });
 

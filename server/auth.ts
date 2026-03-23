@@ -1446,14 +1446,22 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
           console.error("[exchange-code] Login error:", loginErr);
           return res.status(500).json({ message: "Login failed" });
         }
-        return res.json({
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-          },
-          sessionId: req.sessionID,
+        const sid = req.sessionID;
+        // Force-save the session to the PostgreSQL store BEFORE returning the
+        // sessionId. Without this, the session may not be persisted yet when
+        // the native app immediately uses Bearer sid for /api/auth/user.
+        req.session.save((saveErr) => {
+          if (saveErr) console.error("[exchange-code] Session save warning:", saveErr);
+          console.log(`[exchange-code] Session saved (sid=${sid.substring(0, 8)}…), user=${user.email || user.id}`);
+          return res.json({
+            user: {
+              id: user.id,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+            },
+            sessionId: sid,
+          });
         });
       });
     } catch (error) {

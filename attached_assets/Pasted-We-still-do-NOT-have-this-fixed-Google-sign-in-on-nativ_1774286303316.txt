@@ -1,0 +1,192 @@
+We still do NOT have this fixed.
+
+Google sign-in on native is broken in two ways:
+
+The Google auth success screen is not auto-closing
+The user is not actually ending up signed in inside EcoLogic
+
+I need you to stop patching around it and trace the full native Google OAuth chain end-to-end, then implement the correct flow.
+
+CURRENT BROKEN FLOW
+
+User taps Continue with Google
+Google auth opens
+User selects account
+Browser lands on the success screen
+That screen does NOT auto-close
+Even after leaving that screen, the app is still not authenticated
+
+This means BOTH pieces are broken:
+
+the app handoff / browser close is broken
+the auth-state finalization is broken
+
+Do a full root-cause trace and fix it properly.
+
+====================
+WHAT I WANT BUILT
+
+We need a production-correct native Google OAuth completion flow:
+
+User taps Continue with Google
+Google OAuth runs
+Backend callback succeeds
+Backend creates/finalizes the real EcoLogic authenticated session or a one-time native auth handoff
+Backend redirects into the EcoLogic deep link
+Native app receives the deep link
+Native app immediately closes the auth browser
+Native app finalizes auth state
+Native app refreshes current user/session
+User lands inside EcoLogic already signed in
+No manual close
+No dead-end “sign in complete” page sitting on screen
+====================
+BACKEND REQUIREMENTS
+
+Audit the full Google auth chain:
+
+auth start route
+Google callback route
+session creation logic
+redirect logic
+current-user/session endpoint
+any mobile/native-specific auth code
+
+Fix the callback behavior so success does NOT end on a dead-end success HTML page.
+
+On successful Google callback, the backend must do one of these correctly:
+A) fully establish the same real session normal login uses and ensure native app can consume it
+OR
+B) generate a short-lived one-time auth handoff token/code for the native app to exchange
+
+Preferred robust flow:
+
+Google callback validates successfully
+find/create user
+generate one-time short-lived handoff token
+redirect to deep link like:
+ecologic://auth/callback?status=success&handoff=TOKEN
+
+On failure:
+
+redirect to deep link like:
+ecologic://auth/callback?status=error&reason=google_auth_failed
+
+If provider rules require an HTTPS callback page first, that page must ONLY be a bridge page that instantly opens the deep link and does not sit there waiting for the user.
+
+Add a dedicated exchange endpoint if needed, for example:
+
+POST /api/auth/google/mobile-exchange
+
+That endpoint should:
+
+validate one-time token
+ensure short expiration
+ensure token is single-use
+identify the user
+finalize the real EcoLogic authenticated session
+return the authenticated user/session payload needed by the app
+
+Also verify auth cookie/session settings:
+
+SameSite
+Secure
+domain/path
+cross-context behavior in native browser flow
+====================
+NATIVE APP REQUIREMENTS
+
+In the native app, wire the Google auth flow correctly.
+
+If using Capacitor, use the proper native listeners:
+
+App.addListener('appUrlOpen', ...)
+Browser.close()
+
+Required behavior:
+
+app launches Google auth in browser/in-app browser
+app listens for deep link callback
+when callback is received:
+immediately call Browser.close()
+parse status and handoff token
+if success: call backend exchange endpoint or refresh auth session correctly
+call /api/auth/me or equivalent
+update auth store/context/state
+navigate into the authenticated app
+if error:
+close browser
+show clean error message
+remain on sign-in
+
+Do not assume browser OAuth success means app auth success.
+Do not rely on the success page being manually closed.
+Do not leave the app on sign-in after successful Google auth.
+
+====================
+THINGS TO INVESTIGATE
+
+Check all of these and fix the real root cause(s):
+
+success page is plain HTML and never deep-links into the app
+deep link scheme is wrong or not registered correctly
+native app is not listening for appUrlOpen in the right place
+Browser.close() never fires because callback listener never runs
+backend session only exists in browser context, not app-recognized context
+auth store/context is not refreshed after OAuth return
+/api/auth/me is not called after return
+deep link fires but handoff/session exchange fails
+callback creates user but does not finalize the real auth state
+duplicate or conflicting auth flows exist for web vs native
+app routing sends user back to sign-in before auth refresh finishes
+====================
+DELIVERABLES
+
+I want the response in this exact style:
+
+Exact files changed
+Exact root cause(s) found
+Exact auth flow after fix, step by step
+Exact temporary logs added
+Confirmation of final working behavior
+====================
+REQUIRED TEMP LOGS
+
+Add targeted logs for this exact chain:
+
+Google auth start
+Google callback hit
+Google callback success
+user found/created
+session or handoff token created
+deep link redirect fired
+native app appUrlOpen received
+Browser.close called
+handoff exchange called
+handoff exchange success
+/api/auth/me success
+auth context/store updated
+final navigation into authenticated app
+
+Then remove noisy logs after verification and keep only minimal useful auth logs.
+
+====================
+ACCEPTANCE TEST
+
+This is only done if all of the below happen:
+
+Tap Continue with Google
+Select Google account
+Browser does NOT remain sitting on the success screen
+No manual close required
+App returns to EcoLogic automatically
+User is actually authenticated
+App lands inside the signed-in experience, not back on sign-in
+Repeating the flow works consistently
+
+Do not give me a partial fix.
+Do not just change the success page text.
+Do not stop after making it auto-close if the user still is not signed in.
+Do not stop after signing in if the browser still hangs open.
+
+Fix the full native Google auth loop end-to-end.
