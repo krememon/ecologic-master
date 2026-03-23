@@ -1,0 +1,92 @@
+We need to fix the Dev Tools “Disconnect Stripe” action in EcoLogic because the button currently does nothing.
+
+CURRENT BUG
+In Dev Tools, when I click:
+Disconnect Stripe
+
+nothing happens.
+
+GOAL
+Make the Dev Tools Disconnect Stripe action actually work end-to-end.
+
+IMPORTANT
+This is not a UI-only issue.
+The button must trigger the real destructive disconnect flow.
+
+EXPECTED BEHAVIOR
+When admin clicks Disconnect Stripe:
+
+1. A confirmation step should appear if it is supposed to
+2. On confirm, the disconnect action should actually run
+3. The company’s Stripe connection should be removed from EcoLogic
+4. The company should be treated as disconnected everywhere in the app
+5. If we already implemented Stripe-side unlink/removal, that should also execute
+6. The Dev Tools UI should refresh afterward and show the disconnected state
+
+IF THERE IS ALREADY A CONFIRMATION MODAL
+- make sure the button opens it
+- make sure the confirm button actually calls the mutation/action
+
+IF THERE IS NO CONFIRMATION YET
+- add one and wire it correctly
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Dev Tools Stripe disconnect UI/button component.
+2. Find why clicking the button currently does nothing.
+3. Check for issues like:
+   - missing onClick handler
+   - handler not bound
+   - button inside disabled/loading state permanently
+   - mutation not being called
+   - confirm modal not opening
+   - confirm modal opens but confirm button not wired
+   - API route missing / wrong path / wrong method
+   - frontend not passing company ID
+   - backend returning error silently
+4. Fix the full flow so clicking Disconnect Stripe actually performs the disconnect.
+5. Surface success/error feedback clearly.
+6. Refresh the Dev Tools company state after success.
+7. Preserve the destructive confirmation pattern.
+
+BACKEND / API REQUIREMENTS
+Please verify the action actually reaches the backend and completes:
+- company ID is passed correctly
+- route/controller executes
+- Stripe unlink/reset logic runs
+- DB state is updated
+- response returns success
+- frontend refreshes from the updated source of truth
+
+DEBUGGING REQUIREMENTS
+Add/inspect logs as needed so we can see:
+- button click fired
+- confirm fired
+- API request sent
+- API response received
+- disconnect success/failure reason
+
+If there is an error, do NOT fail silently.
+
+VALIDATION
+Please verify this exact flow:
+1. Open Dev Tools company Stripe section
+2. Click Disconnect Stripe
+3. Confirmation appears
+4. Confirm disconnect
+5. Action runs successfully
+6. Company becomes disconnected in Dev Tools/UI
+7. Stripe-gated features are blocked again
+8. No dead button / no-op behavior remains
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why the button was doing nothing
+3. What frontend wiring was fixed
+4. What backend route/action it now calls
+5. Confirmation that:
+   - Disconnect Stripe button now works
+   - confirmation works
+   - company state refreshes after success
+   - disconnect flow actually executes
+
+Please implement it now.

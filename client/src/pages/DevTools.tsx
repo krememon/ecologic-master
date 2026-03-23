@@ -13,6 +13,9 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Search, Building2, Users, CreditCard,
   ShieldOff, ShieldCheck, Ban, Unlock, RefreshCw,
   UserCircle, Mail, Calendar, Hash, Loader2,
@@ -407,18 +410,27 @@ export default function DevTools() {
   };
 
   const handleStripeDisconnect = async () => {
-    if (!company) return;
+    if (!company) {
+      console.warn("[stripe-disconnect] called with no company selected");
+      return;
+    }
+    console.log(`[stripe-disconnect] starting for companyId=${company.id} name="${company.name}"`);
     setIsStripeDisconnecting(true);
     try {
       const res = await fetch(`/api/admin/company/${company.id}/stripe-disconnect`, { method: "POST" });
+      console.log(`[stripe-disconnect] response status=${res.status}`);
       const data = await res.json();
+      console.log(`[stripe-disconnect] response body=`, data);
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setShowStripeDisconnectDialog(false);
       toast({
         title: "Stripe account disconnected",
         description: `${company.name} must now reconnect Stripe from scratch.${data.previousAccountId ? ` Previous account: ${data.previousAccountId}` : ""}`,
       });
+      // Reload the company detail so the UI reflects the cleared Stripe state
+      await loadDetail(company.id);
     } catch (e: any) {
+      console.error(`[stripe-disconnect] failed:`, e.message);
       toast({ title: "Disconnect failed", description: e.message, variant: "destructive" });
     } finally {
       setIsStripeDisconnecting(false);
@@ -1055,7 +1067,10 @@ export default function DevTools() {
                 variant="outline"
                 size="sm"
                 disabled={isStripeDisconnecting || isDeleting}
-                onClick={() => setShowStripeDisconnectDialog(true)}
+                onClick={() => {
+                  console.log("[stripe-disconnect] button clicked, opening confirm dialog");
+                  setShowStripeDisconnectDialog(true);
+                }}
                 className="shrink-0 border-orange-400 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-950"
               >
                 {isStripeDisconnecting ? (
@@ -1170,27 +1185,36 @@ export default function DevTools() {
       </AlertDialog>
 
       {/* ── STRIPE DISCONNECT CONFIRMATION ─────────────────── */}
-      <AlertDialog open={showStripeDisconnectDialog} onOpenChange={(open) => {
+      <Dialog open={showStripeDisconnectDialog} onOpenChange={(open) => {
         if (!isStripeDisconnecting) setShowStripeDisconnectDialog(open);
       }}>
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
               <CreditCard className="h-5 w-5" />
               Disconnect Stripe account?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-left">
+            </DialogTitle>
+            <DialogDescription className="text-left">
               This will remove <strong className="text-slate-900 dark:text-white">{company?.name}</strong>'s current Stripe connection and require them to reconnect Stripe and re-enter their account information.
               <span className="block mt-2 text-orange-700 dark:text-orange-400 font-medium text-sm">
                 The connected account will also be deleted from Stripe Connected Accounts.
               </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isStripeDisconnecting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
               disabled={isStripeDisconnecting}
-              onClick={(e) => { e.preventDefault(); handleStripeDisconnect(); }}
+              onClick={() => setShowStripeDisconnectDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isStripeDisconnecting}
+              onClick={() => {
+                console.log("[stripe-disconnect] confirm button clicked");
+                handleStripeDisconnect();
+              }}
               className="bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-40"
             >
               {isStripeDisconnecting ? (
@@ -1198,10 +1222,10 @@ export default function DevTools() {
               ) : (
                 "Disconnect Stripe"
               )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── USERS ────────────────────────────────────────────── */}
       {company && !isLoadingDetail && (
