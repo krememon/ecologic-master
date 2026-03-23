@@ -1,0 +1,107 @@
+We need to fix live location tracking after clock-in in EcoLogic.
+
+CURRENT BUG
+After a user clocks into a job:
+1. their location is NOT appearing on the map
+2. the location permission/request popup did NOT appear
+
+That is incorrect.
+
+GOAL
+When a user clocks into a job, EcoLogic should properly request location permission if needed, and then their live/current location should appear on the map as intended.
+
+IMPORTANT
+- Do NOT redesign the UI
+- Do NOT change clock-in UX unless needed for permission/location flow
+- Do NOT break timesheet clock-in
+- Do NOT break map screens
+- This is a real permission + tracking/data flow fix
+- Need this to work in the native app, especially iPhone/iPad
+
+REQUIRED BEHAVIOR
+When user clocks into a job:
+
+1. If location permission has NOT been granted yet:
+   - app should trigger the location permission request
+   - user should see the native location permission popup
+   - if user allows, tracking proceeds
+
+2. If location permission is already granted:
+   - app should begin/update location tracking immediately after clock-in
+
+3. After clock-in:
+   - the user’s location should appear on the map in the correct place
+   - map should reflect active clocked-in users as intended
+
+4. If permission is denied:
+   - fail gracefully
+   - show appropriate message/status if app already has a pattern for this
+   - do NOT silently pretend tracking is working
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact clock-in flow for jobs.
+2. Find where location permission is supposed to be requested.
+3. Identify why the permission popup did not appear.
+4. Identify why the location is not showing on the map after clock-in.
+5. Fix both the permission request path and the actual location update/tracking path.
+6. Make sure the app correctly handles:
+   - first-time permission request
+   - already granted permission
+   - denied permission
+   - app returning from background
+7. Ensure the tracked location is actually sent/stored/read by the map source of truth.
+8. Verify the map view is reading the correct active location data for clocked-in users.
+9. Preserve existing job clock-in/timesheet behavior.
+10. If native permissions are required in Capacitor/iOS config, verify those too.
+
+TECHNICAL NOTES
+- Check whether clock-in is supposed to trigger:
+  - geolocation permission request
+  - watchPosition / getCurrentPosition
+  - location sync to backend
+  - map refresh/subscription
+- Likely causes could be:
+  - permission request never called
+  - native permission config missing or incorrect
+  - location service starts only after permission but never initializes
+  - location updates are not being posted to backend
+  - map query is not reading active user locations correctly
+  - iOS native permission strings/capabilities are incomplete
+- Since the popup did not appear, first verify the permission request is actually invoked at the correct time
+- Then verify the returned location is being stored and surfaced on the map
+
+NATIVE/IOS CHECKS
+Please verify as needed:
+- correct location usage descriptions exist in iOS config/plist
+- Capacitor/native geolocation permission flow is wired correctly
+- app is not relying only on browser behavior
+- permission request occurs in native build, not just web
+
+VALIDATION
+Please verify:
+1. User with no prior location permission clocks into a job
+2. Native location permission popup appears
+3. User allows permission
+4. User location appears on the map
+
+Also verify:
+5. User with existing permission clocks into a job
+6. Location appears without needing another popup
+
+And:
+7. Denied permission case is handled cleanly
+8. Clock-in still works
+9. Map reflects correct active user location
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why permission popup was not appearing
+3. Root cause of why location was not reaching the map
+4. What permission/tracking/map logic was fixed
+5. Confirmation that:
+   - location permission now requests correctly
+   - clocked-in users now appear on the map
+   - clock-in flow still works
+   - native iOS behavior is fixed
+
+Please implement it now.

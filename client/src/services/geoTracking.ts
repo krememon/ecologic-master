@@ -108,20 +108,36 @@ function handleCoords(lat: number, lng: number, accuracy: number, speed: number 
 async function startNative(sessionId: number) {
   const { Geolocation } = await import('@capacitor/geolocation');
 
+  // Check current permission state first
   log('native: checking permissions...');
+  let currentStatus = 'prompt';
   try {
     const permStatus = await Geolocation.checkPermissions();
+    currentStatus = permStatus.location;
     log('native: perm status location=' + permStatus.location + ' coarseLocation=' + permStatus.coarseLocation);
   } catch (e) {
     log('native: checkPermissions error', e);
   }
 
-  log('native: requesting permissions...');
-  try {
-    const reqResult = await Geolocation.requestPermissions({ permissions: ['location'] });
-    log('native: requestPermissions result location=' + reqResult.location + ' coarseLocation=' + reqResult.coarseLocation);
-  } catch (e) {
-    log('native: requestPermissions error', e);
+  // Request permission if not already granted (shows iOS dialog on first request)
+  if (currentStatus !== 'granted') {
+    log('native: requesting permissions (currentStatus=' + currentStatus + ')...');
+    try {
+      const reqResult = await Geolocation.requestPermissions({ permissions: ['location'] });
+      currentStatus = reqResult.location;
+      log('native: requestPermissions result location=' + reqResult.location + ' coarseLocation=' + reqResult.coarseLocation);
+    } catch (e) {
+      log('native: requestPermissions error', e);
+      currentStatus = 'denied';
+    }
+  } else {
+    log('native: permission already granted — skipping request dialog');
+  }
+
+  // Bail out cleanly if denied — do NOT attempt watchPosition
+  if (currentStatus === 'denied') {
+    log('native: location permission DENIED — tracking unavailable. Ask user to enable Location in iOS Settings > EcoLogic.');
+    return;
   }
 
   log('native: starting watchPosition...');

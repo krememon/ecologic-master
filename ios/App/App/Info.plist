@@ -74,7 +74,14 @@
         <key>UIBackgroundModes</key>
         <array>
                 <string>remote-notification</string>
+                <string>location</string>
         </array>
+        <key>NSLocationWhenInUseUsageDescription</key>
+        <string>EcoLogic needs your location to track your position on the crew map while you are clocked in to a job.</string>
+        <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+        <string>EcoLogic needs background location access to keep tracking your position on the crew map while the app is minimized during an active work session.</string>
+        <key>NSLocationAlwaysUsageDescription</key>
+        <string>EcoLogic needs background location access to keep tracking your position on the crew map while the app is minimized during an active work session.</string>
         <key>NSCameraUsageDescription</key>
         <string>EcoLogic uses the camera to capture photos and videos for job documents.</string>
         <key>NSPhotoLibraryUsageDescription</key>
