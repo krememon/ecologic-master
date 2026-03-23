@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send, Scale, Info, Headphones, ChevronRight } from "lucide-react";
+import { User, Moon, Sun, Bell, Shield, Camera, BellRing, Send, Scale, Info, Headphones, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
 import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
@@ -54,7 +54,6 @@ export default function Settings() {
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
-  const [croppedProfileFile, setCroppedProfileFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
   const [profileData, setProfileData] = useState({
@@ -257,17 +256,11 @@ export default function Settings() {
   };
 
   const handleCropComplete = async (croppedFile: File) => {
-    setCroppedProfileFile(croppedFile);
     const previewUrl = URL.createObjectURL(croppedFile);
     setProfileImagePreview(previewUrl);
-  };
-
-  const handleImageUpload = () => {
-    if (croppedProfileFile) {
-      const formData = new FormData();
-      formData.append("profileImage", croppedProfileFile);
-      updateProfilePictureMutation.mutate(formData);
-    }
+    const formData = new FormData();
+    formData.append("profileImage", croppedFile);
+    updateProfilePictureMutation.mutate(formData);
   };
 
   const triggerFileInput = () => {
@@ -321,37 +314,8 @@ export default function Settings() {
               <div className="flex-1">
                 <h3 className="font-medium">{user?.firstName} {user?.lastName}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400">{user?.email}</p>
-                {profileImagePreview && (
-                  <div className="flex gap-2 mt-2">
-                    <Button
-                      size="sm"
-                      onClick={handleImageUpload}
-                      disabled={updateProfilePictureMutation.isPending}
-                      className="h-8 text-xs"
-                    >
-                      {updateProfilePictureMutation.isPending ? (
-                        <>Uploading...</>
-                      ) : (
-                        <>
-                          <Upload className="h-3 w-3 mr-1" />
-                          Save
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setProfileImagePreview(null);
-                        setCroppedProfileFile(null);
-                        setPendingCropFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="h-8 text-xs"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+                {updateProfilePictureMutation.isPending && (
+                  <p className="text-xs text-slate-500 mt-1">Uploading photo...</p>
                 )}
               </div>
             </div>

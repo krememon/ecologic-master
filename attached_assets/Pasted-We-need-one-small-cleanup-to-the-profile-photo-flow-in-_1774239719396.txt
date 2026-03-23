@@ -1,0 +1,77 @@
+We need one small cleanup to the profile photo flow in EcoLogic Settings.
+
+GOAL
+After the user crops/edits their profile photo and taps the first “Save Photo” button in the crop modal, that should be the ONLY save step.
+
+CURRENT ISSUE
+Right now the flow is:
+1. choose photo
+2. crop/edit photo
+3. tap Save Photo in the crop modal
+4. then back on the Settings page there is a second Save / Cancel step
+
+I do NOT want that second step.
+
+DESIRED BEHAVIOR
+After the user taps Save Photo in the crop modal:
+- the cropped photo should immediately save/apply as the profile photo
+- the crop modal should close
+- there should be NO second Save button
+- there should be NO second Cancel button
+
+IMPORTANT
+- Do NOT redesign the Settings page
+- Do NOT change the crop modal UI unless needed for this exact behavior
+- Keep the crop/edit flow
+- Keep the ability to cancel BEFORE saving in the crop modal
+- Just remove the unnecessary second confirmation/save layer after the crop is already saved
+
+REQUIRED BEHAVIOR
+New flow should be:
+1. user taps profile photo/upload
+2. selects image
+3. crop/edit modal opens
+4. user adjusts image
+5. taps Save Photo
+6. cropped image is immediately uploaded/saved/applied
+7. modal closes
+8. no extra Save/Cancel buttons remain on the profile card
+
+If user cancels out of the crop modal:
+- no photo changes are saved
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the profile photo upload/crop flow in Settings.
+2. Remove the extra post-crop pending state that currently requires a second Save/Cancel.
+3. Make the crop modal’s Save Photo action perform the final save/upload directly.
+4. After successful save:
+   - update the visible profile photo immediately
+   - close the crop modal
+   - do not show a second Save/Cancel action for the image
+5. Preserve the ability to cancel before the crop is saved.
+6. Preserve existing profile update logic for text fields like name/email/phone.
+7. Make sure this only affects the profile photo flow and does not break the rest of the profile form.
+
+TECHNICAL NOTES
+- Likely the crop modal currently only sets a temporary local preview, and the second Save applies it
+- Change it so Save Photo in the modal commits the upload/save directly
+- Remove any temporary “pending photo save” UI/buttons that become unnecessary afterward
+- Keep the existing uploaded-image refresh so the new avatar appears immediately
+- Do NOT require two confirmations for one profile photo change
+
+EXPECTED RESULT
+- one save step only for profile photo
+- crop modal Save Photo = final save
+- no second Save/Cancel buttons next to the profile image afterward
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why there was a second save step
+3. What logic was changed so crop-modal Save is now the final save
+4. Confirmation that:
+   - second Save/Cancel buttons are gone
+   - Save Photo in crop modal now fully saves the image
+   - canceling before save still works
+   - profile photo updates correctly across the app
+
+Please implement it now.
