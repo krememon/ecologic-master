@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import LocationInput from "@/components/LocationInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Search, Plus, X, ChevronLeft, User, Users } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -355,13 +355,11 @@ function AddCustomerModal({
 
             <div className="space-y-1.5">
               <Label htmlFor="address">Address</Label>
-              <Textarea
-                id="address"
+              <LocationInput
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={setAddress}
+                onAddressSelected={(a) => setAddress(a.formatted_address || a.street)}
                 placeholder="Address"
-                rows={2}
-                data-testid="input-customer-address"
               />
             </div>
 

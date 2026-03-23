@@ -1,0 +1,91 @@
+We need to fix the Add New Customer flow inside Create New Job / Create New Estimate in EcoLogic.
+
+GOAL
+In:
+- Create New Job → Select Client → Add New
+- Create New Estimate → Select Client → Add New
+
+we need to fix the Address field and implement Google address autofill.
+
+CURRENT ISSUE
+The address bar/field in the Add Customer modal is just a normal text area/input right now and needs to be upgraded.
+
+DESIRED RESULT
+When the user is adding a new customer from inside the job/estimate flow, the Address field should use Google autofill/autocomplete so they can start typing an address and select the correct one.
+
+IMPORTANT
+- Do NOT redesign the modal
+- Do NOT change the Add Customer flow more than needed
+- Keep the current modal layout/style as much as possible
+- This should work specifically in the Add New Customer flow launched from:
+  - Create New Job
+  - Create New Estimate
+- Preserve manual editing after autofill if needed
+
+REQUIRED BEHAVIOR
+Inside the Add Customer modal:
+1. User taps Address
+2. Starts typing
+3. Google address suggestions appear
+4. User taps/selects a suggestion
+5. The address fills correctly
+6. Customer can then be saved normally
+
+If structured fields exist behind the scenes, populate them correctly.
+If this modal currently uses one combined address field, still support autocomplete cleanly.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Add New Customer modal used inside:
+   - Create Job
+   - Create Estimate
+2. Replace/fix the Address field to use Google Places / address autocomplete.
+3. Use the proper Google autocomplete integration, not fake local suggestions.
+4. Make sure selected addresses populate the customer address correctly.
+5. Preserve existing customer save behavior.
+6. Preserve manual typing/editing in case user wants to tweak the address.
+7. Make sure this works in native mobile layouts too, especially inside the modal.
+8. Ensure dropdown positioning works correctly inside the modal and is not clipped.
+9. If the app already has Google address autocomplete elsewhere, reuse that exact component/helper instead of building a second version.
+10. If env/config is required, wire it correctly using the existing project pattern.
+
+TECHNICAL NOTES
+- Check whether there is already a shared address autocomplete component used elsewhere in EcoLogic
+- If yes, reuse it in this Add Customer modal
+- If no, add the cleanest shared implementation possible
+- Make sure the suggestions overlay is usable inside modals
+- Avoid textarea behavior if this should really be a single-line address autocomplete field
+- Do NOT break:
+  - customer creation
+  - client selection
+  - create job flow
+  - create estimate flow
+
+VALIDATION
+Please verify:
+1. Open Create New Job
+2. Select Client
+3. Tap Add New
+4. Type into Address
+5. Google suggestions appear
+6. Select address
+7. Save customer successfully
+
+Also verify same flow for:
+8. Create New Estimate
+9. Select Client
+10. Add New
+11. Address autocomplete works there too
+
+DELIVERABLES
+1. Exact files changed
+2. Where Google autocomplete was added/reused
+3. Whether a shared address component/helper was reused
+4. What config/env was required
+5. Confirmation that:
+   - Add Customer address field is fixed
+   - Google autofill works in Create Job flow
+   - Google autofill works in Create Estimate flow
+   - customer save flow still works
+   - modal layout still works cleanly
+
+Please implement it now.
