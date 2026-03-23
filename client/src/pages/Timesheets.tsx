@@ -879,13 +879,18 @@ export default function Timesheets() {
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteEntry} onOpenChange={(o) => { if (!o && !deleteMutation.isPending) { setDeleteEntry(null); setDeleteEmployeeName(undefined); } }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete entry?</DialogTitle>
+        <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="px-4 h-14 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="w-8" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Delete entry?
+            </DialogTitle>
+            <div className="w-8" />
           </DialogHeader>
-          <div className="space-y-2 py-1">
+
+          <div className="px-4 pt-4 pb-3 space-y-2.5">
             {deleteEmployeeName && (
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{deleteEmployeeName}</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{deleteEmployeeName}</p>
             )}
             {deleteEntry && (
               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -893,28 +898,29 @@ export default function Timesheets() {
                 {" · "}{formatTime(deleteEntry.clockInAt)} → {formatTime(deleteEntry.clockOutAt)}
               </p>
             )}
-            <p className="text-sm text-slate-600 dark:text-slate-400 pt-1">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               This will permanently remove this timesheet entry.
             </p>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
-            <Button
-              variant="outline"
-              onClick={() => { setDeleteEntry(null); setDeleteEmployeeName(undefined); }}
-              disabled={deleteMutation.isPending}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
+
+          <div className="px-4 pb-4 pt-1 flex flex-col gap-2.5">
             <Button
               variant="destructive"
               onClick={handleDeleteConfirmed}
               disabled={deleteMutation.isPending}
-              className="w-full sm:w-auto"
+              className="w-full h-12 rounded-xl font-semibold"
             >
               {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete entry"}
             </Button>
-          </DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => { setDeleteEntry(null); setDeleteEmployeeName(undefined); }}
+              disabled={deleteMutation.isPending}
+              className="w-full h-11 rounded-xl text-slate-600 dark:text-slate-400 font-medium"
+            >
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

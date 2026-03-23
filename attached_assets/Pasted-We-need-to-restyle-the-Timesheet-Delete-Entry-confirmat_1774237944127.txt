@@ -1,0 +1,93 @@
+We need to restyle the Timesheet Delete Entry confirmation modal in EcoLogic so it matches the same vibe/aesthetic as the Select Customer modal.
+
+GOAL
+Update the Delete Entry confirmation modal to feel visually consistent with the Select Customer modal.
+
+REFERENCE
+Use the Select Customer modal as the design reference for:
+- overall modal shape
+- padding
+- border radius
+- header styling
+- close icon placement
+- spacing rhythm
+- clean modern feel
+
+IMPORTANT
+- Do NOT change the delete behavior/logic
+- Do NOT change the confirmation copy unless needed for visual polish
+- Do NOT break the delete flow
+- This is a UI styling/polish update only
+- Keep the modal clean, modern, and consistent with the rest of EcoLogic
+
+CURRENT ISSUE
+The Delete Entry modal feels like a different style system than the Select Customer modal.
+
+We want it to match the same:
+- softer polished modal feel
+- cleaner spacing
+- more unified button layout
+- same overall premium EcoLogic aesthetic
+
+DESIRED RESULT
+The Delete Entry modal should visually match the Select Customer modal as much as possible while still being a destructive confirmation modal.
+
+That means:
+- similar modal container styling
+- similar header/title layout
+- similar top-right X placement
+- similar spacing/padding
+- same clean rounded-corner look
+- same polished modern feel
+
+DESTRUCTIVE ACTION STYLING
+Keep Delete entry clearly destructive, but make the overall modal styling feel like it belongs to the same design system as Select Customer.
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Delete Entry confirmation modal component.
+2. Compare it to the Select Customer modal component/style.
+3. Update the Delete Entry modal styling so it matches the same vibe/aesthetic.
+4. Preserve:
+   - title
+   - close X
+   - Cancel button
+   - Delete entry button
+   - underlying delete logic
+5. Keep the destructive action obvious, but make the layout/spacing/buttons feel consistent with the Select Customer modal.
+6. Do NOT redesign unrelated modals unless they share the exact same component and the change is beneficial/intentional.
+7. If both modals can share a more unified modal shell styling, that is fine as long as nothing else breaks.
+
+STYLE DIRECTION
+Match the Select Customer modal feel:
+- rounded modern container
+- balanced whitespace
+- clean header row
+- polished close icon placement
+- consistent inner padding
+- buttons that feel aligned with the EcoLogic system
+
+TECHNICAL NOTES
+- This is a styling/UI consistency task, not a logic task
+- Reuse shared modal/dialog styles if available
+- Keep the delete action destructive color
+- Keep accessibility and click targets intact
+
+VALIDATION
+Please verify:
+1. Open Delete Entry modal
+2. It now visually matches the Select Customer modal vibe
+3. Cancel still works
+4. X still works
+5. Delete entry still works
+6. No logic changed, only styling/presentation
+
+DELIVERABLES
+1. Exact file(s) changed
+2. What styling/component changes were made
+3. Confirmation that:
+   - Delete Entry modal now matches Select Customer modal aesthetic
+   - delete logic still works
+   - cancel/close still work
+   - no unrelated modal behavior was broken
+
+Please implement it now.
