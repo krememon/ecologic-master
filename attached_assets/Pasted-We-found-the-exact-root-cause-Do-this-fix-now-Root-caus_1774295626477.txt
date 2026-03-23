@@ -1,0 +1,77 @@
+We found the exact root cause. Do this fix now.
+
+Root cause:
+There are duplicate native Google auth routes registered in two places:
+
+server/replitAuth.ts
+server/auth.ts
+
+Because replitAuth.ts is registered first, Express is serving the WRONG handlers.
+
+What is breaking:
+
+Wrong /api/auth/google-complete
+replitAuth.ts serves a static “Sign in complete! Return to the EcoLogic app.” page
+it has no JavaScript
+it never fires ecologic://auth/callback?...
+so appUrlOpen never fires
+so Browser.close() never runs
+so native deep-link completion is dead
+Wrong /api/auth/poll-code
+auth.ts stores the auth code in its own nonceCodeStore
+but polling is hitting replitAuth.ts’s /api/auth/poll-code
+replitAuth.ts uses a different empty nonceCodeStore
+so polling always returns pending
+so polling completion is also dead
+
+So both native completion paths are broken at the same time because the wrong duplicate routes are winning route registration order.
+
+What to change:
+Delete the duplicate native auth handlers from server/replitAuth.ts so Express uses the correct versions in server/auth.ts.
+
+Delete these duplicate route handlers from server/replitAuth.ts:
+
+/api/auth/google-complete
+/api/auth/poll-code
+/api/auth/exchange-code
+
+The agent already traced them to roughly lines 575–627 in server/replitAuth.ts.
+
+After removing those duplicates:
+
+/api/auth/google-complete will use the correct handler in auth.ts
+that handler serves the bridge page that actually fires:
+ecologic://auth/callback?code=...
+/api/auth/poll-code will use the correct shared nonceCodeStore
+/api/auth/exchange-code will use the correct matching flow
+appUrlOpen should finally fire
+Browser.close() should finally run
+auth refresh should finally happen
+
+What I want you to do:
+
+Remove the duplicate three handlers from server/replitAuth.ts
+Confirm server/routes.ts / setupAuth still only registers auth once in the final effective route tree
+Verify the active /api/auth/google-complete response now contains the HTML/JS deep link bridge from auth.ts
+Verify the active /api/auth/poll-code is using the same nonceCodeStore that storeAuthCodeForNonce(...) writes into
+Test the full native Google flow again
+
+Reply in this exact format:
+
+Exact lines removed from server/replitAuth.ts
+Which active file now owns:
+/api/auth/google-complete
+/api/auth/poll-code
+/api/auth/exchange-code
+Confirm whether the active /api/auth/google-complete now fires:
+ecologic://auth/callback?code=...
+Confirm whether polling now reads the same store the callback writes to
+Final test result:
+did browser auto-close
+did app return automatically
+did user end up signed in
+
+Important:
+Do NOT add new workaround logic first.
+Do the smallest correct fix first:
+remove the duplicate handlers in server/replitAuth.ts that are overriding the correct native auth flow.

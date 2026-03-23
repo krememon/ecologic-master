@@ -572,60 +572,6 @@ export async function setupAuth(app: Express) {
     res.redirect(302, `/api/auth/google/callback${qs}`);
   });
 
-  // Native auth completion page
-  app.get("/api/auth/google-complete", (_req, res) => {
-    res.setHeader("Content-Type", "text/html");
-    return res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign In Complete</title>
-<style>body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;color:#166534}
-.card{text-align:center;padding:2rem}.check{font-size:3rem;margin-bottom:1rem}p{font-size:1.1rem;margin:0.5rem 0}</style></head>
-<body><div class="card"><div class="check">&#10003;</div><p><strong>Sign in complete!</strong></p><p>Return to the EcoLogic app.</p></div></body></html>`);
-  });
-
-  // Native auth polling endpoint
-  app.get("/api/auth/poll-code", (req, res) => {
-    const nonce = req.query.nonce as string;
-    if (!nonce) return res.status(400).json({ status: "error", message: "nonce required" });
-    const code = pollAuthCode(nonce);
-    if (code) {
-      console.log("[poll-code] Code found for nonce:", nonce.substring(0, 8) + "...");
-      return res.json({ status: "ready", code });
-    }
-    return res.json({ status: "pending" });
-  });
-
-  // Native auth code exchange endpoint
-  app.post("/api/auth/exchange-code", async (req: any, res) => {
-    try {
-      const { code } = req.body;
-      if (!code || typeof code !== "string") {
-        return res.status(400).json({ message: "Auth code is required" });
-      }
-      const userId = consumeAuthCode(code);
-      if (!userId) {
-        return res.status(401).json({ message: "Invalid or expired auth code" });
-      }
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      req.login(user, (loginErr: any) => {
-        if (loginErr) {
-          console.error("[exchange-code] Login error:", loginErr);
-          return res.status(500).json({ message: "Login failed" });
-        }
-        return res.json({
-          user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
-          sessionId: req.sessionID,
-        });
-      });
-    } catch (error) {
-      console.error("[exchange-code] Error:", error);
-      return res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   // Apple Sign-In routes
   if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
     const appleRedirectUri = process.env.APPLE_REDIRECT_URI || 
