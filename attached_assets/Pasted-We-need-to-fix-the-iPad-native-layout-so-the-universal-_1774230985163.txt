@@ -1,0 +1,90 @@
+We need to fix the iPad native layout so the universal header actions are always accessible.
+
+CURRENT BUG
+On iPad, the universal:
+- Notifications bell
+- Global + button
+
+are not properly visible/accessible in the wrapper app.
+
+This seems to be caused by how the iPad/native wrapper layout is formatting the header area.
+
+GOAL
+On iPad, make sure the universal header actions are present in the header portion of the screen and remain accessible across the app.
+
+IMPORTANT
+- Do NOT redesign the app
+- Do NOT break desktop/web layout
+- Do NOT break iPhone layout
+- Do NOT remove the existing universal + / notification functionality
+- This is a layout/placement fix for iPad native specifically
+- The actions should live in the header/top bar area where they are easy to reach and consistently visible
+
+WHAT I AM SEEING
+- On iPad native, the bell and + are effectively missing / clipped / not positioned correctly
+- They need to be placed into the top header area of the screen
+- This should work consistently across pages, not just one screen
+
+REQUIRED BEHAVIOR
+On iPad:
+1. The top header should show the universal notification bell
+2. The top header should show the universal + button
+3. They should be properly aligned and tappable
+4. They should not be hidden by wrapper/native safe-area/layout issues
+5. They should remain consistent across the app
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the shared app shell / header / top bar component used in native iPad layout.
+2. Identify why the universal actions are missing/clipped on iPad.
+3. Fix the header layout so the bell and + appear in the header region on iPad.
+4. Check for likely causes such as:
+   - safe-area inset issues
+   - header container width/overflow clipping
+   - z-index/layering issues
+   - responsive breakpoint hiding those actions on tablet widths
+   - native wrapper viewport padding issues
+   - separate mobile vs tablet header variants not including the actions
+5. Preserve current behavior on:
+   - web desktop
+   - iPhone native
+   - normal mobile responsive screens
+6. If iPad needs a tablet-specific header variant, make it minimal and clean.
+7. Ensure the actions remain connected to the existing universal functionality:
+   - bell opens notifications
+   - + opens the current global create/add flow
+
+TECHNICAL NOTES
+- This is likely in the shared layout/app-shell/header code, not a page-specific issue
+- Check if iPad is falling into the wrong responsive mode
+- Check if the header right-side actions are being hidden by `display: none`, overflow, or conditional rendering at tablet widths
+- Respect iPad safe areas
+- Make sure the actions are not sitting offscreen or under the native status area
+- Keep the look consistent with the rest of EcoLogic
+
+EXPECTED RESULT
+On iPad native:
+- the universal bell is visible in the header
+- the universal + is visible in the header
+- both are aligned correctly
+- both are tappable
+- the rest of the page layout still looks right
+
+VALIDATION
+Please verify:
+1. Open multiple screens on iPad native
+2. Confirm header shows notification bell + global plus
+3. Confirm both are tappable and work
+4. Confirm no clipping/overflow
+5. Confirm iPhone and web layouts were not broken
+
+DELIVERABLES
+1. Exact files changed
+2. Root cause of why the iPad wrapper/header was hiding the actions
+3. What header/layout logic was changed
+4. Confirmation that:
+   - iPad now shows the universal bell
+   - iPad now shows the universal + button
+   - both work
+   - iPhone/web were not broken
+
+Please implement it now.
