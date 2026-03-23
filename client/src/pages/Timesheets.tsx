@@ -110,15 +110,6 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function getAvatarColor(name: string): string {
-  const colors = [
-    "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500",
-    "bg-rose-500", "bg-cyan-500", "bg-indigo-500", "bg-teal-500",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
 
 function dateToTimeString(dateStr: string): string {
   const date = parseISO(dateStr);
@@ -169,7 +160,7 @@ function EmployeeAvatar({
   return (
     <Avatar className={`${sizeClass} flex-shrink-0`}>
       {profileImageUrl && <AvatarImage src={profileImageUrl} alt={name} className="object-cover" />}
-      <AvatarFallback className={`font-semibold text-white ${getAvatarColor(name)}`}>
+      <AvatarFallback className="font-semibold">
         {getInitials(name)}
       </AvatarFallback>
     </Avatar>
