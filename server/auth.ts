@@ -48,6 +48,13 @@ declare global {
 const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
 const nonceCodeStore = new Map<string, { code: string; expiresAt: number }>();
 
+// ── Module-init sentinel — one log per process start ──────────────────────────
+console.log(
+  `[auth-init] auth.ts module initialized pid=${process.pid} ` +
+  `at=${new Date().toISOString()} ` +
+  `authCodeStore.size=${authCodeStore.size} nonceCodeStore.size=${nonceCodeStore.size}`,
+);
+
 function generateAuthCode(): string {
   return randomBytes(32).toString("hex");
 }
@@ -61,15 +68,41 @@ function storeAuthCode(userId: number): string {
 function storeAuthCodeForNonce(nonce: string, userId: number): string {
   const code = storeAuthCode(userId);
   nonceCodeStore.set(nonce, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
-  console.log("[auth-nonce] Stored code for nonce:", nonce.substring(0, 8) + "...");
+  console.log(
+    `[auth-store] storeAuthCodeForNonce ` +
+    `pid=${process.pid} ` +
+    `nonce=${nonce.substring(0, 8)}… ` +
+    `code=${code.substring(0, 8)}… ` +
+    `userId=${userId} ` +
+    `authCodeStore.size=${authCodeStore.size} ` +
+    `nonceCodeStore.size=${nonceCodeStore.size}`,
+  );
   return code;
 }
 
 function consumeAuthCode(code: string): number | null {
-  const entry = authCodeStore.get(code);
-  if (!entry) return null;
+  const codePrefix   = code.substring(0, 8);
+  const hadCode      = authCodeStore.has(code);
+  const entry        = authCodeStore.get(code);
+  const sizeBeforeDelete = authCodeStore.size;
+  if (!entry) {
+    console.log(
+      `[auth-consume] MISS pid=${process.pid} code=${codePrefix}… ` +
+      `hadInStore=${hadCode} authCodeStore.size=${sizeBeforeDelete}`,
+    );
+    return null;
+  }
   authCodeStore.delete(code);
-  if (Date.now() > entry.expiresAt) return null;
+  const expired = Date.now() > entry.expiresAt;
+  console.log(
+    `[auth-consume] ${expired ? "EXPIRED" : "HIT"} pid=${process.pid} ` +
+    `code=${codePrefix}… ` +
+    `hadInStore=${hadCode} ` +
+    `expired=${expired} ` +
+    `userId=${entry.userId} ` +
+    `authCodeStore.size=${authCodeStore.size} (was ${sizeBeforeDelete})`,
+  );
+  if (expired) return null;
   return entry.userId;
 }
 
@@ -1342,8 +1375,18 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         const code = nonce
           ? storeAuthCodeForNonce(nonce, user.id)
           : storeAuthCode(user.id);
-        console.log(`[google-auth] iOS: code stored${nonce ? " (nonce=" + nonce.substring(0, 8) + "…)" : ""}, redirecting to bridge page`);
-        return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(code)}`);
+        const redirectTarget = `/api/auth/google-complete?code=${encodeURIComponent(code)}`;
+        console.log(
+          `[auth/google/callback] iOS STORE+REDIRECT ` +
+          `pid=${process.pid} ` +
+          `userId=${user.id} ` +
+          `nonce=${nonce ? nonce.substring(0, 8) + "…" : "none"} ` +
+          `code=${code.substring(0, 8)}… ` +
+          `authCodeStore.size=${authCodeStore.size} ` +
+          `nonceCodeStore.size=${nonceCodeStore.size} ` +
+          `redirect=${redirectTarget.substring(0, 60)}`,
+        );
+        return res.redirect(redirectTarget);
       }
 
       // Popup flow: log user in, save session, then return postMessage HTML
@@ -1440,14 +1483,25 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
 
       const codePrefix    = code.substring(0, 8);
       const hadCodeBefore = authCodeStore.has(code);
-      console.log(`[exchange-code] RECEIVED code=${codePrefix}… hadInStore=${hadCodeBefore}`);
+      console.log(
+        `[exchange-code] RECEIVED pid=${process.pid} ` +
+        `code=${codePrefix}… ` +
+        `hadInStore=${hadCodeBefore} ` +
+        `authCodeStore.size=${authCodeStore.size}`,
+      );
 
       const userId = consumeAuthCode(code);
       if (!userId) {
-        console.log(`[exchange-code] 401 code=${codePrefix}… — hadInStore=${hadCodeBefore} (already consumed or expired)`);
+        console.log(
+          `[exchange-code] 401 pid=${process.pid} ` +
+          `code=${codePrefix}… ` +
+          `hadInStore=${hadCodeBefore} ` +
+          `authCodeStore.size=${authCodeStore.size} ` +
+          `(already consumed or expired)`,
+        );
         return res.status(401).json({ message: "Invalid or expired auth code" });
       }
-      console.log(`[exchange-code] CONSUMED code=${codePrefix}… userId=${userId}`);
+      console.log(`[exchange-code] CONSUMED pid=${process.pid} code=${codePrefix}… userId=${userId}`);
 
       const user = await storage.getUser(userId);
       if (!user) {

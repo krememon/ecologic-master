@@ -1,0 +1,105 @@
+We have a new exact diagnosis from the latest logs.
+
+This is no longer primarily a client race bug.
+
+What the logs show:
+
+deep link fires correctly
+app handles the deep link
+app posts /api/auth/exchange-code immediately
+that FIRST exchange already returns 401 {"message":"Invalid or expired auth code"}
+there are no poll-success logs in the failing sequence
+
+So the one-time code is already missing/invalid before the client can exchange it.
+
+This means the current likely root cause is server-side, not client-side.
+
+MOST LIKELY CAUSES
+
+/api/auth/google/callback is not actually storing the code before redirect
+callback stores code in one in-memory store, but /api/auth/exchange-code reads another
+callback and exchange are hitting different server processes / instances, so in-memory Map data is lost
+server reload/restart happens between callback and exchange
+the wrong auth module or duplicate route is still active somewhere for callback vs exchange
+
+WHAT I WANT YOU TO DO NOW
+Stop changing the client for a moment and inspect the server path end-to-end.
+
+Add server logs to these exact places:
+
+In /api/auth/google/callback
+Log:
+request received
+platform and nonce
+whether user auth succeeded
+exact code generated (first 8 chars only)
+whether storeAuthCodeForNonce(...) ran
+sizes of both stores after write:
+authCodeStore.size
+nonceCodeStore.size
+process identifier info:
+process.pid
+uptime if useful
+exact redirect target
+In storeAuthCodeForNonce(...)
+Log:
+nonce first 8 chars
+code first 8 chars
+userId
+store sizes after insert
+process.pid
+In POST /api/auth/exchange-code
+Log:
+code first 8 chars
+process.pid
+authCodeStore.size BEFORE consume
+whether authCodeStore.has(code) BEFORE consume
+whether consume succeeded
+if 401, log whether store was empty / code missing
+In consumeAuthCode(code)
+Log:
+code first 8 chars
+process.pid
+authCodeStore.has(code) before delete
+whether it returned data
+store size after delete or failed lookup
+On server startup / module init for auth.ts
+Log once:
+auth module initialized
+process.pid
+timestamp
+This is to catch whether the server reloads and resets the in-memory Maps.
+
+WHAT I NEED YOU TO ANSWER
+Reply in this exact format:
+
+Does /api/auth/google/callback definitely run on the same process.pid as /api/auth/exchange-code?
+Does storeAuthCodeForNonce(...) definitely run before the redirect?
+After callback stores the code, what are:
+authCodeStore.size
+nonceCodeStore.size
+When /api/auth/exchange-code is hit for that same code, what are:
+process.pid
+authCodeStore.size
+authCodeStore.has(code)
+Is the code missing because:
+it was never stored
+it was stored then lost
+it was stored in a different process
+wrong module/route is active
+Smallest correct fix
+
+IMPORTANT
+Do not guess.
+I need hard evidence from server logs around one single login attempt.
+
+MY CURRENT READ
+The latest client logs show:
+
+deep-link path is working
+the first exchange already fails
+so the code is not available server-side at exchange time
+
+That strongly points to a server storage/route/process problem, not another browser-close or polling issue.
+
+After you get that server log output, paste it here exactly and I’ll tell you the next move.

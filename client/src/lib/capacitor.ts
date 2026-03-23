@@ -190,9 +190,10 @@ export async function exchangeNativeAuthCode(
   _authHandled = true;
   stopPolling();
 
-  console.log(`[exchange] POSTING /api/auth/exchange-code source=${source} code=${codePrefix}…`);
+  const exchangeBaseUrl = getApiBaseUrl();
+  console.log(`[exchange] POSTING /api/auth/exchange-code source=${source} code=${codePrefix}… base=${exchangeBaseUrl || "(relative)"}`);
   try {
-    const res = await fetch("/api/auth/exchange-code", {
+    const res = await fetch(`${exchangeBaseUrl}/api/auth/exchange-code`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
