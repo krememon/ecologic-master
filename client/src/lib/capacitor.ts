@@ -28,7 +28,6 @@ export function getApiBaseUrl(): string {
     // process would never find it.
     const configured = import.meta.env.VITE_APP_BASE_URL as string | undefined;
     const resolved = configured || window.location.origin;
-    console.log("[capacitor] getApiBaseUrl native, resolved:", resolved, "(configured:", configured, ")");
     return resolved;
   }
   return "";
@@ -142,48 +141,19 @@ export function resetAuthHandled(): void {
   // _inFlightCodes intentionally NOT cleared — a code in flight must stay locked
 }
 
-// Debug accessors used by the deep-link handler for pre-exchange state logging
-export function _inFlightCodes_debug(code: string): boolean {
-  return _inFlightCodes.has(code);
-}
-export function _authHandled_debug(): boolean {
-  return _authHandled;
-}
-
 export async function exchangeNativeAuthCode(
   code: string,
   source: "deep-link" | "poll" | "cold-start" = "deep-link",
 ): Promise<void> {
-  const codePrefix = code.substring(0, 8);
-  const guardA_consumed   = localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === code;
-  const guardB_inFlight   = _inFlightCodes.has(code);
-  const guardC_handled    = _authHandled;
-  const existingSessionId = localStorage.getItem("nativeSessionId");
-
-  console.log(
-    `[exchange] source=${source} code=${codePrefix}… ` +
-    `guardA_consumed=${guardA_consumed} ` +
-    `guardB_inFlight=${guardB_inFlight} ` +
-    `guardC_authHandled=${guardC_handled} ` +
-    `existingSession=${!!existingSessionId}`,
-  );
-
   // ── Guard A: cross-reload dedup ────────────────────────────────────────────
-  if (guardA_consumed) {
-    console.log(`[exchange] SKIP source=${source} code=${codePrefix}… — already consumed on a previous load`);
-    return;
-  }
+  if (localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === code) return;
 
   // ── Guard B: per-code concurrent dedup ─────────────────────────────────────
-  if (guardB_inFlight) {
-    console.log(`[exchange] SKIP source=${source} code=${codePrefix}… — exchange already in flight`);
-    return;
-  }
+  if (_inFlightCodes.has(code)) return;
   _inFlightCodes.add(code);
 
   // ── Guard C: session-level flag (belt + suspenders) ─────────────────────────
-  if (guardC_handled) {
-    console.log(`[exchange] SKIP source=${source} code=${codePrefix}… — _authHandled already true`);
+  if (_authHandled) {
     _inFlightCodes.delete(code);
     return;
   }
@@ -191,7 +161,6 @@ export async function exchangeNativeAuthCode(
   stopPolling();
 
   const exchangeBaseUrl = getApiBaseUrl();
-  console.log(`[exchange] POSTING /api/auth/exchange-code source=${source} code=${codePrefix}… base=${exchangeBaseUrl || "(relative)"}`);
   try {
     const res = await fetch(`${exchangeBaseUrl}/api/auth/exchange-code`, {
       method: "POST",
@@ -326,26 +295,12 @@ export async function startGoogleAuthNative(): Promise<void> {
         });
         const d = await r.json().catch(() => ({}));
         if (d.status === "ready" && d.code) {
-          const pCode    = d.code.substring(0, 8);
-          const pConsumed  = localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === d.code;
-          const pInFlight  = _inFlightCodes.has(d.code);
-          const pHandled   = _authHandled;
-          const pStopped   = activePollInterval === null;
-          console.log(
-            `[poll] found code=${pCode}… ` +
-            `guardA_consumed=${pConsumed} ` +
-            `guardB_inFlight=${pInFlight} ` +
-            `guardC_authHandled=${pHandled} ` +
-            `pollingAlreadyStopped=${pStopped}`,
-          );
-          // Re-check AFTER the async fetch — the deep-link path may have
+          // Re-check guards AFTER the async fetch — the deep-link path may have
           // already started exchanging during the await above.
-          if (pHandled || pInFlight || pConsumed) {
-            console.log(`[poll] ABORT code=${pCode}… — deep-link already handled it`);
+          if (_authHandled || _inFlightCodes.has(d.code) || localStorage.getItem(AUTH_CODE_CONSUMED_KEY) === d.code) {
             stopPolling();
             return;
           }
-          console.log(`[poll] proceeding — closing browser then calling exchange code=${pCode}…`);
           stopPolling();
           await Browser.close();
           await exchangeNativeAuthCode(d.code, "poll");
@@ -765,8 +720,8 @@ export async function closeSystemBrowser(): Promise<void> {
   try {
     const { Browser } = await import("@capacitor/browser");
     await Browser.close();
-  } catch (err) {
-    console.error("[capacitor] Browser.close failed:", err);
+  } catch {
+    // Browser may already be closed (e.g. auth completed via deep link) — ignore
   }
 }
 

@@ -31,9 +31,6 @@ function isNativeMobile(): boolean {
 }
 
 async function fetchAuthUser(): Promise<AuthUser | null> {
-  const native = isNativeMobile();
-  console.log("[auth] fetching user from /api/auth/user", native ? "(native mobile)" : "(web)");
-
   const attempt = async (): Promise<Response> => {
     // Include the native Bearer token when it is stored in localStorage.
     // This is required because Capacitor WebViews always carry a stale
@@ -44,10 +41,7 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
       const sid = typeof localStorage !== "undefined"
         ? localStorage.getItem("nativeSessionId")
         : null;
-      if (sid) {
-        headers["Authorization"] = `Bearer ${sid}`;
-        console.log("[auth] attaching Bearer token to /api/auth/user");
-      }
+      if (sid) headers["Authorization"] = `Bearer ${sid}`;
     } catch {}
     return fetch("/api/auth/user", {
       credentials: "include",
@@ -88,15 +82,7 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
 
   const user: AuthUser = await res.json();
 
-  console.log("[auth] mobile app user fetched", {
-    id: user.id,
-    email: user.email,
-    companyId: user.company?.id ?? null,
-    onboardingChoice: user.onboardingChoice ?? null,
-  });
-
   if (user.company) {
-    console.log("[auth] companyId detected:", user.company.id);
     localStorage.removeItem("onboardingChoice");
     localStorage.removeItem("onboardingIndustry");
   }
@@ -120,18 +106,8 @@ export function useAuth() {
   useEffect(() => {
     if (!native || refreshedRef.current || isLoading) return;
     refreshedRef.current = true;
-    console.log("[auth] native app start — forcing fresh user fetch");
     queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
   }, [native, isLoading, queryClient]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (user.company) {
-      console.log("[auth] redirecting to dashboard — companyId:", user.company.id);
-    } else {
-      console.log("[auth] no company found for user, onboarding flow will handle routing");
-    }
-  }, [user]);
 
   return {
     user: user ?? null,

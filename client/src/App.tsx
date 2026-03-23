@@ -96,8 +96,6 @@ import {
   closeSystemBrowser,
   stopPolling,
   exchangeNativeAuthCode,
-  _inFlightCodes_debug,
-  _authHandled_debug,
 } from "@/lib/capacitor";
 
 let _nativeLaunchUrlChecked = false;
@@ -110,21 +108,16 @@ function checkLaunchDeepLink(): void {
     const platform = cap.getPlatform?.();
     if (!platform || platform === "web") return;
 
-    console.log("[deep-link] early check: native platform detected, path=", window.location.pathname);
-
     const currentPath = window.location.pathname;
     const invitePathMatch = currentPath.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
     if (invitePathMatch) {
-      const target = `/referrals/invite/${invitePathMatch[1]}`;
-      console.log("[deep-link] early check: invite URL path, saving pending=", target);
-      sessionStorage.setItem("pendingDeepLink", target);
+      sessionStorage.setItem("pendingDeepLink", `/referrals/invite/${invitePathMatch[1]}`);
       _nativeLaunchUrlChecked = true;
       return;
     }
 
     const referralsMatch = currentPath.match(/^\/referrals\/invite\/([a-zA-Z0-9]+)/);
     if (referralsMatch) {
-      console.log("[deep-link] early check: already on invite screen path");
       sessionStorage.setItem("pendingDeepLink", currentPath);
       _nativeLaunchUrlChecked = true;
       return;
@@ -132,9 +125,7 @@ function checkLaunchDeepLink(): void {
 
     const jobOfferMatch = currentPath.match(/^\/job-offer\/\d+\/([a-zA-Z0-9]+)/);
     if (jobOfferMatch) {
-      const target = `/referrals/invite/${jobOfferMatch[1]}`;
-      console.log("[deep-link] early check: job-offer path, saving pending=", target);
-      sessionStorage.setItem("pendingDeepLink", target);
+      sessionStorage.setItem("pendingDeepLink", `/referrals/invite/${jobOfferMatch[1]}`);
       _nativeLaunchUrlChecked = true;
       return;
     }
@@ -143,7 +134,6 @@ function checkLaunchDeepLink(): void {
       try {
         const { App: CapApp } = await import("@capacitor/app");
         const launchUrl = await CapApp.getLaunchUrl();
-        console.log("[deep-link] early getLaunchUrl result=", launchUrl?.url || "(none)");
         if (launchUrl?.url) {
           let pathToMatch = "";
           try {
@@ -156,25 +146,18 @@ function checkLaunchDeepLink(): void {
 
           const jobOffer = pathToMatch.match(/^\/job-offer\/(\d+)\/([a-zA-Z0-9]+)/);
           if (jobOffer) {
-            const target = `/referrals/invite/${jobOffer[2]}`;
-            console.log("[deep-link] early getLaunchUrl: job-offer, saving pending=", target);
-            sessionStorage.setItem("pendingDeepLink", target);
+            sessionStorage.setItem("pendingDeepLink", `/referrals/invite/${jobOffer[2]}`);
           }
           const invite = pathToMatch.match(/^\/invite\/referral\/([a-zA-Z0-9]+)/);
           if (invite) {
-            const target = `/referrals/invite/${invite[1]}`;
-            console.log("[deep-link] early getLaunchUrl: invite, saving pending=", target);
-            sessionStorage.setItem("pendingDeepLink", target);
+            sessionStorage.setItem("pendingDeepLink", `/referrals/invite/${invite[1]}`);
           }
         }
-      } catch (e) {
-        console.log("[deep-link] early getLaunchUrl failed:", e);
-      } finally {
+      } catch { /* ignore */ } finally {
         _nativeLaunchUrlChecked = true;
       }
     })();
-  } catch (e) {
-    console.log("[deep-link] early check failed:", e);
+  } catch {
     _nativeLaunchUrlChecked = true;
   }
 }
@@ -214,7 +197,6 @@ function getNextOnboardingRoute(params: {
     // that is the company owner's responsibility.
     if (!isOwner) {
       if (onboardingCompleted) {
-        console.log("[auth] redirecting to dashboard — employee, onboarding complete");
         return null;
       }
       return null;
@@ -222,7 +204,6 @@ function getNextOnboardingRoute(params: {
 
     // Owner: enforce subscription gate
     if (onboardingCompleted && subActive) {
-      console.log("[auth] redirecting to dashboard — onboarding complete + subscription active");
       return null;
     }
 
@@ -731,22 +712,8 @@ async function handleAuthCallbackUrl(
     return true;
   }
 
-  const codePrefix = code.substring(0, 8);
-  // Log guard state synchronously — statically imported functions, zero latency
-  const guardA = localStorage.getItem("nativeAuthCodeConsumed") === code;
-  const guardB = _inFlightCodes_debug(code);
-  const guardC = _authHandled_debug();
-  const sess   = !!localStorage.getItem("nativeSessionId");
-  console.log(
-    `[deep-link] received code=${codePrefix}… ` +
-    `guardA_consumed=${guardA} ` +
-    `guardB_inFlight=${guardB} ` +
-    `guardC_authHandled=${guardC} ` +
-    `existingSession=${sess}`,
-  );
-  console.log(`[deep-link] calling exchangeNativeAuthCode source=deep-link code=${codePrefix}…`);
   try {
-    await exchangeNativeAuthCode(code, "deep-link"); // statically imported
+    await exchangeNativeAuthCode(code, "deep-link");
   } catch (err) {
     console.error("[google-auth] Deep link exchange error:", err);
     window.location.href = "/login?error=exchange_failed";
@@ -762,12 +729,8 @@ function useCapacitorDeepLinks() {
       try {
         // isNativePlatform and closeSystemBrowser are statically imported at the
         // top of this file — no dynamic import needed here.
-        if (!isNativePlatform()) {
-          console.log("[deep-link] Web platform detected, skipping deep link setup");
-          return;
-        }
+        if (!isNativePlatform()) return;
 
-        console.log("[deep-link] Native platform detected, setting up deep link listener");
         const { App: CapApp } = await import("@capacitor/app");
 
         // Cold start: app was launched directly from the deep link URL
