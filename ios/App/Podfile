@@ -1,6 +1,6 @@
 require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
-platform :ios, '14.0'
+platform :ios, '15.0'
 use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
@@ -14,6 +14,7 @@ def capacitor_pods
   pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
   pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
   pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
+  pod 'CapacitorGeolocation', :path => '../../node_modules/@capacitor/geolocation'
   pod 'CapacitorPushNotifications', :path => '../../node_modules/@capacitor/push-notifications'
   pod 'CapacitorLocalNotifications', :path => '../../node_modules/@capacitor/local-notifications'
   pod 'CapgoNativePurchases', :path => '../../node_modules/@capgo/native-purchases'
@@ -36,7 +37,10 @@ post_install do |installer|
       'NSCameraUsageDescription'          => 'EcoLogic uses the camera to capture photos and videos for job documents.',
       'NSPhotoLibraryUsageDescription'    => 'EcoLogic accesses your photo library so you can attach images to job documents.',
       'NSPhotoLibraryAddUsageDescription' => 'EcoLogic may save captured photos to your library for job documentation.',
-      'NSMicrophoneUsageDescription'      => 'EcoLogic uses the microphone to record audio when capturing video for job documents.'
+      'NSMicrophoneUsageDescription'      => 'EcoLogic uses the microphone to record audio when capturing video for job documents.',
+      'NSLocationWhenInUseUsageDescription'             => 'EcoLogic tracks your location while you are clocked into a job so your live position appears on the crew map until you clock out.',
+      'NSLocationAlwaysAndWhenInUseUsageDescription'    => 'EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.',
+      'NSLocationAlwaysUsageDescription'                => 'EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.'
     }
     privacy_entries.each do |key, value|
       # Try Add first (fails silently if key exists), then Set to ensure value is current
@@ -44,5 +48,13 @@ post_install do |installer|
       system("/usr/libexec/PlistBuddy -c 'Set :#{key} #{value}' '#{info_plist}'")
     end
     puts "✅  iOS privacy usage descriptions verified in Info.plist"
+
+    # Ensure UIBackgroundModes includes 'location' for background geo-tracking.
+    # The 'remote-notification' mode for push notifications must also remain.
+    modes_needed = ['remote-notification', 'location']
+    modes_needed.each do |mode|
+      system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes: string #{mode}' '#{info_plist}' 2>/dev/null")
+    end
+    puts "✅  UIBackgroundModes (location + remote-notification) verified in Info.plist"
   end
 end

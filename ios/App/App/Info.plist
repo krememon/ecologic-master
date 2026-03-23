@@ -77,11 +77,11 @@
                 <string>location</string>
         </array>
         <key>NSLocationWhenInUseUsageDescription</key>
-        <string>EcoLogic needs your location to track your position on the crew map while you are clocked in to a job.</string>
+        <string>EcoLogic tracks your location while you are clocked into a job so your live position appears on the crew map until you clock out.</string>
         <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-        <string>EcoLogic needs background location access to keep tracking your position on the crew map while the app is minimized during an active work session.</string>
+        <string>EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.</string>
         <key>NSLocationAlwaysUsageDescription</key>
-        <string>EcoLogic needs background location access to keep tracking your position on the crew map while the app is minimized during an active work session.</string>
+        <string>EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.</string>
         <key>NSCameraUsageDescription</key>
         <string>EcoLogic uses the camera to capture photos and videos for job documents.</string>
         <key>NSPhotoLibraryUsageDescription</key>

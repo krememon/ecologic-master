@@ -1,0 +1,121 @@
+We need to upgrade EcoLogic’s job clock-in location tracking so it continues LIVE in the background until the user clocks out.
+
+GOAL
+Right now the iOS prompt only offers:
+- Allow Once
+- Allow While Using App
+- Don’t Allow
+
+That is not enough for our intended behavior.
+
+We want this:
+- when a user is clocked into a job
+- EcoLogic keeps tracking/sending their location even if the app is minimized, backgrounded, or the screen is off
+- tracking continues until the user clocks out
+- then background tracking stops immediately
+
+IMPORTANT
+- Do NOT redesign the UI
+- Do NOT break normal clock-in / clock-out
+- Do NOT fake this with frontend timers only
+- This requires real native iOS background location support
+- Preserve privacy and only track while actively clocked into a job
+
+REQUIRED BEHAVIOR
+1. When a user clocks into a job:
+   - app requests the correct iOS location permissions needed for continuous tracking
+   - app can continue tracking even when not actively open
+   - location updates continue to sync so the live map reflects the user
+
+2. While the user remains clocked in:
+   - background location tracking stays active
+   - map keeps receiving updated coordinates
+
+3. When the user clocks out:
+   - background tracking stops immediately
+   - no more location updates are sent unless they clock in again
+
+IOS REQUIREMENTS
+This must be implemented the correct native iOS way.
+
+Please handle all of the following:
+
+1. Permission model
+   - support requesting background-capable permission, not just “When In Use”
+   - if needed, do the proper two-step iOS flow:
+     - first request When In Use
+     - then request Always/background permission in the correct way
+   - use clear permission copy explaining tracking only occurs while clocked into a job
+
+2. Info.plist
+   Add/verify all required location permission keys and descriptions, including:
+   - Privacy - Location When In Use Usage Description
+   - Privacy - Location Always and When In Use Usage Description
+   - any other required location usage keys for the deployment target if applicable
+
+   Recommended copy should make it clear:
+   EcoLogic tracks your location while you are clocked into a job so your live location can appear on the map until you clock out.
+
+3. Background Modes
+   - enable iOS background location mode properly
+   - verify Required background modes includes location updates if needed
+
+4. Native tracking behavior
+   - use a real background-capable location watcher/service
+   - do NOT rely only on browser geolocation behavior
+   - do NOT stop updates just because the app is backgrounded
+   - ensure updates are actually sent to the backend while clocked in
+
+5. Stop conditions
+   - when user clocks out, terminate the location watcher/service
+   - stop sending updates immediately
+   - avoid battery drain when not clocked in
+
+6. App logic
+   - tracking should only run for actively clocked-in users
+   - preserve existing map display logic
+   - preserve existing timesheet/job clock-in logic
+
+7. Permission handling UX
+   - if user only grants When In Use, handle it correctly and prompt/explain that Always access is required for live tracking when the app is not open
+   - if user denies Always/background, fail clearly instead of pretending background live tracking works
+
+TECHNICAL NOTES
+- This is not just a plist copy change
+- It likely needs:
+  - native iOS permission/config updates
+  - background mode updates
+  - location tracking service changes
+  - backend sync verification
+- Since we need tracking outside the app, confirm the current Capacitor/browser geolocation approach is sufficient or replace/augment it with a proper native background-location solution
+- Be mindful of App Store review/privacy compliance:
+  - tracking only while clocked into a job
+  - clear user-facing explanation
+  - no always-on tracking outside work sessions
+
+VALIDATION
+Please verify all of this:
+1. User clocks into a job
+2. App gets proper location permissions
+3. User backgrounds the app
+4. Location continues updating on the live map
+5. User locks phone / leaves app
+6. Location still updates while clocked in
+7. User clocks out
+8. Location tracking stops
+9. No more background updates are sent
+
+DELIVERABLES
+1. Exact files changed
+2. What iOS permission keys/background modes were added or updated
+3. What native/background tracking logic was changed
+4. How clock-in starts tracking
+5. How clock-out stops tracking
+6. Confirmation that:
+   - background tracking now works while clocked in
+   - app can track even when not open
+   - tracking stops on clock-out
+   - map updates correctly
+   - privacy scope is limited to active job clock-ins only
+
+Please implement it now.
