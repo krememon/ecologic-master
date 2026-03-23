@@ -1,0 +1,113 @@
+We need to add a Dev Tools admin function in EcoLogic to FULLY disconnect a company’s Stripe connected account — including removing it from Stripe Connected Accounts, not just clearing local app state.
+
+GOAL
+In Dev Tools, I want an admin action that completely disconnects a company/user’s Stripe connected account.
+
+CRITICAL REQUIREMENTS
+When this action is used:
+1. The company is treated as fully disconnected inside EcoLogic
+2. They must reconnect Stripe from scratch and re-enter all required information
+3. The old connected account must also be removed/deauthorized so it no longer remains in Stripe Connected Accounts
+
+IMPORTANT
+This is NOT just:
+- disabling payouts
+- flipping a UI flag
+- clearing a local field only
+
+I want the connection actually severed in both places:
+- EcoLogic side
+- Stripe connected accounts side
+
+EXPECTED RESULT
+After admin uses this Dev Tools action:
+- the company no longer shows as connected in EcoLogic
+- the company no longer appears under Stripe Connected Accounts as an active connected account for our platform
+- the user has to fully reconnect Stripe and re-enter onboarding/account details again
+- all Stripe-gated features are blocked until reconnection
+
+DEV TOOLS ACTION
+Add a destructive admin action like:
+- Disconnect Stripe
+or
+- Reset Stripe Connection
+
+Use confirmation modal:
+
+Title:
+Disconnect Stripe account?
+
+Body:
+This will fully remove the company’s Stripe connection and require them to reconnect Stripe and re-enter their account information.
+
+Buttons:
+- Disconnect Stripe
+- Cancel
+
+REQUIRED BEHAVIOR
+After confirm:
+1. EcoLogic clears all stored Stripe-connected state for that company
+2. Stripe-side connected account relationship is deauthorized/removed if the current Connect architecture supports that
+3. The company must no longer appear as an active connected account for our platform in Stripe Connected Accounts
+4. The app must behave exactly like the company never connected Stripe before
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where company Stripe connect state is stored in the DB/app.
+2. Add a Dev Tools control to trigger full Stripe disconnect for a selected company.
+3. Make this action destructive and confirmation-protected.
+4. Reset all local Stripe connection state used by EcoLogic, including things like:
+   - connected account ID
+   - payouts enabled
+   - charges enabled
+   - details submitted
+   - onboarding completion/status fields
+   - any cached account status / requirements fields
+   - any stored connect readiness markers
+5. ALSO determine the correct Stripe-side action required so the connected account is no longer attached to our platform / no longer appears in Stripe Connected Accounts.
+6. Use the correct Stripe Connect deauthorization/disconnect flow for our architecture, rather than only hiding it locally.
+7. If current architecture requires deleting/deauthorizing/unlinking the connected account relationship, do that safely.
+8. Prevent any webhook or sync process from rehydrating the old connection after disconnect.
+9. After disconnect, all Stripe-gated features should behave as disconnected again:
+   - send invoice payment links
+   - online invoice payments
+   - subcontract/send job flows
+   - payouts page status
+10. Reconnection should require the full onboarding flow again.
+
+IMPORTANT ARCHITECTURE NOTE
+Please determine the correct implementation based on how EcoLogic currently uses Stripe Connect.
+
+The goal is:
+- the old connection is no longer valid
+- it is removed from Stripe Connected Accounts for our platform
+- the user must reconnect from scratch
+
+If true Stripe-side removal/deauthorization is needed, implement that.
+Do NOT just clear DB fields and leave the connected account still attached in Stripe.
+
+SAFETY / VALIDATION
+Please verify:
+1. Company currently has connected Stripe
+2. Admin uses Dev Tools → Disconnect Stripe
+3. Company is now disconnected everywhere in EcoLogic
+4. Company is removed from Stripe Connected Accounts for our platform
+5. Stripe payouts page shows disconnected state
+6. Send Invoice / online payments / subcontract job Stripe-gated features are blocked again
+7. User must fully reconnect Stripe and re-enter info
+8. Old connection does not silently continue working
+9. Old connection does not silently reappear via webhook sync
+
+DELIVERABLES
+1. Exact files changed
+2. What Dev Tools control was added
+3. What local DB/app Stripe fields were reset
+4. What Stripe-side disconnect/deauthorization/removal action was used
+5. How you ensured the account no longer remains in Stripe Connected Accounts
+6. Confirmation that:
+   - company is fully treated as disconnected
+   - old connected account is removed/unlinked from Stripe Connected Accounts
+   - user must reconnect from scratch
+   - Stripe-gated features are blocked until reconnection
+   - normal user-facing flows were not otherwise changed
+
+Please implement it now.

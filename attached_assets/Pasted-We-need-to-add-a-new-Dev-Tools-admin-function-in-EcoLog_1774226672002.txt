@@ -1,0 +1,106 @@
+We need to add a new Dev Tools admin function in EcoLogic to fully disconnect a company’s Stripe connected account.
+
+GOAL
+In Dev Tools, I want an admin action that can disconnect a user/company’s Stripe connected account.
+
+IMPORTANT RESULT
+When this is done, the user must have to fully reconnect Stripe from scratch and re-enter all required Stripe information again.
+
+In other words:
+- not just “disable payouts”
+- not just “mark as disconnected” visually
+- fully sever the connected-account linkage in EcoLogic so the app treats them like they have never connected Stripe
+
+USE CASE
+This is for internal/dev/admin use only in Dev Tools.
+
+REQUIRED BEHAVIOR
+From Dev Tools, admin should be able to trigger:
+- Disconnect Stripe Account
+
+After that:
+1. The company is treated as not connected to Stripe
+2. Stripe-dependent features are blocked again until reconnection
+3. The company/user must go through the full Stripe connect flow again
+4. They must re-enter all required Stripe onboarding information again
+5. Any UI that checks Stripe-connected state should update accordingly
+
+IMPORTANT
+- This should be an internal Dev Tools action only
+- Do NOT expose this button in normal user-facing settings
+- Do NOT redesign Dev Tools more than needed
+- Do NOT break existing Stripe payout/connect flows
+- This is a real reset/disconnect action, not just cosmetic
+
+IMPLEMENTATION REQUIREMENTS
+1. Find where company Stripe connect/account state is stored in the database and app logic.
+2. Add a Dev Tools button/action for disconnecting the Stripe account for a selected company/user.
+3. Make this action clear and destructive, with confirmation first.
+4. On confirm, clear/reset all Stripe-connected state fields that make the app consider the company connected, such as:
+   - connected account ID
+   - charges enabled / payouts enabled flags
+   - details submitted flags
+   - onboarding completion markers
+   - any cached Stripe account status fields
+   - any connect-session / onboarding-related persisted state if applicable
+5. Make sure the app then treats that company exactly like a fresh company with no Stripe connection.
+6. Ensure the user must re-run the full Stripe connect flow and re-enter info.
+7. If there is a Stripe-side action needed too, handle that carefully:
+   - determine whether we should only unlink/reset on EcoLogic side
+   - or also create a true Stripe-side disconnect/deauthorization flow if applicable
+8. Reuse the safest correct architecture so the result is:
+   - app no longer trusts the old connection
+   - user must reconnect from scratch
+
+DEV TOOLS UX
+In Dev Tools, this should be something like:
+- Disconnect Stripe
+or
+- Reset Stripe Connection
+
+Use a confirmation modal like:
+Title:
+Disconnect Stripe account?
+
+Body:
+This will remove the company’s current Stripe connection and require them to reconnect Stripe and re-enter their account information.
+
+Buttons:
+- Disconnect Stripe
+- Cancel
+
+TECHNICAL NOTES
+- We need to distinguish between:
+  1. clearing EcoLogic’s stored connection state
+  2. actual Stripe account lifecycle/deauthorization behavior
+
+Please determine the correct safest implementation based on current EcoLogic Stripe Connect architecture.
+
+If the goal of “must re-enter all info” is best achieved by clearing the linked connected-account ID and forcing creation of a brand-new Stripe Connect onboarding path, do that.
+
+Do NOT leave a path where the old connected account is silently reused without the user re-entering information.
+
+If there are webhooks/sync jobs that would immediately restore the old state, fix that too.
+
+SAFETY / VALIDATION
+Please verify:
+1. Company has connected Stripe
+2. Admin uses Dev Tools → Disconnect Stripe
+3. Company now shows as disconnected everywhere
+4. Payment-link/send-invoice/subcontracting Stripe-gated features are blocked again
+5. Stripe payouts page shows disconnected state
+6. User must reconnect Stripe from scratch
+7. Old connection does not silently continue working
+
+DELIVERABLES
+1. Exact files changed
+2. What Dev Tools control was added
+3. What DB fields / Stripe state were reset
+4. Whether any Stripe-side deauthorization/unlink step was used
+5. Confirmation that:
+   - company is fully treated as disconnected
+   - user must reconnect from scratch
+   - Stripe-gated features are blocked until reconnection
+   - normal non-dev user flows were not affected
+
+Please implement it now.

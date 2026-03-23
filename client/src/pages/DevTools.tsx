@@ -239,6 +239,10 @@ export default function DevTools() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Stripe disconnect state
+  const [showStripeDisconnectDialog, setShowStripeDisconnectDialog] = useState(false);
+  const [isStripeDisconnecting, setIsStripeDisconnecting] = useState(false);
+
   // Paginated company directory
   const [listItems, setListItems] = useState<CompanyBasic[]>([]);
   const [listPage, setListPage] = useState(1);
@@ -399,6 +403,25 @@ export default function DevTools() {
       toast({ title: "Action failed", description: e.message, variant: "destructive" });
     } finally {
       setIsBillingMutating(null);
+    }
+  };
+
+  const handleStripeDisconnect = async () => {
+    if (!company) return;
+    setIsStripeDisconnecting(true);
+    try {
+      const res = await fetch(`/api/admin/company/${company.id}/stripe-disconnect`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setShowStripeDisconnectDialog(false);
+      toast({
+        title: "Stripe account disconnected",
+        description: `${company.name} must now reconnect Stripe from scratch.${data.previousAccountId ? ` Previous account: ${data.previousAccountId}` : ""}`,
+      });
+    } catch (e: any) {
+      toast({ title: "Disconnect failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIsStripeDisconnecting(false);
     }
   };
 
@@ -1009,6 +1032,44 @@ export default function DevTools() {
         </Card>
       )}
 
+      {/* ── STRIPE CONNECT ────────────────────────────────────── */}
+      {company && !isLoadingDetail && (
+        <Card className="border-orange-200 dark:border-orange-900">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-orange-500" />
+              Stripe Connect
+            </CardTitle>
+            <CardDescription>Manage this company's Stripe Express connected account</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-start justify-between gap-4 p-4 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">Disconnect Stripe account</p>
+                <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
+                  Removes the company's Stripe Connect link — both from EcoLogic's database and from Stripe Connected Accounts.
+                  The company must reconnect Stripe and re-enter all account information.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isStripeDisconnecting || isDeleting}
+                onClick={() => setShowStripeDisconnectDialog(true)}
+                className="shrink-0 border-orange-400 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-950"
+              >
+                {isStripeDisconnecting ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Disconnect Stripe
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── DANGER ZONE — Delete Company ──────────────────────── */}
       {company && !isLoadingDetail && (
         <Card className="border-red-300 dark:border-red-800">
@@ -1102,6 +1163,40 @@ export default function DevTools() {
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</>
               ) : (
                 "Delete company permanently"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── STRIPE DISCONNECT CONFIRMATION ─────────────────── */}
+      <AlertDialog open={showStripeDisconnectDialog} onOpenChange={(open) => {
+        if (!isStripeDisconnecting) setShowStripeDisconnectDialog(open);
+      }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+              <CreditCard className="h-5 w-5" />
+              Disconnect Stripe account?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              This will remove <strong className="text-slate-900 dark:text-white">{company?.name}</strong>'s current Stripe connection and require them to reconnect Stripe and re-enter their account information.
+              <span className="block mt-2 text-orange-700 dark:text-orange-400 font-medium text-sm">
+                The connected account will also be deleted from Stripe Connected Accounts.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isStripeDisconnecting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isStripeDisconnecting}
+              onClick={(e) => { e.preventDefault(); handleStripeDisconnect(); }}
+              className="bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-40"
+            >
+              {isStripeDisconnecting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Disconnecting…</>
+              ) : (
+                "Disconnect Stripe"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

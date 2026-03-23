@@ -20370,6 +20370,67 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       }
     });
 
+    // POST /api/admin/company/:id/stripe-disconnect — fully severs the Stripe Connect relationship.
+    // Calls stripe.accounts.del() to remove the Express account from Stripe Connected Accounts,
+    // then clears all Stripe Connect fields in the DB so the company must reconnect from scratch.
+    app.post('/api/admin/company/:id/stripe-disconnect', isAuthenticated, requireDev, async (req: any, res) => {
+      const companyId = parseInt(req.params.id);
+      if (!companyId || isNaN(companyId)) {
+        return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+      }
+      const actorEmail: string = req.user?.email || req.user?.claims?.email || 'unknown';
+
+      try {
+        const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+        if (!company) return res.status(404).json({ ok: false, error: 'Company not found' });
+
+        const accountId = company.stripeConnectAccountId;
+
+        // 1. Attempt to delete the Express account on Stripe's side.
+        //    This removes it from the platform's Connected Accounts list.
+        //    We tolerate errors (account may already be deleted or deauthorized).
+        let stripeResult: 'deleted' | 'not_found' | 'skipped' | 'error' = 'skipped';
+        if (accountId) {
+          const stripeInstance = new (await import('stripe')).default(process.env.STRIPE_SECRET_KEY || '', {
+            apiVersion: '2025-04-30.basil' as any,
+          });
+          try {
+            await stripeInstance.accounts.del(accountId);
+            stripeResult = 'deleted';
+            console.log(`[admin-stripe-disconnect] Deleted Stripe account ${accountId} for company ${companyId} (actor=${actorEmail})`);
+          } catch (stripeErr: any) {
+            if (stripeErr?.code === 'resource_missing' || stripeErr?.statusCode === 404) {
+              stripeResult = 'not_found';
+              console.log(`[admin-stripe-disconnect] Account ${accountId} already removed on Stripe side — continuing local reset`);
+            } else {
+              stripeResult = 'error';
+              console.warn(`[admin-stripe-disconnect] Stripe delete failed for ${accountId}: ${stripeErr.message} — still resetting local state`);
+            }
+          }
+        } else {
+          console.log(`[admin-stripe-disconnect] No stripeConnectAccountId for company ${companyId} — resetting local state only`);
+        }
+
+        // 2. Reset all Stripe Connect fields to disconnected defaults.
+        await db.update(companies).set({
+          stripeConnectAccountId: null,
+          stripeConnectStatus: 'not_started',
+          stripeConnectChargesEnabled: false,
+          stripeConnectPayoutsEnabled: false,
+          stripeConnectDetailsSubmitted: false,
+          stripeConnectOnboardedAt: null,
+          stripeConnectLastCheckedAt: null,
+        }).where(eq(companies.id, companyId));
+
+        console.log(`[admin-stripe-disconnect] Local state reset complete — company=${companyId} previousAccountId=${accountId || 'none'} stripeResult=${stripeResult}`);
+
+        res.json({ ok: true, previousAccountId: accountId || null, stripeResult });
+      } catch (e: any) {
+        console.error(`[admin-stripe-disconnect] ERROR — actor=${actorEmail} companyId=${companyId}:`, e);
+        res.status(500).json({ ok: false, error: e.message });
+      }
+    });
+
     // DELETE /api/admin/company/:id — permanently delete a company and all its data
     // Protected companies (ID 415, owner pjpell077@gmail.com) are hard-blocked on the backend.
     app.delete('/api/admin/company/:id', isAuthenticated, requireDev, async (req: any, res) => {
