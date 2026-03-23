@@ -416,6 +416,18 @@ html.native-ios .appSheetContent.sheetBottomSide {
   top: auto !important;
 }
 
+/* iPad override: on tablet-width native iOS (≥640px) there is no fixed mobile header,
+   so the Sheet overlay must cover the full viewport and the panel starts at the safe-area
+   boundary rather than at the 56px mobile-header offset. */
+@media (min-width: 640px) {
+  html.native-ios .appSheetOverlay {
+    top: 0 !important;
+  }
+  html.native-ios .appSheetContent {
+    top: env(safe-area-inset-top, 0px) !important;
+  }
+}
+
 /* iOS native wrapper: push DM thread header below status bar / Dynamic Island */
 html.native-ios .dmThreadHeader {
   padding-top: calc(var(--native-safe-top, 56px) + 8px) !important;
