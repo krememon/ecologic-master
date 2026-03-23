@@ -1,0 +1,77 @@
+We need to add an owner push notification for successful online invoice payments in EcoLogic.
+
+GOAL
+When a client pays an invoice online, the owner should receive a push notification that the payment was collected.
+
+DESIRED NOTIFICATION
+After successful online payment:
+- send a push notification to the company owner
+- notification should say that payment was collected from the client
+
+Example content:
+Title:
+Payment Received
+
+Body:
+Payment was collected from [Client Name]
+
+If invoice number fits cleanly, even better:
+Body:
+Payment was collected from [Client Name] for invoice #INV-xxxxx
+
+IMPORTANT
+- Do NOT redesign UI
+- Do NOT change payment processing flow
+- Do NOT break Stripe webhook/payment success logic
+- This should trigger only after a real successful online payment
+- Do NOT send false positives before payment is actually confirmed
+- Reuse existing push notification infrastructure
+
+REQUIRED BEHAVIOR
+When a client successfully pays an invoice online:
+1. payment is confirmed successfully
+2. owner receives a push notification
+3. notification includes client name
+4. ideally include invoice number if available
+5. notification should only fire once per successful payment event
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the exact success point for online invoice payments.
+2. Trigger the notification only after the payment is truly confirmed/succeeded.
+3. Use the real company owner as the recipient.
+4. Reuse the existing push token / notification service already used elsewhere in EcoLogic.
+5. Make sure duplicate notifications are not sent if:
+   - webhook retries
+   - payment sync runs multiple times
+   - refresh/reprocessing occurs
+6. If partial payments are supported, still notify appropriately on successful payment collection.
+7. Preserve existing payment status syncing and payment records.
+
+TECHNICAL NOTES
+- Best trigger point is likely the backend payment success / Stripe webhook success path, not frontend UI
+- Use the real source of truth for successful payment completion
+- Deduplicate by payment intent / charge / payment record ID if needed
+- If owner-only is the rule, notify only the owner
+- Do not notify random employees unless current app logic intentionally includes them
+
+VALIDATION
+Please verify:
+1. Client pays invoice online
+2. Payment succeeds
+3. Owner receives one push notification
+4. Notification includes client name
+5. No duplicate push notifications are sent
+6. Payment records/status still work correctly
+
+DELIVERABLES
+1. Exact files changed
+2. What payment success event now triggers the push
+3. Who receives the notification
+4. What dedupe logic prevents duplicates
+5. Confirmation that:
+   - owner now gets notified after online invoice payment
+   - client name appears in the notification
+   - no duplicate notifications are sent
+   - payment flow was not broken
+
+Please implement it now.

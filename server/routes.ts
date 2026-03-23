@@ -11860,8 +11860,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sendReceiptForPayment(matchedPayment.id).catch(err =>
           console.error('[receipt] stripe-confirm error:', err?.message));
 
-        // Trigger QB payment sync — in-app PaymentElement path
+        // Notify owner(s) that an online payment was collected
         const confirmCompanyId = (matchedPayment as any).companyId || inv?.companyId;
+        if (confirmCompanyId && inv) {
+          (async () => {
+            try {
+              let clientName = "a client";
+              if (inv.customerId) {
+                const [cust] = await db
+                  .select({ firstName: customers.firstName, lastName: customers.lastName })
+                  .from(customers)
+                  .where(eq(customers.id, inv.customerId));
+                if (cust) {
+                  clientName = [cust.firstName, cust.lastName].filter(Boolean).join(" ") || "a client";
+                }
+              }
+              const invoiceSuffix = inv.invoiceNumber ? ` for invoice #${inv.invoiceNumber}` : "";
+              await createPaymentNotifications({
+                companyId: confirmCompanyId,
+                type: "payment_collected",
+                title: "Payment Received",
+                body: `Payment was collected from ${clientName}${invoiceSuffix}`,
+                entityType: "payment",
+                entityId: matchedPayment.id,
+                linkUrl: `/invoices`,
+              });
+            } catch (err: any) {
+              console.error('[PayNotif] stripe-confirm owner notification error:', err?.message);
+            }
+          })();
+        }
+
+        // Trigger QB payment sync — in-app PaymentElement path
         if (confirmCompanyId) {
           console.log(`[QB-PAY] stripe-confirm upgrade paymentId=${matchedPayment.id} companyId=${confirmCompanyId}`);
           syncPaymentToQbo(matchedPayment.id, confirmCompanyId)
