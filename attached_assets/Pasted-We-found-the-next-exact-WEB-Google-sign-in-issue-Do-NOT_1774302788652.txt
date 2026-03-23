@@ -1,0 +1,127 @@
+We found the next exact WEB Google sign-in issue.
+
+Do NOT touch or risk the iOS native Google sign-in fix.
+
+====================
+WHAT THE LOGS SHOW
+
+On web / preview origin, after Google popup starts, /api/auth/user keeps returning 401.
+
+Important lines:
+
+[auth/google][debug] host=...picard.replit.dev ... platform=popup
+/api/auth/google is being hit correctly for popup flow
+then repeated:
+[MobileAuth] Bearer sessionId not found or expired in DB
+[MobileAuth] Bearer resolved userId: email_...
+User not found in database
+GET /api/auth/user 401
+
+This strongly suggests the WEB app is sending a stale/native Bearer auth token during normal web auth checks, causing /api/auth/user to go through the MobileAuth path instead of relying on the normal web session cookie.
+
+====================
+MOST LIKELY ROOT CAUSE
+
+A stale nativeSessionId or mobile auth header is leaking into the WEB app / preview app.
+
+So after popup completes, the web app may actually be trying to fetch /api/auth/user with:
+
+Authorization: Bearer <nativeSessionId>
+
+instead of:
+
+normal browser session cookie auth
+
+That would explain:
+
+why MobileAuth logs appear during web sign-in
+why user lookup is failing with email_...
+why web stays unauthorized even if popup flow is otherwise okay
+====================
+WHAT I NEED INVESTIGATED
+
+Trace the WEB auth fetch path end-to-end.
+
+Inspect:
+
+GET /api/auth/user on web
+where is it called from
+does web send Authorization header
+if yes, where is that header coming from
+Any shared auth helper / query client logic
+does it automatically attach nativeSessionId
+does it do this on preview/web too
+does it incorrectly treat preview/canvas as native
+client/src/lib/capacitor.ts
+any helpers that read/write nativeSessionId
+any code that runs on web when it should only run on native
+Auth bootstrap on app start
+are we reading localStorage.nativeSessionId on web
+are we attaching it to /api/auth/user on web
+are we forcing bearer auth even when not in native mode
+Preview/canvas environment detection
+is isNativePlatform() wrong anywhere
+is iframe / preview / canvas being treated as native accidentally
+====================
+WHAT I WANT FIXED
+
+Fix WEB auth so that on web:
+
+/api/auth/user uses normal web session auth
+it does NOT send stale native Bearer auth
+any nativeSessionId is ignored on web
+web popup completion can refresh auth correctly
+user leaves sign-in page and enters EcoLogic
+====================
+IMPORTANT SAFETY RULE
+
+Do NOT break iOS native auth.
+
+If nativeSessionId handling is changed:
+
+it must remain active for true native iOS
+it must be ignored for normal web / preview / iframe web
+
+Preferred fix style:
+
+narrow the change to “only attach native Bearer auth when actually running on native platform”
+do not broadly rewrite auth
+====================
+QUESTIONS I NEED ANSWERED
+
+Reply in this exact format:
+
+Exact files inspected
+Exact file/function where /api/auth/user gets its auth headers
+Whether web is currently sending Authorization: Bearer ...
+Where that Bearer token comes from
+Exact root cause of the 401 on web
+Exact files changed
+Exact fix made
+Why this does NOT affect iOS native Google sign-in
+Final web test result
+====================
+LIKELY SMALLEST FIX
+
+If confirmed, the likely smallest correct fix is:
+
+Only use nativeSessionId / Bearer auth when isNativePlatform() is true
+On web, do not attach native Bearer auth to /api/auth/user
+Optionally ignore or clear stale nativeSessionId on web startup so preview/web cannot poison auth checks
+
+But do NOT guess — inspect first and confirm exactly where the header is being attached.
+
+====================
+ACCEPTANCE CRITERIA
+
+This is only fixed if:
+
+web popup sign-in completes
+/api/auth/user no longer goes through MobileAuth on web
+no repeated Bearer-session 401 logs on web
+web app leaves sign-in page
+user lands inside EcoLogic authenticated
+
+And:
+
+iOS native sign-in still works exactly as before
