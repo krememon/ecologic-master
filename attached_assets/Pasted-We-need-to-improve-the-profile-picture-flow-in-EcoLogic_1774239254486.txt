@@ -1,0 +1,80 @@
+We need to improve the profile picture flow in EcoLogic Settings.
+
+GOAL
+When a user uploads a new profile picture from their camera roll, the app should immediately let them crop/edit the image before it gets saved.
+
+DESIRED FLOW
+In Settings → Profile:
+1. User taps profile photo / upload photo
+2. User chooses an image from camera roll
+3. Immediately after selecting it, the user is taken into a crop/edit step
+4. User adjusts/crops the image
+5. User taps Done / Save
+6. The cropped version is what gets uploaded and saved as the profile picture
+
+IMPORTANT
+- Do NOT redesign the full Settings page
+- Do NOT remove current upload behavior
+- This is about adding a crop/edit step after choosing a photo
+- Keep the experience smooth on native iPhone/iPad
+- Preserve existing camera/upload button behavior unless needed for this flow
+- Final saved image should be the cropped one, not the raw original
+
+REQUIRED BEHAVIOR
+For camera roll uploads:
+- selecting a profile photo should open an edit/crop flow immediately
+- user should be able to crop/position the image
+- after confirming, only the edited image is uploaded/saved
+
+If the user cancels out of the crop step:
+- do NOT save the image
+- return cleanly to the previous state
+
+IMPLEMENTATION REQUIREMENTS
+1. Find the Settings → Profile picture upload flow.
+2. Add a crop/edit step immediately after selecting an image from the photo library.
+3. Reuse the platform/native edit UI if already available/preferred.
+4. If a custom cropper is needed, keep it clean and simple.
+5. Make sure the cropped image is what gets uploaded to the backend/storage.
+6. Preserve existing profile-picture update/save logic after the final edited image is confirmed.
+7. Handle:
+   - cancel photo pick
+   - cancel crop/edit
+   - successful crop + upload
+8. Keep the profile image aspect/shape compatible with the app’s avatar display.
+9. Make sure this works in native app builds, not just browser.
+10. Do NOT break existing profile image display elsewhere in the app.
+
+TECHNICAL NOTES
+- If the native iOS photo picker already supports edit/crop, use that if possible
+- Otherwise add a post-selection cropper before upload
+- Preserve image quality reasonably while still outputting an avatar-friendly image
+- Keep the final crop shape/layout appropriate for circular avatar display
+- If compression/resizing is already part of the upload flow, make sure it happens after crop on the final image
+- Make sure uploaded real profile pictures still override fallback initials avatars everywhere
+
+VALIDATION
+Please verify:
+1. Open Settings → Profile
+2. Choose new photo from camera roll
+3. Crop/edit UI appears immediately
+4. Adjust image
+5. Save
+6. Cropped version becomes the profile picture
+
+Also verify:
+7. Canceling crop does not save the photo
+8. Existing profile upload flow still works cleanly
+9. Updated profile image shows correctly across the app
+
+DELIVERABLES
+1. Exact files changed
+2. What crop/edit flow was used
+3. Whether the cropped image or original image is uploaded now
+4. Confirmation that:
+   - user can crop/edit immediately after selecting a profile photo
+   - canceled crops do not save
+   - cropped image saves correctly
+   - profile photo updates still work across the app
+
+Please implement it now.

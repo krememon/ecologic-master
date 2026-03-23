@@ -11,12 +11,18 @@ interface ImageCropModalProps {
   open: boolean;
   onClose: () => void;
   file: File | null;
-  mode: "logo" | "banner";
+  mode: "logo" | "banner" | "avatar";
   onCropped: (file: File) => Promise<void>;
 }
 
 const CROP_CONFIG = {
   logo: {
+    aspect: 1,
+    outputSize: 512,
+    cropShape: "round" as const,
+    showGrid: false,
+  },
+  avatar: {
     aspect: 1,
     outputSize: 512,
     cropShape: "round" as const,
@@ -102,7 +108,7 @@ export default function ImageCropModal({
   const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   const config = CROP_CONFIG[mode];
-  const isLogo = mode === "logo";
+  const isRound = mode === "logo" || mode === "avatar";
 
   const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -135,18 +141,22 @@ export default function ImageCropModal({
 
     setIsProcessing(true);
     try {
-      const outputWidth = isLogo ? CROP_CONFIG.logo.outputSize : CROP_CONFIG.banner.outputWidth;
-      const outputHeight = isLogo ? CROP_CONFIG.logo.outputSize : CROP_CONFIG.banner.outputHeight;
+      const outputWidth = isRound
+        ? (CROP_CONFIG[mode] as typeof CROP_CONFIG.logo).outputSize
+        : CROP_CONFIG.banner.outputWidth;
+      const outputHeight = isRound
+        ? (CROP_CONFIG[mode] as typeof CROP_CONFIG.logo).outputSize
+        : CROP_CONFIG.banner.outputHeight;
       
       const croppedBlob = await createCroppedImage(
         imageSrc,
         croppedAreaPixels,
         outputWidth,
         outputHeight,
-        isLogo
+        isRound
       );
 
-      const fileName = isLogo ? "logo-cropped.png" : "banner-cropped.png";
+      const fileName = mode === "avatar" ? "avatar-cropped.png" : mode === "logo" ? "logo-cropped.png" : "banner-cropped.png";
       const croppedFile = new File([croppedBlob], fileName, { type: "image/png" });
 
       await onCropped(croppedFile);
@@ -163,7 +173,9 @@ export default function ImageCropModal({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-lg max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>{isLogo ? "Edit Logo" : "Edit Banner"}</DialogTitle>
+          <DialogTitle>
+            {mode === "avatar" ? "Edit Profile Photo" : mode === "logo" ? "Edit Logo" : "Edit Banner"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -213,7 +225,7 @@ export default function ImageCropModal({
                   Saving...
                 </>
               ) : (
-                isLogo ? "Save Logo" : "Save Banner"
+                mode === "avatar" ? "Save Photo" : mode === "logo" ? "Save Logo" : "Save Banner"
               )}
             </Button>
           </div>

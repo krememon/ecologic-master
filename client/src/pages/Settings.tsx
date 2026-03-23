@@ -23,6 +23,7 @@ import DeleteAccountModal from "@/components/DeleteAccountModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 import Disable2FAModal from "@/components/Disable2FAModal";
+import ImageCropModal from "@/components/ImageCropModal";
 
 function PushTokenStatus() {
   const { data, isLoading } = useQuery<{ userId: number; count: number; tokens: any[] }>({
@@ -51,6 +52,9 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const [croppedProfileFile, setCroppedProfileFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
   const [profileData, setProfileData] = useState({
@@ -238,29 +242,30 @@ export default function Settings() {
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({
-          title: "Error",
-          description: "Image size must be less than 5MB",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Image size must be less than 10MB",
+        variant: "destructive",
+      });
+      return;
     }
+    setPendingCropFile(file);
+    setCropModalOpen(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCropComplete = async (croppedFile: File) => {
+    setCroppedProfileFile(croppedFile);
+    const previewUrl = URL.createObjectURL(croppedFile);
+    setProfileImagePreview(previewUrl);
   };
 
   const handleImageUpload = () => {
-    const file = fileInputRef.current?.files?.[0];
-    if (file) {
+    if (croppedProfileFile) {
       const formData = new FormData();
-      formData.append("profileImage", file);
+      formData.append("profileImage", croppedProfileFile);
       updateProfilePictureMutation.mutate(formData);
     }
   };
@@ -338,6 +343,8 @@ export default function Settings() {
                       variant="outline"
                       onClick={() => {
                         setProfileImagePreview(null);
+                        setCroppedProfileFile(null);
+                        setPendingCropFile(null);
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                       className="h-8 text-xs"
@@ -711,6 +718,17 @@ export default function Settings() {
       <Disable2FAModal
         open={disable2FAModalOpen}
         onOpenChange={setDisable2FAModalOpen}
+      />
+
+      <ImageCropModal
+        open={cropModalOpen}
+        onClose={() => {
+          setCropModalOpen(false);
+          setPendingCropFile(null);
+        }}
+        file={pendingCropFile}
+        mode="avatar"
+        onCropped={handleCropComplete}
       />
     </div>
   );
