@@ -12,23 +12,33 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[UnhandledRejection]", e.reason);
 });
 
-// Returns true only when we're on a context that requires Bearer auth:
-//   • Capacitor native app (iOS / Android) — session cookies are unreliable in WebViews
-//   • Web preview / canvas on a DIFFERENT origin than the production server — the production
-//     session cookie's domain doesn't match, so we must use Bearer from localStorage instead.
-// On same-origin production web, session cookies work fine and Bearer must NOT be attached
-// (stale or expired tokens in localStorage would poison every request and break auth).
+// Returns true ONLY for Capacitor native (iOS/Android).
+// Web always uses session cookies — Bearer is never needed on web.
+// (The canvas/picard origin uses the same Express process as production, so
+//  exchange-code via relative URL creates a same-domain session cookie.)
 function shouldAttachBearer(): boolean {
   try {
     const cap = (window as any).Capacitor;
-    if (cap?.getPlatform?.() && cap.getPlatform() !== "web") return true; // native iOS/Android
-    const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
-    if (!prodBase) return false; // no production URL configured → same-domain dev
-    return window.location.origin !== prodBase; // cross-domain canvas/preview
+    return !!(cap?.getPlatform?.() && cap.getPlatform() !== "web");
   } catch {
     return false;
   }
 }
+
+// On web startup: immediately clear any stale nativeSessionId from prior attempts.
+// Web auth uses session cookies exclusively; a leftover nativeSessionId would cause
+// every fetch to hit MobileAuth with a dead token and return 401.
+;(() => {
+  try {
+    if (!shouldAttachBearer()) {
+      const stale = (typeof localStorage !== "undefined") && localStorage.getItem("nativeSessionId");
+      if (stale) {
+        console.log("[auth/user][client] source=main.tsx startup: clearing stale nativeSessionId on web — native=false origin=" + window.location.origin);
+        localStorage.removeItem("nativeSessionId");
+      }
+    }
+  } catch {}
+})();
 
 // Global fetch interceptor — automatically attaches Bearer token to every
 // same-origin API request so native sessions work without modifying each fetch call.

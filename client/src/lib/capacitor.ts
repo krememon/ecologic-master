@@ -99,20 +99,29 @@ async function openGoogleAuthPopup(): Promise<void> {
       if (event.data?.type === "google-auth-success") {
         settle();
         const code = event.data.webAuthCode as string | undefined;
-        if (code && prodOrigin) {
-          // Cross-domain completion: exchange the one-time code for a Bearer token
+        if (code) {
+          // Web popup completion: exchange the one-time code for a session by calling the
+          // SAME-ORIGIN exchange-code endpoint (relative URL). The picard canvas and the
+          // production server are the same Express process — a relative /api/auth/exchange-code
+          // request hits the same in-memory authCodeStore and creates a session cookie for
+          // THIS domain (picard.replit.dev). No Bearer / nativeSessionId needed on web.
+          // Native uses exchangeNativeAuthCode() separately — this path is web-only.
+          console.log(`[auth/user][client] source=capacitor.ts native=false origin=${window.location.origin} hasNativeSession=${!!localStorage.getItem("nativeSessionId")} attachBearer=false exchanging code via relative URL`);
           try {
-            const res = await fetch(`${prodOrigin}/api/auth/exchange-code`, {
+            const res = await fetch("/api/auth/exchange-code", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ code }),
               credentials: "include",
             });
             if (res.ok) {
-              const data = await res.json().catch(() => ({}));
-              if (data.sessionId) localStorage.setItem("nativeSessionId", data.sessionId);
+              console.log("[auth/user][client] source=capacitor.ts exchange-code OK — session cookie set on this domain, no Bearer stored");
+            } else {
+              console.warn("[auth/user][client] source=capacitor.ts exchange-code failed:", res.status);
             }
-          } catch { /* ignore */ }
+          } catch (e) {
+            console.warn("[auth/user][client] source=capacitor.ts exchange-code error:", e);
+          }
         }
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         resolve();

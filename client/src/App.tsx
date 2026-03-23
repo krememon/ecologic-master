@@ -311,20 +311,30 @@ function AuthenticatedRouter() {
   }, []);
 
   // Exchange a one-time webAuthCode issued by the production server (for preview
-  // Google OAuth cross-domain redirect) into a Bearer session token.
-  // IMPORTANT: the code lives in the production server's memory, so we must
-  // POST to the production server regardless of which domain the client is on.
+  // Google OAuth cross-domain redirect) into a session.
+  //
+  // Web: call /api/auth/exchange-code at a RELATIVE URL (same-origin picard proxy).
+  //   The picard canvas and the production server are the SAME Express process, so
+  //   the relative call finds the code in the shared in-memory store and creates a
+  //   picard-domain session cookie. No Bearer / nativeSessionId used on web.
+  //
+  // Native (Capacitor): call the production URL, store nativeSessionId for Bearer auth.
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const webAuthCode = params.get("webAuthCode");
     if (!webAuthCode) return;
 
-    console.log("[auth] Found webAuthCode in URL — exchanging for session...");
+    const isNative = !!(window as any).Capacitor?.getPlatform?.() && (window as any).Capacitor.getPlatform() !== "web";
+    const hasNativeSession = !!localStorage.getItem("nativeSessionId");
+    console.log(`[auth/user][client] source=App.tsx webAuthCode native=${isNative} origin=${window.location.origin} hasNativeSession=${hasNativeSession} attachBearer=${isNative}`);
+
     const cleanUrl = window.location.pathname;
     window.history.replaceState({}, document.title, cleanUrl);
 
     const prodBase = (import.meta.env.VITE_APP_BASE_URL as string | undefined) || "";
-    const exchangeUrl = prodBase
+    // Native: must call production URL (exchange-code code is in production's memory for native auth flows).
+    // Web: use relative URL — same Express process, session cookie set for this domain.
+    const exchangeUrl = isNative && prodBase
       ? `${prodBase}/api/auth/exchange-code`
       : "/api/auth/exchange-code";
     console.log("[auth] webAuthCode exchange URL:", exchangeUrl);
@@ -341,19 +351,21 @@ function AuthenticatedRouter() {
           return;
         }
         const data = await res.json();
-        if (data.sessionId) {
+        if (isNative && data.sessionId) {
           localStorage.setItem("nativeSessionId", data.sessionId);
-          console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId");
+          console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId (native)");
+        } else if (!isNative) {
+          console.log("[auth] webAuthCode exchange succeeded — session cookie set (web), no Bearer stored");
         }
         // If this page loaded in a popup (opened by the preview iframe for
         // Google OAuth), close the popup. The opener iframe will detect the
-        // localStorage change via the 'storage' event and reload itself.
+        // auth query invalidation via closedPoll and refetch with cookie auth.
         if (window.opener) {
           console.log("[auth] Running in popup — closing window");
           window.close();
           return;
         }
-        // Otherwise (direct navigation), reload so queries re-run with Bearer token.
+        // Otherwise (direct navigation), reload so queries re-run with cookie auth.
         window.location.reload();
       })
       .catch((err) => {

@@ -30,22 +30,22 @@ function isNativeMobile(): boolean {
   }
 }
 
-// Mirrors the shouldAttachBearer() logic in main.tsx.
-// Returns true on native platforms and cross-domain web previews (canvas / picard origin).
-// Returns false on same-origin production web — session cookies are used there instead.
+// Returns true ONLY for Capacitor native (iOS/Android). Web always uses session cookies.
 function shouldAttachBearer(): boolean {
   try {
     const cap = (window as any).Capacitor;
-    if (cap?.getPlatform?.() && cap.getPlatform() !== "web") return true;
-    const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
-    if (!prodBase) return false;
-    return window.location.origin !== prodBase;
+    return !!(cap?.getPlatform?.() && cap.getPlatform() !== "web");
   } catch {
     return false;
   }
 }
 
 async function fetchAuthUser(): Promise<AuthUser | null> {
+  const native = isNativeMobile();
+  const useBearer = shouldAttachBearer();
+  const hasNativeSession = typeof localStorage !== "undefined" && !!localStorage.getItem("nativeSessionId");
+  console.log(`[auth/user][client] source=useAuth.ts native=${native} origin=${window.location.origin} hasNativeSession=${hasNativeSession} attachBearer=${useBearer}`);
+
   const doFetch = (withBearer: boolean): Promise<Response> => {
     const headers: Record<string, string> = {};
     if (withBearer) {
@@ -59,22 +59,16 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
     return fetch("/api/auth/user", { credentials: "include", cache: "no-store", headers });
   };
 
-  const useBearer = shouldAttachBearer();
   let res = await doFetch(useBearer);
 
   if (res.status === 401) {
-    if (useBearer && !isNativeMobile()) {
-      // Cross-domain web (canvas / preview): Bearer returned 401 → the stored session is
-      // stale or expired. Clear it so subsequent requests don't keep sending the dead token,
-      // then retry with cookie auth (works on same-domain web; returns 401 on cross-domain,
-      // which correctly shows the sign-in page).
-      try { localStorage.removeItem("nativeSessionId"); } catch {}
-      res = await doFetch(false);
-    } else {
+    if (native) {
       // Native: wait briefly and retry — Capacitor WebViews may lag before the session is ready.
       await new Promise((r) => setTimeout(r, 600));
-      res = await doFetch(isNativeMobile());
+      res = await doFetch(true);
     }
+    // Web: no retry with Bearer — session cookies are the only auth mechanism on web.
+    // If 401 on web, the user simply isn't authenticated (show sign-in page).
   }
 
   if (res.status === 401) {

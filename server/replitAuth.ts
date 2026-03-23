@@ -1367,15 +1367,20 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const hasPassport = typeof req.isAuthenticated === "function";
   const isAuthed = hasPassport ? req.isAuthenticated() : !!req.user;
-  
+  const _authHdr = req.headers['authorization'] || '';
+  const _hasAuthorization = _authHdr.startsWith('Bearer ');
+  const _usingMobileAuth = _hasAuthorization && !!((req as any)._mobileSessionUserId);
+  if (req.path === '/api/auth/user') {
+    console.log(`[auth/user][server] hasAuthorization=${_hasAuthorization} usingMobileAuth=${_usingMobileAuth} hasCookie=${!!req.headers.cookie} host=${req.headers.host} origin=${req.headers.origin || '-'} mobileUserId=${(req as any)._mobileSessionUserId || 'none'}`);
+  }
+
   if (!isAuthed || !req.user) {
     if (process.env.AUTH_DEBUG === 'true' || req.path === '/api/auth/user') {
-      const authHdr = req.headers['authorization'] || '';
       console.log("[auth] 401:", {
         path: req.path,
         hasCookie: !!req.headers.cookie,
-        hasBearer: authHdr.startsWith('Bearer '),
-        bearerPrefix: authHdr ? authHdr.substring(0, 16) : '(none)',
+        hasBearer: _hasAuthorization,
+        bearerPrefix: _authHdr ? _authHdr.substring(0, 16) : '(none)',
         hasSessionID: !!req.sessionID,
         mobileUserId: (req as any)._mobileSessionUserId || null,
         secure: req.secure,

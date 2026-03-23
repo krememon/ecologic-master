@@ -1,0 +1,110 @@
+We still do NOT have the web auth cleanup fully fixed.
+
+The latest logs prove the web app is STILL sending Bearer auth on web, which is wrong.
+
+What the logs show:
+
+popup flow starts correctly with platform=popup
+but /api/auth/user is still hitting the MobileAuth path
+server logs:
+[MobileAuth] Bearer resolved userId: ...
+User not found in database
+GET /api/auth/user 401
+
+That means some web code path is STILL attaching Authorization: Bearer <nativeSessionId> during web auth checks.
+
+This must be fixed without affecting iOS native.
+
+====================
+WHAT I NEED YOU TO DO
+
+Trace every place the web app can attach Bearer auth.
+
+I want a complete audit of all client-side auth request paths for /api/auth/user and any shared fetch/query helpers.
+
+Inspect ALL of these:
+
+client/src/lib/capacitor.ts
+every place nativeSessionId is read
+every place Authorization: Bearer is added
+every helper that fetches /api/auth/user
+every helper that calls exchange / post-auth refresh
+client/src/App.tsx
+all /api/auth/user refreshes
+all startup auth bootstrap logic
+any direct fetches with headers
+any web popup completion effect
+Shared query/fetch helpers
+query client defaults
+custom fetch wrapper
+any helper that auto-attaches auth headers
+Web-only popup logic
+after popup closes / after webAuthCode, what exact code refetches /api/auth/user
+whether that code is using normal cookie auth or mistakenly using native Bearer auth
+====================
+MOST LIKELY ISSUE
+
+One of these is still true:
+
+same-domain web is still allowed to use nativeSessionId
+preview/canvas origin is still being mistaken for native
+one direct /api/auth/user fetch path was missed and still adds Bearer
+stale nativeSessionId is still being read from localStorage on web and used before platform/origin guards run
+there are multiple auth/user fetch implementations and only some were fixed
+====================
+WHAT I WANT FIXED
+
+On WEB:
+
+/api/auth/user must use normal browser session auth only
+no Authorization: Bearer header on web popup/sign-in flow
+stale nativeSessionId must be ignored on web
+optionally clear stale nativeSessionId on web startup if not native
+
+On iOS native:
+
+keep current Bearer auth behavior exactly as-is
+do not break the working native Google sign-in flow
+====================
+ADD THESE TEMP LOGS
+
+On the CLIENT, for every /api/auth/user request:
+
+log source function/file
+log whether Authorization header is being attached
+log whether app thinks it is native or web
+log current origin
+log whether nativeSessionId exists in localStorage
+
+Example style:
+
+[auth/user][client] source=App.tsx native=false origin=https://... hasNativeSession=true attachBearer=true
+
+On the SERVER, in /api/auth/user:
+
+log whether request had Authorization header
+log whether request used session-cookie auth vs MobileAuth path
+
+Example:
+
+[auth/user][server] hasAuthorization=true usingMobileAuth=true
+[auth/user][server] hasAuthorization=false usingSessionAuth=true
+====================
+REPLY IN THIS EXACT FORMAT
+Exact files inspected
+Every exact place still attaching Bearer auth on web
+Exact root cause of why web is still hitting MobileAuth
+Exact files changed
+Exact fix made
+Why this does NOT affect iOS native Google sign-in
+Final test result:
+same-domain web
+preview/canvas web
+iOS native
+====================
+IMPORTANT
+
+Do NOT guess.
+Find the exact remaining path that still attaches Bearer on web.
+
+The current logs prove the previous fix was incomplete because /api/auth/user is still arriving with Bearer auth on web.

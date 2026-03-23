@@ -1,23 +1,16 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /**
- * Returns Authorization header if a native session token is stored in localStorage AND
- * we're in a context that actually requires Bearer auth:
- *   • Capacitor native (iOS / Android)
- *   • Cross-domain web preview (canvas / picard origin ≠ production origin)
- * On same-origin production web, session cookies handle auth — attaching a stale
- * nativeSessionId as Bearer would force every request through the MobileAuth path and
- * return 401 if that session expired, breaking all API calls.
+ * Returns Authorization header ONLY for Capacitor native (iOS/Android).
+ * Web always uses session cookies — Bearer is never attached on web.
+ * The canvas/picard origin uses exchange-code via relative URL to get a
+ * same-domain session cookie, so Bearer is not needed there either.
  */
 function getNativeAuthHeaders(): Record<string, string> {
   try {
     const cap = (window as any).Capacitor;
-    const isNative = cap?.getPlatform?.() && cap.getPlatform() !== "web";
-    if (!isNative) {
-      // On web: only attach Bearer when the current origin differs from the production server.
-      const prodBase = ((import.meta.env as any).VITE_APP_BASE_URL || "").replace(/\/$/, "");
-      if (!prodBase || window.location.origin === prodBase) return {};
-    }
+    const isNative = !!(cap?.getPlatform?.() && cap.getPlatform() !== "web");
+    if (!isNative) return {};
     const sessionId = typeof localStorage !== "undefined"
       ? localStorage.getItem("nativeSessionId")
       : null;
