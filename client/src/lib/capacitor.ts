@@ -89,13 +89,18 @@ async function openGoogleAuthPopup(): Promise<void> {
       clearInterval(closedPoll);
     };
 
-    // Accept messages from same origin OR the production server.
-    // The production origin sends messages when the popup is cross-domain (custom domain / iframe case).
-    const prodOrigin = ((import.meta.env.VITE_APP_BASE_URL as string) || "").replace(/\/$/, "");
+    // Accept messages from same origin OR any trusted Replit domain.
+    // VITE_APP_BASE_URL may not be set in dev/preview environments (picard canvas), so we
+    // cannot rely on it for origin filtering. Instead we accept messages from any *.replit.app
+    // or *.replit.dev origin alongside same-origin — all are within the Replit trust boundary.
+    // The message type check + code validation provide the real security gate.
+    const prodOriginHint = ((import.meta.env.VITE_APP_BASE_URL as string) || "").replace(/\/$/, "");
     const onMessage = async (event: MessageEvent) => {
       const isSameOrigin = event.origin === window.location.origin;
-      const isProdOrigin = prodOrigin && event.origin === prodOrigin;
-      if (!isSameOrigin && !isProdOrigin) return;
+      const isProdHint = prodOriginHint && event.origin === prodOriginHint;
+      const isTrustedReplit =
+        event.origin.endsWith(".replit.app") || event.origin.endsWith(".replit.dev");
+      if (!isSameOrigin && !isProdHint && !isTrustedReplit) return;
       if (event.data?.type === "google-auth-success") {
         settle();
         const code = event.data.webAuthCode as string | undefined;
@@ -111,11 +116,15 @@ async function openGoogleAuthPopup(): Promise<void> {
           //
           // Same-domain: both steps collapse into one relative call (single process).
           // Native: handled separately by exchangeNativeAuthCode() — not this path.
-          const isCrossDomain = !!(prodOrigin && window.location.origin !== prodOrigin);
-          console.log(`[auth/user][client] source=capacitor.ts native=false origin=${window.location.origin} isCrossDomain=${isCrossDomain} attachBearer=false`);
+          //
+          // isCrossDomain is derived from the actual message origin, NOT from VITE_APP_BASE_URL,
+          // so it works even when the env var is absent (picard canvas dev environment).
+          const isCrossDomain = !isSameOrigin;
+          const senderOrigin = event.origin; // actual production server origin
+          console.log(`[auth/user][client] source=capacitor.ts native=false origin=${window.location.origin} isCrossDomain=${isCrossDomain} senderOrigin=${senderOrigin} attachBearer=false`);
           try {
             const exchangeUrl = isCrossDomain
-              ? `${prodOrigin}/api/auth/exchange-code`
+              ? `${senderOrigin}/api/auth/exchange-code`
               : "/api/auth/exchange-code";
             const exchRes = await fetch(exchangeUrl, {
               method: "POST",

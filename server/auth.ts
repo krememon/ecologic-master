@@ -1740,6 +1740,8 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
 
   // Logout
   app.post("/api/logout", (req, res, next) => {
+    const userId = (req.user as any)?.id || "unknown";
+    console.log(`[logout][server] POST /api/logout — host=${req.headers.host} origin=${req.headers.origin || "-"} referer=${req.headers.referer || "-"} userId=${userId} hasCookie=${!!req.headers.cookie} hasBearer=${req.headers.authorization?.startsWith("Bearer ") ?? false}`);
     req.logout((err) => {
       if (err) return next(err);
       res.json({ message: "Logout successful" });

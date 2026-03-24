@@ -476,6 +476,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                 <button 
                   onClick={async () => {
                     try {
+                      console.log("[logout][client] MobileNav logout button clicked");
                       await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                     } catch {}
                     try {

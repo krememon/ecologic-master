@@ -190,6 +190,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
         <button 
           onClick={async () => {
             try {
+              console.log("[logout][client] Sidebar logout button clicked");
               await fetch('/api/logout', { method: 'POST', credentials: 'include' });
             } catch {}
             try {

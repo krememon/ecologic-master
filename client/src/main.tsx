@@ -43,6 +43,8 @@ function shouldAttachBearer(): boolean {
 // Global fetch interceptor — automatically attaches Bearer token to every
 // same-origin API request so native sessions work without modifying each fetch call.
 // Only fires when shouldAttachBearer() is true (native or cross-domain web preview).
+// Also logs a stack trace whenever POST /api/logout is called so we can identify
+// the exact caller when logout fires unexpectedly.
 (function installFetchInterceptor() {
   const _fetch = window.fetch.bind(window);
   window.fetch = function(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -52,6 +54,14 @@ function shouldAttachBearer(): boolean {
         : input instanceof URL
           ? input.toString()
           : (input as Request).url;
+      const method = (init?.method || "GET").toUpperCase();
+
+      // Diagnostic: capture stack trace for every logout call
+      if (method === "POST" && (url === "/api/logout" || url.endsWith("/api/logout"))) {
+        console.log("[logout][client] POST /api/logout intercepted — stack trace follows:");
+        console.trace("[logout][client] logout call site");
+      }
+
       const isSameOrigin = url.startsWith("/") || url.startsWith(window.location.origin);
       if (isSameOrigin && shouldAttachBearer()) {
         const sid = localStorage.getItem("nativeSessionId");
