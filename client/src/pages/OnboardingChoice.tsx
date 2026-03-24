@@ -12,10 +12,10 @@ if (import.meta.env.DEV) {
 export default function OnboardingChoice() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingChoice, setSubmittingChoice] = useState<"owner" | "employee" | null>(null);
 
   const handleChoice = async (choice: "owner" | "employee") => {
-    setIsSubmitting(true);
+    setSubmittingChoice(choice);
     try {
       const res = await apiRequest("POST", "/api/auth/onboarding-choice", { choice });
       if (!res.ok) {
@@ -37,7 +37,7 @@ export default function OnboardingChoice() {
         variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false);
+      setSubmittingChoice(null);
     }
   };
 
@@ -90,11 +90,11 @@ export default function OnboardingChoice() {
               <button
                 type="button"
                 onClick={() => handleChoice("owner")}
-                disabled={isSubmitting}
+                disabled={submittingChoice !== null}
                 className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  {isSubmitting ? (
+                  {submittingChoice === "owner" ? (
                     <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
                   ) : (
                     <BadgePlus className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -108,11 +108,11 @@ export default function OnboardingChoice() {
               <button
                 type="button"
                 onClick={() => handleChoice("employee")}
-                disabled={isSubmitting}
+                disabled={submittingChoice !== null}
                 className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  {isSubmitting ? (
+                  {submittingChoice === "employee" ? (
                     <Loader2 className="w-6 h-6 text-green-600 dark:text-green-400 animate-spin" />
                   ) : (
                     <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
