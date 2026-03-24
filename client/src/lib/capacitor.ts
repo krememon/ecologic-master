@@ -100,27 +100,52 @@ async function openGoogleAuthPopup(): Promise<void> {
         settle();
         const code = event.data.webAuthCode as string | undefined;
         if (code) {
-          // Web popup completion: exchange the one-time code for a session by calling the
-          // SAME-ORIGIN exchange-code endpoint (relative URL). The picard canvas and the
-          // production server are the same Express process — a relative /api/auth/exchange-code
-          // request hits the same in-memory authCodeStore and creates a session cookie for
-          // THIS domain (picard.replit.dev). No Bearer / nativeSessionId needed on web.
-          // Native uses exchangeNativeAuthCode() separately — this path is web-only.
-          console.log(`[auth/user][client] source=capacitor.ts native=false origin=${window.location.origin} hasNativeSession=${!!localStorage.getItem("nativeSessionId")} attachBearer=false exchanging code via relative URL`);
+          // Web popup completion — two-step session handoff for cross-domain preview/canvas:
+          //
+          // The picard canvas and the production server are SEPARATE Node processes with
+          // SEPARATE in-memory authCodeStores. The webAuthCode was stored in the PRODUCTION
+          // server's authCodeStore, so exchange-code MUST be called on the production server.
+          // After exchange, we adopt the resulting production session into the LOCAL (picard)
+          // server via POST /api/auth/adopt-session — picard looks up the session from the
+          // shared PostgreSQL table and runs req.login() to issue a picard-domain cookie.
+          //
+          // Same-domain: both steps collapse into one relative call (single process).
+          // Native: handled separately by exchangeNativeAuthCode() — not this path.
+          const isCrossDomain = !!(prodOrigin && window.location.origin !== prodOrigin);
+          console.log(`[auth/user][client] source=capacitor.ts native=false origin=${window.location.origin} isCrossDomain=${isCrossDomain} attachBearer=false`);
           try {
-            const res = await fetch("/api/auth/exchange-code", {
+            const exchangeUrl = isCrossDomain
+              ? `${prodOrigin}/api/auth/exchange-code`
+              : "/api/auth/exchange-code";
+            const exchRes = await fetch(exchangeUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ code }),
               credentials: "include",
             });
-            if (res.ok) {
-              console.log("[auth/user][client] source=capacitor.ts exchange-code OK — session cookie set on this domain, no Bearer stored");
+            if (exchRes.ok) {
+              const data = await exchRes.json().catch(() => ({}));
+              if (isCrossDomain && data.sessionId) {
+                // Adopt the production session into the local picard server
+                const adoptRes = await fetch("/api/auth/adopt-session", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ sessionId: data.sessionId }),
+                  credentials: "include",
+                });
+                if (adoptRes.ok) {
+                  console.log("[auth/user][client] source=capacitor.ts adopt-session OK — picard session cookie set, no Bearer stored");
+                } else {
+                  console.warn("[auth/user][client] source=capacitor.ts adopt-session failed:", adoptRes.status);
+                }
+              } else {
+                console.log("[auth/user][client] source=capacitor.ts exchange-code OK — same-domain session cookie set");
+              }
             } else {
-              console.warn("[auth/user][client] source=capacitor.ts exchange-code failed:", res.status);
+              console.warn("[auth/user][client] source=capacitor.ts exchange-code failed:", exchRes.status);
             }
           } catch (e) {
-            console.warn("[auth/user][client] source=capacitor.ts exchange-code error:", e);
+            console.warn("[auth/user][client] source=capacitor.ts exchange error:", e);
           }
         }
         queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });

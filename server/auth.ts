@@ -1529,6 +1529,76 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
     }
   });
 
+  // adopt-session: lets the preview/canvas (picard) server adopt a session that was
+  // created on the production server during Google OAuth. The picard server and the
+  // production server are SEPARATE processes with separate in-memory authCodeStores,
+  // but they share a single PostgreSQL session table. After exchange-code runs on
+  // production, the canvas calls adopt-session (relative URL → picard server), which
+  // looks the session up in the shared DB and runs req.login() to create a local
+  // picard-domain session cookie. No Bearer / nativeSessionId ever stored on web.
+  app.options("/api/auth/adopt-session", (req, res) => {
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    }
+    res.sendStatus(204);
+  });
+
+  app.post("/api/auth/adopt-session", async (req, res) => {
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId || typeof sessionId !== "string") {
+        return res.status(400).json({ message: "sessionId is required" });
+      }
+      const { pool: dbPool } = await import('./db');
+      const result = await dbPool.query(
+        'SELECT sess FROM sessions WHERE sid = $1 AND expire > NOW()',
+        [sessionId]
+      );
+      if (result.rows.length === 0) {
+        console.log(`[adopt-session] Session not found or expired (sid=${sessionId.substring(0, 8)}…)`);
+        return res.status(401).json({ message: "Invalid or expired session" });
+      }
+      const sess = result.rows[0].sess;
+      const passportUser = sess?.passport?.user;
+      if (!passportUser) {
+        console.log(`[adopt-session] No passport.user in session`);
+        return res.status(401).json({ message: "Invalid session data" });
+      }
+      const userId = typeof passportUser === 'object' && passportUser?.id
+        ? String(passportUser.id)
+        : String(passportUser);
+      const { storage } = await import('./storage');
+      const user = await storage.getUser(userId);
+      if (!user) {
+        console.log(`[adopt-session] User not found in DB: userId=${userId}`);
+        return res.status(404).json({ message: "User not found" });
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[adopt-session] Login error:", loginErr);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        req.session.save((saveErr) => {
+          if (saveErr) console.error("[adopt-session] Session save warning:", saveErr);
+          console.log(`[adopt-session] Local session created for userId=${user.id} host=${req.headers.host}`);
+          return res.json({ ok: true, userId: user.id });
+        });
+      });
+    } catch (error) {
+      console.error("[adopt-session] Error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));
   app.get("/api/auth/facebook/callback", passport.authenticate("facebook", { successRedirect: "/", failureRedirect: "/auth" }));
 

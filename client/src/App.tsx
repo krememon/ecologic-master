@@ -332,12 +332,15 @@ function AuthenticatedRouter() {
     window.history.replaceState({}, document.title, cleanUrl);
 
     const prodBase = (import.meta.env.VITE_APP_BASE_URL as string | undefined) || "";
-    // Native: must call production URL (exchange-code code is in production's memory for native auth flows).
-    // Web: use relative URL — same Express process, session cookie set for this domain.
-    const exchangeUrl = isNative && prodBase
+    // isCrossDomain: web preview/canvas on picard origin ≠ production server.
+    // The code was created in the PRODUCTION server's in-memory authCodeStore, so
+    // exchange-code MUST be called there. Then for cross-domain web, adopt that
+    // production session into the local (picard) server for cookie auth.
+    const isCrossDomain = !isNative && !!(prodBase && window.location.origin !== prodBase);
+    const exchangeUrl = (isNative || isCrossDomain) && prodBase
       ? `${prodBase}/api/auth/exchange-code`
       : "/api/auth/exchange-code";
-    console.log("[auth] webAuthCode exchange URL:", exchangeUrl);
+    console.log("[auth] webAuthCode exchange URL:", exchangeUrl, "isCrossDomain:", isCrossDomain);
 
     fetch(exchangeUrl, {
       method: "POST",
@@ -354,8 +357,22 @@ function AuthenticatedRouter() {
         if (isNative && data.sessionId) {
           localStorage.setItem("nativeSessionId", data.sessionId);
           console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId (native)");
-        } else if (!isNative) {
-          console.log("[auth] webAuthCode exchange succeeded — session cookie set (web), no Bearer stored");
+        } else if (isCrossDomain && data.sessionId) {
+          // Adopt the production session into the local picard-domain session
+          const adoptRes = await fetch("/api/auth/adopt-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: data.sessionId }),
+            credentials: "include",
+          });
+          if (adoptRes.ok) {
+            console.log("[auth] webAuthCode adopt-session OK — picard session cookie set (web), no Bearer stored");
+          } else {
+            console.error("[auth] webAuthCode adopt-session failed:", adoptRes.status);
+            return;
+          }
+        } else if (!isNative && !isCrossDomain) {
+          console.log("[auth] webAuthCode exchange succeeded — session cookie set (same-domain web)");
         }
         // If this page loaded in a popup (opened by the preview iframe for
         // Google OAuth), close the popup. The opener iframe will detect the
