@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, Search, Settings2, X, FolderOpen, Pencil } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import type { ServiceCatalogItem, PricebookCategory } from "@shared/schema";
@@ -24,91 +24,25 @@ const UNIT_OPTIONS = [
   { value: "day", label: "Day" },
 ];
 
-function ItemRow({
-  item,
-  catName,
-  showCatBadge,
-  onEdit,
-  onDelete,
-}: {
-  item: ServiceCatalogItem;
-  catName?: string;
-  showCatBadge?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-
-  return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{item.name}</div>
-        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
-          <span>{formatCurrency(item.defaultPriceCents)}</span>
-          <span className="text-slate-300 dark:text-slate-600">·</span>
-          <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
-          {showCatBadge && catName && (
-            <>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded text-[11px] font-medium">
-                {catName}
-              </span>
-            </>
-          )}
-          {showCatBadge && !catName && (
-            <>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="text-slate-400 dark:text-slate-500 text-[11px]">Uncategorized</span>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
-        >
-          <Edit2 className="h-3.5 w-3.5" />
-        </button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <button className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="ecologic-alert-dialog">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Item</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete "{item.name}"? This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </div>
-  );
-}
+type ActiveView =
+  | { type: "list" }
+  | { type: "category"; categoryId: number; categoryName: string }
+  | { type: "uncategorized" };
 
 export default function PriceBook() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { can } = useCan();
 
+  const [view, setView] = useState<ActiveView>({ type: "list" });
+  const [listSearch, setListSearch] = useState("");
+  const [detailSearch, setDetailSearch] = useState("");
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ServiceCatalogItem | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<number | null>(null);
   const [renamingCategoryName, setRenamingCategoryName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const [priceDisplay, setPriceDisplay] = useState("");
   const [formData, setFormData] = useState({
     name: "",
@@ -128,6 +62,8 @@ export default function PriceBook() {
     queryKey: ['/api/service-catalog/categories'],
     enabled: isAuthenticated && can('customize.manage'),
   });
+
+  // ── Mutations ──────────────────────────────────────────────────
 
   const createItemMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -196,13 +132,18 @@ export default function PriceBook() {
 
   const deleteCategoryMutation = useMutation({
     mutationFn: async (id: number) => { await apiRequest('DELETE', `/api/service-catalog/categories/${id}`); },
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+      if (view.type === "category" && view.categoryId === deletedId) {
+        setView({ type: "list" });
+      }
       toast({ title: "Category deleted", description: "Items moved to Uncategorized" });
     },
     onError: () => toast({ title: "Error", description: "Failed to delete category", variant: "destructive" }),
   });
+
+  // ── Form helpers ───────────────────────────────────────────────
 
   const resetItemForm = () => {
     setFormData({ name: "", description: "", defaultPriceCents: 0, unit: "each", categoryId: null, taskCode: "" });
@@ -211,8 +152,10 @@ export default function PriceBook() {
 
   const openCreateItemDialog = (prefillCategoryId?: number | null) => {
     resetItemForm();
-    if (prefillCategoryId != null) {
+    if (prefillCategoryId !== undefined) {
       setFormData(f => ({ ...f, categoryId: prefillCategoryId }));
+    } else if (view.type === "category") {
+      setFormData(f => ({ ...f, categoryId: view.categoryId }));
     }
     setEditingItem(null);
     setIsItemDialogOpen(true);
@@ -244,6 +187,9 @@ export default function PriceBook() {
     }
   };
 
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
   const handlePriceChange = (value: string) => {
     const stripped = value.replace(/,/g, '');
     const cleanValue = stripped.replace(/[^0-9.]/g, '');
@@ -270,6 +216,8 @@ export default function PriceBook() {
     setPriceDisplay(formatted.endsWith('.00') ? formatted.slice(0, -3) : formatted);
   };
 
+  // ── Auth guard ─────────────────────────────────────────────────
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -290,21 +238,178 @@ export default function PriceBook() {
     );
   }
 
-  const isSearching = searchQuery.trim().length > 0;
+  // ── Derived data ───────────────────────────────────────────────
 
-  // Search: flat list across all items
-  const searchResults = isSearching
-    ? catalogItems.filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
+  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId);
+
+  const itemsForCurrentCategory = view.type === "category"
+    ? catalogItems.filter(item => (item as any).categoryId === view.categoryId)
+    : view.type === "uncategorized"
+    ? uncategorizedItems
     : [];
 
-  // Section data for normal (non-search) view
-  const categoriesWithItems = categories.filter(cat =>
-    catalogItems.some(item => (item as any).categoryId === cat.id)
+  const detailFiltered = itemsForCurrentCategory.filter(item =>
+    !detailSearch.trim() ||
+    item.name.toLowerCase().includes(detailSearch.toLowerCase()) ||
+    (item.description && item.description.toLowerCase().includes(detailSearch.toLowerCase()))
   );
-  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId);
+
+  // List-level search: matches categories by name OR items by name (shows category rows that match)
+  const listSearchLower = listSearch.trim().toLowerCase();
+  const filteredCategories = listSearchLower
+    ? categories.filter(cat => {
+        if (cat.name.toLowerCase().includes(listSearchLower)) return true;
+        return catalogItems.some(
+          item => (item as any).categoryId === cat.id &&
+            (item.name.toLowerCase().includes(listSearchLower) ||
+             (item.description && item.description.toLowerCase().includes(listSearchLower)))
+        );
+      })
+    : categories;
+
+  const showUncategorized = uncategorizedItems.length > 0 &&
+    (!listSearchLower || "uncategorized".includes(listSearchLower) ||
+      uncategorizedItems.some(item =>
+        item.name.toLowerCase().includes(listSearchLower) ||
+        (item.description && item.description.toLowerCase().includes(listSearchLower))
+      ));
+
+  // ── Category detail view ───────────────────────────────────────
+
+  if (view.type === "category" || view.type === "uncategorized") {
+    const title = view.type === "category" ? view.categoryName : "Uncategorized";
+    const currentCatId = view.type === "category" ? view.categoryId : null;
+
+    return (
+      <div className="container mx-auto px-4 py-6 max-w-2xl">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5">
+          <button
+            onClick={() => { setView({ type: "list" }); setDetailSearch(""); }}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Price Book</p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
+          </div>
+          <Button onClick={() => openCreateItemDialog(currentCatId)} className="bg-teal-600 hover:bg-teal-700">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Item
+          </Button>
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder={`Search in ${title}...`}
+            value={detailSearch}
+            onChange={(e) => setDetailSearch(e.target.value)}
+            className="pl-10"
+          />
+          {detailSearch && (
+            <button
+              onClick={() => setDetailSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Items */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+          </div>
+        ) : detailFiltered.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14">
+            {detailSearch ? (
+              <>
+                <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+                <p className="text-slate-500 dark:text-slate-400">No items match "{detailSearch}"</p>
+              </>
+            ) : (
+              <>
+                <Tag className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+                <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No items here yet</p>
+                <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">Add your first item to this category</p>
+                <Button onClick={() => openCreateItemDialog(currentCatId)} className="bg-teal-600 hover:bg-teal-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          <>
+            {detailSearch && (
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 px-1">
+                {detailFiltered.length} result{detailFiltered.length !== 1 ? 's' : ''}
+              </p>
+            )}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+              {detailFiltered.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <span>{formatCurrency(item.defaultPriceCents)}</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEditItemDialog(item)}
+                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="ecologic-alert-dialog">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Item</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{item.name}"? This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteItemMutation.mutate(item.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Shared dialogs */}
+        {itemDialog()}
+      </div>
+    );
+  }
+
+  // ── Category list view (main) ──────────────────────────────────
 
   const totalItems = catalogItems.length;
 
@@ -320,10 +425,9 @@ export default function PriceBook() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {totalItems} item{totalItems !== 1 ? 's' : ''}
+            {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'} · {totalItems} item{totalItems !== 1 ? 's' : ''}
           </p>
         </div>
-        {/* Category management — right side of header */}
         <button
           onClick={() => setIsCategoryDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
@@ -331,25 +435,21 @@ export default function PriceBook() {
           <FolderOpen className="h-4 w-4" />
           <span className="hidden sm:inline">Categories</span>
         </button>
-        <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add Item
-        </Button>
       </div>
 
       {/* Search */}
       <div className="relative mb-5">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <Input
           type="text"
-          placeholder="Search items..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search categories or items..."
+          value={listSearch}
+          onChange={(e) => setListSearch(e.target.value)}
           className="pl-10"
         />
-        {searchQuery && (
+        {listSearch && (
           <button
-            onClick={() => setSearchQuery("")}
+            onClick={() => setListSearch("")}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
             <X className="h-4 w-4" />
@@ -357,156 +457,95 @@ export default function PriceBook() {
         )}
       </div>
 
-      {isLoading ? (
+      {/* Loading */}
+      {isLoading || categoriesLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
         </div>
-      ) : isSearching ? (
-        /* ── Search results: flat list with category badge ── */
-        <div>
-          {searchResults.length === 0 ? (
-            <div className="text-center py-14">
-              <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-              <p className="text-slate-500 dark:text-slate-400">No items match "{searchQuery}"</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 px-1">
-                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
-              </p>
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-                {searchResults.map(item => {
-                  const catName = categories.find(c => c.id === (item as any).categoryId)?.name;
-                  return (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      catName={catName}
-                      showCatBadge
-                      onEdit={() => openEditItemDialog(item)}
-                      onDelete={() => deleteItemMutation.mutate(item.id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : totalItems === 0 && categories.length === 0 ? (
-        /* ── Empty state ── */
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14">
-          <DollarSign className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-          <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No items yet</p>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">Add your first item to get started</p>
-          <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
+
+      /* Empty — no categories at all */
+      ) : categories.length === 0 && uncategorizedItems.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14 px-6">
+          <FolderOpen className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+          <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No categories yet</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
+            Create a category to start organizing your price book
+          </p>
+          <Button onClick={() => setIsCategoryDialogOpen(true)} className="bg-teal-600 hover:bg-teal-700">
             <Plus className="h-4 w-4 mr-2" />
-            Add Item
+            Create Category
           </Button>
         </div>
-      ) : (
-        /* ── Section view ── */
-        <div className="space-y-5">
 
-          {/* Category sections (only categories that have items) */}
-          {categoriesWithItems.map(cat => {
-            const items = catalogItems.filter(item => (item as any).categoryId === cat.id);
+      /* Search returned nothing */
+      ) : filteredCategories.length === 0 && !showUncategorized ? (
+        <div className="text-center py-14">
+          <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+          <p className="text-slate-500 dark:text-slate-400">No results for "{listSearch}"</p>
+        </div>
+
+      /* Category list */
+      ) : (
+        <div className="space-y-2">
+          {filteredCategories.map(cat => {
+            const count = catalogItems.filter(item => (item as any).categoryId === cat.id).length;
             return (
-              <div key={cat.id}>
-                {/* Section header */}
-                <div className="flex items-center justify-between mb-1.5 px-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                      {cat.name}
-                    </h2>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">
-                      {items.length}
-                    </span>
+              <button
+                key={cat.id}
+                onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
+                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all text-left group"
+              >
+                {/* Icon */}
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                  <FolderOpen className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                </div>
+                {/* Name + count */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    {cat.name}
                   </div>
-                  <button
-                    onClick={() => openCreateItemDialog(cat.id)}
-                    className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add
-                  </button>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    {count === 0 ? "No items" : `${count} item${count !== 1 ? 's' : ''}`}
+                  </div>
                 </div>
-                {/* Items card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-                  {items.map(item => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onEdit={() => openEditItemDialog(item)}
-                      onDelete={() => deleteItemMutation.mutate(item.id)}
-                    />
-                  ))}
-                </div>
-              </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+              </button>
             );
           })}
 
-          {/* Empty categories (categories with no items get a subtle placeholder) */}
-          {categories
-            .filter(cat => !catalogItems.some(item => (item as any).categoryId === cat.id))
-            .map(cat => (
-              <div key={cat.id}>
-                <div className="flex items-center justify-between mb-1.5 px-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-                      {cat.name}
-                    </h2>
-                    <span className="text-xs text-slate-300 dark:text-slate-600">0</span>
-                  </div>
-                  <button
-                    onClick={() => openCreateItemDialog(cat.id)}
-                    className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add
-                  </button>
+          {/* Uncategorized row */}
+          {showUncategorized && (
+            <button
+              onClick={() => { setView({ type: "uncategorized" }); setDetailSearch(""); }}
+              className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md transition-all text-left group"
+            >
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                <Tag className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-700 dark:text-slate-300 truncate">
+                  Uncategorized
                 </div>
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-dashed border-slate-200 dark:border-slate-700 py-4 px-4 text-center">
-                  <p className="text-xs text-slate-400 dark:text-slate-500">No items in this category</p>
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  {uncategorizedItems.length} item{uncategorizedItems.length !== 1 ? 's' : ''}
                 </div>
               </div>
-            ))}
-
-          {/* Uncategorized section */}
-          {uncategorizedItems.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5 px-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    Uncategorized
-                  </h2>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">
-                    {uncategorizedItems.length}
-                  </span>
-                </div>
-                <button
-                  onClick={() => openCreateItemDialog(null)}
-                  className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add
-                </button>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-                {uncategorizedItems.map(item => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    onEdit={() => openEditItemDialog(item)}
-                    onDelete={() => deleteItemMutation.mutate(item.id)}
-                  />
-                ))}
-              </div>
-            </div>
+              <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors flex-shrink-0" />
+            </button>
           )}
         </div>
       )}
 
-      {/* ── Add / Edit Item Dialog ── */}
+      {/* Shared dialogs */}
+      {itemDialog()}
+      {categoryDialog()}
+    </div>
+  );
+
+  // ── Dialog renderers (shared between both views) ───────────────
+
+  function itemDialog() {
+    return (
       <Dialog open={isItemDialogOpen} onOpenChange={(open) => {
         setIsItemDialogOpen(open);
         if (!open) { resetItemForm(); setEditingItem(null); }
@@ -648,8 +687,11 @@ export default function PriceBook() {
           </div>
         </DialogContent>
       </Dialog>
+    );
+  }
 
-      {/* ── Manage Categories Dialog ── */}
+  function categoryDialog() {
+    return (
       <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
         <DialogContent className="ecologic-dialog w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
           <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
@@ -693,7 +735,7 @@ export default function PriceBook() {
               </div>
             </div>
 
-            {/* Existing categories */}
+            {/* Existing */}
             {categoriesLoading ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
@@ -794,6 +836,6 @@ export default function PriceBook() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    );
+  }
 }

@@ -1,0 +1,152 @@
+We need to redesign the Price Book category experience in EcoLogic again.
+
+CLARIFICATION
+I do NOT want the current version where the page is just category headers with line items directly underneath on one long screen.
+
+That is not the right UX.
+
+I want it to work more like this flow:
+
+Level 1:
+Category list page
+
+Level 2:
+Tap a category -> open that category’s item list page
+
+This is the general structure I want.
+
+IMPORTANT
+Do NOT directly copy Housecall Pro’s design.
+Use the structure idea only:
+- category list first
+- then category detail/item list second
+
+But keep EcoLogic’s own aesthetic, spacing, typography, buttons, colors, and overall vibe.
+
+PRODUCT DIRECTION
+The Price Book should feel organized and simple:
+
+Price Book
+-> list of categories
+
+Tap category
+-> see items inside that category
+
+That means categories are the main entry point, not inline headers on one giant page.
+
+WHAT TO CHANGE
+
+1. Make the main Price Book page a category list page
+The main Price Book screen should primarily show categories, not all items mixed into the same screen.
+
+Each category should feel like a clean tappable row/card/list item that leads into that category.
+
+For each category on the main Price Book page, show useful summary info like:
+- category name
+- optional item count
+
+But keep it clean and not cluttered.
+
+2. Add a category detail page / view
+When the user taps a category, open that category’s own page/view showing the items inside it.
+
+That category detail page should include:
+- category title
+- search for items within that category
+- item list inside that category
+- add item action
+- edit/delete item actions still working as expected
+
+3. Keep EcoLogic styling
+Do NOT copy Housecall directly.
+Instead:
+- keep EcoLogic typography
+- keep EcoLogic button style
+- keep EcoLogic spacing
+- keep EcoLogic colors
+- keep EcoLogic card/list treatment
+- keep EcoLogic nav/header style
+
+This should feel like EcoLogic’s version of a better category flow.
+
+4. Main Price Book behavior
+The main Price Book page should feel like a category browser.
+
+Examples:
+- Plumbing Fixtures
+- Water Heaters
+- Drain Cleaning
+- Heating
+- Electrical
+
+Tapping one opens that category’s items.
+
+5. Search behavior
+Use the cleanest UX possible:
+- main Price Book search can search categories and/or items if that already makes sense
+OR
+- keep search focused at the category-detail level
+
+But whatever is chosen, it needs to feel intentional and not confusing.
+
+6. Keep category management
+We still need to manage categories.
+Keep the manage categories entry point, but place it in a clean EcoLogic-appropriate spot.
+
+Examples:
+- icon button near Add Item
+- overflow/menu
+- manage button in header area
+
+Do not make it feel like a fake tab.
+
+7. Empty states
+If there are no categories:
+- show a clean empty state guiding the user to create a category
+
+If a category exists but has no items:
+- show a clean empty state inside that category
+- with a clear Add Item action
+
+8. Uncategorized items
+Handle uncategorized items safely.
+If needed, support an "Uncategorized" category/section/page so older items are still accessible.
+
+IMPORTANT
+- Do not keep the current “all categories expanded on one screen” approach
+- Do not create a messy accordion
+- Do not directly clone Housecall UI
+- Do not lose existing category/item data
+- Do not break add/edit/delete flows
+- Do not break mobile usability
+- Keep this contractor-simple and polished
+
+DESIGN INTENT
+The main page should answer:
+“What categories do I have?”
+
+The next page should answer:
+“What items are inside this category?”
+
+That is the structure I want.
+
+EXPECTED RESULT
+- Main Price Book page shows categories as the primary browsing experience
+- Tapping a category opens a category-specific item list page
+- The UI feels like EcoLogic, not Housecall copied
+- Category management still exists in a clean place
+- Item creation/editing still works
+- The experience feels much more organized and scalable
+
+DELIVERABLES
+1. Redesign the main Price Book page into a category list experience
+2. Add a category detail page/view for items inside a category
+3. Keep category management in a clean EcoLogic-style location
+4. Preserve existing add/edit/delete item flows
+5. Handle empty categories and uncategorized items safely
+6. Tell me the exact file(s) changed
+7. Explain the final page structure:
+   - main Price Book page
+   - category detail page
+   - where category management now lives
+8. Confirm the final UI uses EcoLogic styling and is not a direct Housecall copy
