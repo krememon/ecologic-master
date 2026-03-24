@@ -1,0 +1,95 @@
+We have a new exact diagnosis from the latest logs.
+
+The stale Bearer/MobileAuth issue is fixed.
+
+Proof from the logs:
+
+[auth/user][server] hasAuthorization=false
+usingMobileAuth=false
+hasCookie=true
+
+So web is no longer attaching native Bearer auth. Good.
+
+The new failure is now:
+
+web popup starts on preview host (picard.replit.dev)
+/api/auth/google correctly serves cross-domain trampoline to eco-logic-pjpell077.replit.app
+then POST /api/auth/exchange-code returns:
+401 Invalid or expired auth code
+then /api/auth/user stays 401 because auth completion never finishes
+
+This strongly suggests the one-time web auth code is being created on the production auth host but exchanged on the preview host.
+
+Same class of bug we fixed on native.
+
+====================
+WHAT I NEED YOU TO VERIFY
+
+Trace the WEB webAuthCode exchange path.
+
+Inspect:
+
+Where webAuthCode is handled on the client
+exact file/function
+exact fetch URL used for POST /api/auth/exchange-code
+Whether that exchange uses:
+bare relative URL /api/auth/exchange-code
+or
+the production auth base URL
+Compare the host that creates the web auth code vs the host that exchanges it:
+callback / code creation host
+exchange host
+Add logs for one single web preview login attempt:
+Client:
+current origin
+webAuthCode present
+exact exchange URL being called
+Server:
+host on /api/auth/google/callback
+host on /api/auth/exchange-code
+whether authCodeStore.has(code) before consume
+====================
+MOST LIKELY ROOT CAUSE
+
+In preview/canvas web mode:
+
+code is created on eco-logic-pjpell077.replit.app
+client exchanges using relative /api/auth/exchange-code
+that hits picard.replit.dev
+preview host does not have the code in its in-memory store
+exchange returns 401 invalid/expired
+====================
+SMALLEST CORRECT FIX
+
+If confirmed, the fix should mirror the native fix:
+
+For cross-domain web popup completion, make the webAuthCode exchange post to the same production auth host that created the code, not the preview host.
+
+Likely:
+
+use the same base URL logic already used for cross-domain auth/trampoline
+do NOT use a bare relative /api/auth/exchange-code for preview/canvas cross-domain completion
+same-domain production web can keep relative URL if appropriate
+preview/canvas web must exchange against eco-logic-pjpell077.replit.app
+====================
+REPLY IN THIS EXACT FORMAT
+Exact file/function where webAuthCode is exchanged
+Exact URL currently used for exchange
+Host that creates the code
+Host that exchanges the code
+Exact root cause
+Exact files changed
+Exact fix made
+Why this does NOT affect iOS native Google sign-in
+Final test result for:
+same-domain web
+preview/canvas web
+iOS native
+====================
+IMPORTANT
+
+Do NOT change native auth flow.
+Do NOT re-open the Bearer-auth fix.
+Focus only on the web webAuthCode exchange host mismatch now.
+
+The latest logs strongly indicate that preview web is exchanging on the wrong host.
