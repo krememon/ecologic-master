@@ -1,0 +1,111 @@
+We need to change the Price Book management UX in EcoLogic.
+
+CURRENT STATE
+Right now there is a Select button on the Price Book screen.
+
+I do NOT want that anymore.
+
+DESIRED UX
+Remove Select completely.
+
+Instead, I want a 3-dots menu on each individual entry:
+- category cards on the main Price Book page
+- line items inside category detail pages
+- materials inside material category detail pages
+
+When the user taps the 3 dots, they should get actions like:
+- Edit name
+- Delete
+
+GOAL
+Move away from a bulk-select workflow and use per-row/per-card overflow actions instead.
+
+WHAT TO CHANGE
+
+1. Remove the Select button completely
+- Delete the Select action from the Price Book header
+- Do not leave awkward spacing where it used to be
+- Rebalance the header cleanly with the existing Add button
+
+2. Add 3-dots overflow menu to each category card
+On the main Price Book category list:
+- each category card should have a 3-dots menu
+- tapping it should open a small clean EcoLogic-style action menu
+
+Category menu actions:
+- Edit name
+- Delete
+
+3. Add 3-dots overflow menu to each line item
+Inside the category detail page for Line Items:
+- each line item should have its own 3-dots menu
+
+Line Item menu actions:
+- Edit name
+- Delete
+
+4. Add 3-dots overflow menu to each material
+Inside the category detail page for Materials:
+- each material should have its own 3-dots menu
+
+Material menu actions:
+- Edit name
+- Delete
+
+5. Delete behavior
+CATEGORY DELETE
+Handle category deletion safely.
+Use the cleanest product behavior.
+
+Recommended:
+- if category is empty, allow delete with confirmation
+- if category has contents, still require confirmation and clearly explain what happens
+- do NOT silently delete things with no warning
+
+If there is already a safer existing delete rule in the app, follow that pattern.
+
+ITEM / MATERIAL DELETE
+- deleting an item deletes just that item
+- deleting a material deletes just that material
+- always use confirmation for destructive actions
+
+6. Edit behavior
+For now, Edit should allow renaming the selected thing:
+- category name
+- line item name
+- material name
+
+Use the cleanest existing EcoLogic modal/sheet/dialog pattern.
+Do not create a weird custom hack.
+
+IMPORTANT
+- Do not clutter the cards/rows
+- Keep the 3 dots subtle and aligned nicely
+- Keep the EcoLogic style
+- Do not break navigation when tapping the main card/row
+- Make sure the 3-dots tap target works separately from the card tap target
+- Do not leave Select mode code visible in the UI
+- Keep mobile usability strong
+
+EXPECTED RESULT
+- No more Select button
+- Every category has a 3-dots menu
+- Every line item has a 3-dots menu
+- Every material has a 3-dots menu
+- 3-dots menu offers Edit name and Delete
+- Destructive actions require confirmation
+- UI feels cleaner and more natural
+
+DELIVERABLES
+1. Remove the Select button
+2. Add 3-dots menus to category cards
+3. Add 3-dots menus to line items
+4. Add 3-dots menus to materials
+5. Wire Edit name and Delete actions
+6. Tell me the exact file(s) changed
+7. Explain the final delete behavior for:
+   - empty category
+   - category with contents
+   - individual line item
+   - individual material
+8. Confirm nothing else on the Price Book flow was unintentionally changed

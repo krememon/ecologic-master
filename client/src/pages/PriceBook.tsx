@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown, Package, CheckCircle2, Circle, Trash2 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Edit2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Tag, ListPlus, ChevronDown, Package, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import { cn } from "@/lib/utils";
@@ -46,8 +46,6 @@ export default function PriceBook() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ServiceCatalogItem | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [renamingCategoryId, setRenamingCategoryId] = useState<number | null>(null);
-  const [renamingCategoryName, setRenamingCategoryName] = useState("");
   const [priceDisplay, setPriceDisplay] = useState("");
   const [formData, setFormData] = useState({
     name: "",
@@ -59,34 +57,11 @@ export default function PriceBook() {
     itemType: "line_item" as "line_item" | "material",
   });
 
-  // ── Select mode state ──────────────────────────────────────────
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-
-  const exitSelectMode = () => {
-    setIsSelectMode(false);
-    setSelectedCategoryIds(new Set());
-    setSelectedItemIds(new Set());
-  };
-
-  const toggleCategorySelection = (id: number) => {
-    setSelectedCategoryIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleItemSelection = (id: number) => {
-    setSelectedItemIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  // ── Per-row action state ───────────────────────────────────────
+  const [categoryToDelete, setCategoryToDelete] = useState<PricebookCategory | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<ServiceCatalogItem | null>(null);
+  const [renameCatDialog, setRenameCatDialog] = useState<{ id: number; name: string } | null>(null);
+  const [renameCatValue, setRenameCatValue] = useState("");
 
   // ── Queries ────────────────────────────────────────────────────
 
@@ -176,6 +151,17 @@ export default function PriceBook() {
     onError: () => toast({ title: "Error", description: "Failed to update item", variant: "destructive" }),
   });
 
+  const deleteItemMutation = useMutation({
+    mutationFn: async (id: number) => { await apiRequest('DELETE', `/api/service-catalog/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+      const word = activeTab === "materials" ? "Material" : "Item";
+      toast({ title: `${word} deleted` });
+      setItemToDelete(null);
+    },
+    onError: () => toast({ title: "Error", description: "Failed to delete item", variant: "destructive" }),
+  });
+
   const createCategoryMutation = useMutation({
     mutationFn: async ({ name, categoryType }: { name: string; categoryType: string }) => {
       const res = await apiRequest('POST', '/api/service-catalog/categories', { name, categoryType });
@@ -196,70 +182,29 @@ export default function PriceBook() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
-      setRenamingCategoryId(null);
-      setRenamingCategoryName("");
+      setRenameCatDialog(null);
       toast({ title: "Category renamed" });
+      // Update view name if we renamed the currently-open category
+      if (view.type === "category" && renameCatDialog && view.categoryId === renameCatDialog.id) {
+        setView(v => v.type === "category" ? { ...v, categoryName: renameCatValue.trim() } : v);
+      }
     },
     onError: () => toast({ title: "Error", description: "Failed to rename category", variant: "destructive" }),
   });
 
-  // ── Bulk delete ────────────────────────────────────────────────
-
-  const handleBulkDelete = async () => {
-    setIsBulkDeleting(true);
-    try {
-      if (view.type === "list") {
-        await Promise.all(
-          [...selectedCategoryIds].map(id =>
-            apiRequest('DELETE', `/api/service-catalog/categories/${id}`)
-          )
-        );
-        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-        const n = selectedCategoryIds.size;
-        toast({ title: `${n} categor${n !== 1 ? 'ies' : 'y'} deleted` });
-      } else {
-        await Promise.all(
-          [...selectedItemIds].map(id =>
-            apiRequest('DELETE', `/api/service-catalog/${id}`)
-          )
-        );
-        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-        const n = selectedItemIds.size;
-        toast({ title: `${n} ${activeTab === "materials" ? "material" : "item"}${n !== 1 ? 's' : ''} deleted` });
-      }
-      exitSelectMode();
-      if (view.type === "list") {
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: number) => { await apiRequest('DELETE', `/api/service-catalog/categories/${id}`); },
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+      if (view.type === "category" && view.categoryId === deletedId) {
         setView({ type: "list" });
       }
-    } catch {
-      toast({ title: "Error", description: "Some items could not be deleted", variant: "destructive" });
-    } finally {
-      setIsBulkDeleting(false);
-      setShowBulkDeleteConfirm(false);
-    }
-  };
-
-  // Build bulk delete confirmation message
-  const bulkDeleteMessage = (() => {
-    if (view.type === "list") {
-      const n = selectedCategoryIds.size;
-      const itemsAffected = [...selectedCategoryIds].reduce((sum, catId) =>
-        sum + tabItems.filter(item => (item as any).categoryId === catId).length, 0);
-      const catWord = `${n} categor${n !== 1 ? 'ies' : 'y'}`;
-      if (itemsAffected === 0) {
-        return `Delete ${catWord}? This cannot be undone.`;
-      }
-      const thingWord = activeTab === "materials" ? "material" : "item";
-      return `Delete ${catWord}? The ${itemsAffected} ${thingWord}${itemsAffected !== 1 ? 's' : ''} inside will become Uncategorized — they won't be deleted.`;
-    } else {
-      const n = selectedItemIds.size;
-      const thingWord = activeTab === "materials" ? "material" : "item";
-      return `Delete ${n} ${thingWord}${n !== 1 ? 's' : ''}? This cannot be undone.`;
-    }
-  })();
-
-  const selectedCount = view.type === "list" ? selectedCategoryIds.size : selectedItemIds.size;
+      toast({ title: "Category deleted" });
+      setCategoryToDelete(null);
+    },
+    onError: () => toast({ title: "Error", description: "Failed to delete category", variant: "destructive" }),
+  });
 
   // ── Form helpers ───────────────────────────────────────────────
 
@@ -307,6 +252,11 @@ export default function PriceBook() {
     }
   };
 
+  const openRenameCatDialog = (cat: PricebookCategory) => {
+    setRenameCatDialog({ id: cat.id, name: cat.name });
+    setRenameCatValue(cat.name);
+  };
+
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
@@ -341,7 +291,6 @@ export default function PriceBook() {
     setView({ type: "list" });
     setListSearch("");
     setDetailSearch("");
-    exitSelectMode();
   };
 
   // ── Auth guard ─────────────────────────────────────────────────
@@ -375,113 +324,51 @@ export default function PriceBook() {
   if (view.type === "category" || view.type === "uncategorized") {
     const title = view.type === "category" ? view.categoryName : "Uncategorized";
     const currentCatId = view.type === "category" ? view.categoryId : null;
-    const allItemIds = detailFiltered.map(i => i.id);
-    const allSelected = allItemIds.length > 0 && allItemIds.every(id => selectedItemIds.has(id));
-
-    const toggleSelectAll = () => {
-      if (allSelected) {
-        setSelectedItemIds(new Set());
-      } else {
-        setSelectedItemIds(new Set(allItemIds));
-      }
-    };
 
     return (
       <div className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          {isSelectMode ? (
-            <>
-              <button
-                onClick={exitSelectMode}
-                className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-1 py-2 min-w-[52px]"
-              >
-                Cancel
-              </button>
-              <div className="flex-1 min-w-0 text-center">
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {selectedCount === 0 ? "Select items" : `${selectedCount} selected`}
-                </p>
-              </div>
-              <Button
-                onClick={() => selectedCount > 0 && setShowBulkDeleteConfirm(true)}
-                disabled={selectedCount === 0}
-                variant="ghost"
-                className={cn(
-                  "text-sm font-semibold min-w-[52px]",
-                  selectedCount > 0
-                    ? "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    : "text-slate-300 dark:text-slate-600"
-                )}
-              >
-                Delete{selectedCount > 0 ? ` (${selectedCount})` : ""}
-              </Button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => { setView({ type: "list" }); setDetailSearch(""); exitSelectMode(); }}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-              </button>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
-                  Price Book · {isMaterials ? "Materials" : "Line Items"}
-                </p>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
-              </div>
-              <button
-                onClick={() => { setIsSelectMode(true); setSelectedItemIds(new Set()); }}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors px-2 py-2"
-              >
-                Select
-              </button>
-              <Button
-                onClick={() => openCreateItemDialog(currentCatId)}
-                className="bg-teal-600 hover:bg-teal-700"
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Add {addItemLabel}
-              </Button>
-            </>
-          )}
+          <button
+            onClick={() => { setView({ type: "list" }); setDetailSearch(""); }}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
+              Price Book · {isMaterials ? "Materials" : "Line Items"}
+            </p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
+          </div>
+          <Button
+            onClick={() => openCreateItemDialog(currentCatId)}
+            className="bg-teal-600 hover:bg-teal-700"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add {addItemLabel}
+          </Button>
         </div>
 
-        {/* Select-all row when in select mode with items */}
-        {isSelectMode && detailFiltered.length > 0 && (
-          <button
-            onClick={toggleSelectAll}
-            className="w-full flex items-center gap-3 px-1 pb-3 text-sm text-teal-600 dark:text-teal-400 font-medium hover:text-teal-700 dark:hover:text-teal-300 transition-colors"
-          >
-            {allSelected
-              ? <CheckCircle2 className="h-4 w-4" />
-              : <Circle className="h-4 w-4" />}
-            {allSelected ? "Deselect all" : "Select all"}
-          </button>
-        )}
-
-        {/* Search (hidden in select mode) */}
-        {!isSelectMode && (
-          <div className="relative mb-5">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              type="text"
-              placeholder={`Search in ${title}...`}
-              value={detailSearch}
-              onChange={(e) => setDetailSearch(e.target.value)}
-              className="pl-10"
-            />
-            {detailSearch && (
-              <button
-                onClick={() => setDetailSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        )}
+        {/* Search */}
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder={`Search in ${title}...`}
+            value={detailSearch}
+            onChange={(e) => setDetailSearch(e.target.value)}
+            className="pl-10"
+          />
+          {detailSearch && (
+            <button
+              onClick={() => setDetailSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
         {/* Items */}
         {isLoading ? (
@@ -513,60 +400,62 @@ export default function PriceBook() {
           </div>
         ) : (
           <>
-            {!isSelectMode && detailSearch && (
+            {detailSearch && (
               <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 px-1">
                 {detailFiltered.length} result{detailFiltered.length !== 1 ? 's' : ''}
               </p>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-              {detailFiltered.map((item) => {
-                const isSelected = selectedItemIds.has(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    onClick={isSelectMode ? () => toggleItemSelection(item.id) : undefined}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-3.5 transition-colors group",
-                      isSelectMode
-                        ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-700/40",
-                      isSelected && "bg-teal-50 dark:bg-teal-900/20"
-                    )}
-                  >
-                    {isSelectMode && (
-                      <div className="flex-shrink-0 mr-3">
-                        {isSelected
-                          ? <CheckCircle2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                          : <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600" />}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
-                      <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
-                        <span>{formatCurrency(item.defaultPriceCents)}</span>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
-                      </div>
+              {detailFiltered.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <span>{formatCurrency(item.defaultPriceCents)}</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
                     </div>
-                    {!isSelectMode && (
-                      <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEditItemDialog(item)}
-                          className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
                   </div>
-                );
-              })}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="ml-2 p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 cursor-pointer py-2"
+                        onSelect={() => openEditItemDialog(item)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Edit</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                        onSelect={() => setItemToDelete(item)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
             </div>
           </>
         )}
 
         {itemDialog()}
-        {bulkDeleteConfirmDialog()}
+        {deleteItemConfirmDialog()}
+        {deleteCategoryConfirmDialog()}
+        {renameCategoryDialog()}
       </div>
     );
   }
@@ -577,160 +466,94 @@ export default function PriceBook() {
   const totalTabCategories = tabCategories.length;
   const listIsEmpty = totalTabCategories === 0 && uncategorizedTabItems.length === 0;
   const searchReturnedNothing = !listIsEmpty && filteredTabCategories.length === 0 && !showUncategorized;
-  const allCategoryIds = filteredTabCategories.map(c => c.id);
-  const allCatsSelected = allCategoryIds.length > 0 && allCategoryIds.every(id => selectedCategoryIds.has(id));
-
-  const toggleSelectAllCategories = () => {
-    if (allCatsSelected) {
-      setSelectedCategoryIds(new Set());
-    } else {
-      setSelectedCategoryIds(new Set(allCategoryIds));
-    }
-  };
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        {isSelectMode ? (
-          <>
-            <button
-              onClick={exitSelectMode}
-              className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-1 py-2 min-w-[52px]"
-            >
-              Cancel
-            </button>
-            <div className="flex-1 min-w-0 text-center">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {selectedCount === 0 ? "Select categories" : `${selectedCount} selected`}
-              </p>
-            </div>
-            <Button
-              onClick={() => selectedCount > 0 && setShowBulkDeleteConfirm(true)}
-              disabled={selectedCount === 0}
-              variant="ghost"
-              className={cn(
-                "text-sm font-semibold min-w-[52px]",
-                selectedCount > 0
-                  ? "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  : "text-slate-300 dark:text-slate-600"
-              )}
-            >
-              Delete{selectedCount > 0 ? ` (${selectedCount})` : ""}
+        <Link href="/customize">
+          <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            {totalTabCategories} categor{totalTabCategories !== 1 ? 'ies' : 'y'} · {totalTabItems} {isMaterials ? "material" : "item"}{totalTabItems !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="bg-teal-600 hover:bg-teal-700">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add
+              <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
             </Button>
-          </>
-        ) : (
-          <>
-            <Link href="/customize">
-              <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-              </button>
-            </Link>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                {totalTabCategories} categor{totalTabCategories !== 1 ? 'ies' : 'y'} · {totalTabItems} {isMaterials ? "material" : "item"}{totalTabItems !== 1 ? 's' : ''}
-              </p>
-            </div>
-            {!listIsEmpty && (
-              <button
-                onClick={() => { setIsSelectMode(true); setSelectedCategoryIds(new Set()); }}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors px-2 py-2"
-              >
-                Select
-              </button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="bg-teal-600 hover:bg-teal-700">
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Add
-                  <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem
-                  className="flex items-center gap-2.5 cursor-pointer py-2.5"
-                  onSelect={() => openCreateItemDialog()}
-                >
-                  {addItemIcon}
-                  <span className="font-medium">{addItemLabel}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="flex items-center gap-2.5 cursor-pointer py-2.5"
-                  onSelect={() => setIsCategoryDialogOpen(true)}
-                >
-                  <FolderOpen className="h-4 w-4 text-teal-600" />
-                  <span className="font-medium">Category</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem
+              className="flex items-center gap-2.5 cursor-pointer py-2.5"
+              onSelect={() => openCreateItemDialog()}
+            >
+              {addItemIcon}
+              <span className="font-medium">{addItemLabel}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2.5 cursor-pointer py-2.5"
+              onSelect={() => setIsCategoryDialogOpen(true)}
+            >
+              <FolderOpen className="h-4 w-4 text-teal-600" />
+              <span className="font-medium">Category</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Tab Toggle — hidden during select mode */}
-      {!isSelectMode && (
-        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
-          <button
-            onClick={() => switchTab("line_items")}
-            className={cn(
-              "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
-              activeTab === "line_items"
-                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            )}
-          >
-            Line Items
-          </button>
-          <button
-            onClick={() => switchTab("materials")}
-            className={cn(
-              "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
-              activeTab === "materials"
-                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            )}
-          >
-            Materials
-          </button>
-        </div>
-      )}
-
-      {/* Search — hidden during select mode */}
-      {!isSelectMode && (
-        <div className="relative mb-5">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            type="text"
-            placeholder={isMaterials ? "Search materials or categories..." : "Search items or categories..."}
-            value={listSearch}
-            onChange={(e) => setListSearch(e.target.value)}
-            className="pl-10"
-          />
-          {listSearch && (
-            <button
-              onClick={() => setListSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Select-all row when in select mode with categories */}
-      {isSelectMode && filteredTabCategories.length > 0 && (
+      {/* Tab Toggle */}
+      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
         <button
-          onClick={toggleSelectAllCategories}
-          className="w-full flex items-center gap-3 px-1 pb-3 text-sm text-teal-600 dark:text-teal-400 font-medium hover:text-teal-700 dark:hover:text-teal-300 transition-colors"
+          onClick={() => switchTab("line_items")}
+          className={cn(
+            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+            activeTab === "line_items"
+              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          )}
         >
-          {allCatsSelected
-            ? <CheckCircle2 className="h-4 w-4" />
-            : <Circle className="h-4 w-4" />}
-          {allCatsSelected ? "Deselect all" : "Select all"}
+          Line Items
         </button>
-      )}
+        <button
+          onClick={() => switchTab("materials")}
+          className={cn(
+            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+            activeTab === "materials"
+              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          )}
+        >
+          Materials
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-5">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input
+          type="text"
+          placeholder={isMaterials ? "Search materials or categories..." : "Search items or categories..."}
+          value={listSearch}
+          onChange={(e) => setListSearch(e.target.value)}
+          className="pl-10"
+        />
+        {listSearch && (
+          <button
+            onClick={() => setListSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       {/* Loading */}
       {isLoading || categoriesLoading ? (
@@ -763,34 +586,12 @@ export default function PriceBook() {
         <div className="space-y-2">
           {filteredTabCategories.map(cat => {
             const count = tabItems.filter(item => (item as any).categoryId === cat.id).length;
-            const isSelected = selectedCategoryIds.has(cat.id);
             return (
-              <button
+              <div
                 key={cat.id}
-                onClick={() => {
-                  if (isSelectMode) {
-                    toggleCategorySelection(cat.id);
-                  } else {
-                    setView({ type: "category", categoryId: cat.id, categoryName: cat.name });
-                    setDetailSearch("");
-                  }
-                }}
-                className={cn(
-                  "w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all text-left group",
-                  isSelectMode
-                    ? isSelected
-                      ? "border-teal-400 dark:border-teal-500 bg-teal-50 dark:bg-teal-900/20"
-                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
-                    : "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md"
-                )}
+                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all group cursor-pointer"
+                onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
               >
-                {isSelectMode && (
-                  <div className="flex-shrink-0">
-                    {isSelected
-                      ? <CheckCircle2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                      : <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600" />}
-                  </div>
-                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     {cat.name}
@@ -801,15 +602,40 @@ export default function PriceBook() {
                       : `${count} ${isMaterials ? "material" : "item"}${count !== 1 ? 's' : ''}`}
                   </div>
                 </div>
-                {!isSelectMode && (
-                  <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
-                )}
-              </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem
+                      className="flex items-center gap-2 cursor-pointer py-2"
+                      onSelect={() => openRenameCatDialog(cat)}
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                      <span>Edit name</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                      onSelect={() => setCategoryToDelete(cat)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+              </div>
             );
           })}
 
-          {/* Uncategorized row — not selectable; user enters and selects items individually */}
-          {showUncategorized && !isSelectMode && (
+          {/* Uncategorized row */}
+          {showUncategorized && (
             <button
               onClick={() => { setView({ type: "uncategorized" }); setDetailSearch(""); }}
               className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md transition-all text-left group"
@@ -830,41 +656,130 @@ export default function PriceBook() {
 
       {itemDialog()}
       {categoryDialog()}
-      {bulkDeleteConfirmDialog()}
+      {deleteItemConfirmDialog()}
+      {deleteCategoryConfirmDialog()}
+      {renameCategoryDialog()}
     </div>
   );
 
   // ── Dialog renderers ───────────────────────────────────────────
 
-  function bulkDeleteConfirmDialog() {
-    const isDetailView = view.type === "category" || view.type === "uncategorized";
+  function deleteItemConfirmDialog() {
+    if (!itemToDelete) return null;
+    const word = activeTab === "materials" ? "material" : "item";
     return (
-      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => { if (!open) setItemToDelete(null); }}>
         <AlertDialogContent className="ecologic-alert-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {isDetailView
-                ? `Delete ${selectedCount} ${activeTab === "materials" ? "material" : "item"}${selectedCount !== 1 ? 's' : ''}?`
-                : `Delete ${selectedCount} categor${selectedCount !== 1 ? 'ies' : 'y'}?`}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete {isMaterials ? "Material" : "Item"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {bulkDeleteMessage}
+              Are you sure you want to delete "{itemToDelete.name}"? This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBulkDelete}
-              disabled={isBulkDeleting}
+              onClick={() => deleteItemMutation.mutate(itemToDelete.id)}
+              disabled={deleteItemMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isBulkDeleting
+              {deleteItemMutation.isPending
                 ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>
-                : "Delete"}
+                : `Delete ${word}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    );
+  }
+
+  function deleteCategoryConfirmDialog() {
+    if (!categoryToDelete) return null;
+    const itemsInCat = tabItems.filter(item => (item as any).categoryId === categoryToDelete.id).length;
+    const thingWord = isMaterials ? "material" : "item";
+    const description = itemsInCat > 0
+      ? `Delete "${categoryToDelete.name}"? The ${itemsInCat} ${thingWord}${itemsInCat !== 1 ? 's' : ''} inside will become Uncategorized — they won't be deleted.`
+      : `Delete "${categoryToDelete.name}"? This cannot be undone.`;
+    return (
+      <AlertDialog open={!!categoryToDelete} onOpenChange={(open) => { if (!open) setCategoryToDelete(null); }}>
+        <AlertDialogContent className="ecologic-alert-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCategoryMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteCategoryMutation.mutate(categoryToDelete.id)}
+              disabled={deleteCategoryMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteCategoryMutation.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>
+                : "Delete Category"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
+
+  function renameCategoryDialog() {
+    return (
+      <Dialog
+        open={!!renameCatDialog}
+        onOpenChange={(open) => { if (!open) setRenameCatDialog(null); }}
+      >
+        <DialogContent className="ecologic-dialog w-[95vw] max-w-sm p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Rename Category
+            </DialogTitle>
+            <button
+              onClick={() => setRenameCatDialog(null)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="px-4 py-5 bg-white dark:bg-slate-900">
+            <Input
+              value={renameCatValue}
+              onChange={(e) => setRenameCatValue(e.target.value)}
+              placeholder="Category name"
+              autoFocus
+              className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && renameCatValue.trim() && renameCatDialog) {
+                  renameCategoryMutation.mutate({ id: renameCatDialog.id, name: renameCatValue.trim() });
+                }
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <button
+              onClick={() => setRenameCatDialog(null)}
+              className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors px-2 py-2"
+            >
+              Cancel
+            </button>
+            <Button
+              onClick={() => {
+                if (renameCatValue.trim() && renameCatDialog) {
+                  renameCategoryMutation.mutate({ id: renameCatDialog.id, name: renameCatValue.trim() });
+                }
+              }}
+              disabled={!renameCatValue.trim() || renameCategoryMutation.isPending}
+              className="h-10 rounded-xl bg-teal-600 hover:bg-teal-700 px-6"
+            >
+              {renameCategoryMutation.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
@@ -1074,57 +989,19 @@ export default function PriceBook() {
             ) : (
               <div>
                 <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
-                  Categories
+                  Existing Categories
                 </p>
                 <div className="space-y-1">
                   {tabCategories.map(cat => {
                     const itemCount = tabItems.filter(item => (item as any).categoryId === cat.id).length;
-                    const isRenaming = renamingCategoryId === cat.id;
                     return (
-                      <div key={cat.id} className="flex items-center gap-2 group p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        {isRenaming ? (
-                          <>
-                            <Input
-                              value={renamingCategoryName}
-                              onChange={(e) => setRenamingCategoryName(e.target.value)}
-                              className="h-9 flex-1 rounded-lg"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && renamingCategoryName.trim()) {
-                                  renameCategoryMutation.mutate({ id: cat.id, name: renamingCategoryName.trim() });
-                                } else if (e.key === 'Escape') {
-                                  setRenamingCategoryId(null);
-                                }
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => { if (renamingCategoryName.trim()) renameCategoryMutation.mutate({ id: cat.id, name: renamingCategoryName.trim() }); }}
-                              disabled={renameCategoryMutation.isPending}
-                              className="h-9 bg-teal-600 hover:bg-teal-700 rounded-lg px-3"
-                            >
-                              {renameCategoryMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setRenamingCategoryId(null)} className="h-9 rounded-lg px-2">
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{cat.name}</span>
-                              <span className="ml-2 text-xs text-slate-400">
-                                {itemCount} {isMaterials ? "material" : "item"}{itemCount !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => { setRenamingCategoryId(cat.id); setRenamingCategoryName(cat.name); }}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-all"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        )}
+                      <div key={cat.id} className="flex items-center gap-2 p-2 rounded-xl">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{cat.name}</span>
+                          <span className="ml-2 text-xs text-slate-400">
+                            {itemCount} {isMaterials ? "material" : "item"}{itemCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
