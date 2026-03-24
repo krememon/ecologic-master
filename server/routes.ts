@@ -11656,6 +11656,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const onlinePaymentAvailable = isSubcontractJobPublicGet
         || !!(company?.stripeConnectAccountId && company?.stripeConnectChargesEnabled);
 
+      // Build normalized line items for the public invoice page.
+      // Three possible data sources are handled here:
+      // 1. Invoice JSONB lineItems with unitPriceCents (cents) — standalone invoices from NewInvoiceSheet
+      // 2. Invoice JSONB lineItems with unitPrice (dollars) — legacy auto-created payment invoices
+      // 3. No JSONB lineItems but invoice has a jobId — fetch from job_line_items table (cents)
+      type PublicLineItem = {
+        name: string;
+        description?: string;
+        quantity: number;
+        unitPriceCents: number;
+        unit?: string;
+      };
+      let publicLineItems: PublicLineItem[] = [];
+      const rawJsonbItems = (invoice.lineItems || []) as any[];
+      if (rawJsonbItems.length > 0) {
+        publicLineItems = rawJsonbItems
+          .filter((item: any) => item.name && String(item.name).trim())
+          .map((item: any) => ({
+            name: String(item.name || '').trim(),
+            description: item.description ? String(item.description) : undefined,
+            quantity: Number(item.quantity) || 1,
+            unitPriceCents: item.unitPriceCents != null
+              ? Math.round(Number(item.unitPriceCents))
+              : item.unitPrice != null
+                ? Math.round(Number(item.unitPrice) * 100)
+                : 0,
+            unit: item.unit ? String(item.unit) : undefined,
+          }));
+      } else if (invoice.jobId) {
+        const jobItems = await db
+          .select()
+          .from(jobLineItems)
+          .where(eq(jobLineItems.jobId, invoice.jobId))
+          .orderBy(jobLineItems.sortOrder);
+        publicLineItems = jobItems
+          .filter(item => item.name && item.name.trim())
+          .map(item => ({
+            name: item.name.trim(),
+            description: item.description ?? undefined,
+            quantity: Number(item.quantity) || 1,
+            unitPriceCents: item.unitPriceCents,
+            unit: item.unit ?? undefined,
+          }));
+      }
+
       res.json({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -11668,7 +11713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: computed.computedStatus,
         dueDate: invoice.dueDate,
         issueDate: invoice.issueDate,
-        lineItems: invoice.lineItems,
+        lineItems: publicLineItems,
         onlinePaymentAvailable,
         company: {
           name: company?.name || 'Unknown Company',
@@ -11682,6 +11727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         customer,
         jobTitle,
+        notes: invoice.notes || null,
       });
     } catch (error) {
       console.error("Error fetching public invoice:", error);

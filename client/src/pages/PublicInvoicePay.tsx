@@ -47,6 +47,7 @@ interface PublicInvoiceData {
     zip: string | null;
   } | null;
   jobTitle: string | null;
+  notes: string | null;
   onlinePaymentAvailable?: boolean;
 }
 
@@ -502,37 +503,51 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           </div>
 
-          {lineItems.length > 0 && (
-            <div className="px-8 pb-6 md:px-10">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-t border-b border-gray-200">
-                    <th className="py-3 text-left font-semibold text-gray-500 uppercase text-xs tracking-wider">Service</th>
-                    <th className="py-3 text-center font-semibold text-gray-500 uppercase text-xs tracking-wider w-16">Qty</th>
-                    <th className="py-3 text-right font-semibold text-gray-500 uppercase text-xs tracking-wider w-24">Price</th>
-                    <th className="py-3 text-right font-semibold text-gray-500 uppercase text-xs tracking-wider w-28">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineItems.map((item, index) => (
-                    <tr key={index} className="border-b border-gray-100">
-                      <td className="py-3">
-                        <p className="font-medium text-gray-900">{item.name}</p>
-                        {item.description && (
-                          <p className="text-gray-500 text-xs mt-0.5">{item.description}</p>
-                        )}
-                      </td>
-                      <td className="py-3 text-center text-gray-700">
-                        {item.quantity} {item.unit && item.unit !== 'x' ? item.unit : ''}
-                      </td>
-                      <td className="py-3 text-right text-gray-700">{formatCurrency(item.unitPriceCents)}</td>
-                      <td className="py-3 text-right font-medium text-gray-900">{formatCurrency(item.quantity * item.unitPriceCents)}</td>
+          <div className="px-8 pb-6 md:px-10">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Services &amp; Materials</p>
+            {lineItems.length > 0 ? (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-500 uppercase text-xs tracking-wider">Description</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-500 uppercase text-xs tracking-wider w-20 hidden sm:table-cell">Qty</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-500 uppercase text-xs tracking-wider w-24 hidden sm:table-cell">Unit Price</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-500 uppercase text-xs tracking-wider w-28">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {lineItems.map((item, index) => (
+                      <tr key={index} className="bg-white">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">{item.name}</p>
+                          {item.description && (
+                            <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{item.description}</p>
+                          )}
+                          <p className="text-gray-400 text-xs mt-0.5 sm:hidden">
+                            {item.quantity} {item.unit && item.unit !== 'each' ? item.unit : 'x'} @ {formatCurrency(item.unitPriceCents)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-600 hidden sm:table-cell">
+                          {item.quantity}{item.unit && item.unit !== 'each' ? ` ${item.unit}` : ''}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-600 hidden sm:table-cell">{formatCurrency(item.unitPriceCents)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(item.quantity * item.unitPriceCents)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No itemized breakdown available.</p>
+            )}
+            {invoice.notes && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Notes</p>
+                <p className="text-sm text-gray-600 whitespace-pre-line">{invoice.notes}</p>
+              </div>
+            )}
+          </div>
 
           <div className="px-8 pb-8 md:px-10">
             <div className="flex justify-end">
