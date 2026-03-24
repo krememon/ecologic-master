@@ -1,0 +1,58 @@
+We need to fix a Price Book categories sync/render bug in EcoLogic.
+
+CURRENT BUG
+After creating a category in Manage Categories, it does NOT show up in the main Price Book view.
+
+That is wrong.
+
+EXPECTED BEHAVIOR
+As soon as a category is created, it should appear in the Price Book immediately without feeling broken or out of sync.
+
+Since the Price Book is now structured like:
+Category -> Items inside
+
+a newly created category should show up as its own section in the Price Book, even if it has 0 items.
+
+WHAT TO FIX
+1. Audit the full category creation flow end to end
+- category create modal / sheet
+- create-category API call
+- server response
+- client state update
+- query invalidation / refetch
+- Price Book category-section rendering logic
+
+2. Find exactly why the newly created category is not appearing in the main Price Book after creation
+
+3. Fix the sync/update behavior so that after a successful category create:
+- the Manage Categories list updates correctly
+- the main Price Book view updates correctly
+- the new category shows as a visible category section even when empty
+
+IMPORTANT
+- A category with 0 items should still appear in the Price Book
+- Do not require the user to manually refresh
+- Do not require adding an item first before the category appears
+- Do not break the new Category -> Items inside layout
+- Keep the UX feeling instant and reliable
+
+EXPECTED RESULT
+- Create category
+- Close modal or return to Price Book
+- New category is visible immediately in the main Price Book as its own empty section
+- No page refresh needed
+- No stale UI
+
+DO NOT
+- do not hack this with fake placeholder data
+- do not only update one screen
+- do not break search
+- do not break manage categories
+- do not hide empty categories if the new UX is supposed to show category sections
+
+DELIVERABLES
+1. Fix the category-create sync/render bug
+2. Tell me the exact file(s) changed
+3. Explain what was causing the category not to appear
+4. Explain how the main Price Book now updates after category creation
+5. Confirm newly created empty categories now appear immediately in the Price Book

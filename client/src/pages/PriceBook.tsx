@@ -392,7 +392,7 @@ export default function PriceBook() {
             </div>
           )}
         </div>
-      ) : totalItems === 0 ? (
+      ) : totalItems === 0 && categories.length === 0 ? (
         /* ── Empty state ── */
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14">
           <DollarSign className="mx-auto h-12 w-12 text-slate-300 mb-3" />
