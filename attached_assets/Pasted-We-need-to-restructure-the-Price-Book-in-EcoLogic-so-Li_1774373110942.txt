@@ -1,0 +1,145 @@
+We need to restructure the Price Book in EcoLogic so Line Items and Materials are two completely separate sections.
+
+CURRENT ISSUE
+Right now, Materials are showing mixed into the same main Price Book category list as Line Items.
+
+I do NOT want that.
+
+PRODUCT DIRECTION
+The Price Book should have a top toggle/switcher like the Jobs / Estimates segmented control style.
+
+The two tabs should be:
+- Line Items
+- Materials
+
+GOAL
+Create two clearly separated Price Book modes:
+
+1. Line Items
+2. Materials
+
+Each mode should have its own category system and its own browsing flow.
+
+DESIRED STRUCTURE
+
+PRICE BOOK
+[ Line Items ] [ Materials ]
+
+When Line Items is selected:
+- show Line Item categories
+- tapping a category opens Line Items inside that category
+- Add flow should be for Line Item / Line Item Category only
+
+When Materials is selected:
+- show Material categories
+- tapping a category opens Materials inside that category
+- Add flow should be for Material / Material Category only
+
+IMPORTANT
+Materials should NOT appear as just another category mixed into Line Items.
+Materials need their own fully separate section/tab in the Price Book.
+
+DATA MODEL INTENT
+We need separate category systems for each side:
+
+- Line Item Categories
+- Material Categories
+
+Do NOT mix them together in one shared category list unless there is already a clean type field separating them at the data-model level.
+
+If using one shared categories table/model is fine technically, then categories must at minimum be typed/scoped correctly so:
+- Line Item categories only appear under Line Items
+- Material categories only appear under Materials
+
+WHAT TO CHANGE
+
+1. Add a segmented toggle at the top of the Price Book
+Use a clean EcoLogic-style toggle similar in concept to the Jobs / Estimates switcher.
+
+Tabs:
+- Line Items
+- Materials
+
+Do NOT copy the exact Jobs/Estimates component blindly if it does not fit, but use that same style direction.
+
+2. Split the main Price Book page into 2 modes
+
+LINE ITEMS MODE
+- category list for line items only
+- item counts for line items only
+- search should search line item categories/items only
+- category detail page should show line items only
+
+MATERIALS MODE
+- category list for materials only
+- item counts for materials only
+- search should search material categories/items only
+- category detail page should show materials only
+
+3. Separate create flows by active tab
+
+If active tab = Line Items:
+Add button choices should be:
+- Line Item
+- Category
+
+If active tab = Materials:
+Add button choices should be:
+- Material
+- Category
+
+Important:
+That Category option should create the correct category type for the active tab.
+Do not create the wrong kind of category.
+
+4. Separate empty states
+If there are no line item categories/items, show a Line Items empty state.
+If there are no material categories/items, show a Materials empty state.
+
+Make them feel intentional and specific to the active tab.
+
+5. Preserve EcoLogic style
+- keep EcoLogic spacing
+- keep EcoLogic colors
+- keep EcoLogic buttons
+- keep EcoLogic typography
+- keep EcoLogic card/list styling
+- keep it polished and contractor-simple
+
+Do NOT make it feel like a different app.
+
+6. Preserve existing flows
+- existing line item flows should keep working
+- new materials flows should work cleanly
+- category detail pages should still work
+- add/edit/delete should still work
+- search should still work, scoped to the active tab
+
+7. Backwards compatibility / data safety
+- do not lose any existing categories/items/materials
+- if Materials were previously mixed into the main category list, migrate/display them into the Materials tab correctly
+- ensure existing Line Item categories remain under Line Items
+
+EXPECTED RESULT
+The Price Book now has a top toggle:
+[ Line Items ] [ Materials ]
+
+Line Items tab:
+- only line item categories/items
+
+Materials tab:
+- only material categories/items
+
+Both sides have their own category -> items flow.
+
+DELIVERABLES
+1. Add the Line Items / Materials toggle to the Price Book
+2. Split the Price Book into 2 separate modes
+3. Scope categories correctly by type/tab
+4. Scope Add button choices correctly by active tab
+5. Preserve search/add/edit/delete flows
+6. Tell me the exact file(s) changed
+7. Explain the final data structure used for:
+   - line item categories
+   - material categories
+8. Confirm Materials no longer appear mixed into the Line Items category list

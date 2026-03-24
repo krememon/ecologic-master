@@ -1152,6 +1152,7 @@ export const pricebookCategories = pgTable("pricebook_categories", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 100 }).notNull(),
+  categoryType: varchar("category_type", { length: 50 }).notNull().default("line_item"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({

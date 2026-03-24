@@ -14,6 +14,7 @@ import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Se
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
+import { cn } from "@/lib/utils";
 import type { ServiceCatalogItem, PricebookCategory } from "@shared/schema";
 
 const UNIT_OPTIONS = [
@@ -25,17 +26,19 @@ const UNIT_OPTIONS = [
   { value: "day", label: "Day" },
 ];
 
+type Tab = "line_items" | "materials";
+
 type ActiveView =
   | { type: "list" }
   | { type: "category"; categoryId: number; categoryName: string }
-  | { type: "uncategorized" }
-  | { type: "materials" };
+  | { type: "uncategorized" };
 
 export default function PriceBook() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { can } = useCan();
 
+  const [activeTab, setActiveTab] = useState<Tab>("line_items");
   const [view, setView] = useState<ActiveView>({ type: "list" });
   const [listSearch, setListSearch] = useState("");
   const [detailSearch, setDetailSearch] = useState("");
@@ -66,6 +69,56 @@ export default function PriceBook() {
     enabled: isAuthenticated && can('customize.manage'),
   });
 
+  // ── Derived data: scoped to the active tab ──────────────────────
+
+  const tabItemType: "line_item" | "material" = activeTab === "materials" ? "material" : "line_item";
+
+  // Categories matching the active tab
+  const tabCategories = categories.filter(
+    cat => ((cat as any).categoryType ?? 'line_item') === tabItemType
+  );
+
+  // Items matching the active tab
+  const tabItems = catalogItems.filter(
+    item => ((item as any).itemType ?? 'line_item') === tabItemType
+  );
+
+  // Uncategorized items for the active tab
+  const uncategorizedTabItems = tabItems.filter(item => !(item as any).categoryId);
+
+  // Items for the current detail view
+  const itemsForCurrentView = view.type === "category"
+    ? tabItems.filter(item => (item as any).categoryId === view.categoryId)
+    : view.type === "uncategorized"
+    ? uncategorizedTabItems
+    : [];
+
+  const detailFiltered = itemsForCurrentView.filter(item =>
+    !detailSearch.trim() ||
+    item.name.toLowerCase().includes(detailSearch.toLowerCase()) ||
+    (item.description && item.description.toLowerCase().includes(detailSearch.toLowerCase()))
+  );
+
+  // List-level search
+  const listSearchLower = listSearch.trim().toLowerCase();
+  const filteredTabCategories = listSearchLower
+    ? tabCategories.filter(cat => {
+        if (cat.name.toLowerCase().includes(listSearchLower)) return true;
+        return tabItems.some(
+          item => (item as any).categoryId === cat.id &&
+            (item.name.toLowerCase().includes(listSearchLower) ||
+             (item.description && item.description.toLowerCase().includes(listSearchLower)))
+        );
+      })
+    : tabCategories;
+
+  const showUncategorized = uncategorizedTabItems.length > 0 &&
+    (!listSearchLower || "uncategorized".includes(listSearchLower) ||
+      uncategorizedTabItems.some(item =>
+        item.name.toLowerCase().includes(listSearchLower) ||
+        (item.description && item.description.toLowerCase().includes(listSearchLower))
+      ));
+
   // ── Mutations ──────────────────────────────────────────────────
 
   const createItemMutation = useMutation({
@@ -75,7 +128,7 @@ export default function PriceBook() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-      toast({ title: "Item added" });
+      toast({ title: activeTab === "materials" ? "Material added" : "Item added" });
       resetItemForm();
       setIsItemDialogOpen(false);
     },
@@ -107,8 +160,8 @@ export default function PriceBook() {
   });
 
   const createCategoryMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await apiRequest('POST', '/api/service-catalog/categories', { name });
+    mutationFn: async ({ name, categoryType }: { name: string; categoryType: string }) => {
+      const res = await apiRequest('POST', '/api/service-catalog/categories', { name, categoryType });
       return res.json();
     },
     onSuccess: (cat: PricebookCategory) => {
@@ -153,16 +206,15 @@ export default function PriceBook() {
     setPriceDisplay("");
   };
 
-  const openCreateItemDialog = (prefillCategoryId?: number | null, prefillItemType?: "line_item" | "material") => {
+  const openCreateItemDialog = (prefillCategoryId?: number | null) => {
     resetItemForm();
-    const type = prefillItemType ?? (view.type === "materials" ? "material" : "line_item");
-    if (prefillCategoryId !== undefined) {
-      setFormData(f => ({ ...f, categoryId: prefillCategoryId, itemType: type }));
-    } else if (view.type === "category") {
-      setFormData(f => ({ ...f, categoryId: view.categoryId, itemType: type }));
-    } else {
-      setFormData(f => ({ ...f, itemType: type }));
-    }
+    const type = tabItemType;
+    const catId = prefillCategoryId !== undefined
+      ? prefillCategoryId
+      : view.type === "category"
+      ? view.categoryId
+      : null;
+    setFormData(f => ({ ...f, categoryId: catId, itemType: type }));
     setEditingItem(null);
     setIsItemDialogOpen(true);
   };
@@ -223,6 +275,13 @@ export default function PriceBook() {
     setPriceDisplay(formatted.endsWith('.00') ? formatted.slice(0, -3) : formatted);
   };
 
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    setView({ type: "list" });
+    setListSearch("");
+    setDetailSearch("");
+  };
+
   // ── Auth guard ─────────────────────────────────────────────────
 
   if (authLoading) {
@@ -245,51 +304,15 @@ export default function PriceBook() {
     );
   }
 
-  // ── Derived data ───────────────────────────────────────────────
-
-  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId && (item as any).itemType !== 'material');
-  const materialItems = catalogItems.filter(item => (item as any).itemType === 'material');
-
-  const itemsForCurrentCategory = view.type === "category"
-    ? catalogItems.filter(item => (item as any).categoryId === view.categoryId && (item as any).itemType !== 'material')
-    : view.type === "uncategorized"
-    ? uncategorizedItems
-    : view.type === "materials"
-    ? materialItems
-    : [];
-
-  const detailFiltered = itemsForCurrentCategory.filter(item =>
-    !detailSearch.trim() ||
-    item.name.toLowerCase().includes(detailSearch.toLowerCase()) ||
-    (item.description && item.description.toLowerCase().includes(detailSearch.toLowerCase()))
-  );
-
-  // List-level search: matches categories by name OR items by name (shows category rows that match)
-  const listSearchLower = listSearch.trim().toLowerCase();
-  const filteredCategories = listSearchLower
-    ? categories.filter(cat => {
-        if (cat.name.toLowerCase().includes(listSearchLower)) return true;
-        return catalogItems.some(
-          item => (item as any).categoryId === cat.id &&
-            (item.name.toLowerCase().includes(listSearchLower) ||
-             (item.description && item.description.toLowerCase().includes(listSearchLower)))
-        );
-      })
-    : categories;
-
-  const showUncategorized = uncategorizedItems.length > 0 &&
-    (!listSearchLower || "uncategorized".includes(listSearchLower) ||
-      uncategorizedItems.some(item =>
-        item.name.toLowerCase().includes(listSearchLower) ||
-        (item.description && item.description.toLowerCase().includes(listSearchLower))
-      ));
+  const isMaterials = activeTab === "materials";
+  const addItemLabel = isMaterials ? "Material" : "Line Item";
+  const addItemIcon = isMaterials ? <Package className="h-4 w-4 text-teal-600" /> : <ListPlus className="h-4 w-4 text-teal-600" />;
 
   // ── Category detail view ───────────────────────────────────────
 
-  if (view.type === "category" || view.type === "uncategorized" || view.type === "materials") {
-    const title = view.type === "category" ? view.categoryName : view.type === "materials" ? "Materials" : "Uncategorized";
+  if (view.type === "category" || view.type === "uncategorized") {
+    const title = view.type === "category" ? view.categoryName : "Uncategorized";
     const currentCatId = view.type === "category" ? view.categoryId : null;
-    const isMaterialsView = view.type === "materials";
 
     return (
       <div className="container mx-auto px-4 py-6 max-w-2xl">
@@ -302,15 +325,17 @@ export default function PriceBook() {
             <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Price Book</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
+              Price Book · {isMaterials ? "Materials" : "Line Items"}
+            </p>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
           </div>
           <Button
-            onClick={() => openCreateItemDialog(currentCatId, isMaterialsView ? "material" : undefined)}
+            onClick={() => openCreateItemDialog(currentCatId)}
             className="bg-teal-600 hover:bg-teal-700"
           >
             <Plus className="h-4 w-4 mr-1.5" />
-            {isMaterialsView ? "Add Material" : "Add Item"}
+            Add {addItemLabel}
           </Button>
         </div>
 
@@ -344,25 +369,27 @@ export default function PriceBook() {
             {detailSearch ? (
               <>
                 <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-500 dark:text-slate-400">No items match "{detailSearch}"</p>
+                <p className="text-slate-500 dark:text-slate-400">No results for "{detailSearch}"</p>
               </>
             ) : (
               <>
-                {isMaterialsView
+                {isMaterials
                   ? <Package className="mx-auto h-10 w-10 text-slate-300 mb-3" />
                   : <Tag className="mx-auto h-10 w-10 text-slate-300 mb-3" />}
                 <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">
-                  {isMaterialsView ? "No materials yet" : "No items here yet"}
+                  {isMaterials ? "No materials here yet" : "No items here yet"}
                 </p>
                 <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
-                  {isMaterialsView ? "Add your first material to the catalog" : "Add your first item to this category"}
+                  {isMaterials
+                    ? "Add your first material to this category"
+                    : "Add your first item to this category"}
                 </p>
                 <Button
-                  onClick={() => openCreateItemDialog(currentCatId, isMaterialsView ? "material" : undefined)}
+                  onClick={() => openCreateItemDialog(currentCatId)}
                   className="bg-teal-600 hover:bg-teal-700"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {isMaterialsView ? "Add Material" : "Add Item"}
+                  Add {addItemLabel}
                 </Button>
               </>
             )}
@@ -403,7 +430,7 @@ export default function PriceBook() {
                       </AlertDialogTrigger>
                       <AlertDialogContent className="ecologic-alert-dialog">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Item</AlertDialogTitle>
+                          <AlertDialogTitle>Delete {isMaterials ? "Material" : "Item"}</AlertDialogTitle>
                           <AlertDialogDescription>
                             Are you sure you want to delete "{item.name}"? This cannot be undone.
                           </AlertDialogDescription>
@@ -426,15 +453,18 @@ export default function PriceBook() {
           </>
         )}
 
-        {/* Shared dialogs */}
         {itemDialog()}
       </div>
     );
   }
 
-  // ── Category list view (main) ──────────────────────────────────
+  // ── Main list view ─────────────────────────────────────────────
 
-  const totalItems = catalogItems.length;
+  const totalTabItems = tabItems.length;
+  const totalTabCategories = tabCategories.length;
+
+  const listIsEmpty = totalTabCategories === 0 && uncategorizedTabItems.length === 0;
+  const searchReturnedNothing = !listIsEmpty && filteredTabCategories.length === 0 && !showUncategorized;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
@@ -448,7 +478,7 @@ export default function PriceBook() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'} · {totalItems} item{totalItems !== 1 ? 's' : ''}
+            {totalTabCategories} categor{totalTabCategories !== 1 ? 'ies' : 'y'} · {totalTabItems} {isMaterials ? "material" : "item"}{totalTabItems !== 1 ? 's' : ''}
           </p>
         </div>
         <DropdownMenu>
@@ -464,15 +494,8 @@ export default function PriceBook() {
               className="flex items-center gap-2.5 cursor-pointer py-2.5"
               onSelect={() => openCreateItemDialog()}
             >
-              <ListPlus className="h-4 w-4 text-teal-600" />
-              <span className="font-medium">Line Item</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-2.5 cursor-pointer py-2.5"
-              onSelect={() => openCreateItemDialog(undefined, "material")}
-            >
-              <Package className="h-4 w-4 text-teal-600" />
-              <span className="font-medium">Material</span>
+              {addItemIcon}
+              <span className="font-medium">{addItemLabel}</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               className="flex items-center gap-2.5 cursor-pointer py-2.5"
@@ -485,12 +508,38 @@ export default function PriceBook() {
         </DropdownMenu>
       </div>
 
+      {/* Tab Toggle */}
+      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
+        <button
+          onClick={() => switchTab("line_items")}
+          className={cn(
+            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+            activeTab === "line_items"
+              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          )}
+        >
+          Line Items
+        </button>
+        <button
+          onClick={() => switchTab("materials")}
+          className={cn(
+            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+            activeTab === "materials"
+              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          )}
+        >
+          Materials
+        </button>
+      </div>
+
       {/* Search */}
       <div className="relative mb-5">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <Input
           type="text"
-          placeholder="Search categories or items..."
+          placeholder={isMaterials ? "Search materials or categories..." : "Search items or categories..."}
           value={listSearch}
           onChange={(e) => setListSearch(e.target.value)}
           className="pl-10"
@@ -511,22 +560,34 @@ export default function PriceBook() {
           <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
         </div>
 
-      /* Empty — no categories at all */
-      ) : categories.length === 0 && uncategorizedItems.length === 0 ? (
+      /* Empty — no categories or items in this tab */
+      ) : listIsEmpty ? (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14 px-6">
-          <FolderOpen className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-          <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No categories yet</p>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
-            Create a category to start organizing your price book
+          {isMaterials
+            ? <Package className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+            : <FolderOpen className="mx-auto h-12 w-12 text-slate-300 mb-3" />}
+          <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">
+            {isMaterials ? "No materials yet" : "No line items yet"}
           </p>
-          <Button onClick={() => setIsCategoryDialogOpen(true)} className="bg-teal-600 hover:bg-teal-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Category
-          </Button>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
+            {isMaterials
+              ? "Create a category or add materials directly"
+              : "Create a category to start organizing your price book"}
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Add {addItemLabel}
+            </Button>
+            <Button onClick={() => setIsCategoryDialogOpen(true)} variant="outline">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Add Category
+            </Button>
+          </div>
         </div>
 
       /* Search returned nothing */
-      ) : filteredCategories.length === 0 && !showUncategorized ? (
+      ) : searchReturnedNothing ? (
         <div className="text-center py-14">
           <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
           <p className="text-slate-500 dark:text-slate-400">No results for "{listSearch}"</p>
@@ -535,8 +596,8 @@ export default function PriceBook() {
       /* Category list */
       ) : (
         <div className="space-y-2">
-          {filteredCategories.map(cat => {
-            const count = catalogItems.filter(item => (item as any).categoryId === cat.id).length;
+          {filteredTabCategories.map(cat => {
+            const count = tabItems.filter(item => (item as any).categoryId === cat.id).length;
             return (
               <button
                 key={cat.id}
@@ -548,48 +609,15 @@ export default function PriceBook() {
                     {cat.name}
                   </div>
                   <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                    {count === 0 ? "No items" : `${count} item${count !== 1 ? 's' : ''}`}
+                    {count === 0
+                      ? (isMaterials ? "No materials" : "No items")
+                      : `${count} ${isMaterials ? "material" : "item"}${count !== 1 ? 's' : ''}`}
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
               </button>
             );
           })}
-
-          {/* Materials row */}
-          {(() => {
-            const matCount = catalogItems.filter(item => (item as any).itemType === 'material').length;
-            const showMaterials = matCount > 0 || (!listSearchLower) || "materials".includes(listSearchLower);
-            if (!showMaterials && matCount === 0) return null;
-            if (listSearchLower && !("materials".includes(listSearchLower)) && matCount === 0) return null;
-            if (listSearchLower && !("materials".includes(listSearchLower)) &&
-              !catalogItems.some(item =>
-                (item as any).itemType === 'material' && (
-                  item.name.toLowerCase().includes(listSearchLower) ||
-                  (item.description && item.description.toLowerCase().includes(listSearchLower))
-                )
-              )
-            ) return null;
-            return (
-              <button
-                onClick={() => { setView({ type: "materials" }); setDetailSearch(""); }}
-                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all text-left group"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
-                    Materials
-                    <span className="text-xs font-normal bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded">
-                      catalog
-                    </span>
-                  </div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                    {matCount === 0 ? "No materials" : `${matCount} material${matCount !== 1 ? 's' : ''}`}
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
-              </button>
-            );
-          })()}
 
           {/* Uncategorized row */}
           {showUncategorized && (
@@ -602,7 +630,7 @@ export default function PriceBook() {
                   Uncategorized
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                  {uncategorizedItems.length} item{uncategorizedItems.length !== 1 ? 's' : ''}
+                  {uncategorizedTabItems.length} {isMaterials ? "material" : "item"}{uncategorizedTabItems.length !== 1 ? 's' : ''}
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors flex-shrink-0" />
@@ -617,9 +645,10 @@ export default function PriceBook() {
     </div>
   );
 
-  // ── Dialog renderers (shared between both views) ───────────────
+  // ── Dialog renderers ───────────────────────────────────────────
 
   function itemDialog() {
+    const isMat = formData.itemType === "material";
     return (
       <Dialog open={isItemDialogOpen} onOpenChange={(open) => {
         setIsItemDialogOpen(open);
@@ -630,8 +659,8 @@ export default function PriceBook() {
             <div className="min-w-[44px]" />
             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {editingItem
-                ? (formData.itemType === "material" ? "Edit Material" : "Edit Item")
-                : (formData.itemType === "material" ? "Add Material" : "Add Item")}
+                ? (isMat ? "Edit Material" : "Edit Item")
+                : (isMat ? "Add Material" : "Add Item")}
             </DialogTitle>
             <button
               onClick={() => setIsItemDialogOpen(false)}
@@ -723,7 +752,7 @@ export default function PriceBook() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {categories.map(cat => (
+                    {tabCategories.map(cat => (
                       <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -759,9 +788,7 @@ export default function PriceBook() {
               {(createItemMutation.isPending || updateItemMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingItem
-                ? "Save Changes"
-                : (formData.itemType === "material" ? "Add Material" : "Add Item")}
+              {editingItem ? "Save Changes" : (isMat ? "Add Material" : "Add Item")}
             </Button>
           </div>
         </DialogContent>
@@ -770,13 +797,14 @@ export default function PriceBook() {
   }
 
   function categoryDialog() {
+    const dialogTitle = isMaterials ? "Material Categories" : "Line Item Categories";
     return (
       <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
         <DialogContent className="ecologic-dialog w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
           <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
             <div className="min-w-[44px]" />
             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Manage Categories
+              {dialogTitle}
             </DialogTitle>
             <button
               onClick={() => setIsCategoryDialogOpen(false)}
@@ -800,12 +828,16 @@ export default function PriceBook() {
                   className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newCategoryName.trim()) {
-                      createCategoryMutation.mutate(newCategoryName.trim());
+                      createCategoryMutation.mutate({ name: newCategoryName.trim(), categoryType: tabItemType });
                     }
                   }}
                 />
                 <Button
-                  onClick={() => { if (newCategoryName.trim()) createCategoryMutation.mutate(newCategoryName.trim()); }}
+                  onClick={() => {
+                    if (newCategoryName.trim()) {
+                      createCategoryMutation.mutate({ name: newCategoryName.trim(), categoryType: tabItemType });
+                    }
+                  }}
                   disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
                   className="h-10 bg-teal-600 hover:bg-teal-700 rounded-xl px-4 flex-shrink-0"
                 >
@@ -819,7 +851,7 @@ export default function PriceBook() {
               <div className="flex justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
               </div>
-            ) : categories.length === 0 ? (
+            ) : tabCategories.length === 0 ? (
               <div className="text-center py-6">
                 <FolderOpen className="mx-auto h-10 w-10 text-slate-300 mb-2" />
                 <p className="text-sm text-slate-500 dark:text-slate-400">No categories yet</p>
@@ -830,8 +862,8 @@ export default function PriceBook() {
                   Categories
                 </p>
                 <div className="space-y-1">
-                  {categories.map(cat => {
-                    const itemCount = catalogItems.filter(item => (item as any).categoryId === cat.id).length;
+                  {tabCategories.map(cat => {
+                    const itemCount = tabItems.filter(item => (item as any).categoryId === cat.id).length;
                     const isRenaming = renamingCategoryId === cat.id;
                     return (
                       <div key={cat.id} className="flex items-center gap-2 group p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -866,7 +898,9 @@ export default function PriceBook() {
                           <>
                             <div className="flex-1 min-w-0">
                               <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{cat.name}</span>
-                              <span className="ml-2 text-xs text-slate-400">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+                              <span className="ml-2 text-xs text-slate-400">
+                                {itemCount} {isMaterials ? "material" : "item"}{itemCount !== 1 ? 's' : ''}
+                              </span>
                             </div>
                             <button
                               onClick={() => { setRenamingCategoryId(cat.id); setRenamingCategoryName(cat.name); }}
@@ -884,7 +918,7 @@ export default function PriceBook() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Delete Category</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Delete "{cat.name}"? The {itemCount} item{itemCount !== 1 ? 's' : ''} inside will move to Uncategorized — nothing gets deleted.
+                                    Delete "{cat.name}"? The {itemCount} {isMaterials ? "material" : "item"}{itemCount !== 1 ? 's' : ''} inside will move to Uncategorized — nothing gets deleted.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>

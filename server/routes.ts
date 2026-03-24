@@ -15622,11 +15622,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMemberByUserId(userId);
       if (!member) return res.status(403).json({ error: 'Not a company member' });
       if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
-      const { name } = req.body;
+      const { name, categoryType } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
+      const validType = categoryType === 'material' ? 'material' : 'line_item';
       const category = await storage.createPricebookCategory({
         companyId: member.companyId,
         name: name.trim(),
+        categoryType: validType,
         sortOrder: 0,
       });
       res.status(201).json(category);
