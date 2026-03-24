@@ -210,7 +210,7 @@ export default function OnboardingCompany() {
                   id="companyPhone"
                   value={phone}
                   onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
-                  placeholder="(555) 555-5555"
+                  placeholder="Enter phone"
                   inputMode="tel"
                 />
               </div>
@@ -222,7 +222,7 @@ export default function OnboardingCompany() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="office@yourcompany.com"
+                  placeholder="Enter email"
                 />
               </div>
 
