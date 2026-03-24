@@ -569,21 +569,11 @@ export default function PriceBook() {
           <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">
             {isMaterials ? "No materials yet" : "No line items yet"}
           </p>
-          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
+          <p className="text-sm text-slate-400 dark:text-slate-500">
             {isMaterials
-              ? "Create a category or add materials directly"
-              : "Create a category to start organizing your price book"}
+              ? "Use the Add button above to create a material or category"
+              : "Use the Add button above to create an item or category"}
           </p>
-          <div className="flex items-center justify-center gap-2">
-            <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Add {addItemLabel}
-            </Button>
-            <Button onClick={() => setIsCategoryDialogOpen(true)} variant="outline">
-              <FolderOpen className="h-4 w-4 mr-2" />
-              Add Category
-            </Button>
-          </div>
         </div>
 
       /* Search returned nothing */
