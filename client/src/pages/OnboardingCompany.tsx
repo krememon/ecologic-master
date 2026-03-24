@@ -8,6 +8,8 @@ import { Loader2, ArrowLeft, LogOut } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { getPlanForTeamSize, subscriptionPlans } from "@/config/subscriptionPlans";
+import LocationInput, { type Address } from "@/components/LocationInput";
+import { formatPhoneInput } from "@shared/phoneUtils";
 
 const EMPLOYEE_RANGES = [
   { value: "1", label: "Just me (1)" },
@@ -22,6 +24,10 @@ export default function OnboardingCompany() {
   const { user, isLoading: authLoading } = useAuth();
 
   const [companyName, setCompanyName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [addressText, setAddressText] = useState("");
+  const [addressParsed, setAddressParsed] = useState<Address | null>(null);
   const [employeeRange, setEmployeeRange] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -65,6 +71,11 @@ export default function OnboardingCompany() {
   const selectedPlanKey = employeeRange ? getPlanForTeamSize(employeeRange) : null;
   const selectedPlan = selectedPlanKey ? subscriptionPlans[selectedPlanKey] : null;
 
+  const handleAddressSelected = (addr: Address) => {
+    setAddressText(addr.formatted_address || addr.street);
+    setAddressParsed(addr);
+  };
+
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -90,6 +101,13 @@ export default function OnboardingCompany() {
         teamSizeRange: employeeRange,
         planKey,
         userLimit: plan.userLimit,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        addressLine1: addressParsed?.street || addressText.trim() || undefined,
+        city: addressParsed?.city || undefined,
+        state: addressParsed?.state || undefined,
+        postalCode: addressParsed?.postalCode || undefined,
+        country: addressParsed?.country || undefined,
       });
 
       if (!res.ok) {
@@ -132,10 +150,19 @@ export default function OnboardingCompany() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
+            <h1
+              className="text-5xl md:text-6xl mx-auto mb-2"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                color: "#0B0B0D",
+              }}
+            >
               EcoLogic
             </h1>
-            <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Professional contractor management</p>
           </div>
 
           <div className="mb-6">
@@ -150,7 +177,7 @@ export default function OnboardingCompany() {
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 min-h-[400px]">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
             <button
               type="button"
               onClick={handleBack}
@@ -160,7 +187,7 @@ export default function OnboardingCompany() {
               Back
             </button>
 
-            <form onSubmit={handleCompanySubmit} className="space-y-6">
+            <form onSubmit={handleCompanySubmit} className="space-y-4">
               <div className="text-center mb-6">
                 <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Tell us about your company</h2>
               </div>
@@ -171,10 +198,42 @@ export default function OnboardingCompany() {
                   id="companyName"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Your company name"
+                  placeholder="Enter name"
                   className={errors.companyName ? "border-red-500" : ""}
                 />
                 {errors.companyName && <p className="text-xs text-red-500 mt-1">{errors.companyName}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="companyPhone">Phone Number <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input
+                  id="companyPhone"
+                  value={phone}
+                  onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                  placeholder="(555) 555-5555"
+                  inputMode="tel"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="companyEmail">Company Email <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input
+                  id="companyEmail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="office@yourcompany.com"
+                />
+              </div>
+
+              <div>
+                <Label>Company Address <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <LocationInput
+                  value={addressText}
+                  onChange={setAddressText}
+                  onAddressSelected={handleAddressSelected}
+                  placeholder="Search address"
+                />
               </div>
 
               <div>

@@ -4309,7 +4309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("[companies] create: userId=", userId, "provider=", (req.user as any)?.provider);
       
-      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit } = req.body;
+      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
       const inviteCode = await generateUniqueInviteCode(async (code) => {
@@ -4327,6 +4327,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamSizeRange: teamSizeRange || null,
         subscriptionPlan: planKey || null,
         maxUsers: userLimit || 1,
+        phone: phone || null,
+        email: email || null,
+        addressLine1: addressLine1 || null,
+        city: city || null,
+        state: state || null,
+        postalCode: postalCode || null,
+        country: country || null,
       });
       
       res.status(201).json(company);

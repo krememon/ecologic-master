@@ -1,0 +1,75 @@
+We need to update the Create Company screen in EcoLogic.
+
+GOAL
+Clean up this screen so it matches the rest of the sign-in / create-account flow visually, collects more useful company info up front, and automatically carries that data into the Company Profile / Customize section after company creation.
+
+CHANGES NEEDED
+
+1. Fix the EcoLogic branding at the top
+- Right now the EcoLogic logo/text on this screen does not match the rest of the sign-in / create-account flow
+- Change it so it matches the exact same auth header style used on the other screens
+- Reuse the same top branding treatment, sizing, font weight, spacing, and subtitle style
+- Do not make a new variation
+- It should match perfectly with the rest of the auth flow
+
+2. Change the Company Name placeholder text
+- Current placeholder:
+  "Your company name"
+- Change it to:
+  "Enter name"
+
+3. Add more company information fields to this create-company step
+We need to collect more info here up front.
+
+Add these fields:
+- Phone Number
+- Company Email
+- Company Address
+
+For Company Address:
+- Use Google address autofill / autocomplete
+- User should be able to search and select an address cleanly
+- Keep it styled consistently with the rest of the form
+
+IMPORTANT:
+- Keep the UI clean and simple
+- Do not make the screen feel cluttered or messy
+- Maintain the same EcoLogic auth-flow vibe
+- Field spacing should stay polished and consistent
+
+4. Save the new company data directly into Company Profile / Customize
+After the company is created, the information entered on this screen should automatically populate the matching fields in the Company Profile / Customize section.
+
+At minimum, map and persist:
+- Company Name
+- Phone Number
+- Company Email
+- Company Address
+
+EXPECTED DATA BEHAVIOR
+After company creation:
+- If I go into Customize / Company Profile
+- The company info should already be filled in automatically
+- I should not have to re-enter the same details a second time
+
+IMPORTANT IMPLEMENTATION NOTES
+- Reuse the same company profile field mapping / storage shape if possible
+- Do not create duplicate company info sources if one already exists
+- Make sure the create-company flow writes into the same source of truth used by the Customize / Company Profile screen
+- If Google autofill returns structured address fields, store them in the format that best matches the existing company profile data model
+
+DO NOT
+- Do not break the current create-company flow
+- Do not remove the team size selection unless absolutely necessary
+- Do not make weird UI changes
+- Do not change button styling or the overall layout vibe beyond what is needed for these additions
+- Do not create a mismatched header style
+
+DELIVERABLES
+1. Update the Create Company screen UI
+2. Add Phone Number, Company Email, and Company Address fields
+3. Wire Company Address to Google autofill/autocomplete
+4. Ensure created company info auto-populates in Customize > Company Profile
+5. Tell me the exact file(s) changed
+6. Confirm the exact field mapping used from create-company -> company profile
+7. Confirm the EcoLogic top branding now matches the rest of the auth flow perfectly
