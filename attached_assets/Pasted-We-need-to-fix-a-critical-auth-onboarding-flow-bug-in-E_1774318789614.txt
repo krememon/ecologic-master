@@ -1,0 +1,60 @@
+We need to fix a critical auth/onboarding flow bug in EcoLogic.
+
+CURRENT BUG
+Right now, if a user taps "Continue with Google" using a Gmail account that has NEVER actually created an EcoLogic account before, the app is still letting them through and sending them to the "How will you use EcoLogic" screen.
+
+That is wrong.
+
+DESIRED BEHAVIOR
+Google sign-in should only work as a true sign-in for users who already have a real EcoLogic account.
+
+If someone uses Google with an email that does NOT already have an EcoLogic account, they should NOT be allowed to continue into the app flow automatically.
+
+They should instead be routed into the proper account creation flow, or be stopped and told they need to create an account first.
+
+CORE RULE
+A user should not be able to bypass the normal create-account process just by using Google sign-in with a brand new email.
+
+WHAT TO FIX
+1. Audit the current Google auth flow from start to finish
+   - web
+   - iPad/mobile wrapper flow
+   - backend auth callback handling
+   - frontend redirect logic after auth success
+
+2. Find exactly why a brand new Google account is being treated like an existing EcoLogic user
+
+3. Change the logic so that:
+   - existing EcoLogic users who sign in with Google can continue normally
+   - brand new Google emails that do not already belong to a real EcoLogic account cannot get dropped into onboarding as if they already started signup
+   - those users must be routed into the real create-account flow instead
+
+4. Make sure this behavior is based on actual account existence in our system, not just successful Google authentication
+
+IMPORTANT PRODUCT INTENT
+Signing in and creating an account are two different things.
+
+"Continue with Google" should not silently create or partially create a user in a way that skips the intended signup flow.
+
+If we do want Google-based signup in the future, that needs to be an intentional create-account flow, not an accidental side effect of sign-in.
+
+ALSO FIX
+The "Log out" button on the "How will you use EcoLogic" screen is not working.
+That must be fixed too.
+
+EXPECTED RESULT
+- Existing user + Google sign-in = works normally
+- Brand new Google email + Google sign-in = does NOT get let into onboarding/sign-in flow incorrectly
+- User is redirected to create account flow or shown the proper next step
+- No accidental partial account creation
+- Log out button on "How will you use EcoLogic" works correctly
+
+DELIVERABLES
+1. Fix the Google auth logic
+2. Fix the broken logout button on the "How will you use EcoLogic" screen
+3. Tell me the exact files changed
+4. Explain the exact redirect logic after the fix
+5. Confirm the tested scenarios:
+   - existing account + Google
+   - brand new Google account
+   - logout from How will you use EcoLogic screen

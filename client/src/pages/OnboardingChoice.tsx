@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Building2, Users, HelpCircle, LogOut, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, clearNativeSession } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 if (import.meta.env.DEV) {
@@ -44,10 +44,14 @@ export default function OnboardingChoice() {
   const handleLogout = async () => {
     try {
       await apiRequest("POST", "/api/logout", {});
+      // Clear the native Bearer token BEFORE invalidating queries so the
+      // native app doesn't immediately re-authenticate with the old token.
+      clearNativeSession();
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
       await queryClient.invalidateQueries();
-      setLocation("/");
+      // Use a hard navigation so all in-memory auth state is flushed.
+      window.location.href = "/";
     } catch (error) {
       toast({
         title: "Error",

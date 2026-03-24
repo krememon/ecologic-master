@@ -468,6 +468,11 @@ function AuthenticatedRouter() {
       <Switch>
         <Route path="/terms" component={TermsOfService} />
         <Route path="/privacy" component={PrivacyPolicy} />
+        {/* Allow the signup wizard to stay mounted while onboarding is pending.
+            This is needed for the Google new-user flow: complete-registration
+            logs the user in (triggering nextRoute), but the SignupWizard must
+            remain accessible to let the user finish the role-selection step. */}
+        <Route path="/signup" component={SignupWizard} />
         <Route path="/onboarding/choice" component={OnboardingChoice} />
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
