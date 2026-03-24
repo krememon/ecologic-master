@@ -748,7 +748,6 @@ export default function PriceBook() {
               value={renameCatValue}
               onChange={(e) => setRenameCatValue(e.target.value)}
               placeholder="Category name"
-              autoFocus
               className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && renameCatValue.trim() && renameCatDialog) {
