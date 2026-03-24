@@ -24,16 +24,87 @@ const UNIT_OPTIONS = [
   { value: "day", label: "Day" },
 ];
 
+function ItemRow({
+  item,
+  catName,
+  showCatBadge,
+  onEdit,
+  onDelete,
+}: {
+  item: ServiceCatalogItem;
+  catName?: string;
+  showCatBadge?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{item.name}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+          <span>{formatCurrency(item.defaultPriceCents)}</span>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
+          {showCatBadge && catName && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <span className="bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded text-[11px] font-medium">
+                {catName}
+              </span>
+            </>
+          )}
+          {showCatBadge && !catName && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <span className="text-slate-400 dark:text-slate-500 text-[11px]">Uncategorized</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={onEdit}
+          className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="ecologic-alert-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Item</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{item.name}"? This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onDelete} className="bg-red-600 hover:bg-red-700">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
+
 export default function PriceBook() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { can } = useCan();
 
-  const [activeCategory, setActiveCategory] = useState<number | "all" | "uncategorized">("all");
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ServiceCatalogItem | null>(null);
-  const [editingCategory, setEditingCategory] = useState<PricebookCategory | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [renamingCategoryId, setRenamingCategoryId] = useState<number | null>(null);
   const [renamingCategoryName, setRenamingCategoryName] = useState("");
@@ -104,8 +175,7 @@ export default function PriceBook() {
     onSuccess: (cat: PricebookCategory) => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
       setNewCategoryName("");
-      setActiveCategory(cat.id);
-      toast({ title: `Category "${cat.name}" created` });
+      toast({ title: `"${cat.name}" created` });
     },
     onError: () => toast({ title: "Error", description: "Failed to create category", variant: "destructive" }),
   });
@@ -129,7 +199,6 @@ export default function PriceBook() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-      setActiveCategory("all");
       toast({ title: "Category deleted", description: "Items moved to Uncategorized" });
     },
     onError: () => toast({ title: "Error", description: "Failed to delete category", variant: "destructive" }),
@@ -140,10 +209,10 @@ export default function PriceBook() {
     setPriceDisplay("");
   };
 
-  const openCreateItemDialog = () => {
+  const openCreateItemDialog = (prefillCategoryId?: number | null) => {
     resetItemForm();
-    if (typeof activeCategory === "number") {
-      setFormData(f => ({ ...f, categoryId: activeCategory }));
+    if (prefillCategoryId != null) {
+      setFormData(f => ({ ...f, categoryId: prefillCategoryId }));
     }
     setEditingItem(null);
     setIsItemDialogOpen(true);
@@ -174,9 +243,6 @@ export default function PriceBook() {
       createItemMutation.mutate(formData);
     }
   };
-
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
   const handlePriceChange = (value: string) => {
     const stripped = value.replace(/,/g, '');
@@ -224,18 +290,23 @@ export default function PriceBook() {
     );
   }
 
-  const searchFiltered = catalogItems.filter(item =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  const isSearching = searchQuery.trim().length > 0;
+
+  // Search: flat list across all items
+  const searchResults = isSearching
+    ? catalogItems.filter(item =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : [];
+
+  // Section data for normal (non-search) view
+  const categoriesWithItems = categories.filter(cat =>
+    catalogItems.some(item => (item as any).categoryId === cat.id)
   );
+  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId);
 
-  const filteredItems = searchFiltered.filter(item => {
-    if (activeCategory === "all") return true;
-    if (activeCategory === "uncategorized") return !(item as any).categoryId;
-    return (item as any).categoryId === activeCategory;
-  });
-
-  const uncategorizedCount = catalogItems.filter(item => !(item as any).categoryId).length;
+  const totalItems = catalogItems.length;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
@@ -246,18 +317,28 @@ export default function PriceBook() {
             <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
         </Link>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">Reusable line items for estimates</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            {totalItems} item{totalItems !== 1 ? 's' : ''}
+          </p>
         </div>
-        <Button onClick={openCreateItemDialog} className="bg-teal-600 hover:bg-teal-700">
-          <Plus className="h-4 w-4 mr-2" />
+        {/* Category management — right side of header */}
+        <button
+          onClick={() => setIsCategoryDialogOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+        >
+          <FolderOpen className="h-4 w-4" />
+          <span className="hidden sm:inline">Categories</span>
+        </button>
+        <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
+          <Plus className="h-4 w-4 mr-1.5" />
           Add Item
         </Button>
       </div>
 
       {/* Search */}
-      <div className="relative mb-4">
+      <div className="relative mb-5">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
         <Input
           type="text"
@@ -266,147 +347,166 @@ export default function PriceBook() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
         />
-      </div>
-
-      {/* Category tabs */}
-      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          onClick={() => setActiveCategory("all")}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            activeCategory === "all"
-              ? "bg-teal-600 text-white"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          All ({catalogItems.length})
-        </button>
-        {categories.map(cat => {
-          const count = catalogItems.filter(item => (item as any).categoryId === cat.id).length;
-          return (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                activeCategory === cat.id
-                  ? "bg-teal-600 text-white"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-              }`}
-            >
-              {cat.name} ({count})
-            </button>
-          );
-        })}
-        {uncategorizedCount > 0 && (
+        {searchQuery && (
           <button
-            onClick={() => setActiveCategory("uncategorized")}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              activeCategory === "uncategorized"
-                ? "bg-slate-600 text-white"
-                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-            }`}
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
-            Uncategorized ({uncategorizedCount})
+            <X className="h-4 w-4" />
           </button>
         )}
-        <button
-          onClick={() => setIsCategoryDialogOpen(true)}
-          className="flex-shrink-0 ml-1 px-3 py-1.5 rounded-full text-sm font-medium border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors flex items-center gap-1"
-        >
-          <FolderOpen className="h-3.5 w-3.5" />
-          Manage
-        </button>
       </div>
 
-      {/* Items list */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="text-center py-12">
-            <DollarSign className="mx-auto h-12 w-12 text-slate-300 mb-4" />
-            <p className="text-slate-500 dark:text-slate-400">
-              {searchQuery
-                ? "No items match your search"
-                : activeCategory !== "all"
-                ? "No items in this category yet."
-                : "No items yet. Add your first item to get started."}
-            </p>
-            {activeCategory !== "all" && !searchQuery && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-3 text-teal-600 hover:text-teal-700"
-                onClick={openCreateItemDialog}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add item here
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-200 dark:divide-slate-700">
-            {filteredItems.map((item) => {
-              const catName = categories.find(c => c.id === (item as any).categoryId)?.name;
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
-                    <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap">
-                      <span>{formatCurrency(item.defaultPriceCents)}</span>
-                      <span className="text-slate-300 dark:text-slate-600">•</span>
-                      <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
-                      {catName && (
-                        <>
-                          <span className="text-slate-300 dark:text-slate-600">•</span>
-                          <span className="inline-flex items-center gap-1 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-xs px-2 py-0.5 rounded-full font-medium">
-                            {catName}
-                          </span>
-                        </>
-                      )}
-                    </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+        </div>
+      ) : isSearching ? (
+        /* ── Search results: flat list with category badge ── */
+        <div>
+          {searchResults.length === 0 ? (
+            <div className="text-center py-14">
+              <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+              <p className="text-slate-500 dark:text-slate-400">No items match "{searchQuery}"</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 px-1">
+                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+              </p>
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                {searchResults.map(item => {
+                  const catName = categories.find(c => c.id === (item as any).categoryId)?.name;
+                  return (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      catName={catName}
+                      showCatBadge
+                      onEdit={() => openEditItemDialog(item)}
+                      onDelete={() => deleteItemMutation.mutate(item.id)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : totalItems === 0 ? (
+        /* ── Empty state ── */
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14">
+          <DollarSign className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+          <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No items yet</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">Add your first item to get started</p>
+          <Button onClick={() => openCreateItemDialog()} className="bg-teal-600 hover:bg-teal-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
+      ) : (
+        /* ── Section view ── */
+        <div className="space-y-5">
+
+          {/* Category sections (only categories that have items) */}
+          {categoriesWithItems.map(cat => {
+            const items = catalogItems.filter(item => (item as any).categoryId === cat.id);
+            return (
+              <div key={cat.id}>
+                {/* Section header */}
+                <div className="flex items-center justify-between mb-1.5 px-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                      {cat.name}
+                    </h2>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">
+                      {items.length}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1 ml-4">
-                    <Button variant="ghost" size="sm" onClick={() => openEditItemDialog(item)}>
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="ecologic-alert-dialog">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Item</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{item.name}"? This cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteItemMutation.mutate(item.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  <button
+                    onClick={() => openCreateItemDialog(cat.id)}
+                    className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                {/* Items card */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                  {items.map(item => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      onEdit={() => openEditItemDialog(item)}
+                      onDelete={() => deleteItemMutation.mutate(item.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
 
-      {/* Add/Edit Item Dialog */}
+          {/* Empty categories (categories with no items get a subtle placeholder) */}
+          {categories
+            .filter(cat => !catalogItems.some(item => (item as any).categoryId === cat.id))
+            .map(cat => (
+              <div key={cat.id}>
+                <div className="flex items-center justify-between mb-1.5 px-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                      {cat.name}
+                    </h2>
+                    <span className="text-xs text-slate-300 dark:text-slate-600">0</span>
+                  </div>
+                  <button
+                    onClick={() => openCreateItemDialog(cat.id)}
+                    className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add
+                  </button>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-dashed border-slate-200 dark:border-slate-700 py-4 px-4 text-center">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">No items in this category</p>
+                </div>
+              </div>
+            ))}
+
+          {/* Uncategorized section */}
+          {uncategorizedItems.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                    Uncategorized
+                  </h2>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">
+                    {uncategorizedItems.length}
+                  </span>
+                </div>
+                <button
+                  onClick={() => openCreateItemDialog(null)}
+                  className="flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium transition-colors py-1 px-1.5 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </button>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                {uncategorizedItems.map(item => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onEdit={() => openEditItemDialog(item)}
+                    onDelete={() => deleteItemMutation.mutate(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Add / Edit Item Dialog ── */}
       <Dialog open={isItemDialogOpen} onOpenChange={(open) => {
         setIsItemDialogOpen(open);
         if (!open) { resetItemForm(); setEditingItem(null); }
@@ -426,6 +526,7 @@ export default function PriceBook() {
           </div>
 
           <div className="px-4 py-5 space-y-4 bg-white dark:bg-slate-900 overflow-y-auto max-h-[70vh]">
+            {/* Name */}
             <div className="space-y-1.5">
               <Label htmlFor="item-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Name <span className="text-red-500">*</span>
@@ -439,6 +540,7 @@ export default function PriceBook() {
               />
             </div>
 
+            {/* Description */}
             <div className="space-y-1.5">
               <Label htmlFor="item-description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Description
@@ -453,6 +555,7 @@ export default function PriceBook() {
               />
             </div>
 
+            {/* Price + Unit */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="item-price" className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -476,10 +579,7 @@ export default function PriceBook() {
                 <Label htmlFor="item-unit" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Unit
                 </Label>
-                <Select
-                  value={formData.unit}
-                  onValueChange={(value) => setFormData({ ...formData, unit: value })}
-                >
+                <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
                   <SelectTrigger className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                     <SelectValue />
                   </SelectTrigger>
@@ -492,6 +592,7 @@ export default function PriceBook() {
               </div>
             </div>
 
+            {/* Category + Task Code */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="item-category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -548,7 +649,7 @@ export default function PriceBook() {
         </DialogContent>
       </Dialog>
 
-      {/* Manage Categories Dialog */}
+      {/* ── Manage Categories Dialog ── */}
       <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
         <DialogContent className="ecologic-dialog w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
           <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
@@ -564,8 +665,8 @@ export default function PriceBook() {
             </button>
           </div>
 
-          <div className="px-4 py-5 bg-white dark:bg-slate-900 overflow-y-auto max-h-[65vh] space-y-4">
-            {/* Create new category */}
+          <div className="px-4 py-5 bg-white dark:bg-slate-900 overflow-y-auto max-h-[65vh] space-y-5">
+            {/* Create new */}
             <div>
               <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
                 New Category
@@ -583,9 +684,7 @@ export default function PriceBook() {
                   }}
                 />
                 <Button
-                  onClick={() => {
-                    if (newCategoryName.trim()) createCategoryMutation.mutate(newCategoryName.trim());
-                  }}
+                  onClick={() => { if (newCategoryName.trim()) createCategoryMutation.mutate(newCategoryName.trim()); }}
                   disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
                   className="h-10 bg-teal-600 hover:bg-teal-700 rounded-xl px-4 flex-shrink-0"
                 >
@@ -596,7 +695,7 @@ export default function PriceBook() {
 
             {/* Existing categories */}
             {categoriesLoading ? (
-              <div className="flex justify-center py-6">
+              <div className="flex justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
               </div>
             ) : categories.length === 0 ? (
@@ -606,10 +705,10 @@ export default function PriceBook() {
               </div>
             ) : (
               <div>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
-                  Existing Categories
+                <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
+                  Categories
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {categories.map(cat => {
                     const itemCount = catalogItems.filter(item => (item as any).categoryId === cat.id).length;
                     const isRenaming = renamingCategoryId === cat.id;
@@ -620,7 +719,7 @@ export default function PriceBook() {
                             <Input
                               value={renamingCategoryName}
                               onChange={(e) => setRenamingCategoryName(e.target.value)}
-                              className="h-9 flex-1 rounded-lg bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                              className="h-9 flex-1 rounded-lg"
                               autoFocus
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && renamingCategoryName.trim()) {
@@ -632,22 +731,13 @@ export default function PriceBook() {
                             />
                             <Button
                               size="sm"
-                              onClick={() => {
-                                if (renamingCategoryName.trim()) {
-                                  renameCategoryMutation.mutate({ id: cat.id, name: renamingCategoryName.trim() });
-                                }
-                              }}
+                              onClick={() => { if (renamingCategoryName.trim()) renameCategoryMutation.mutate({ id: cat.id, name: renamingCategoryName.trim() }); }}
                               disabled={renameCategoryMutation.isPending}
                               className="h-9 bg-teal-600 hover:bg-teal-700 rounded-lg px-3"
                             >
                               {renameCategoryMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setRenamingCategoryId(null)}
-                              className="h-9 rounded-lg px-2"
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => setRenamingCategoryId(null)} className="h-9 rounded-lg px-2">
                               <X className="h-4 w-4" />
                             </Button>
                           </>
@@ -659,13 +749,13 @@ export default function PriceBook() {
                             </div>
                             <button
                               onClick={() => { setRenamingCategoryId(cat.id); setRenamingCategoryName(cat.name); }}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-all text-slate-500 dark:text-slate-400"
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-all"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <button className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all text-red-500">
+                                <button className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-all">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               </AlertDialogTrigger>
@@ -698,11 +788,7 @@ export default function PriceBook() {
           </div>
 
           <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <Button
-              onClick={() => setIsCategoryDialogOpen(false)}
-              className="w-full h-10 rounded-xl"
-              variant="outline"
-            >
+            <Button onClick={() => setIsCategoryDialogOpen(false)} className="w-full h-10 rounded-xl" variant="outline">
               Done
             </Button>
           </div>
