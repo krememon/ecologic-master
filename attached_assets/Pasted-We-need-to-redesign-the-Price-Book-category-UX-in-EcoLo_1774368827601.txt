@@ -1,0 +1,118 @@
+We need to redesign the Price Book category UX in EcoLogic.
+
+CURRENT STATE
+Right now the Price Book is using top tabs/chips like:
+- All
+- Plumbing
+- Manage
+
+That is not the direction I want.
+
+PRODUCT DIRECTION
+I want the Price Book to be structured and displayed like:
+
+Category (name)
+-> items inside
+
+So instead of category tabs across the top, the page should feel like a categorized list where each category is a section and the items live underneath that category.
+
+GOAL
+Move away from the current tab/chip-based category navigation and make the Price Book feel like a proper:
+
+Category -> Items inside
+
+experience.
+
+DESIRED UX
+The Price Book should read more like this:
+
+Plumbing
+- Install toilet
+- Replace faucet
+- Install shower valve
+
+Water Heaters
+- Install 40 gal gas water heater
+- Install tankless water heater
+
+Drain Cleaning
+- Main line snaking
+- Camera inspection
+
+This is much better than forcing the user to switch between category pills/tabs.
+
+WHAT TO CHANGE
+
+1. Remove the current top category tab/chip style
+- Remove the current category pills/tabs such as:
+  - All
+  - Plumbing
+  - Manage
+- Do not use the category system as horizontal filters anymore
+
+2. Convert the main Price Book list into sectioned category groups
+- Render categories as section headers
+- Render each category’s items directly underneath that category header
+- This should create a scrollable categorized list
+
+3. Keep category management, but move it out of the tab row
+- We still need category management
+- But it should not live as a fake tab next to categories
+- Move category management into a more appropriate UI entry point, such as:
+  - top-right action
+  - overflow/menu
+  - separate manage categories button
+  - or another clean location that fits the page
+
+4. Support uncategorized items safely
+- If any items do not have a category, they should still appear safely
+- Use an "Uncategorized" section if needed
+
+5. Search should still work
+- Search should continue to work across all items
+- When searching, results should still feel organized and not broken
+- Use the cleanest UX possible:
+  - either filtered inside sections
+  - or a clean search-results state
+- but keep it polished and easy to understand
+
+6. Keep item actions working
+- Add item
+- edit item
+- delete item
+- category assignment
+All of that still needs to keep working with the new layout
+
+IMPORTANT
+- Do not make this cluttered
+- Do not create an ugly accordion unless it truly feels polished
+- Do not make the list hard to scan
+- Preserve the EcoLogic vibe
+- Keep it contractor-simple and fast
+- Do not break existing category data
+- Do not remove the ability to manage categories
+- Do not regress mobile usability
+
+DESIGN INTENT
+This page should feel like a real organized price book, not a filtered tab bar.
+
+The category is the container.
+The items live inside the category.
+
+That relationship should be visually obvious.
+
+EXPECTED RESULT
+- No more All / Plumbing / Manage chips as the main interaction model
+- Price Book shows category sections with items inside each one
+- Category management still exists in a better place
+- Items are easier to browse without jumping between tabs
+- UX feels cleaner and more natural
+
+DELIVERABLES
+1. Redesign the Price Book list from tab-based categories to section-based categories
+2. Remove the current category chip/tab row as the main category UX
+3. Move category management to a cleaner location
+4. Preserve add/edit/delete/category functionality
+5. Handle uncategorized items safely
+6. Tell me the exact file(s) changed
+7. Explain the final structure of the page and where category management now lives
