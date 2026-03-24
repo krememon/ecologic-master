@@ -130,7 +130,6 @@ const getNavigation = (role: string | undefined) => [
   { href: "/documents", icon: FolderOpen, label: "Documents", permission: "documents.view" as Permission },
   { href: "/messages", icon: MessageSquare, label: "Messages", permission: null },
   { href: "/employees", icon: UsersIcon, label: "Employees", permission: "users.view" as Permission },
-  { href: "/settings", icon: Settings, label: "Settings", permission: null },
   { href: "/dev-tools", icon: Terminal, label: "Dev Tools", permission: null, devOnly: true },
 ];
 
@@ -471,8 +470,19 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                 </div>
               )}
 
-              {/* Logout Button */}
+              {/* Settings + Logout */}
               <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+                <Link href="/settings" onClick={handleNavItemClick}>
+                  <div className={cn(
+                    "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105 mb-1",
+                    location === "/settings"
+                      ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
+                  )}>
+                    <Settings className="w-5 h-5 transition-transform duration-200" />
+                    <span className="transition-all duration-200">Settings</span>
+                  </div>
+                </Link>
                 <button 
                   onClick={async () => {
                     try {
