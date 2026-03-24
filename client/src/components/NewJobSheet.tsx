@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -172,6 +172,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
   const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
   const [locationUpdateConfirmOpen, setLocationUpdateConfirmOpen] = useState(false);
+  const lineItemsScrollRef = useRef<HTMLDivElement>(null);
   const [pendingCustomerForLocation, setPendingCustomerForLocation] = useState<Customer | null>(null);
 
   // Customer search
@@ -379,6 +380,14 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       setIsInitialized(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (lineItemsModalOpen) {
+      requestAnimationFrame(() => {
+        lineItemsScrollRef.current?.scrollTo({ top: lineItemsScrollRef.current.scrollHeight, behavior: 'smooth' });
+      });
+    }
+  }, [lineItems.length]);
 
   // Create customer mutation
   const createCustomerMutation = useMutation({
@@ -721,7 +730,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
+    setLineItems(prev => [...prev, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
@@ -1227,7 +1236,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <div ref={lineItemsScrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {lineItems.map((item, index) => (
               <div key={index} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700">

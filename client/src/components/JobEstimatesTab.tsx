@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
   const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
+  const lineItemsScrollRef = useRef<HTMLDivElement>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
@@ -182,6 +183,14 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       onCustomerUsed?.();
     }
   }, [externalSelectedCustomer, onCustomerUsed]);
+
+  useEffect(() => {
+    if (lineItemsModalOpen) {
+      requestAnimationFrame(() => {
+        lineItemsScrollRef.current?.scrollTo({ top: lineItemsScrollRef.current.scrollHeight, behavior: 'smooth' });
+      });
+    }
+  }, [lineItems.length]);
 
   // Reset form to defaults
   const resetForm = () => {
@@ -412,7 +421,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems(prev => [...prev, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
@@ -863,7 +872,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             <DialogTitle>Line Items</DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-4 py-2">
+          <div ref={lineItemsScrollRef} className="flex-1 overflow-y-auto space-y-4 py-2">
             {lineItems.map((item, index) => (
               <div key={index} className="p-3 border rounded-lg space-y-3 bg-slate-50 dark:bg-slate-800">
                 <div className="flex items-center justify-between">
