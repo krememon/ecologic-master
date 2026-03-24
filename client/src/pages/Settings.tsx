@@ -367,7 +367,7 @@ export default function Settings() {
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input 
                   id="phone" 
-                  placeholder="555-123-4567"
+                  placeholder="Enter phone"
                   value={profileData.phone}
                   onChange={(e) => setProfileData(prev => ({ ...prev, phone: formatPhoneInput(e.target.value) }))}
                   inputMode="numeric"
