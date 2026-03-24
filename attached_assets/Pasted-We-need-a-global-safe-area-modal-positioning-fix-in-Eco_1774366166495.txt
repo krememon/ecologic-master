@@ -1,0 +1,64 @@
+We need a global safe-area / modal positioning fix in EcoLogic.
+
+CURRENT ISSUE
+Some popups / modals / sheets / overlays are appearing too high and can end up too close to or underneath the Dynamic Island / top native status area.
+
+That is not acceptable.
+
+GOAL
+Make all popups appear below the Dynamic Island / top safe area consistently across the app.
+
+WHAT TO FIX
+Audit every popup-style UI in the app and ensure they respect the iPhone/iPad top safe area properly.
+
+This includes things like:
+- modals
+- dialogs
+- sheets
+- dropdown popovers
+- action menus
+- top overlays
+- confirmation popups
+- anything that visually floats above the page
+
+DESIRED BEHAVIOR
+- No popup should render underneath the Dynamic Island
+- No popup header should be clipped by the notch / status area
+- All popup content should start below the top safe area with proper spacing
+- This should work consistently across native iOS wrapper usage, not just desktop/web
+- It should feel clean and intentional, not hacked together
+
+IMPLEMENTATION INTENT
+Create one consistent safe-area-aware popup strategy across the app instead of fixing random popups one by one.
+
+Use the cleanest shared solution possible so all overlays/modals respect:
+- iOS safe area insets
+- Dynamic Island / notch area
+- status bar space
+- Capacitor/native wrapper rendering
+
+If there is already a shared modal/dialog/sheet wrapper, update that source of truth.
+If there are multiple popup systems, standardize them as much as possible.
+
+IMPORTANT
+- Do not just add random extra top padding everywhere
+- Do not break desktop/web modal positioning
+- Do not make popups look too low on non-iPhone devices
+- Do not create inconsistent spacing between different popup types
+- Preserve the current EcoLogic visual style
+- Keep animations and interactions working normally
+
+EXPECTED RESULT
+- All popups consistently open below the Dynamic Island / top safe area
+- No clipping into the native status area
+- No weird per-screen hacks
+- Desktop/web still looks correct
+- Native iPhone/iPad wrapper experience feels polished
+
+DELIVERABLES
+1. Audit the popup/modal/overlay positioning system
+2. Implement a shared safe-area-aware fix
+3. Apply it globally across the app
+4. Tell me the exact file(s) changed
+5. Explain the shared strategy used
+6. Confirm popups now appear below the Dynamic Island throughout the app

@@ -433,6 +433,35 @@ html.native-ios .dmThreadHeader {
   padding-top: calc(var(--native-safe-top, 56px) + 8px) !important;
 }
 
+/* ── Global popup / modal safe-area fence (iOS Dynamic Island / notch) ────────
+   All Radix portals render outside #root, so they don't inherit the root
+   padding-top. Each popup type is given a marker class and guarded here.
+
+   html.native-ios is set by main.tsx when running inside Capacitor on iOS.
+
+   1. Dialog / AlertDialog (ecologic-dialog / ecologic-alert-dialog)
+      Centred with top:50% translateY(-50%). When the modal is very tall its top
+      edge can clip into the Dynamic Island. Capping max-height to
+        100dvh − 2 × safe-area-inset-top
+      guarantees: top-edge = 50dvh − height/2 ≥ safe-area-inset-top. ✓
+
+   2. Toast viewport (ecologic-toast-viewport)
+      On < sm breakpoints the viewport sits at fixed top-0, which overlaps the
+      status bar. Shifting it down by safe-area-inset-top fixes this without
+      touching desktop / tablet behaviour (those use sm:top-auto sm:bottom-0).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+html.native-ios .ecologic-dialog,
+html.native-ios .ecologic-alert-dialog {
+  max-height: calc(100dvh - 2 * env(safe-area-inset-top, 0px)) !important;
+  overflow-y: auto !important;
+}
+
+html.native-ios .ecologic-toast-viewport {
+  top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 4px !important;
+}
+
 /* Google Places .pac-container: constrain width, position, and z-index inside modals */
 .pac-container {
   z-index: 99999 !important;
