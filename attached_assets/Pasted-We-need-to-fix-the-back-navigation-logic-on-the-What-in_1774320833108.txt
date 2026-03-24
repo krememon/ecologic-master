@@ -1,0 +1,53 @@
+We need to fix the back-navigation logic on the "What industry are you in?" screen in EcoLogic.
+
+CURRENT BUG
+Right now, when the user taps Back on the "What industry are you in?" page, it sends them too far back in the flow — all the way back to the form with first name, last name, etc.
+
+That is wrong.
+
+DESIRED BEHAVIOR
+The Back button on the Industry page should only go back one step to the correct previous screen:
+
+- If the user came from the Create Company page, Back should return to the Create Company page
+- If the user came from the Join Company page, Back should return to the Join Company page
+
+It should NOT jump all the way back to the earlier account-info form.
+
+WHAT TO FIX
+1. Audit the current routing / navigation logic for the Industry page
+2. Find out why the Back action is popping too far back in the stack
+3. Change it so the Industry screen knows which page it came from
+4. Make the Back action return to the immediate prior auth step only:
+   - Create Company -> Industry -> Back = Create Company
+   - Join Company -> Industry -> Back = Join Company
+
+IMPLEMENTATION INTENT
+This should use explicit flow-aware navigation, not a generic back behavior that accidentally jumps too far.
+
+Use the cleanest source of truth possible for the previous step:
+- route state
+- query param
+- onboarding flow state
+- or existing step-tracking
+Whatever is already most consistent with the app.
+
+IMPORTANT
+- Do not break forward navigation
+- Do not break the rest of onboarding
+- Do not change styling or layout
+- Do not create weird navigation hacks
+- Keep this as a targeted routing fix
+
+EXPECTED RESULT
+- Back from Industry returns to Create Company when user came from Create Company
+- Back from Industry returns to Join Company when user came from Join Company
+- User no longer gets sent back to the first name / last name screen
+
+DELIVERABLES
+1. Fix the Industry page back-navigation logic
+2. Tell me the exact file(s) changed
+3. Explain exactly how the previous-step routing is now determined
+4. Confirm these tested paths:
+   - Create Company -> Industry -> Back
+   - Join Company -> Industry -> Back
+   - Forward navigation still works normally

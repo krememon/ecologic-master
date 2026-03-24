@@ -48,12 +48,13 @@ export default function IndustryOnboarding() {
   }, [onboardingChoice, setLocation]);
 
   const handleBack = () => {
-    // If they came through OnboardingChoice ("Create a company"), go back there.
-    // Otherwise they came from SignupWizard's role step, go back to /signup.
-    if (onboardingChoice === "owner") {
-      setLocation("/onboarding/choice");
+    // Employee path: go back to join-company
+    if (onboardingChoice === "employee") {
+      setLocation("/join-company");
     } else {
-      setLocation("/signup");
+      // Owner path (both "owner" and null / SignupWizard role-step):
+      // always return to the choice screen — never to /signup which resets the wizard.
+      setLocation("/onboarding/choice");
     }
   };
 
