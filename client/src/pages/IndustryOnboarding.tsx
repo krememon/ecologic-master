@@ -5,7 +5,6 @@ import {
   Wrench, 
   Thermometer, 
   Zap, 
-  Hammer, 
   Building2, 
   SprayCanIcon,
   Leaf,
@@ -13,8 +12,8 @@ import {
   Bug,
   Droplets,
   Car,
-  MoreHorizontal,
-  Sparkles
+  Sparkles,
+  ArrowLeft
 } from "lucide-react";
 
 const INDUSTRIES = [
@@ -30,7 +29,6 @@ const INDUSTRIES = [
   { id: "Pest Control", label: "Pest Control", icon: Bug },
   { id: "Window & Exterior Cleaning", label: "Window & Exterior Cleaning", icon: Droplets },
   { id: "Automotive", label: "Automotive", icon: Car },
-  { id: "Other", label: "Other", icon: MoreHorizontal },
 ];
 
 export default function IndustryOnboarding() {
@@ -49,6 +47,16 @@ export default function IndustryOnboarding() {
     // If no choice set, assume owner path (they came from /signup)
   }, [onboardingChoice, setLocation]);
 
+  const handleBack = () => {
+    // If they came through OnboardingChoice ("Create a company"), go back there.
+    // Otherwise they came from SignupWizard's role step, go back to /signup.
+    if (onboardingChoice === "owner") {
+      setLocation("/onboarding/choice");
+    } else {
+      setLocation("/signup");
+    }
+  };
+
   const handleContinue = () => {
     if (selectedIndustry) {
       // Save industry to localStorage for use in company creation
@@ -63,6 +71,15 @@ export default function IndustryOnboarding() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
         <div className="w-full max-w-3xl">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back
+          </button>
+
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
               What industry are you in?
