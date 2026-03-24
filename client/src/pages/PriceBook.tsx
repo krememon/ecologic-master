@@ -589,47 +589,53 @@ export default function PriceBook() {
             return (
               <div
                 key={cat.id}
-                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all group cursor-pointer"
-                onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
+                className="flex items-center bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all overflow-hidden"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                    {cat.name}
+                {/* Navigable area — only this triggers category open */}
+                <button
+                  className="flex-1 flex items-center gap-3 px-4 py-4 text-left min-w-0"
+                  onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      {cat.name}
+                    </div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                      {count === 0
+                        ? (isMaterials ? "No materials" : "No items")
+                        : `${count} ${isMaterials ? "material" : "item"}${count !== 1 ? 's' : ''}`}
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                    {count === 0
-                      ? (isMaterials ? "No materials" : "No items")
-                      : `${count} ${isMaterials ? "material" : "item"}${count !== 1 ? 's' : ''}`}
-                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                </button>
+
+                {/* 3-dots — completely separate from the navigation button */}
+                <div className="flex-shrink-0 pr-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 cursor-pointer py-2"
+                        onSelect={() => openRenameCatDialog(cat)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Edit name</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                        onSelect={() => setCategoryToDelete(cat)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuItem
-                      className="flex items-center gap-2 cursor-pointer py-2"
-                      onSelect={() => openRenameCatDialog(cat)}
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                      <span>Edit name</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                      onSelect={() => setCategoryToDelete(cat)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Delete</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
               </div>
             );
           })}
