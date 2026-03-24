@@ -146,7 +146,6 @@ export default function JoinCompany() {
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="Enter code"
-                  className="uppercase"
                   data-testid="input-invite-code"
                   required
                 />
