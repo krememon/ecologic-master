@@ -1176,6 +1176,7 @@ export const serviceCatalogItems = pgTable("service_catalog_items", {
   category: varchar("category", { length: 100 }),
   categoryId: integer("category_id").references(() => pricebookCategories.id, { onDelete: "set null" }),
   taskCode: varchar("task_code", { length: 50 }),
+  itemType: varchar("item_type", { length: 50 }).notNull().default("line_item"), // line_item, material
   taxable: boolean("taxable").notNull().default(false),
   isPreset: boolean("is_preset").default(false),
   presetIndustry: varchar("preset_industry", { length: 100 }),

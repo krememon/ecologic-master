@@ -15711,7 +15711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 
-      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable } = req.body;
+      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable, itemType } = req.body;
       if (!name) {
         return res.status(400).json({ error: 'Name is required' });
       }
@@ -15726,6 +15726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         categoryId: categoryId ?? null,
         taskCode: taskCode || null,
         taxable: taxable ?? false,
+        itemType: itemType || 'line_item',
       });
 
       res.status(201).json(item);
@@ -15801,7 +15802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Item not found' });
       }
 
-      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable } = req.body;
+      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable, itemType } = req.body;
       const updated = await storage.updateServiceCatalogItem(itemId, {
         name,
         description,
@@ -15811,6 +15812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         categoryId: categoryId ?? null,
         taskCode,
         taxable,
+        itemType: itemType || undefined,
       });
 
       res.json(updated);

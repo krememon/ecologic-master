@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown, Package } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
@@ -28,7 +28,8 @@ const UNIT_OPTIONS = [
 type ActiveView =
   | { type: "list" }
   | { type: "category"; categoryId: number; categoryName: string }
-  | { type: "uncategorized" };
+  | { type: "uncategorized" }
+  | { type: "materials" };
 
 export default function PriceBook() {
   const { toast } = useToast();
@@ -52,6 +53,7 @@ export default function PriceBook() {
     unit: "each",
     categoryId: null as number | null,
     taskCode: "",
+    itemType: "line_item" as "line_item" | "material",
   });
 
   const { data: catalogItems = [], isLoading } = useQuery<ServiceCatalogItem[]>({
@@ -147,16 +149,19 @@ export default function PriceBook() {
   // ── Form helpers ───────────────────────────────────────────────
 
   const resetItemForm = () => {
-    setFormData({ name: "", description: "", defaultPriceCents: 0, unit: "each", categoryId: null, taskCode: "" });
+    setFormData({ name: "", description: "", defaultPriceCents: 0, unit: "each", categoryId: null, taskCode: "", itemType: "line_item" });
     setPriceDisplay("");
   };
 
-  const openCreateItemDialog = (prefillCategoryId?: number | null) => {
+  const openCreateItemDialog = (prefillCategoryId?: number | null, prefillItemType?: "line_item" | "material") => {
     resetItemForm();
+    const type = prefillItemType ?? (view.type === "materials" ? "material" : "line_item");
     if (prefillCategoryId !== undefined) {
-      setFormData(f => ({ ...f, categoryId: prefillCategoryId }));
+      setFormData(f => ({ ...f, categoryId: prefillCategoryId, itemType: type }));
     } else if (view.type === "category") {
-      setFormData(f => ({ ...f, categoryId: view.categoryId }));
+      setFormData(f => ({ ...f, categoryId: view.categoryId, itemType: type }));
+    } else {
+      setFormData(f => ({ ...f, itemType: type }));
     }
     setEditingItem(null);
     setIsItemDialogOpen(true);
@@ -171,6 +176,7 @@ export default function PriceBook() {
       unit: item.unit,
       categoryId: (item as any).categoryId ?? null,
       taskCode: (item as any).taskCode || "",
+      itemType: ((item as any).itemType as "line_item" | "material") || "line_item",
     });
     setPriceDisplay((item.defaultPriceCents / 100).toFixed(2));
     setIsItemDialogOpen(true);
@@ -241,12 +247,15 @@ export default function PriceBook() {
 
   // ── Derived data ───────────────────────────────────────────────
 
-  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId);
+  const uncategorizedItems = catalogItems.filter(item => !(item as any).categoryId && (item as any).itemType !== 'material');
+  const materialItems = catalogItems.filter(item => (item as any).itemType === 'material');
 
   const itemsForCurrentCategory = view.type === "category"
-    ? catalogItems.filter(item => (item as any).categoryId === view.categoryId)
+    ? catalogItems.filter(item => (item as any).categoryId === view.categoryId && (item as any).itemType !== 'material')
     : view.type === "uncategorized"
     ? uncategorizedItems
+    : view.type === "materials"
+    ? materialItems
     : [];
 
   const detailFiltered = itemsForCurrentCategory.filter(item =>
@@ -277,9 +286,10 @@ export default function PriceBook() {
 
   // ── Category detail view ───────────────────────────────────────
 
-  if (view.type === "category" || view.type === "uncategorized") {
-    const title = view.type === "category" ? view.categoryName : "Uncategorized";
+  if (view.type === "category" || view.type === "uncategorized" || view.type === "materials") {
+    const title = view.type === "category" ? view.categoryName : view.type === "materials" ? "Materials" : "Uncategorized";
     const currentCatId = view.type === "category" ? view.categoryId : null;
+    const isMaterialsView = view.type === "materials";
 
     return (
       <div className="container mx-auto px-4 py-6 max-w-2xl">
@@ -295,9 +305,12 @@ export default function PriceBook() {
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Price Book</p>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
           </div>
-          <Button onClick={() => openCreateItemDialog(currentCatId)} className="bg-teal-600 hover:bg-teal-700">
+          <Button
+            onClick={() => openCreateItemDialog(currentCatId, isMaterialsView ? "material" : undefined)}
+            className="bg-teal-600 hover:bg-teal-700"
+          >
             <Plus className="h-4 w-4 mr-1.5" />
-            Add Item
+            {isMaterialsView ? "Add Material" : "Add Item"}
           </Button>
         </div>
 
@@ -335,12 +348,21 @@ export default function PriceBook() {
               </>
             ) : (
               <>
-                <Tag className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">No items here yet</p>
-                <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">Add your first item to this category</p>
-                <Button onClick={() => openCreateItemDialog(currentCatId)} className="bg-teal-600 hover:bg-teal-700">
+                {isMaterialsView
+                  ? <Package className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+                  : <Tag className="mx-auto h-10 w-10 text-slate-300 mb-3" />}
+                <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">
+                  {isMaterialsView ? "No materials yet" : "No items here yet"}
+                </p>
+                <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
+                  {isMaterialsView ? "Add your first material to the catalog" : "Add your first item to this category"}
+                </p>
+                <Button
+                  onClick={() => openCreateItemDialog(currentCatId, isMaterialsView ? "material" : undefined)}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Item
+                  {isMaterialsView ? "Add Material" : "Add Item"}
                 </Button>
               </>
             )}
@@ -447,6 +469,13 @@ export default function PriceBook() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="flex items-center gap-2.5 cursor-pointer py-2.5"
+              onSelect={() => openCreateItemDialog(undefined, "material")}
+            >
+              <Package className="h-4 w-4 text-teal-600" />
+              <span className="font-medium">Material</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2.5 cursor-pointer py-2.5"
               onSelect={() => setIsCategoryDialogOpen(true)}
             >
               <FolderOpen className="h-4 w-4 text-teal-600" />
@@ -527,6 +556,41 @@ export default function PriceBook() {
             );
           })}
 
+          {/* Materials row */}
+          {(() => {
+            const matCount = catalogItems.filter(item => (item as any).itemType === 'material').length;
+            const showMaterials = matCount > 0 || (!listSearchLower) || "materials".includes(listSearchLower);
+            if (!showMaterials && matCount === 0) return null;
+            if (listSearchLower && !("materials".includes(listSearchLower)) && matCount === 0) return null;
+            if (listSearchLower && !("materials".includes(listSearchLower)) &&
+              !catalogItems.some(item =>
+                (item as any).itemType === 'material' && (
+                  item.name.toLowerCase().includes(listSearchLower) ||
+                  (item.description && item.description.toLowerCase().includes(listSearchLower))
+                )
+              )
+            ) return null;
+            return (
+              <button
+                onClick={() => { setView({ type: "materials" }); setDetailSearch(""); }}
+                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all text-left group"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
+                    Materials
+                    <span className="text-xs font-normal bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-1.5 py-0.5 rounded">
+                      catalog
+                    </span>
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    {matCount === 0 ? "No materials" : `${matCount} material${matCount !== 1 ? 's' : ''}`}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+              </button>
+            );
+          })()}
+
           {/* Uncategorized row */}
           {showUncategorized && (
             <button
@@ -565,7 +629,9 @@ export default function PriceBook() {
           <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
             <div className="min-w-[44px]" />
             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {editingItem ? "Edit Item" : "Add Item"}
+              {editingItem
+                ? (formData.itemType === "material" ? "Edit Material" : "Edit Item")
+                : (formData.itemType === "material" ? "Add Material" : "Add Item")}
             </DialogTitle>
             <button
               onClick={() => setIsItemDialogOpen(false)}
@@ -693,7 +759,9 @@ export default function PriceBook() {
               {(createItemMutation.isPending || updateItemMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingItem ? "Save Changes" : "Add Item"}
+              {editingItem
+                ? "Save Changes"
+                : (formData.itemType === "material" ? "Add Material" : "Add Item")}
             </Button>
           </div>
         </DialogContent>
