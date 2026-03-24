@@ -1147,6 +1147,24 @@ export const companyCounters = pgTable("company_counters", {
   invoiceCounter: integer("invoice_counter").notNull().default(0),
 });
 
+// Pricebook categories - flat category list for organizing service catalog items
+export const pricebookCategories = pgTable("pricebook_categories", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  companyIdx: index("pricebook_categories_company_idx").on(table.companyId),
+}));
+
+export const pricebookCategoriesRelations = relations(pricebookCategories, ({ one }) => ({
+  company: one(companies, {
+    fields: [pricebookCategories.companyId],
+    references: [companies.id],
+  }),
+}));
+
 // Service catalog items - reusable line item templates for estimates
 export const serviceCatalogItems = pgTable("service_catalog_items", {
   id: serial("id").primaryKey(),
@@ -1156,6 +1174,7 @@ export const serviceCatalogItems = pgTable("service_catalog_items", {
   defaultPriceCents: integer("default_price_cents").notNull().default(0),
   unit: varchar("unit", { length: 50 }).notNull().default("each"), // each, hour, ft, sq_ft, job, day
   category: varchar("category", { length: 100 }),
+  categoryId: integer("category_id").references(() => pricebookCategories.id, { onDelete: "set null" }),
   taskCode: varchar("task_code", { length: 50 }),
   taxable: boolean("taxable").notNull().default(false),
   isPreset: boolean("is_preset").default(false),
@@ -1171,6 +1190,10 @@ export const serviceCatalogItemsRelations = relations(serviceCatalogItems, ({ on
   company: one(companies, {
     fields: [serviceCatalogItems.companyId],
     references: [companies.id],
+  }),
+  pricebookCategory: one(pricebookCategories, {
+    fields: [serviceCatalogItems.categoryId],
+    references: [pricebookCategories.id],
   }),
 }));
 
@@ -1522,6 +1545,8 @@ export type InsertEstimateItem = z.infer<typeof insertEstimateItemSchema>;
 export type CreateEstimatePayload = z.infer<typeof createEstimateSchema>;
 export type UpdateEstimatePayload = z.infer<typeof updateEstimateSchema>;
 export type CompanyCounter = typeof companyCounters.$inferSelect;
+export type PricebookCategory = typeof pricebookCategories.$inferSelect;
+export type InsertPricebookCategory = typeof pricebookCategories.$inferInsert;
 export type ServiceCatalogItem = typeof serviceCatalogItems.$inferSelect;
 export type InsertServiceCatalogItem = typeof serviceCatalogItems.$inferInsert;
 export type EstimateAttachment = typeof estimateAttachments.$inferSelect;

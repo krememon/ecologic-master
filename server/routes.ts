@@ -15597,6 +15597,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =============================================================================
+  // Pricebook Category API (Owner/Supervisor only)
+  // =============================================================================
+
+  // GET /api/service-catalog/categories
+  app.get('/api/service-catalog/categories', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ error: 'Not a company member' });
+      if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
+      const categories = await storage.getPricebookCategories(member.companyId);
+      res.json(categories);
+    } catch (error: any) {
+      console.error('Error fetching pricebook categories:', error);
+      res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+  });
+
+  // POST /api/service-catalog/categories
+  app.post('/api/service-catalog/categories', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ error: 'Not a company member' });
+      if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
+      const { name } = req.body;
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
+      const category = await storage.createPricebookCategory({
+        companyId: member.companyId,
+        name: name.trim(),
+        sortOrder: 0,
+      });
+      res.status(201).json(category);
+    } catch (error: any) {
+      console.error('Error creating pricebook category:', error);
+      res.status(500).json({ error: 'Failed to create category' });
+    }
+  });
+
+  // PATCH /api/service-catalog/categories/:id
+  app.patch('/api/service-catalog/categories/:id', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ error: 'Not a company member' });
+      if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
+      const { name } = req.body;
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
+      const id = parseInt(req.params.id);
+      const updated = await storage.updatePricebookCategory(id, name.trim());
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating pricebook category:', error);
+      res.status(500).json({ error: 'Failed to update category' });
+    }
+  });
+
+  // DELETE /api/service-catalog/categories/:id
+  // Items in the deleted category have categoryId set to null automatically via ON DELETE SET NULL
+  app.delete('/api/service-catalog/categories/:id', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ error: 'Not a company member' });
+      if (!can(member.role as UserRole, 'customize.manage')) return res.status(403).json({ error: 'Insufficient permissions' });
+      const id = parseInt(req.params.id);
+      await storage.deletePricebookCategory(id);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error deleting pricebook category:', error);
+      res.status(500).json({ error: 'Failed to delete category' });
+    }
+  });
+
+  // =============================================================================
   // Service Catalog API (Owner/Supervisor only)
   // =============================================================================
 
@@ -15636,7 +15711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 
-      const { name, description, defaultPriceCents, unit, category, taskCode, taxable } = req.body;
+      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable } = req.body;
       if (!name) {
         return res.status(400).json({ error: 'Name is required' });
       }
@@ -15648,6 +15723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         defaultPriceCents: defaultPriceCents || 0,
         unit: unit || 'each',
         category: category || null,
+        categoryId: categoryId ?? null,
         taskCode: taskCode || null,
         taxable: taxable ?? false,
       });
@@ -15725,13 +15801,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Item not found' });
       }
 
-      const { name, description, defaultPriceCents, unit, category, taskCode, taxable } = req.body;
+      const { name, description, defaultPriceCents, unit, category, categoryId, taskCode, taxable } = req.body;
       const updated = await storage.updateServiceCatalogItem(itemId, {
         name,
         description,
         defaultPriceCents,
         unit,
-        category,
+        category: category || null,
+        categoryId: categoryId ?? null,
         taskCode,
         taxable,
       });

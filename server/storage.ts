@@ -25,6 +25,7 @@ import {
   estimateAttachments,
   estimateDocuments,
   companyCounters,
+  pricebookCategories,
   serviceCatalogItems,
   companyTaxes,
   leads,
@@ -67,6 +68,8 @@ import {
   type InsertEstimateDocument,
   type CreateEstimatePayload,
   type UpdateEstimatePayload,
+  type PricebookCategory,
+  type InsertPricebookCategory,
   type ServiceCatalogItem,
   type InsertServiceCatalogItem,
   type CompanyTax,
@@ -389,6 +392,12 @@ export interface IStorage {
   getEmailBranding(companyId: number): Promise<CompanyEmailBranding | undefined>;
   upsertEmailBranding(companyId: number, branding: Partial<InsertCompanyEmailBranding>): Promise<CompanyEmailBranding>;
   
+  // Pricebook category operations
+  getPricebookCategories(companyId: number): Promise<PricebookCategory[]>;
+  createPricebookCategory(category: InsertPricebookCategory): Promise<PricebookCategory>;
+  updatePricebookCategory(id: number, name: string): Promise<PricebookCategory>;
+  deletePricebookCategory(id: number): Promise<void>;
+
   // Service catalog operations
   getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]>;
   getServiceCatalogItem(id: number): Promise<ServiceCatalogItem | undefined>;
@@ -3553,6 +3562,36 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  // Pricebook category operations
+  async getPricebookCategories(companyId: number): Promise<PricebookCategory[]> {
+    return db
+      .select()
+      .from(pricebookCategories)
+      .where(eq(pricebookCategories.companyId, companyId))
+      .orderBy(pricebookCategories.sortOrder, pricebookCategories.name);
+  }
+
+  async createPricebookCategory(category: InsertPricebookCategory): Promise<PricebookCategory> {
+    const [created] = await db
+      .insert(pricebookCategories)
+      .values(category)
+      .returning();
+    return created;
+  }
+
+  async updatePricebookCategory(id: number, name: string): Promise<PricebookCategory> {
+    const [updated] = await db
+      .update(pricebookCategories)
+      .set({ name })
+      .where(eq(pricebookCategories.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePricebookCategory(id: number): Promise<void> {
+    await db.delete(pricebookCategories).where(eq(pricebookCategories.id, id));
   }
 
   // Service catalog operations

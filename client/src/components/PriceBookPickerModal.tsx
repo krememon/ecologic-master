@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Plus, Check, Loader2, Package, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { ServiceCatalogItem } from "@shared/schema";
+import type { ServiceCatalogItem, PricebookCategory } from "@shared/schema";
 
 interface LineItem {
   name: string;
@@ -55,6 +55,7 @@ export function PriceBookPickerModal({
 }: PriceBookPickerModalProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<number | "all">("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
   const [initialSelectedIds, setInitialSelectedIds] = useState<Set<number>>(new Set());
@@ -65,12 +66,17 @@ export function PriceBookPickerModal({
     taskCode: "",
     defaultPriceCents: 0,
     unit: "each",
-    category: "",
+    categoryId: null as number | null,
     taxable: false,
   });
 
   const { data: catalogItems = [], isLoading } = useQuery<ServiceCatalogItem[]>({
     queryKey: ['/api/service-catalog'],
+    enabled: open,
+  });
+
+  const { data: categories = [] } = useQuery<PricebookCategory[]>({
+    queryKey: ['/api/service-catalog/categories'],
     enabled: open,
   });
 
@@ -129,7 +135,7 @@ export function PriceBookPickerModal({
       taskCode: "",
       defaultPriceCents: 0,
       unit: "each",
-      category: "",
+      categoryId: null,
       taxable: false,
     });
     setPriceDisplay("");
@@ -138,6 +144,7 @@ export function PriceBookPickerModal({
   useEffect(() => {
     if (!open) {
       setSearchQuery("");
+      setActiveCategoryFilter("all");
       setShowCreateForm(false);
       setSelectedItemIds(new Set());
       setInitialSelectedIds(new Set());
@@ -202,21 +209,13 @@ export function PriceBookPickerModal({
   };
 
   const handlePriceChange = (value: string) => {
-    // Strip commas so pasted values like "1,000" work correctly
     const stripped = value.replace(/,/g, '');
-    // Allow only digits and a single decimal point
     const cleanValue = stripped.replace(/[^0-9.]/g, '');
     const parts = cleanValue.split('.');
     const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
-
     const dollars = parseFloat(sanitized) || 0;
     setNewItem({ ...newItem, defaultPriceCents: Math.round(dollars * 100) });
-
-    // Format the integer portion with commas while keeping the decimal as-is
-    if (sanitized === '' || sanitized === '.') {
-      setPriceDisplay(sanitized);
-      return;
-    }
+    if (sanitized === '' || sanitized === '.') { setPriceDisplay(sanitized); return; }
     const decParts = sanitized.split('.');
     const intFormatted = decParts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     setPriceDisplay(decParts.length > 1 ? `${intFormatted}.${decParts[1]}` : intFormatted);
@@ -224,35 +223,32 @@ export function PriceBookPickerModal({
 
   const handlePriceBlur = () => {
     const dollars = newItem.defaultPriceCents / 100;
-    if (dollars === 0) {
-      setPriceDisplay('');
-      return;
-    }
+    if (dollars === 0) { setPriceDisplay(''); return; }
     setPriceDisplay(dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   };
 
   const handlePriceFocus = () => {
     const dollars = newItem.defaultPriceCents / 100;
-    if (dollars === 0) {
-      setPriceDisplay('');
-      return;
-    }
-    // Show with commas, strip trailing .00 so editing feels natural
+    if (dollars === 0) { setPriceDisplay(''); return; }
     const formatted = dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     setPriceDisplay(formatted.endsWith('.00') ? formatted.slice(0, -3) : formatted);
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(cents / 100);
-  };
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
-  const filteredItems = catalogItems.filter(item =>
+  const searchFiltered = catalogItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const filteredItems = searchFiltered.filter(item => {
+    if (activeCategoryFilter === "all") return true;
+    return (item as any).categoryId === activeCategoryFilter;
+  });
+
+  const categoriesWithItems = categories.filter(cat =>
+    catalogItems.some(item => (item as any).categoryId === cat.id)
   );
 
   if (showCreateForm) {
@@ -316,9 +312,7 @@ export function PriceBookPickerModal({
                   </SelectTrigger>
                   <SelectContent>
                     {UNIT_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -336,26 +330,32 @@ export function PriceBookPickerModal({
                   className="h-9"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="item-category">Category</Label>
-                <Input
-                  id="item-category"
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  placeholder="Category"
-                  className="h-9"
-                />
-              </div>
+              {categories.length > 0 && (
+                <div className="space-y-1">
+                  <Label htmlFor="item-category">Category</Label>
+                  <Select
+                    value={newItem.categoryId ? String(newItem.categoryId) : "none"}
+                    onValueChange={(value) => setNewItem({ ...newItem, categoryId: value === "none" ? null : parseInt(value) })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 
           <DialogFooter className="flex-row gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
             <Button 
               variant="outline" 
-              onClick={() => {
-                resetCreateForm();
-                setShowCreateForm(false);
-              }}
+              onClick={() => { resetCreateForm(); setShowCreateForm(false); }}
               className="flex-1 h-10 rounded-xl"
             >
               Cancel
@@ -365,9 +365,7 @@ export function PriceBookPickerModal({
               disabled={createMutation.isPending}
               className="flex-1 h-10 rounded-xl"
             >
-              {createMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save & Add
             </Button>
           </DialogFooter>
@@ -392,7 +390,7 @@ export function PriceBookPickerModal({
           </button>
         </div>
 
-        <div className="px-4 py-3 bg-white dark:bg-slate-900">
+        <div className="px-4 pt-3 pb-2 bg-white dark:bg-slate-900 space-y-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
@@ -402,6 +400,35 @@ export function PriceBookPickerModal({
               className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
             />
           </div>
+
+          {/* Category filter pills — only shown when there are categories */}
+          {categoriesWithItems.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                onClick={() => setActiveCategoryFilter("all")}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  activeCategoryFilter === "all"
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                All
+              </button>
+              {categoriesWithItems.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategoryFilter(cat.id)}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    activeCategoryFilter === cat.id
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="border-t border-slate-100 dark:border-slate-800" />
@@ -439,9 +466,7 @@ export function PriceBookPickerModal({
                 <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                   <Package className="h-7 w-7 text-slate-400" />
                 </div>
-                <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
-                  No items in your price book yet
-                </p>
+                <p className="font-medium text-slate-600 dark:text-slate-400 text-center">No items in your price book yet</p>
                 <p className="text-sm text-slate-400 mt-1">Create your first item above</p>
               </div>
             ) : filteredItems.length === 0 ? (
@@ -450,14 +475,17 @@ export function PriceBookPickerModal({
                   <Search className="h-7 w-7 text-slate-400" />
                 </div>
                 <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
-                  No items match "{searchQuery}"
+                  {searchQuery ? `No items match "${searchQuery}"` : "No items in this category"}
                 </p>
-                <p className="text-sm text-slate-400 mt-1">Try a different search term</p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {searchQuery ? "Try a different search term" : "Select All to see everything"}
+                </p>
               </div>
             ) : (
               <div className="py-1">
                 {filteredItems.map((item, index) => {
                   const isSelected = selectedItemIds.has(item.id);
+                  const catName = categories.find(c => c.id === (item as any).categoryId)?.name;
                   return (
                     <div key={item.id}>
                       <button
@@ -469,17 +497,13 @@ export function PriceBookPickerModal({
                         }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                            {item.name}
-                          </p>
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
                           <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
                             {formatCurrency(item.defaultPriceCents)} per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}
-                            {item.category && ` · ${item.category}`}
+                            {catName && activeCategoryFilter === "all" && ` · ${catName}`}
                           </p>
                         </div>
-                        {isSelected && (
-                          <Check className="h-5 w-5 text-teal-500 flex-shrink-0 ml-3" />
-                        )}
+                        {isSelected && <Check className="h-5 w-5 text-teal-500 flex-shrink-0 ml-3" />}
                       </button>
                       {index < filteredItems.length - 1 && (
                         <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />

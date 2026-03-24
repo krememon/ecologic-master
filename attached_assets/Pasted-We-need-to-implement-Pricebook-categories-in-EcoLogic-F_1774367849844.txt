@@ -1,0 +1,97 @@
+We need to implement Pricebook categories in EcoLogic.
+
+FEATURE
+Add Categories to the Pricebook so users can organize items better.
+
+PRODUCT GOAL
+Categories should help users:
+- find items faster
+- keep services and materials organized
+- make estimates quicker
+- avoid one giant messy list
+
+MENTAL MODEL
+The Pricebook should work like:
+
+Category -> Items
+
+Example:
+- Plumbing Fixtures
+  - Install toilet
+  - Replace faucet
+  - Install shower valve
+
+- Water Heaters
+  - Install 40 gal gas water heater
+  - Install tankless water heater
+
+- Drain Cleaning
+  - Main line snaking
+  - Camera inspection
+
+IMPORTANT STRUCTURE
+Use flat categories only.
+
+That means:
+- no nested categories
+- no subcategories
+- no category trees
+- just one simple category level
+
+Examples of valid categories:
+- Plumbing
+- Heating
+- Drain
+
+WHAT TO BUILD
+
+1. Add category support to Pricebook items
+Each pricebook item should be able to belong to one category.
+
+2. Add category management
+Users should be able to:
+- create a category
+- rename a category
+- delete a category
+
+3. Flat-only behavior
+Keep categories as a single level only.
+No parent/child category logic.
+
+4. Pricebook organization
+Pricebook items should be grouped/filterable by category so the list is easier to use.
+
+5. Estimating UX support
+The category system should make it easier/faster to find items while building estimates.
+
+IMPLEMENTATION INTENT
+Keep this simple, clean, and scalable.
+
+We do NOT want an overbuilt inventory system.
+We want a practical contractor-friendly category layer that makes the Pricebook easier to use.
+
+IMPORTANT
+- Preserve the current EcoLogic vibe
+- Do not create a cluttered UI
+- Keep category UX fast and simple
+- Do not overcomplicate with deep hierarchy
+- Do not break existing Pricebook items
+- Existing items without a category should still be handled safely
+- If needed, support an uncategorized/default state for backwards compatibility
+
+RECOMMENDED BEHAVIOR
+- Existing pricebook items can remain uncategorized until assigned
+- Users can optionally assign a category when creating/editing an item
+- Pricebook list can be grouped or filtered by category
+- Deleting a category should not delete the items inside it unless explicitly intended
+- Items from a deleted category should safely move to uncategorized or have category cleared
+
+DELIVERABLES
+1. Add category support to the data model for Pricebook items
+2. Add backend support for create / rename / delete category
+3. Add frontend UI for managing categories
+4. Add category assignment on Pricebook items
+5. Add category-based organization/filtering in the Pricebook
+6. Keep categories flat only
+7. Tell me the exact files changed
+8. Explain the final delete-category behavior for items that were inside that category
