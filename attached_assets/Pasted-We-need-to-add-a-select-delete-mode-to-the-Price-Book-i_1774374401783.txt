@@ -1,0 +1,98 @@
+We need to add a select/delete mode to the Price Book in EcoLogic so users can delete categories and items.
+
+GOAL
+Add a clean way for the user to select entries and delete them.
+
+PRODUCT INTENT
+Users need to be able to delete:
+- categories
+- items
+
+This should work cleanly inside the Price Book without making the screen messy.
+
+DESIRED UX
+Add a Select button on the Price Book screen.
+
+When the user taps Select:
+- the page enters selection mode
+- categories/items can be selected
+- delete action becomes available
+
+This should feel similar to a clean native multi-select flow, but still match EcoLogic styling.
+
+WHAT TO BUILD
+
+1. Add a Select button to the Price Book screen
+- Place it in a clean spot in the header area
+- It should not fight with the Add button
+- Keep the layout balanced and polished
+
+2. Add selection mode
+When Select is tapped:
+- user can tap categories/items to select them
+- selected rows/cards show clear selected state
+- there should be a way to cancel selection mode
+- there should be a delete action once something is selected
+
+3. Support deletion for both tabs
+This needs to work for:
+- Line Items tab
+- Materials tab
+
+That means:
+- in Line Items mode, user can select/delete line item categories and/or line items
+- in Materials mode, user can select/delete material categories and/or materials
+
+4. Define delete behavior clearly
+
+CATEGORY DELETE
+If deleting a category, handle the contents safely.
+Use the safest product behavior unless there is already a better existing pattern.
+
+Recommended:
+- deleting a category should NOT silently delete its items/materials unless explicitly confirmed
+- either:
+  A. block category deletion when it still has contents
+  OR
+  B. show a confirmation that clearly explains what happens to contents
+
+Pick the cleanest, safest behavior and implement it intentionally.
+
+ITEM DELETE
+Deleting an item/material should remove just that item/material.
+
+5. Add confirmation
+Destructive actions should have a confirmation step.
+Do not allow instant accidental deletes.
+
+6. Keep the UI clean
+- do not clutter each row/card with permanent delete icons everywhere
+- do not break the current EcoLogic style
+- do not make selection mode confusing
+- keep mobile usability strong
+
+IMPORTANT
+- Do not break category navigation
+- Do not break the Add flow
+- Do not break the Line Items / Materials segmented toggle
+- Do not create weird per-row hacks
+- This should be one clean delete/select system for Price Book management
+
+EXPECTED RESULT
+- Price Book has a Select mode
+- User can select categories/items
+- User can delete selected entries with confirmation
+- Works in both Line Items and Materials tabs
+- Delete behavior for non-empty categories is handled safely and clearly
+
+DELIVERABLES
+1. Add a Select button to the Price Book screen
+2. Implement selection mode for categories/items
+3. Add delete action with confirmation
+4. Make it work for both Line Items and Materials tabs
+5. Tell me the exact file(s) changed
+6. Explain the final delete behavior for:
+   - empty categories
+   - categories with contents
+   - individual items/materials
+7. Confirm the Price Book UI still looks clean and polished

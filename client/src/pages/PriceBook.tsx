@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown, Package } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Plus, Edit2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown, Package, CheckCircle2, Circle, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
@@ -59,6 +59,37 @@ export default function PriceBook() {
     itemType: "line_item" as "line_item" | "material",
   });
 
+  // ── Select mode state ──────────────────────────────────────────
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedCategoryIds(new Set());
+    setSelectedItemIds(new Set());
+  };
+
+  const toggleCategorySelection = (id: number) => {
+    setSelectedCategoryIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleItemSelection = (id: number) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // ── Queries ────────────────────────────────────────────────────
+
   const { data: catalogItems = [], isLoading } = useQuery<ServiceCatalogItem[]>({
     queryKey: ['/api/service-catalog'],
     enabled: isAuthenticated && can('customize.manage'),
@@ -73,20 +104,16 @@ export default function PriceBook() {
 
   const tabItemType: "line_item" | "material" = activeTab === "materials" ? "material" : "line_item";
 
-  // Categories matching the active tab
   const tabCategories = categories.filter(
     cat => ((cat as any).categoryType ?? 'line_item') === tabItemType
   );
 
-  // Items matching the active tab
   const tabItems = catalogItems.filter(
     item => ((item as any).itemType ?? 'line_item') === tabItemType
   );
 
-  // Uncategorized items for the active tab
   const uncategorizedTabItems = tabItems.filter(item => !(item as any).categoryId);
 
-  // Items for the current detail view
   const itemsForCurrentView = view.type === "category"
     ? tabItems.filter(item => (item as any).categoryId === view.categoryId)
     : view.type === "uncategorized"
@@ -99,7 +126,6 @@ export default function PriceBook() {
     (item.description && item.description.toLowerCase().includes(detailSearch.toLowerCase()))
   );
 
-  // List-level search
   const listSearchLower = listSearch.trim().toLowerCase();
   const filteredTabCategories = listSearchLower
     ? tabCategories.filter(cat => {
@@ -150,15 +176,6 @@ export default function PriceBook() {
     onError: () => toast({ title: "Error", description: "Failed to update item", variant: "destructive" }),
   });
 
-  const deleteItemMutation = useMutation({
-    mutationFn: async (id: number) => { await apiRequest('DELETE', `/api/service-catalog/${id}`); },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-      toast({ title: "Item deleted" });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to delete item", variant: "destructive" }),
-  });
-
   const createCategoryMutation = useMutation({
     mutationFn: async ({ name, categoryType }: { name: string; categoryType: string }) => {
       const res = await apiRequest('POST', '/api/service-catalog/categories', { name, categoryType });
@@ -186,18 +203,63 @@ export default function PriceBook() {
     onError: () => toast({ title: "Error", description: "Failed to rename category", variant: "destructive" }),
   });
 
-  const deleteCategoryMutation = useMutation({
-    mutationFn: async (id: number) => { await apiRequest('DELETE', `/api/service-catalog/categories/${id}`); },
-    onSuccess: (_, deletedId) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
-      if (view.type === "category" && view.categoryId === deletedId) {
+  // ── Bulk delete ────────────────────────────────────────────────
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      if (view.type === "list") {
+        await Promise.all(
+          [...selectedCategoryIds].map(id =>
+            apiRequest('DELETE', `/api/service-catalog/categories/${id}`)
+          )
+        );
+        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog/categories'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+        const n = selectedCategoryIds.size;
+        toast({ title: `${n} categor${n !== 1 ? 'ies' : 'y'} deleted` });
+      } else {
+        await Promise.all(
+          [...selectedItemIds].map(id =>
+            apiRequest('DELETE', `/api/service-catalog/${id}`)
+          )
+        );
+        queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+        const n = selectedItemIds.size;
+        toast({ title: `${n} ${activeTab === "materials" ? "material" : "item"}${n !== 1 ? 's' : ''} deleted` });
+      }
+      exitSelectMode();
+      if (view.type === "list") {
         setView({ type: "list" });
       }
-      toast({ title: "Category deleted", description: "Items moved to Uncategorized" });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to delete category", variant: "destructive" }),
-  });
+    } catch {
+      toast({ title: "Error", description: "Some items could not be deleted", variant: "destructive" });
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+    }
+  };
+
+  // Build bulk delete confirmation message
+  const bulkDeleteMessage = (() => {
+    if (view.type === "list") {
+      const n = selectedCategoryIds.size;
+      const itemsAffected = [...selectedCategoryIds].reduce((sum, catId) =>
+        sum + tabItems.filter(item => (item as any).categoryId === catId).length, 0);
+      const catWord = `${n} categor${n !== 1 ? 'ies' : 'y'}`;
+      if (itemsAffected === 0) {
+        return `Delete ${catWord}? This cannot be undone.`;
+      }
+      const thingWord = activeTab === "materials" ? "material" : "item";
+      return `Delete ${catWord}? The ${itemsAffected} ${thingWord}${itemsAffected !== 1 ? 's' : ''} inside will become Uncategorized — they won't be deleted.`;
+    } else {
+      const n = selectedItemIds.size;
+      const thingWord = activeTab === "materials" ? "material" : "item";
+      return `Delete ${n} ${thingWord}${n !== 1 ? 's' : ''}? This cannot be undone.`;
+    }
+  })();
+
+  const selectedCount = view.type === "list" ? selectedCategoryIds.size : selectedItemIds.size;
 
   // ── Form helpers ───────────────────────────────────────────────
 
@@ -208,13 +270,12 @@ export default function PriceBook() {
 
   const openCreateItemDialog = (prefillCategoryId?: number | null) => {
     resetItemForm();
-    const type = tabItemType;
     const catId = prefillCategoryId !== undefined
       ? prefillCategoryId
       : view.type === "category"
       ? view.categoryId
       : null;
-    setFormData(f => ({ ...f, categoryId: catId, itemType: type }));
+    setFormData(f => ({ ...f, categoryId: catId, itemType: tabItemType }));
     setEditingItem(null);
     setIsItemDialogOpen(true);
   };
@@ -280,6 +341,7 @@ export default function PriceBook() {
     setView({ type: "list" });
     setListSearch("");
     setDetailSearch("");
+    exitSelectMode();
   };
 
   // ── Auth guard ─────────────────────────────────────────────────
@@ -313,51 +375,113 @@ export default function PriceBook() {
   if (view.type === "category" || view.type === "uncategorized") {
     const title = view.type === "category" ? view.categoryName : "Uncategorized";
     const currentCatId = view.type === "category" ? view.categoryId : null;
+    const allItemIds = detailFiltered.map(i => i.id);
+    const allSelected = allItemIds.length > 0 && allItemIds.every(id => selectedItemIds.has(id));
+
+    const toggleSelectAll = () => {
+      if (allSelected) {
+        setSelectedItemIds(new Set());
+      } else {
+        setSelectedItemIds(new Set(allItemIds));
+      }
+    };
 
     return (
       <div className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <button
-            onClick={() => { setView({ type: "list" }); setDetailSearch(""); }}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
-              Price Book · {isMaterials ? "Materials" : "Line Items"}
-            </p>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
-          </div>
-          <Button
-            onClick={() => openCreateItemDialog(currentCatId)}
-            className="bg-teal-600 hover:bg-teal-700"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add {addItemLabel}
-          </Button>
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-5">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            type="text"
-            placeholder={`Search in ${title}...`}
-            value={detailSearch}
-            onChange={(e) => setDetailSearch(e.target.value)}
-            className="pl-10"
-          />
-          {detailSearch && (
-            <button
-              onClick={() => setDetailSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <X className="h-4 w-4" />
-            </button>
+          {isSelectMode ? (
+            <>
+              <button
+                onClick={exitSelectMode}
+                className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-1 py-2 min-w-[52px]"
+              >
+                Cancel
+              </button>
+              <div className="flex-1 min-w-0 text-center">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {selectedCount === 0 ? "Select items" : `${selectedCount} selected`}
+                </p>
+              </div>
+              <Button
+                onClick={() => selectedCount > 0 && setShowBulkDeleteConfirm(true)}
+                disabled={selectedCount === 0}
+                variant="ghost"
+                className={cn(
+                  "text-sm font-semibold min-w-[52px]",
+                  selectedCount > 0
+                    ? "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    : "text-slate-300 dark:text-slate-600"
+                )}
+              >
+                Delete{selectedCount > 0 ? ` (${selectedCount})` : ""}
+              </Button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => { setView({ type: "list" }); setDetailSearch(""); exitSelectMode(); }}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
+                  Price Book · {isMaterials ? "Materials" : "Line Items"}
+                </p>
+                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
+              </div>
+              <button
+                onClick={() => { setIsSelectMode(true); setSelectedItemIds(new Set()); }}
+                className="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors px-2 py-2"
+              >
+                Select
+              </button>
+              <Button
+                onClick={() => openCreateItemDialog(currentCatId)}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add {addItemLabel}
+              </Button>
+            </>
           )}
         </div>
+
+        {/* Select-all row when in select mode with items */}
+        {isSelectMode && detailFiltered.length > 0 && (
+          <button
+            onClick={toggleSelectAll}
+            className="w-full flex items-center gap-3 px-1 pb-3 text-sm text-teal-600 dark:text-teal-400 font-medium hover:text-teal-700 dark:hover:text-teal-300 transition-colors"
+          >
+            {allSelected
+              ? <CheckCircle2 className="h-4 w-4" />
+              : <Circle className="h-4 w-4" />}
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        )}
+
+        {/* Search (hidden in select mode) */}
+        {!isSelectMode && (
+          <div className="relative mb-5">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder={`Search in ${title}...`}
+              value={detailSearch}
+              onChange={(e) => setDetailSearch(e.target.value)}
+              className="pl-10"
+            />
+            {detailSearch && (
+              <button
+                onClick={() => setDetailSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Items */}
         {isLoading ? (
@@ -379,81 +503,70 @@ export default function PriceBook() {
                 <p className="text-slate-600 dark:text-slate-400 font-medium mb-1">
                   {isMaterials ? "No materials here yet" : "No items here yet"}
                 </p>
-                <p className="text-sm text-slate-400 dark:text-slate-500 mb-5">
+                <p className="text-sm text-slate-400 dark:text-slate-500">
                   {isMaterials
                     ? "Add your first material to this category"
                     : "Add your first item to this category"}
                 </p>
-                <Button
-                  onClick={() => openCreateItemDialog(currentCatId)}
-                  className="bg-teal-600 hover:bg-teal-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add {addItemLabel}
-                </Button>
               </>
             )}
           </div>
         ) : (
           <>
-            {detailSearch && (
+            {!isSelectMode && detailSearch && (
               <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2 px-1">
                 {detailFiltered.length} result{detailFiltered.length !== 1 ? 's' : ''}
               </p>
             )}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
-              {detailFiltered.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
-                    <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
-                      <span>{formatCurrency(item.defaultPriceCents)}</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
+              {detailFiltered.map((item) => {
+                const isSelected = selectedItemIds.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={isSelectMode ? () => toggleItemSelection(item.id) : undefined}
+                    className={cn(
+                      "flex items-center justify-between px-4 py-3.5 transition-colors group",
+                      isSelectMode
+                        ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-700/40",
+                      isSelected && "bg-teal-50 dark:bg-teal-900/20"
+                    )}
+                  >
+                    {isSelectMode && (
+                      <div className="flex-shrink-0 mr-3">
+                        {isSelected
+                          ? <CheckCircle2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                          : <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600" />}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                        <span>{formatCurrency(item.defaultPriceCents)}</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => openEditItemDialog(item)}
-                      className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors">
-                          <Trash2 className="h-4 w-4" />
+                    {!isSelectMode && (
+                      <div className="flex items-center gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openEditItemDialog(item)}
+                          className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400 transition-colors"
+                        >
+                          <Edit2 className="h-4 w-4" />
                         </button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="ecologic-alert-dialog">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete {isMaterials ? "Material" : "Item"}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{item.name}"? This cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteItemMutation.mutate(item.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
 
         {itemDialog()}
+        {bulkDeleteConfirmDialog()}
       </div>
     );
   }
@@ -462,97 +575,162 @@ export default function PriceBook() {
 
   const totalTabItems = tabItems.length;
   const totalTabCategories = tabCategories.length;
-
   const listIsEmpty = totalTabCategories === 0 && uncategorizedTabItems.length === 0;
   const searchReturnedNothing = !listIsEmpty && filteredTabCategories.length === 0 && !showUncategorized;
+  const allCategoryIds = filteredTabCategories.map(c => c.id);
+  const allCatsSelected = allCategoryIds.length > 0 && allCategoryIds.every(id => selectedCategoryIds.has(id));
+
+  const toggleSelectAllCategories = () => {
+    if (allCatsSelected) {
+      setSelectedCategoryIds(new Set());
+    } else {
+      setSelectedCategoryIds(new Set(allCategoryIds));
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <Link href="/customize">
-          <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-          </button>
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            {totalTabCategories} categor{totalTabCategories !== 1 ? 'ies' : 'y'} · {totalTabItems} {isMaterials ? "material" : "item"}{totalTabItems !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="bg-teal-600 hover:bg-teal-700">
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add
-              <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+        {isSelectMode ? (
+          <>
+            <button
+              onClick={exitSelectMode}
+              className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors px-1 py-2 min-w-[52px]"
+            >
+              Cancel
+            </button>
+            <div className="flex-1 min-w-0 text-center">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                {selectedCount === 0 ? "Select categories" : `${selectedCount} selected`}
+              </p>
+            </div>
+            <Button
+              onClick={() => selectedCount > 0 && setShowBulkDeleteConfirm(true)}
+              disabled={selectedCount === 0}
+              variant="ghost"
+              className={cn(
+                "text-sm font-semibold min-w-[52px]",
+                selectedCount > 0
+                  ? "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  : "text-slate-300 dark:text-slate-600"
+              )}
+            >
+              Delete{selectedCount > 0 ? ` (${selectedCount})` : ""}
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem
-              className="flex items-center gap-2.5 cursor-pointer py-2.5"
-              onSelect={() => openCreateItemDialog()}
-            >
-              {addItemIcon}
-              <span className="font-medium">{addItemLabel}</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-2.5 cursor-pointer py-2.5"
-              onSelect={() => setIsCategoryDialogOpen(true)}
-            >
-              <FolderOpen className="h-4 w-4 text-teal-600" />
-              <span className="font-medium">Category</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Tab Toggle */}
-      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
-        <button
-          onClick={() => switchTab("line_items")}
-          className={cn(
-            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
-            activeTab === "line_items"
-              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          )}
-        >
-          Line Items
-        </button>
-        <button
-          onClick={() => switchTab("materials")}
-          className={cn(
-            "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
-            activeTab === "materials"
-              ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-          )}
-        >
-          Materials
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-5">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input
-          type="text"
-          placeholder={isMaterials ? "Search materials or categories..." : "Search items or categories..."}
-          value={listSearch}
-          onChange={(e) => setListSearch(e.target.value)}
-          className="pl-10"
-        />
-        {listSearch && (
-          <button
-            onClick={() => setListSearch("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          </>
+        ) : (
+          <>
+            <Link href="/customize">
+              <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+              </button>
+            </Link>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Price Book</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                {totalTabCategories} categor{totalTabCategories !== 1 ? 'ies' : 'y'} · {totalTabItems} {isMaterials ? "material" : "item"}{totalTabItems !== 1 ? 's' : ''}
+              </p>
+            </div>
+            {!listIsEmpty && (
+              <button
+                onClick={() => { setIsSelectMode(true); setSelectedCategoryIds(new Set()); }}
+                className="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors px-2 py-2"
+              >
+                Select
+              </button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-teal-600 hover:bg-teal-700">
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Add
+                  <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  className="flex items-center gap-2.5 cursor-pointer py-2.5"
+                  onSelect={() => openCreateItemDialog()}
+                >
+                  {addItemIcon}
+                  <span className="font-medium">{addItemLabel}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="flex items-center gap-2.5 cursor-pointer py-2.5"
+                  onSelect={() => setIsCategoryDialogOpen(true)}
+                >
+                  <FolderOpen className="h-4 w-4 text-teal-600" />
+                  <span className="font-medium">Category</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         )}
       </div>
+
+      {/* Tab Toggle — hidden during select mode */}
+      {!isSelectMode && (
+        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
+          <button
+            onClick={() => switchTab("line_items")}
+            className={cn(
+              "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+              activeTab === "line_items"
+                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            )}
+          >
+            Line Items
+          </button>
+          <button
+            onClick={() => switchTab("materials")}
+            className={cn(
+              "flex-1 py-2 text-sm font-semibold rounded-lg transition-all",
+              activeTab === "materials"
+                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            )}
+          >
+            Materials
+          </button>
+        </div>
+      )}
+
+      {/* Search — hidden during select mode */}
+      {!isSelectMode && (
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder={isMaterials ? "Search materials or categories..." : "Search items or categories..."}
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            className="pl-10"
+          />
+          {listSearch && (
+            <button
+              onClick={() => setListSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Select-all row when in select mode with categories */}
+      {isSelectMode && filteredTabCategories.length > 0 && (
+        <button
+          onClick={toggleSelectAllCategories}
+          className="w-full flex items-center gap-3 px-1 pb-3 text-sm text-teal-600 dark:text-teal-400 font-medium hover:text-teal-700 dark:hover:text-teal-300 transition-colors"
+        >
+          {allCatsSelected
+            ? <CheckCircle2 className="h-4 w-4" />
+            : <Circle className="h-4 w-4" />}
+          {allCatsSelected ? "Deselect all" : "Select all"}
+        </button>
+      )}
 
       {/* Loading */}
       {isLoading || categoriesLoading ? (
@@ -560,7 +738,6 @@ export default function PriceBook() {
           <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
         </div>
 
-      /* Empty — no categories or items in this tab */
       ) : listIsEmpty ? (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center py-14 px-6">
           {isMaterials
@@ -576,24 +753,44 @@ export default function PriceBook() {
           </p>
         </div>
 
-      /* Search returned nothing */
       ) : searchReturnedNothing ? (
         <div className="text-center py-14">
           <Search className="mx-auto h-10 w-10 text-slate-300 mb-3" />
           <p className="text-slate-500 dark:text-slate-400">No results for "{listSearch}"</p>
         </div>
 
-      /* Category list */
       ) : (
         <div className="space-y-2">
           {filteredTabCategories.map(cat => {
             const count = tabItems.filter(item => (item as any).categoryId === cat.id).length;
+            const isSelected = selectedCategoryIds.has(cat.id);
             return (
               <button
                 key={cat.id}
-                onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
-                className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all text-left group"
+                onClick={() => {
+                  if (isSelectMode) {
+                    toggleCategorySelection(cat.id);
+                  } else {
+                    setView({ type: "category", categoryId: cat.id, categoryName: cat.name });
+                    setDetailSearch("");
+                  }
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all text-left group",
+                  isSelectMode
+                    ? isSelected
+                      ? "border-teal-400 dark:border-teal-500 bg-teal-50 dark:bg-teal-900/20"
+                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                    : "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md"
+                )}
               >
+                {isSelectMode && (
+                  <div className="flex-shrink-0">
+                    {isSelected
+                      ? <CheckCircle2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                      : <Circle className="h-5 w-5 text-slate-300 dark:text-slate-600" />}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     {cat.name}
@@ -604,13 +801,15 @@ export default function PriceBook() {
                       : `${count} ${isMaterials ? "material" : "item"}${count !== 1 ? 's' : ''}`}
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+                {!isSelectMode && (
+                  <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-teal-500 transition-colors flex-shrink-0" />
+                )}
               </button>
             );
           })}
 
-          {/* Uncategorized row */}
-          {showUncategorized && (
+          {/* Uncategorized row — not selectable; user enters and selects items individually */}
+          {showUncategorized && !isSelectMode && (
             <button
               onClick={() => { setView({ type: "uncategorized" }); setDetailSearch(""); }}
               className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md transition-all text-left group"
@@ -629,13 +828,45 @@ export default function PriceBook() {
         </div>
       )}
 
-      {/* Shared dialogs */}
       {itemDialog()}
       {categoryDialog()}
+      {bulkDeleteConfirmDialog()}
     </div>
   );
 
   // ── Dialog renderers ───────────────────────────────────────────
+
+  function bulkDeleteConfirmDialog() {
+    const isDetailView = view.type === "category" || view.type === "uncategorized";
+    return (
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent className="ecologic-alert-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {isDetailView
+                ? `Delete ${selectedCount} ${activeTab === "materials" ? "material" : "item"}${selectedCount !== 1 ? 's' : ''}?`
+                : `Delete ${selectedCount} categor${selectedCount !== 1 ? 'ies' : 'y'}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkDeleteMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isBulkDeleting
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting...</>
+                : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
 
   function itemDialog() {
     const isMat = formData.itemType === "material";
@@ -661,7 +892,6 @@ export default function PriceBook() {
           </div>
 
           <div className="px-4 py-5 space-y-4 bg-white dark:bg-slate-900 overflow-y-auto max-h-[70vh]">
-            {/* Name */}
             <div className="space-y-1.5">
               <Label htmlFor="item-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Name <span className="text-red-500">*</span>
@@ -675,7 +905,6 @@ export default function PriceBook() {
               />
             </div>
 
-            {/* Description */}
             <div className="space-y-1.5">
               <Label htmlFor="item-description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Description
@@ -690,7 +919,6 @@ export default function PriceBook() {
               />
             </div>
 
-            {/* Price + Unit */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="item-price" className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -727,7 +955,6 @@ export default function PriceBook() {
               </div>
             </div>
 
-            {/* Category + Task Code */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="item-category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -805,7 +1032,6 @@ export default function PriceBook() {
           </div>
 
           <div className="px-4 py-5 bg-white dark:bg-slate-900 overflow-y-auto max-h-[65vh] space-y-5">
-            {/* Create new */}
             <div>
               <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
                 New Category
@@ -836,7 +1062,6 @@ export default function PriceBook() {
               </div>
             </div>
 
-            {/* Existing */}
             {categoriesLoading ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
@@ -898,30 +1123,6 @@ export default function PriceBook() {
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <button className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-all">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent className="ecologic-alert-dialog">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Category</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Delete "{cat.name}"? The {itemCount} {isMaterials ? "material" : "item"}{itemCount !== 1 ? 's' : ''} inside will move to Uncategorized — nothing gets deleted.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteCategoryMutation.mutate(cat.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Delete Category
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
                           </>
                         )}
                       </div>
