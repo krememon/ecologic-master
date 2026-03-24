@@ -1,0 +1,75 @@
+We need to adjust the Job / Estimate add-items picker behavior for one-time items in EcoLogic.
+
+CURRENT ISSUE
+When a user creates a new one-time line item/material from inside the picker and chooses NOT to save it to the Price Book, it is currently getting grouped under:
+Uncategorized
+
+I do NOT want that.
+
+DESIRED BEHAVIOR
+If the item is a one-time custom item and is not being saved to the Price Book, I want it to display by its actual item name directly in the picker flow instead of being shown under an "Uncategorized" bucket/category.
+
+PRODUCT INTENT
+A one-time custom item is not really part of the reusable category system.
+It should feel like a temporary custom item the user just created for this estimate/job.
+
+WHAT TO FIX
+
+1. Remove the "Uncategorized" grouping for one-time custom items created from this flow
+- Do not place these temporary non-Price-Book items under an Uncategorized category row
+
+2. Show the one-time item directly by name in the picker
+Example:
+If the user creates:
+Roof
+
+then after creation it should appear directly as:
+Roof
+
+not under:
+Uncategorized -> Roof
+
+3. Keep this scoped to one-time items/materials created from inside the Job / Estimate picker
+This behavior should apply when:
+- Save to Price Book = OFF
+
+4. Preserve normal category behavior for real Price Book items
+- actual saved Price Book items should still follow their normal category structure
+- this change is specifically for temporary one-time items/materials
+
+5. Keep selection behavior working
+- user should still be able to see/select/use the one-time item immediately
+- Done/Add behavior should still work normally
+- totals/calculations should still work normally after insertion into the estimate/job
+
+IMPLEMENTATION INTENT
+Treat one-time custom entries like temporary direct results in the current picker session, not as members of the reusable category tree.
+
+IMPORTANT
+- Do not save these one-time items into the Price Book
+- Do not lose them from the current picker session
+- Do not break normal category-first browsing for real Price Book items
+- Do not break Materials vs Line Items separation
+- Keep the UI clean and obvious
+
+EXPECTED RESULT
+Example:
+- user opens Add Line Items
+- creates new line item "Roof"
+- Save to Price Book = OFF
+
+Result:
+- the picker shows "Roof" directly by name in the current session
+- not under an Uncategorized category bucket
+- it remains one-time only
+- it is still usable/selectable for the current estimate/job
+
+Same concept for one-time Materials.
+
+DELIVERABLES
+1. Remove the Uncategorized grouping for one-time non-Price-Book items/materials in the picker
+2. Make one-time items/materials display directly by name in the current picker session
+3. Keep them out of the permanent Price Book
+4. Tell me the exact file(s) changed
+5. Explain how one-time temporary entries now render in the picker
+6. Confirm normal saved Price Book items still use the proper category structure

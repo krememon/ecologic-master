@@ -139,13 +139,16 @@ export function PriceBookPickerModal({
     cat => ((cat as any).categoryType ?? "line_item") === tabItemType
   );
 
-  const uncategorizedTabItems = tabItems.filter(item => !(item as any).categoryId);
+  // Session items are one-time only — keep them out of the category tree entirely
+  const tabSessionItems = tabItems.filter(item => item.id < 0);
+  // Real Price Book items with no category (excludes session items)
+  const uncategorizedTabItems = tabItems.filter(item => item.id >= 0 && !(item as any).categoryId);
 
-  // Items shown in the current detail view
+  // Items shown in the current detail view (session items never appear here)
   const detailItems = innerView.type === "detail"
     ? innerView.categoryId === "uncategorized"
       ? uncategorizedTabItems
-      : tabItems.filter(item => (item as any).categoryId === innerView.categoryId)
+      : tabItems.filter(item => item.id >= 0 && (item as any).categoryId === innerView.categoryId)
     : [];
 
   // When searching: flat list across all tab items
@@ -291,8 +294,8 @@ export function PriceBookPickerModal({
       setSessionItems(prev => [...prev, sessionItem]);
       // Pre-select the item so it gets added when the user taps Done
       setSelectedItemIds(prev => new Set([...prev, fakeId]));
-      // Navigate the picker to the uncategorized section so the item is immediately visible
-      setInnerView({ type: "detail", categoryId: "uncategorized", categoryName: "Uncategorized" });
+      // Stay on (or return to) the main list view — session items appear there directly by name
+      setInnerView({ type: "list" });
       resetCreateForm();
       setShowCreateForm(false);
     }
@@ -511,7 +514,7 @@ export function PriceBookPickerModal({
     // ── Category list view ────────────────────────────────────────
     if (!isDetailView) {
       if (isLoading) return <LoadingSkeletons />;
-      const hasAnything = tabCategories.length > 0 || uncategorizedTabItems.length > 0;
+      const hasAnything = tabCategories.length > 0 || uncategorizedTabItems.length > 0 || tabSessionItems.length > 0;
       if (!hasAnything) {
         return (
           <div className="flex flex-col items-center justify-center py-14 px-4">
@@ -527,6 +530,26 @@ export function PriceBookPickerModal({
       }
       return (
         <div className="py-1">
+          {/* ── One-time session items — shown directly by name, no category bucket ── */}
+          {tabSessionItems.length > 0 && (
+            <div>
+              {tabSessionItems.map((item, index) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedItemIds.has(item.id)}
+                  isSessionItem
+                  subtitle={`${formatCurrency(item.defaultPriceCents)} per ${UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}`}
+                  onToggle={() => handleToggleSelection(item)}
+                  showDivider={index < tabSessionItems.length - 1 || tabCategories.length > 0 || uncategorizedTabItems.length > 0}
+                />
+              ))}
+              {(tabCategories.length > 0 || uncategorizedTabItems.length > 0) && (
+                <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+              )}
+            </div>
+          )}
+
           {tabCategories.map((cat, index) => {
             const count = tabItems.filter(item => (item as any).categoryId === cat.id).length;
             const selectedInCat = tabItems.filter(item => (item as any).categoryId === cat.id && selectedItemIds.has(item.id)).length;
