@@ -102,6 +102,34 @@ async function openGoogleAuthPopup(): Promise<void> {
         event.origin.endsWith(".replit.app") || event.origin.endsWith(".replit.dev");
       if (!isSameOrigin && !isProdHint && !isTrustedReplit) return;
       if (event.data?.type === "google-auth-success") {
+        // ── NEW USER path ──────────────────────────────────────────────────────
+        // The Google Strategy found no existing account. The profile has been
+        // stored in the server's pendingGoogleRegistrations map. We route the
+        // user to the signup wizard where they can review/confirm their info.
+        if (event.data?.isNewUser === true) {
+          settle();
+          const { pendingCode, email, firstName, lastName, profileImageUrl } = event.data as {
+            pendingCode: string; email: string; firstName: string; lastName: string; profileImageUrl: string;
+          };
+          // Persist the Google profile and the origin of the production server so
+          // the signup wizard knows where to send the complete-registration request.
+          const isCrossDomainNew = !isSameOrigin;
+          sessionStorage.setItem("googlePendingProfile", JSON.stringify({
+            pendingCode,
+            email,
+            firstName,
+            lastName,
+            profileImageUrl,
+            // Only set senderOrigin if cross-domain so the wizard can call the production endpoint
+            senderOrigin: isCrossDomainNew ? event.origin : null,
+          }));
+          console.log(`[auth/user][client] source=capacitor.ts isNewUser=true → navigating to /signup pendingCode=${pendingCode.substring(0, 8)}…`);
+          // Navigate to the signup wizard on the current (picard or production) origin
+          window.location.href = "/signup";
+          resolve();
+          return;
+        }
+        // ── EXISTING USER path ─────────────────────────────────────────────────
         settle();
         const code = event.data.webAuthCode as string | undefined;
         if (code) {

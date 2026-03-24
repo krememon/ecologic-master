@@ -8,6 +8,15 @@ import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } 
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { openInAppBrowser } from "@/lib/capacitor";
 
+interface GooglePendingProfile {
+  pendingCode: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string;
+  senderOrigin: string | null;
+}
+
 type WizardStep = 
   | "identity" 
   | "verify" 
@@ -95,6 +104,10 @@ export default function SignupWizard() {
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [userPath, setUserPath] = useState<UserPath>(null);
   
+  // Set when the user arrived via Google OAuth (new Google user flow)
+  const [isGoogleSignup, setIsGoogleSignup] = useState(false);
+  const [googleLoadingMessage, setGoogleLoadingMessage] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -116,7 +129,107 @@ export default function SignupWizard() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  
+
+  // ── Google pending profile detection ─────────────────────────────────────
+  // Two entry points:
+  //   1. Popup path: sessionStorage.googlePendingProfile set by openGoogleAuthPopup()
+  //   2. Standard web redirect: server redirected to /signup?googleCode=xxx&email=...
+  // We complete the registration immediately so the user is logged in
+  // before they reach the role step.
+  useEffect(() => {
+    const raw = sessionStorage.getItem("googlePendingProfile");
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlGoogleCode = urlParams.get("googleCode");
+
+    let profile: GooglePendingProfile | null = null;
+
+    if (raw) {
+      try {
+        profile = JSON.parse(raw) as GooglePendingProfile;
+      } catch {
+        // ignore malformed data
+      }
+      sessionStorage.removeItem("googlePendingProfile");
+    } else if (urlGoogleCode) {
+      // Standard web redirect: extract profile from URL params
+      profile = {
+        pendingCode: urlGoogleCode,
+        email: urlParams.get("email") || "",
+        firstName: urlParams.get("firstName") || "",
+        lastName: urlParams.get("lastName") || "",
+        profileImageUrl: urlParams.get("profileImageUrl") || "",
+        senderOrigin: null, // same-domain redirect
+      };
+      // Clean URL to remove query params
+      window.history.replaceState({}, "", "/signup");
+    }
+
+    if (!profile) return;
+
+    // Prefill form data from Google profile
+    setFormData(prev => ({
+      ...prev,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.email,
+    }));
+    setIsGoogleSignup(true);
+    setGoogleLoadingMessage("Completing your Google sign-up…");
+
+    (async () => {
+      try {
+        // Call complete-registration on the production server
+        const registrationUrl = profile.senderOrigin
+          ? `${profile.senderOrigin}/api/auth/google/complete-registration`
+          : "/api/auth/google/complete-registration";
+
+        const regRes = await fetch(registrationUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pendingCode: profile.pendingCode }),
+          credentials: "include",
+        });
+
+        if (!regRes.ok) {
+          const errData = await regRes.json().catch(() => ({}));
+          throw new Error((errData as any).message || "Registration failed");
+        }
+
+        const regData: { user: { id: number; email: string }; sessionId: string } = await regRes.json();
+
+        // For cross-domain (picard canvas) adopt the production session locally
+        if (profile.senderOrigin) {
+          const adoptRes = await fetch("/api/auth/adopt-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: regData.sessionId }),
+            credentials: "include",
+          });
+          if (!adoptRes.ok) {
+            console.warn("[signup/google] adopt-session failed:", adoptRes.status);
+          }
+        }
+
+        // Refresh auth state so the rest of the wizard knows the user is logged in
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        console.log("[signup/google] Registration complete, moving to role step");
+        setGoogleLoadingMessage(null);
+        goToStep("role");
+      } catch (error: any) {
+        console.error("[signup/google] Registration error:", error);
+        setGoogleLoadingMessage(null);
+        setIsGoogleSignup(false);
+        toast({
+          title: "Google sign-up failed",
+          description: error.message || "Please try again.",
+          variant: "destructive",
+        });
+        setLocation("/auth?error=google_register_failed");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
@@ -425,6 +538,7 @@ export default function SignupWizard() {
   };
   
   const canGoBack = () => {
+    if (isGoogleSignup && ["role", "role-help", "invite"].includes(step)) return false;
     return !["identity", "subscription"].includes(step);
   };
   
@@ -446,6 +560,18 @@ export default function SignupWizard() {
   const passwordStrength = getPasswordStrength(formData.password);
   const stepInfo = getStepInfo();
   
+  // Google registration loading overlay — shown while we complete registration in the background
+  if (googleLoadingMessage) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4 max-w-sm w-full">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <p className="text-slate-700 dark:text-slate-200 font-medium text-center">{googleLoadingMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -654,6 +780,14 @@ export default function SignupWizard() {
                 <div className="space-y-4">
                   <div className="text-center mb-6">
                     <h2 className="text-lg font-semibold text-slate-800 dark:text-white">How will you use EcoLogic?</h2>
+                    {isGoogleSignup && (
+                      <div className="mt-3 inline-flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-3 py-1">
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                        <span className="text-xs text-green-700 dark:text-green-400">
+                          Signed in as {formData.email}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
                   <button

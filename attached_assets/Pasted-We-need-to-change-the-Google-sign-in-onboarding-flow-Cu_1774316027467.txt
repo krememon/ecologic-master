@@ -1,0 +1,55 @@
+We need to change the Google sign-in onboarding flow.
+
+Current wrong behavior:
+
+If a person does NOT already have an EcoLogic account and they sign in with Google, they are being sent to the “How will you use EcoLogic?” page.
+
+Wanted behavior:
+
+If the Google user does NOT have an existing account yet, send them to the Create Account page first.
+Only users who already have an account should continue into the normal app/auth flow.
+The “How will you use EcoLogic?” page should not be the first stop for a brand new Google sign-in user.
+
+What I need you to do:
+
+Trace the full Google auth flow on both backend and frontend.
+Identify exactly where we decide whether the user is:
+existing user
+new user
+Change the logic so a brand new Google-auth user is redirected to the Create Account page instead of the “How will you use EcoLogic?” screen.
+Make sure this works for:
+normal web login
+popup/trampoline flow
+mobile/webview flow if it uses the same auth result
+Preserve the current behavior for existing users.
+
+Implementation requirements:
+
+Use the backend as source of truth for whether the Google identity already maps to a real EcoLogic user/account.
+Do not rely on fragile client-only guessing.
+If the Google email exists and is already attached to a user, continue normal login.
+If no user exists yet, return a clear flag like isNewUser: true from the auth result / exchange-code flow, and route to Create Account.
+After routing to Create Account, prefill any Google info we already have if possible:
+email
+first name
+last name
+profile image if already available
+Do not accidentally auto-create a full company/account before the user finishes the Create Account screen.
+Do not break existing session adoption for real returning users.
+Do not send brand new users to the app dashboard or onboarding choice page prematurely.
+
+Deliverables:
+
+Exact files changed
+Exact old logic causing the redirect to “How will you use EcoLogic?”
+Exact new redirect logic
+Any new backend response fields added
+Confirmation that existing users still log in normally
+Confirmation that new Google users now land on Create Account first
+
+Important:
+
+Keep the current UI vibe exactly the same
+No unnecessary redesigns
+No fake placeholder logic
+Make this fully wired end-to-end, not a temporary patch

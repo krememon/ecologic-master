@@ -48,6 +48,37 @@ declare global {
 const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
 const nonceCodeStore = new Map<string, { code: string; expiresAt: number }>();
 
+// Temporary store for new Google users who haven't completed registration yet.
+// Profile data is held here (up to 30 min) until they finish the signup wizard.
+interface PendingGoogleProfile {
+  email: string;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string;
+  googleId: string;
+  expiresAt: number;
+}
+const pendingGoogleRegistrations = new Map<string, PendingGoogleProfile>();
+
+function storePendingGoogleProfile(profile: Omit<PendingGoogleProfile, "expiresAt">): string {
+  const code = generateAuthCode();
+  pendingGoogleRegistrations.set(code, { ...profile, expiresAt: Date.now() + 30 * 60 * 1000 });
+  return code;
+}
+
+function consumePendingGoogleProfile(code: string): PendingGoogleProfile | null {
+  const entry = pendingGoogleRegistrations.get(code);
+  pendingGoogleRegistrations.delete(code);
+  if (!entry || Date.now() > entry.expiresAt) return null;
+  return entry;
+}
+
+function peekPendingGoogleProfile(code: string): PendingGoogleProfile | null {
+  const entry = pendingGoogleRegistrations.get(code);
+  if (!entry || Date.now() > entry.expiresAt) return null;
+  return entry;
+}
+
 function generateAuthCode(): string {
   return randomBytes(32).toString("hex");
 }
@@ -336,19 +367,18 @@ export function setupAuth(app: Express) {
               return done(null, user!);
             }
             
-            // Step 3: Create new user
-            console.log("[google-auth] Creating new user for email:", email);
-            user = await storage.createUser({
+            // Step 3: No existing account — do NOT create a user yet.
+            // Store the Google profile temporarily and signal the callback handler to
+            // redirect the user to the signup wizard for proper registration.
+            console.log("[google-auth] New Google user (no existing account), storing pending profile for:", email);
+            const pendingCode = storePendingGoogleProfile({
               email,
               firstName: profile.name?.givenName || "",
               lastName: profile.name?.familyName || "",
               profileImageUrl: profile.photos?.[0]?.value || "",
               googleId,
-              googleLinked: true,
-              emailVerified: true, // Google emails are pre-verified
             });
-            
-            return done(null, user);
+            return done(null, false as any, { pendingGoogleCode: pendingCode } as any);
           } catch (error) {
             console.error("[google-auth] Error:", error);
             return done(error);
@@ -1241,10 +1271,20 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
   // Uses "*" as the postMessage targetOrigin so the message is delivered even when
   // the opener is on a different origin (cross-domain canvas/iframe scenario).
   // The optional authCode is a one-time webAuthCode the client exchanges for a Bearer token.
-  function buildPopupResponseHtml(success: boolean, errorCode?: string, authCode?: string): string {
-    const successPayload = authCode
-      ? { type: "google-auth-success", webAuthCode: authCode }
-      : { type: "google-auth-success" };
+  function buildPopupResponseHtml(
+    success: boolean,
+    errorCode?: string,
+    authCode?: string,
+    newUserData?: { pendingCode: string; email: string; firstName: string; lastName: string; profileImageUrl: string },
+  ): string {
+    let successPayload: Record<string, unknown>;
+    if (newUserData) {
+      successPayload = { type: "google-auth-success", isNewUser: true, ...newUserData };
+    } else if (authCode) {
+      successPayload = { type: "google-auth-success", webAuthCode: authCode };
+    } else {
+      successPayload = { type: "google-auth-success" };
+    }
     const payload = success
       ? JSON.stringify(successPayload)
       : JSON.stringify({ type: "google-auth-error", error: errorCode || "unknown" });
@@ -1334,6 +1374,40 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         if (info.success === 'google_linked') {
           if (isPopup) return res.send(buildPopupResponseHtml(true));
           return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
+        }
+
+        // New Google user — no existing EcoLogic account.
+        // Send them to the signup wizard with their Google profile prefilled.
+        if (info.pendingGoogleCode) {
+          const pc: string = info.pendingGoogleCode;
+          const pProfile = peekPendingGoogleProfile(pc);
+          const email = pProfile?.email || "";
+          const firstName = pProfile?.firstName || "";
+          const lastName = pProfile?.lastName || "";
+          const profileImageUrl = pProfile?.profileImageUrl || "";
+          console.log(`[google-auth] New user pending registration — pendingCode=${pc.substring(0, 8)}… email=${email}`);
+
+          // iOS native: pass pendingCode to the bridge page so the native layer can open signup
+          if (isIos) {
+            return res.redirect(
+              `/api/auth/google-complete?pendingCode=${encodeURIComponent(pc)}&email=${encodeURIComponent(email)}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`
+            );
+          }
+
+          // Popup flows (cross-domain or same-domain): postMessage to opener with profile data
+          if (isPopup) {
+            return res.send(buildPopupResponseHtml(true, undefined, undefined, { pendingCode: pc, email, firstName, lastName, profileImageUrl }));
+          }
+
+          // Preview cross-domain redirect (returnTo set by trampoline)
+          if (returnTo) {
+            const qs = new URLSearchParams({ googleCode: pc, email, firstName, lastName, profileImageUrl }).toString();
+            return res.redirect(`${returnTo}/signup?${qs}`);
+          }
+
+          // Standard web flow
+          const qs = new URLSearchParams({ googleCode: pc, email, firstName, lastName, profileImageUrl }).toString();
+          return res.redirect(`/signup?${qs}`);
         }
       }
 
@@ -1525,6 +1599,85 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
       });
     } catch (error) {
       console.error("[exchange-code] Error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Complete Google registration: called from the signup wizard when a brand-new Google
+  // user finishes the registration form. Consumes the pendingCode stored above,
+  // creates the user in the DB, logs them in, and returns the sessionId for adopt-session.
+  app.options("/api/auth/google/complete-registration", (req, res) => {
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    }
+    res.sendStatus(204);
+  });
+
+  app.post("/api/auth/google/complete-registration", async (req, res) => {
+    const origin = req.headers.origin || "";
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+
+    try {
+      const { pendingCode } = req.body;
+      if (!pendingCode || typeof pendingCode !== "string") {
+        return res.status(400).json({ message: "pendingCode is required" });
+      }
+
+      const profile = consumePendingGoogleProfile(pendingCode);
+      if (!profile) {
+        return res.status(400).json({ message: "Invalid or expired registration code. Please try signing in with Google again." });
+      }
+
+      console.log(`[google-register] Completing registration for email=${profile.email} googleId=${profile.googleId}`);
+
+      // Race-condition guard: if another request already created this user, use it
+      let user = await storage.getUserByGoogleId(profile.googleId);
+      if (!user) user = await storage.getUserByEmail(profile.email);
+
+      if (!user) {
+        user = await storage.createUser({
+          email: profile.email,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          profileImageUrl: profile.profileImageUrl,
+          googleId: profile.googleId,
+          googleLinked: true,
+          emailVerified: true,
+        });
+        console.log(`[google-register] Created new user id=${user.id} email=${user.email}`);
+      } else {
+        // Link Google to existing user if not already linked
+        if (!user.googleId) {
+          await storage.updateUser(user.id, { googleId: profile.googleId, googleLinked: true });
+          user = (await storage.getUser(user.id)) ?? user;
+        }
+        console.log(`[google-register] Linked existing user id=${user.id} email=${user.email}`);
+      }
+
+      return req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[google-register] Login error:", loginErr);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        const sid = req.sessionID;
+        req.session.save((saveErr) => {
+          if (saveErr) console.error("[google-register] Session save warning:", saveErr);
+          console.log(`[google-register] Session saved (sid=${sid.substring(0, 8)}…) user=${user!.email}`);
+          return res.json({
+            user: { id: user!.id, email: user!.email, firstName: user!.firstName, lastName: user!.lastName },
+            sessionId: sid,
+          });
+        });
+      });
+    } catch (error) {
+      console.error("[google-register] Error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
