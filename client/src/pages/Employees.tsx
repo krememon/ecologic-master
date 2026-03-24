@@ -156,13 +156,21 @@ export default function Employees() {
     removeEmployeeMutation.mutate(userId);
   };
 
-  // Sort employees
+  // Sort employees — Owner is always pinned first regardless of secondary sort
   const sortEmployees = (employees: Employee[]) => {
     const sorted = [...employees];
-    
+
+    const ownerFirst = (a: Employee, b: Employee) => {
+      if (a.role === "OWNER" && b.role !== "OWNER") return -1;
+      if (b.role === "OWNER" && a.role !== "OWNER") return 1;
+      return 0;
+    };
+
     switch (sortBy) {
       case "name":
         return sorted.sort((a, b) => {
+          const ownerCmp = ownerFirst(a, b);
+          if (ownerCmp !== 0) return ownerCmp;
           const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
           const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
           return nameA.localeCompare(nameB);
@@ -175,9 +183,13 @@ export default function Employees() {
         };
         return sorted.sort((a, b) => roleWeight[a.role] - roleWeight[b.role]);
       case "joined":
-        return sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return sorted.sort((a, b) => {
+          const ownerCmp = ownerFirst(a, b);
+          if (ownerCmp !== 0) return ownerCmp;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
       default:
-        return sorted;
+        return sorted.sort(ownerFirst);
     }
   };
 
