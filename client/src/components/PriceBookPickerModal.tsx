@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Plus, Check, Loader2, Package, X, ChevronLeft, ChevronRight, FolderOpen, ListPlus, Tag } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -72,6 +73,7 @@ export function PriceBookPickerModal({
 
   // ── Create form state ──────────────────────────────────────────
   const [priceDisplay, setPriceDisplay] = useState("");
+  const [saveToBook, setSaveToBook] = useState(false);
   const [newItem, setNewItem] = useState({
     name: "",
     description: "",
@@ -215,6 +217,7 @@ export function PriceBookPickerModal({
   const resetCreateForm = () => {
     setNewItem({ name: "", description: "", taskCode: "", defaultPriceCents: 0, unit: "each", categoryId: null, taxable: false, itemType: "line_item" });
     setPriceDisplay("");
+    setSaveToBook(false);
   };
 
   const createMutation = useMutation({
@@ -253,7 +256,31 @@ export function PriceBookPickerModal({
       toast({ title: "Error", description: "Name is required", variant: "destructive" });
       return;
     }
-    createMutation.mutate({ ...newItem, itemType: tabItemType });
+
+    if (saveToBook) {
+      // Save to Price Book, then add to job/estimate with the real priceBookItemId
+      createMutation.mutate({ ...newItem, itemType: tabItemType });
+    } else {
+      // One-time item: add directly to job/estimate, skip the Price Book entirely
+      const lineItem: LineItem = {
+        name: newItem.name.trim(),
+        description: newItem.description.trim(),
+        taskCode: newItem.taskCode.trim(),
+        quantity: "1",
+        unitPriceCents: newItem.defaultPriceCents,
+        priceDisplay: (newItem.defaultPriceCents / 100).toFixed(2),
+        unit: newItem.unit,
+        taxable: newItem.taxable,
+        taxId: null,
+        taxRatePercentSnapshot: null,
+        taxNameSnapshot: null,
+        saveToPriceBook: false,
+        priceBookItemId: null,
+      };
+      onAddItem(lineItem);
+      resetCreateForm();
+      setShowCreateForm(false);
+    }
   };
 
   const handlePriceChange = (value: string) => {
@@ -385,6 +412,21 @@ export function PriceBookPickerModal({
                 </div>
               )}
             </div>
+
+            {/* Save to Price Book toggle */}
+            <div className="flex items-center justify-between pt-1 pb-1">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Save to Price Book</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  {saveToBook ? "Will be saved for future reuse" : "One-time only — won't be saved"}
+                </p>
+              </div>
+              <Switch
+                checked={saveToBook}
+                onCheckedChange={setSaveToBook}
+                className="ml-4 flex-shrink-0"
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -400,7 +442,7 @@ export function PriceBookPickerModal({
               className="h-10 rounded-xl bg-teal-600 hover:bg-teal-700 px-6"
             >
               {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save & Add
+              {saveToBook ? "Save & Add" : "Add"}
             </Button>
           </div>
         </DialogContent>

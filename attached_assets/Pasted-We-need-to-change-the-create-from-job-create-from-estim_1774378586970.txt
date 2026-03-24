@@ -1,0 +1,134 @@
+We need to change the create-from-job/create-from-estimate behavior for new Line Items and new Materials in EcoLogic.
+
+CURRENT PROBLEM
+When the user is inside the Job / Estimate creation flow and taps:
+- Create New Line Item
+or
+- Create New Material
+
+the new thing is currently being automatically saved into the Price Book.
+
+I do NOT want that to happen automatically.
+
+PRODUCT GOAL
+When creating a new line item or material from inside the Job / Estimate add flow, the user should get to choose whether they want to save it to the Price Book or not.
+
+DESIRED BEHAVIOR
+Add a clear toggle/switch option in the create modal for:
+- Save to Price Book
+
+If ON:
+- the new line item/material gets created
+- it is added to the current job/estimate
+- it is also saved into the Price Book for future reuse
+
+If OFF:
+- the new line item/material gets created
+- it is added only to the current job/estimate
+- it does NOT get saved into the Price Book
+- it behaves like a one-time custom item/material
+
+THIS APPLIES TO
+- Create New Line Item from the job/estimate picker
+- Create New Material from the job/estimate picker
+
+IMPORTANT PRODUCT INTENT
+There are 2 different creation contexts now:
+
+1. Creating from Price Book
+- should save to Price Book normally
+
+2. Creating from inside a Job / Estimate
+- should let the user decide whether this is:
+  - reusable (save to Price Book)
+  - one-time only (do not save to Price Book)
+
+That distinction needs to be respected.
+
+WHAT TO BUILD
+
+1. Add a save toggle to the create modal
+Inside the create-new modal launched from Job / Estimate creation, add a clean toggle/switch for:
+- Save to Price Book
+
+Use the cleanest EcoLogic-style placement.
+It should feel obvious but not cluttered.
+
+2. Default behavior
+Pick the safest/best default and implement it intentionally.
+
+Recommended:
+- default OFF when creating from a job/estimate
+because many users may be creating one-off custom items
+
+But if there is a strong existing reason to default ON, make sure it is explicit and explain it in the delivery.
+
+3. Different save paths based on toggle state
+
+IF SAVE TO PRICE BOOK = ON
+- persist item/material into the proper Price Book table/model
+- assign category if selected
+- make it available in future reuse
+
+IF SAVE TO PRICE BOOK = OFF
+- create it only in the current estimate/job context
+- do not persist it to the reusable Price Book catalog
+- it should still appear and function normally in the current estimate/job
+
+4. Keep totals and calculations working
+Whether saved to Price Book or not:
+- item/material should still be added correctly to the current job/estimate
+- quantities/prices/totals should still work
+- no regression in estimate/job math
+
+5. Handle categories correctly
+If the user is NOT saving to Price Book:
+- do not force a reusable Price Book category requirement unless truly needed
+- if category is only meaningful for the Price Book, make sure one-time items/materials can still be created cleanly
+
+If the user IS saving to Price Book:
+- category behavior should work normally for the correct type
+- line item category for line items
+- material category for materials
+
+6. Preserve Price Book creation behavior
+This change should only affect creation launched from inside the Job / Estimate picker flow.
+
+If the user creates directly from the Price Book itself:
+- that should continue to save to the Price Book normally
+- do not break that workflow
+
+IMPORTANT
+- Do not auto-save to Price Book anymore when created from the job/estimate flow unless the toggle says to
+- Do not break the current modal layout
+- Do not break line item creation
+- Do not break material creation
+- Do not break category typing/scoping
+- Do not break add-to-estimate/add-to-job behavior
+- Keep the UI clean and contractor-simple
+
+EXPECTED RESULT
+From inside Job / Estimate creation:
+- Create New Line Item -> user sees Save to Price Book toggle
+- Create New Material -> user sees Save to Price Book toggle
+
+Toggle ON:
+- added to current job/estimate
+- saved to Price Book
+
+Toggle OFF:
+- added to current job/estimate only
+- not saved to Price Book
+
+DELIVERABLES
+1. Add a "Save to Price Book" toggle to create-new flows launched from Job / Estimate creation
+2. Apply it to both Line Items and Materials
+3. Make OFF behave as one-time only
+4. Make ON save to the proper Price Book catalog
+5. Preserve direct-from-Price-Book creation behavior
+6. Tell me the exact file(s) changed
+7. Explain the final behavior for:
+   - create new line item from estimate/job
+   - create new material from estimate/job
+   - create directly from Price Book
+8. Confirm items/materials no longer auto-save to Price Book unless the toggle is enabled
