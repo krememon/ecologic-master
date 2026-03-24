@@ -1,0 +1,154 @@
+We need to update the Job / Estimate item-picker flow in EcoLogic so it matches the new Price Book structure.
+
+BACKGROUND
+We changed the Price Book a lot.
+
+It is no longer one flat list with old category behavior.
+Now we have:
+- Line Items tab
+- Materials tab
+- category-first structure
+
+Because of that, the Job / Estimate creation flow is now out of sync and needs to be updated.
+
+CURRENT PROBLEM
+When opening the Add Line Items / Price Book picker inside Job creation or Estimate creation, it is still using the old flow.
+
+That needs to be rebuilt so it matches the new Price Book system.
+
+GOAL
+Make the Job / Estimate picker work like this:
+
+LINE ITEMS FLOW
+- user opens the picker
+- line item categories appear first
+- user taps a category
+- then sees the line items inside that category
+- then selects the line items they want
+
+MATERIALS FLOW
+- materials also need to be included somewhere cleanly in this same overall add-to-job / add-to-estimate experience
+- materials should NOT be forgotten just because Price Book changed
+
+DESIRED UX
+
+1. Category-first browsing for line items
+Inside the job/estimate picker:
+- show categories first, not a flat line-item list
+- tapping a category opens the items inside that category
+- user can then select line items from there
+
+This should match the new Price Book mental model:
+Category -> Items inside
+
+2. Include materials in the add flow
+We also need a clean way to add materials during Job / Estimate building.
+
+Use the cleanest product structure possible, such as:
+- a top toggle like:
+  Line Items | Materials
+OR
+- a clean segmented control / switcher
+OR
+- another very clear EcoLogic-style separation
+
+But the end result must make sense and feel easy.
+
+EXPECTED MATERIAL FLOW
+If the user switches to Materials:
+- material categories appear first
+- tapping a material category opens materials inside it
+- user can then select materials from there
+
+3. Keep EcoLogic styling
+Do NOT make this look like a random different modal.
+Keep:
+- EcoLogic modal style
+- EcoLogic button style
+- EcoLogic typography
+- EcoLogic spacing
+- EcoLogic selection states
+- EcoLogic search styling
+
+4. Search must still work
+Search should still work inside this picker.
+
+Use the cleanest scoped behavior:
+- if in Line Items mode, search line items/categories only
+- if in Materials mode, search materials/categories only
+
+Do not make search confusing.
+
+5. Preserve add/create flow support
+If the picker currently supports “Create New Line Item,” keep the equivalent behavior working correctly in the new structure.
+
+If Materials support creation from inside the flow too, wire that properly as well if appropriate.
+
+But do not let create actions break the main selection UX.
+
+6. Selection behavior
+Once inside a category:
+- user should be able to select the line items/materials they want
+- selection should still flow into the estimate/job correctly
+- Done/Add behavior should still work correctly
+
+7. Back navigation inside the picker
+Because this becomes category-first, we need clean navigation:
+
+Example:
+- open picker
+- see categories
+- tap Electrical
+- see items inside Electrical
+- tap back
+- return to category list
+
+Same idea for Materials.
+
+8. Data scoping
+Make sure the picker is using the correct data sources:
+- Line Items tab -> line item categories/items only
+- Materials tab -> material categories/items only
+
+Do not mix them together.
+
+IMPORTANT
+- Do not break existing job/estimate line-item insertion logic
+- Do not break totals/calculations
+- Do not break quantity/price behavior
+- Do not break selected items being added to the estimate/job
+- Do not flatten everything back into one messy list
+- Do not ignore materials
+- Keep mobile usability strong
+- Keep the flow contractor-simple and fast
+
+EXPECTED RESULT
+When opening the picker from Job / Estimate creation:
+
+LINE ITEMS
+- categories first
+- tap category
+- pick line items inside
+
+MATERIALS
+- materials available too
+- ideally via a Line Items / Materials toggle
+- material categories first
+- tap category
+- pick materials inside
+
+This should feel aligned with the new Price Book structure.
+
+DELIVERABLES
+1. Update the Job / Estimate item-picker flow to use category-first browsing
+2. Make line item categories show first, then line items inside
+3. Add materials cleanly into this picker flow
+4. Add any needed Line Items / Materials toggle or equivalent UX
+5. Keep search working and scoped correctly
+6. Keep selection/add behavior working correctly for jobs/estimates
+7. Tell me the exact file(s) changed
+8. Explain the final picker structure for:
+   - line items
+   - materials
+   - back navigation inside the picker
+9. Confirm the new picker is now aligned with the current Price Book structure
