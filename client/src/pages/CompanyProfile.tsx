@@ -109,7 +109,10 @@ export default function CompanyProfile() {
 
   useEffect(() => {
     if (profile) {
-      setFormData(profile);
+      setFormData({
+        ...profile,
+        phone: profile.phone ? formatPhoneInput(profile.phone) : null,
+      });
       setIsDirty(false);
     }
   }, [profile]);

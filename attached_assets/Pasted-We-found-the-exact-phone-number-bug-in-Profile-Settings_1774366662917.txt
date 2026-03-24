@@ -1,0 +1,72 @@
+We found the exact phone-number bug in Profile Settings.
+
+ROOT ISSUE
+When saving a phone number, the app is automatically adding a "1" at the beginning, but then it is also dropping the last digit of the number.
+
+So the saved value is getting shifted/corrupted.
+
+EXAMPLE OF THE BUG
+If the user enters a normal 10-digit phone number, the save logic is effectively turning it into:
+- a leading 1 gets added
+- the final digit gets cut off
+
+That is why the number is saving wrong.
+
+WHAT TO FIX
+Audit the full phone number save flow in Profile Settings and correct the logic so digits are preserved exactly.
+
+Check all of these places:
+- input masking / formatting while typing
+- any normalize / sanitize helper
+- submit payload transformation
+- backend parsing
+- DB save logic
+- read-back formatting logic
+
+LIKELY PROBLEM
+There is probably logic that is trying to convert the number into a US country-code format by prepending "1", but it is doing it incorrectly and causing the final digit to be lost.
+
+DESIRED BEHAVIOR
+- If a user enters a normal 10-digit phone number, all 10 digits should be preserved
+- No extra leading "1" should be added unless the logic intentionally stores E.164 and does so correctly
+- No last digit should ever be removed
+- The saved number should match what the user entered
+- Reloading the page should show the same correct number
+
+IMPLEMENTATION INTENT
+Pick one clean phone strategy and use it consistently:
+
+Option A
+- store 10-digit raw US number
+- display formatted US number
+
+Option B
+- store full normalized E.164 value correctly
+- display formatted US number in UI
+
+Either is fine, but the app must not:
+- auto-add 1 incorrectly
+- trim the last digit
+- corrupt the value between input -> save -> reload
+
+IMPORTANT
+Do not just patch the display.
+Fix the real source-of-truth logic so the correct number is:
+- captured correctly
+- transformed correctly
+- stored correctly
+- rendered correctly
+
+EXPECTED RESULT
+- User enters number
+- Update saves exact correct number
+- Reload shows exact correct number
+- No forced bad leading 1
+- No dropped last digit
+
+DELIVERABLES
+1. Fix the phone-number save bug in Profile Settings
+2. Tell me the exact file(s) changed
+3. Explain exactly where the extra leading 1 was being introduced
+4. Explain exactly where/why the last digit was being dropped
+5. Confirm the final input/save/reload behavior now works correctly

@@ -80,14 +80,27 @@ export function validatePhone(phone: string): boolean {
 /**
  * Format phone as user types (US format with dashes)
  * Returns formatted value suitable for input display: XXX-XXX-XXXX
+ *
+ * Handles E.164 stored values (e.g. +16315551234) correctly by stripping
+ * the leading country code "1" before formatting, so the 10 local digits
+ * are never corrupted.
  */
 export function formatPhoneInput(value: string): string {
   if (!value) return '';
-  
-  // Remove all non-numeric characters and limit to 10 digits
-  const digits = value.replace(/\D/g, '').slice(0, 10);
-  
-  // Format with dashes: XXX-XXX-XXXX
+
+  // Strip everything except digits
+  let digits = value.replace(/\D/g, '');
+
+  // E.164 US numbers are stored as +1XXXXXXXXXX (11 digits starting with 1).
+  // Drop the country code so we always work with the 10-digit local number.
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1);
+  }
+
+  // Cap at 10 digits (prevents any further overflow)
+  digits = digits.slice(0, 10);
+
+  // Format as XXX-XXX-XXXX
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
