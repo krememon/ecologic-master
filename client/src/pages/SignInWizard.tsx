@@ -353,7 +353,6 @@ export default function SignInWizard() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
                       className={error ? "border-red-500" : ""}
                     />
                     {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
