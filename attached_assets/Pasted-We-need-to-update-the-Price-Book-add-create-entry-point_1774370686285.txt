@@ -1,0 +1,73 @@
+We need to update the Price Book add/create entry point in EcoLogic.
+
+CURRENT STATE
+Right now there is a separate file/folder-style manage button on the Price Book page.
+
+I do not want that anymore.
+
+DESIRED UX
+Instead of having that separate manage button, I want just one main Add button.
+
+When the user taps Add, they should get a choice to create either:
+- Line Item
+- Category
+
+GOAL
+Simplify the Price Book actions so creation flows start from one clean entry point.
+
+WHAT TO CHANGE
+
+1. Remove the separate manage/folder button from the main Price Book page
+- Delete that standalone file/folder-style button from the header area
+
+2. Keep one main Add button
+- The main Add button should remain the primary create action on the Price Book page
+
+3. On Add tap, present a clean chooser
+When the user taps Add, show a simple EcoLogic-style choice for:
+- Add Line Item
+- Add Category
+
+Use the cleanest UX that fits the current app style, such as:
+- action sheet
+- modal
+- popover
+- small selection dialog
+
+Do NOT make it feel clunky or overbuilt.
+
+4. Route each option correctly
+- Add Line Item -> opens the normal create line item flow
+- Add Category -> opens the create category flow
+
+5. Preserve existing behavior
+- Do not break current create line item flow
+- Do not break current create category flow
+- Do not break category browsing
+- Do not break search
+- Do not create weird extra taps beyond the chooser itself
+
+IMPORTANT
+- Keep EcoLogic styling
+- Do not redesign the whole Price Book page
+- Do not add multiple competing buttons again
+- This should make the page cleaner, not messier
+- Keep mobile usability strong
+
+EXPECTED RESULT
+- No more separate folder/manage button
+- One Add button on the Price Book page
+- Tapping Add gives the user 2 choices:
+  - Line Item
+  - Category
+- Both flows open correctly from that chooser
+- UI feels cleaner and simpler
+
+DELIVERABLES
+1. Remove the separate manage/folder button
+2. Make the Add button open a chooser for:
+   - Line Item
+   - Category
+3. Wire both choices to the correct flows
+4. Tell me the exact file(s) changed
+5. Confirm nothing else on the Price Book page was unintentionally changed

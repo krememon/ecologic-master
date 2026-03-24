@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, ChevronRight, Search, Settings2, X, FolderOpen, Pencil, Tag, ListPlus, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import type { ServiceCatalogItem, PricebookCategory } from "@shared/schema";
@@ -428,13 +429,31 @@ export default function PriceBook() {
             {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'} · {totalItems} item{totalItems !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={() => setIsCategoryDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
-        >
-          <FolderOpen className="h-4 w-4" />
-          <span className="hidden sm:inline">Categories</span>
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="bg-teal-600 hover:bg-teal-700">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add
+              <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem
+              className="flex items-center gap-2.5 cursor-pointer py-2.5"
+              onSelect={() => openCreateItemDialog()}
+            >
+              <ListPlus className="h-4 w-4 text-teal-600" />
+              <span className="font-medium">Line Item</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2.5 cursor-pointer py-2.5"
+              onSelect={() => setIsCategoryDialogOpen(true)}
+            >
+              <FolderOpen className="h-4 w-4 text-teal-600" />
+              <span className="font-medium">Category</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Search */}
