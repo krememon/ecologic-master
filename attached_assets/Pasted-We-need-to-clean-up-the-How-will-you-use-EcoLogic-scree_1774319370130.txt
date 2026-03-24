@@ -1,0 +1,57 @@
+We need to clean up the "How will you use EcoLogic?" screen so it matches the rest of the sign-in / create-account flow.
+
+GOAL
+Make this screen feel visually consistent with the rest of the EcoLogic auth flow.
+
+CHANGES NEEDED
+
+1. Update the EcoLogic logo/title area at the top
+- Right now the "EcoLogic" text styling on this screen does not match the rest of the sign-in / create-account flow
+- Change it so it matches the exact same top branding style used on the other auth screens
+- Use the same logo/text treatment, sizing, weight, spacing, and subtitle styling as the normal sign-in/create-account screens
+- Do not create a new variation — reuse the existing auth header style
+
+2. Change option text
+- Change:
+  "I'm a business owner"
+  to:
+  "Create a company"
+
+- Change:
+  "I'm an employee"
+  to:
+  "Join a company"
+
+3. Update the first option icon
+- For the first option, replace the current business/building-style circle icon
+- Change it to the + inside badge logo version shown in the reference
+- Keep it in the same visual style family as the current UI
+- It should feel native to the EcoLogic design, not random or off-brand
+
+4. Remove the subtext under the first option
+- Remove the text underneath the first option entirely
+- Right now it says:
+  "Set up my company on EcoLogic"
+- That should be deleted completely
+
+IMPORTANT
+- Do not change the overall layout structure of the screen
+- Do not make weird spacing changes
+- Do not change the card size unless needed for clean alignment after removing the subtext
+- Do not mess up the second option layout
+- Keep the screen looking polished and consistent with the rest of the auth flow
+- Preserve the same overall vibe
+
+EXPECTED RESULT
+- Top EcoLogic branding matches the rest of the sign-in / create-account flow exactly
+- "I'm a business owner" becomes "Create a company"
+- "I'm an employee" becomes "Join a company"
+- First option uses the new + inside badge logo style icon
+- The first option has no subtext underneath
+- Screen looks cleaner and more consistent overall
+
+DELIVERABLES
+1. Make the change
+2. Tell me the exact file(s) changed
+3. Confirm each of the 5 requested changes was completed
+4. Confirm the screen still visually matches the rest of the auth flow
