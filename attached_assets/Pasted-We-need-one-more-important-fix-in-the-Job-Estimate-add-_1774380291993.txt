@@ -1,0 +1,90 @@
+We need one more important fix in the Job / Estimate add-items flow in EcoLogic.
+
+CURRENT ISSUE
+After creating a new item from inside the Add Line Items screen and choosing NOT to save it to the Price Book, it is not staying visible in the picker flow the way it should.
+
+That feels wrong.
+
+DESIRED BEHAVIOR
+If the user creates a new one-time item/material from inside the Job / Estimate add flow and does NOT save it to the Price Book:
+
+- it should still be added to the current job/estimate flow
+- and it should also appear temporarily inside the current Add Line Items / Add Materials screen session
+
+PRODUCT INTENT
+Even if it is not reusable in the Price Book, the user should still be able to immediately see/select/use the one-time item they just created during that open picker session.
+
+This is a temporary session-level item, not a Price Book item.
+
+WHAT TO FIX
+
+1. For create-from-job/create-from-estimate only:
+When the user creates:
+- a Line Item with Save to Price Book = OFF
+or
+- a Material with Save to Price Book = OFF
+
+that new entry should be injected into the currently open picker state temporarily.
+
+2. Temporary visibility rules
+The one-time item/material should:
+- appear in the current picker session immediately after creation
+- be selectable/usable normally in that current flow
+- behave like part of the current estimate/job add flow
+- NOT be permanently added to the reusable Price Book catalog
+
+3. Scope it correctly
+This temporary behavior should be scoped to the current open flow/session only.
+
+That means:
+- it should show in the current Add Line Items / Add Materials screen
+- it should not pollute the global Price Book
+- it should not appear as a reusable catalog item later unless Save to Price Book was ON
+
+4. Placement
+Use the cleanest UX possible for where the temporary item appears.
+
+Recommended:
+- if created while inside a category context, show it in the relevant current list
+- if not category-scoped, still make sure it appears somewhere obvious in the current picker flow
+- keep it easy for the user to find immediately after creating it
+
+5. Preserve correct final behavior
+When the user finishes the add flow:
+- the one-time item/material should still be added to the current estimate/job correctly
+- totals/calculations should still work
+- it should remain part of that estimate/job
+- but it should not exist in the reusable Price Book later
+
+IMPORTANT
+- Do not accidentally save one-time items/materials into the Price Book
+- Do not lose the created one-time item from the picker session
+- Do not break the current add flow
+- Do not break line item/material separation
+- Do not break category-first browsing
+- Keep the UX clean and obvious
+
+EXPECTED RESULT
+Example:
+- user opens Add Line Items
+- taps Create New Line Item
+- turns OFF Save to Price Book
+- saves it
+
+Result:
+- the new item appears temporarily in the current picker session
+- the user can see/select/use it right away
+- it is not permanently saved to the Price Book
+
+Same concept for Materials.
+
+DELIVERABLES
+1. Make one-time items/materials appear temporarily in the current picker session when not saved to Price Book
+2. Keep them out of the permanent Price Book catalog
+3. Apply this to both Line Items and Materials
+4. Tell me the exact file(s) changed
+5. Explain how the temporary session-level visibility works
+6. Confirm these scenarios:
+   - create line item from job/estimate with Save to Price Book OFF
+   - create material from job/estimate with Save to Price Book OFF
+   - neither is permanently added to Price Book

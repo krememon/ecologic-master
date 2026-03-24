@@ -71,6 +71,9 @@ export function PriceBookPickerModal({
   const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
   const [initialSelectedIds, setInitialSelectedIds] = useState<Set<number>>(new Set());
 
+  // ── Session-only items (created with Save to Price Book OFF) ───
+  const [sessionItems, setSessionItems] = useState<ServiceCatalogItem[]>([]);
+
   // ── Create form state ──────────────────────────────────────────
   const [priceDisplay, setPriceDisplay] = useState("");
   const [saveToBook, setSaveToBook] = useState(false);
@@ -117,6 +120,7 @@ export function PriceBookPickerModal({
       setShowCreateForm(false);
       setSelectedItemIds(new Set());
       setInitialSelectedIds(new Set());
+      setSessionItems([]);
       resetCreateForm();
     }
   }, [open]);
@@ -124,7 +128,10 @@ export function PriceBookPickerModal({
   // ── Derived: items and categories scoped to active tab ─────────
   const tabItemType: "line_item" | "material" = activeTab === "materials" ? "material" : "line_item";
 
-  const tabItems = catalogItems.filter(
+  // Merge real catalog items with session-only (one-time) items
+  const allItems = [...catalogItems, ...sessionItems];
+
+  const tabItems = allItems.filter(
     item => ((item as any).itemType ?? "line_item") === tabItemType
   );
 
@@ -168,22 +175,24 @@ export function PriceBookPickerModal({
   const handleDone = () => {
     for (const itemId of selectedItemIds) {
       if (!initialSelectedIds.has(itemId)) {
-        const catalogItem = catalogItems.find(c => c.id === itemId);
-        if (catalogItem) {
+        // Look in both real catalog items and session-only items
+        const foundItem = allItems.find(c => c.id === itemId);
+        if (foundItem) {
+          const isSessionItem = itemId < 0; // session items have negative IDs
           const lineItem: LineItem = {
-            name: catalogItem.name,
-            description: catalogItem.description || "",
-            taskCode: (catalogItem as any).taskCode || "",
+            name: foundItem.name,
+            description: foundItem.description || "",
+            taskCode: (foundItem as any).taskCode || "",
             quantity: "1",
-            unitPriceCents: catalogItem.defaultPriceCents,
-            priceDisplay: (catalogItem.defaultPriceCents / 100).toFixed(2),
-            unit: catalogItem.unit,
-            taxable: (catalogItem as any).taxable ?? false,
+            unitPriceCents: foundItem.defaultPriceCents,
+            priceDisplay: (foundItem.defaultPriceCents / 100).toFixed(2),
+            unit: foundItem.unit,
+            taxable: (foundItem as any).taxable ?? false,
             taxId: null,
             taxRatePercentSnapshot: null,
             taxNameSnapshot: null,
             saveToPriceBook: false,
-            priceBookItemId: catalogItem.id,
+            priceBookItemId: isSessionItem ? null : foundItem.id,
           };
           onAddItem(lineItem);
         }
@@ -261,23 +270,29 @@ export function PriceBookPickerModal({
       // Save to Price Book, then add to job/estimate with the real priceBookItemId
       createMutation.mutate({ ...newItem, itemType: tabItemType });
     } else {
-      // One-time item: add directly to job/estimate, skip the Price Book entirely
-      const lineItem: LineItem = {
+      // One-time item: inject into the session list so the user can see/select it,
+      // but never persist to the Price Book catalog.
+      // Use a negative timestamp-based ID to avoid any conflict with real DB IDs.
+      const fakeId = -Date.now();
+      const sessionItem = {
+        id: fakeId,
+        companyId: 0,
         name: newItem.name.trim(),
-        description: newItem.description.trim(),
-        taskCode: newItem.taskCode.trim(),
-        quantity: "1",
-        unitPriceCents: newItem.defaultPriceCents,
-        priceDisplay: (newItem.defaultPriceCents / 100).toFixed(2),
+        description: newItem.description.trim() || null,
+        taskCode: newItem.taskCode.trim() || null,
+        defaultPriceCents: newItem.defaultPriceCents,
         unit: newItem.unit,
         taxable: newItem.taxable,
-        taxId: null,
-        taxRatePercentSnapshot: null,
-        taxNameSnapshot: null,
-        saveToPriceBook: false,
-        priceBookItemId: null,
-      };
-      onAddItem(lineItem);
+        categoryId: null, // one-time items have no category
+        itemType: tabItemType,
+        createdAt: new Date().toISOString(),
+      } as unknown as ServiceCatalogItem;
+
+      setSessionItems(prev => [...prev, sessionItem]);
+      // Pre-select the item so it gets added when the user taps Done
+      setSelectedItemIds(prev => new Set([...prev, fakeId]));
+      // Navigate the picker to the uncategorized section so the item is immediately visible
+      setInnerView({ type: "detail", categoryId: "uncategorized", categoryName: "Uncategorized" });
       resetCreateForm();
       setShowCreateForm(false);
     }
@@ -392,7 +407,7 @@ export function PriceBookPickerModal({
                   className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                 />
               </div>
-              {tabCatsForCreate.length > 0 && (
+              {saveToBook && tabCatsForCreate.length > 0 && (
                 <div className="space-y-1.5">
                   <Label htmlFor="ci-cat" className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</Label>
                   <Select
@@ -482,6 +497,7 @@ export function PriceBookPickerModal({
                 key={item.id}
                 item={item}
                 isSelected={isSelected}
+                isSessionItem={item.id < 0}
                 subtitle={`${formatCurrency(item.defaultPriceCents)} per ${UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}${catName ? ` · ${catName}` : ""}`}
                 onToggle={() => handleToggleSelection(item)}
                 showDivider={index < searchResults.length - 1}
@@ -586,6 +602,7 @@ export function PriceBookPickerModal({
               key={item.id}
               item={item}
               isSelected={isSelected}
+              isSessionItem={item.id < 0}
               subtitle={`${formatCurrency(item.defaultPriceCents)} per ${UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}`}
               onToggle={() => handleToggleSelection(item)}
               showDivider={index < detailItems.length - 1}
@@ -730,12 +747,14 @@ function ItemRow({
   subtitle,
   onToggle,
   showDivider,
+  isSessionItem = false,
 }: {
   item: ServiceCatalogItem;
   isSelected: boolean;
   subtitle: string;
   onToggle: () => void;
   showDivider: boolean;
+  isSessionItem?: boolean;
 }) {
   return (
     <div>
@@ -749,7 +768,14 @@ function ItemRow({
         )}
       >
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
+            {isSessionItem && (
+              <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
+                One-time
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{subtitle}</p>
         </div>
         {isSelected && <Check className="h-5 w-5 text-teal-500 flex-shrink-0 ml-3" />}
