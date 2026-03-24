@@ -514,11 +514,6 @@ export default function PriceBook() {
                 onClick={() => { setView({ type: "category", categoryId: cat.id, categoryName: cat.name }); setDetailSearch(""); }}
                 className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md transition-all text-left group"
               >
-                {/* Icon */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
-                  <FolderOpen className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                </div>
-                {/* Name + count */}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                     {cat.name}
@@ -538,9 +533,6 @@ export default function PriceBook() {
               onClick={() => { setView({ type: "uncategorized" }); setDetailSearch(""); }}
               className="w-full flex items-center gap-4 px-4 py-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md transition-all text-left group"
             >
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                <Tag className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-slate-700 dark:text-slate-300 truncate">
                   Uncategorized
