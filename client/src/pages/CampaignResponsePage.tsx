@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Loader2, CheckCircle2, AlertCircle, Megaphone } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import logoImg from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1774473378583.png";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -116,10 +117,13 @@ export default function CampaignResponsePage({ token }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="max-w-lg mx-auto flex items-center gap-2">
-          <Megaphone className="h-5 w-5 text-blue-600" />
-          <span className="font-bold tracking-widest text-slate-900 text-sm uppercase">EcoLogic</span>
+      <div className="bg-white border-b border-slate-200 px-6 py-3">
+        <div className="max-w-lg mx-auto flex items-center justify-start">
+          <img
+            src={logoImg}
+            alt="EcoLogic"
+            className="h-10 w-auto object-contain"
+          />
         </div>
       </div>
 
@@ -143,7 +147,6 @@ export default function CampaignResponsePage({ token }: Props) {
                 id="interestMessage"
                 value={interestMessage}
                 onChange={e => setInterestMessage(e.target.value)}
-                placeholder="e.g. Need a quote for a tankless water heater installation…"
                 className="mt-1.5 min-h-[120px] resize-none text-base"
                 required
                 autoFocus
