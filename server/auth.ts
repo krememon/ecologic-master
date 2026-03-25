@@ -315,7 +315,10 @@ export function setupAuth(app: Express) {
 
   // Google Strategy
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    const googleCallbackURL = `${process.env.APP_BASE_URL || 'http://localhost:5000'}/api/auth/google/callback`;
+    // Prefer the canonical branded domain (APP_PUBLIC_BASE_URL) so Google's consent screen
+    // shows app.ecologicc.com rather than the Replit deployment URL.
+    const googleAuthBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'http://localhost:5000';
+    const googleCallbackURL = `${googleAuthBase}/api/auth/google/callback`;
     console.log("[GoogleAuth] callbackURL:", googleCallbackURL);
     passport.use(
       new GoogleStrategy(
@@ -1142,7 +1145,9 @@ export function setupAuth(app: Express) {
       state = "web";
     }
 
-    const productionBase = process.env.APP_BASE_URL;
+    // Prefer the canonical branded domain so the Google consent screen and trampoline
+    // redirect both use app.ecologicc.com rather than the Replit deployment URL.
+    const productionBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL;
     if (productionBase) {
       try {
         const prodHost = new URL(productionBase).host;

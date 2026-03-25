@@ -309,9 +309,10 @@ export async function setupAuth(app: Express) {
   // Replit OAuth strategy removed
 
   // Setup Google OAuth
-  const googleCallbackUrl = process.env.APP_BASE_URL
-    ? `${process.env.APP_BASE_URL}/api/auth/google/callback`
-    : `http://localhost:5000/api/auth/google/callback`;
+  // Prefer the canonical branded domain (APP_PUBLIC_BASE_URL) so Google's consent screen
+  // shows app.ecologicc.com rather than the Replit deployment URL.
+  const googleAuthBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'http://localhost:5000';
+  const googleCallbackUrl = `${googleAuthBase}/api/auth/google/callback`;
   console.log("[GoogleAuth] callbackURL:", googleCallbackUrl);
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
