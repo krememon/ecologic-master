@@ -117,12 +117,12 @@ export default function CampaignResponsePage({ token }: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="bg-white border-b border-slate-200 px-6 py-3">
+      <div className="bg-white border-b border-slate-200 px-6 py-5">
         <div className="max-w-lg mx-auto flex items-center justify-start">
           <img
             src={logoImg}
             alt="EcoLogic"
-            className="h-10 w-auto object-contain"
+            className="h-16 w-auto object-contain"
           />
         </div>
       </div>
