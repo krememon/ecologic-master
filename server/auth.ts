@@ -1145,8 +1145,11 @@ export function setupAuth(app: Express) {
       state = "web";
     }
 
-    // Prefer the canonical branded domain so the Google consent screen and trampoline
-    // redirect both use app.ecologicc.com rather than the Replit deployment URL.
+    // Determine the base URL using a strict priority order:
+    // 1. APP_PUBLIC_BASE_URL — the canonical branded domain (app.ecologicc.com), always preferred
+    // 2. req.protocol + req.get("host") — derived from the incoming request (correct when trust proxy is set)
+    // 3. APP_BASE_URL — the Replit deployment URL, used only as a last resort
+    const requestBase = `${req.protocol}://${req.get("host")}`;
     const productionBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL;
     if (productionBase) {
       try {
@@ -1198,11 +1201,17 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       } catch (_) {}
     }
 
-    const callbackURL = `${productionBase || ""}/api/auth/google/callback`;
-    console.log(`[auth/google][debug] starting OAuth: host=${req.headers.host} state=${state.substring(0, 12)} callbackURL=${callbackURL} platform=${platform} returnTo=${returnTo || "(none)"}`);
+    // Resolve the base URL: prefer APP_PUBLIC_BASE_URL, then the request-derived origin,
+    // then APP_BASE_URL as a last resort. This ensures the Google consent screen always
+    // shows app.ecologicc.com regardless of which host the internal request arrived on.
+    const resolvedBase = productionBase || requestBase;
+    const callbackURL = `${resolvedBase}/api/auth/google/callback`;
+    console.log(`[OAuth] baseUrl resolved to: ${resolvedBase}`);
+    console.log(`[auth/google][debug] starting OAuth: host=${req.headers.host} requestBase=${requestBase} state=${state.substring(0, 12)} callbackURL=${callbackURL} platform=${platform} returnTo=${returnTo || "(none)"}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state,
+      callbackURL,
       prompt: "select_account",
       accessType: "offline",
       includeGrantedScopes: true,

@@ -63,6 +63,11 @@ app.get("/uploads/:filename", serveUploadedFile);
 app.get("/public/uploads/:filename", serveUploadedFile);
 console.log("[Static] Public upload routes registered: /uploads/:filename and /public/uploads/:filename");
 
+// Trust the reverse proxy (Replit / custom domain) so that req.protocol and
+// req.get("host") reflect the public-facing values (https / app.ecologicc.com)
+// rather than the internal container values. Must be set before routes.
+app.set("trust proxy", 1);
+
 // Disable ETags to prevent 304 responses which break JSON parsing
 app.set("etag", false);
 
