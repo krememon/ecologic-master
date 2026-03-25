@@ -63,6 +63,12 @@ app.get("/uploads/:filename", serveUploadedFile);
 app.get("/public/uploads/:filename", serveUploadedFile);
 console.log("[Static] Public upload routes registered: /uploads/:filename and /public/uploads/:filename");
 
+// Serve the project-root public/ folder for BIMI, .well-known, and any other
+// static assets that must be accessible publicly. Registered before all API routes
+// and before the React catch-all so these files are always served as-is.
+app.use(express.static(path.join(process.cwd(), "public"), { index: false }));
+console.log("[Static] Root public/ directory registered for static serving");
+
 // Trust the reverse proxy (Replit / custom domain) so that req.protocol and
 // req.get("host") reflect the public-facing values (https / app.ecologicc.com)
 // rather than the internal container values. Must be set before routes.
