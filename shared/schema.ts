@@ -270,6 +270,7 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   status: varchar("status", { length: 20 }).notNull().default("queued"), // 'queued' | 'sent' | 'failed' | 'skipped'
   providerMessageId: varchar("provider_message_id", { length: 255 }),
   errorMessage: text("error_message"),
+  responseToken: varchar("response_token", { length: 128 }).unique(), // secure token for "I'm Interested" link
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -1636,7 +1637,11 @@ export const leads = pgTable("leads", {
   city: varchar("city"),
   state: varchar("state"),
   postalCode: varchar("postal_code"),
-  source: varchar("source", { length: 100 }), // e.g., "Website", "Referral", "Google Ads"
+  source: varchar("source", { length: 100 }), // e.g., "Website", "Referral", "Google Ads", "campaign"
+  campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+  campaignSubject: varchar("campaign_subject", { length: 500 }), // snapshot of campaign subject at send time
+  interestMessage: text("interest_message"), // what the customer submitted via the "I'm Interested" form
+  campaignResponseAt: timestamp("campaign_response_at"), // when the customer submitted
   estimatedValue: integer("estimated_value"), // in cents
   serviceType: varchar("service_type", { length: 100 }),
   preferredContactMethod: varchar("preferred_contact_method", { length: 50 }),

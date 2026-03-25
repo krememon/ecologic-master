@@ -8,7 +8,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, StickyNote, X } from "lucide-react";
+import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, StickyNote, X, Megaphone } from "lucide-react";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SelectCustomerModal } from "@/components/CustomerModals";
@@ -25,6 +25,11 @@ interface Lead {
   description: string | null;
   notes: string | null;
   status: string;
+  source: string | null;
+  campaignId: number | null;
+  campaignSubject: string | null;
+  interestMessage: string | null;
+  campaignResponseAt: string | null;
   createdAt: string;
   customer?: Customer;
 }
@@ -293,22 +298,36 @@ export default function Leads() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                         {lead.customer
                           ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
-                          : "No customer"}
+                          : lead.firstName || lead.lastName
+                            ? `${lead.firstName || ""} ${lead.lastName || ""}`.trim()
+                            : "Unknown"}
                       </h3>
                       {lead.status === "won" && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                           Won
                         </span>
                       )}
+                      {lead.source === "campaign" && (
+                        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                          <Megaphone className="h-3 w-3" />
+                          Campaign
+                        </span>
+                      )}
                     </div>
 
-                    {lead.description && (
-                      <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
-                        {lead.description}
+                    {lead.source === "campaign" && lead.campaignSubject && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-1 font-medium">
+                        {lead.campaignSubject}
+                      </p>
+                    )}
+
+                    {(lead.interestMessage || lead.description) && (
+                      <p className="text-sm text-slate-700 dark:text-slate-300 mb-2 line-clamp-2">
+                        {lead.interestMessage || lead.description}
                       </p>
                     )}
 

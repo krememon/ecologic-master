@@ -45,6 +45,7 @@ import ClientDetail from "@/pages/ClientDetail";
 import ContractorDetail from "@/pages/ContractorDetail";
 import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
+import CampaignResponsePage from "@/pages/CampaignResponsePage";
 import Leads from "@/pages/Leads";
 import LeadDetails from "@/pages/LeadDetails";
 import Timesheets from "@/pages/Timesheets";
@@ -611,6 +612,11 @@ function Router() {
   
   if (path.startsWith('/unsubscribe')) {
     return <UnsubscribeRouter />;
+  }
+
+  const campaignResponseMatch = path.match(/^\/campaign-response\/([a-f0-9]{64})$/);
+  if (campaignResponseMatch) {
+    return <CampaignResponsePage token={campaignResponseMatch[1]} />;
   }
 
   if (path.startsWith('/payout-setup/')) {

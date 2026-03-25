@@ -284,6 +284,7 @@ export async function sendBrandedCampaignEmail({
   branding,
   company,
   unsubscribeUrl,
+  ctaUrl,
 }: {
   to: string;
   subject: string;
@@ -305,6 +306,7 @@ export async function sendBrandedCampaignEmail({
     postalCode?: string | null;
   } | null;
   unsubscribeUrl?: string;
+  ctaUrl?: string;
 }): Promise<EmailResult> {
   const resendApiKey = process.env.RESEND_API_KEY;
   
@@ -384,6 +386,13 @@ export async function sendBrandedCampaignEmail({
           <tr>
             <td style="padding: 30px;">
               <div style="white-space: pre-wrap; color: #333333; line-height: 1.6;">${body}</div>
+              ${ctaUrl ? `
+              <div style="margin-top: 28px; text-align: center;">
+                <a href="${ctaUrl}"
+                   style="display: inline-block; background-color: #1d4ed8; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 36px; border-radius: 8px; letter-spacing: 0.01em;">
+                  I'm Interested
+                </a>
+              </div>` : ''}
             </td>
           </tr>
           ${footerParts.length > 0 ? `

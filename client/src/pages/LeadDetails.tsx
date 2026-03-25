@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck, AlertCircle } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck, AlertCircle, Megaphone, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -62,6 +62,11 @@ interface Lead {
   description: string | null;
   notes: string | null;
   status: string;
+  source: string | null;
+  campaignId: number | null;
+  campaignSubject: string | null;
+  interestMessage: string | null;
+  campaignResponseAt: string | null;
   createdAt: string;
   customer?: Customer;
 }
@@ -299,6 +304,43 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
             )}
           </CardContent>
         </Card>
+
+        {lead.source === "campaign" && (
+          <Card className="border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-blue-500" />
+                Campaign Source
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {lead.campaignSubject && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Campaign</p>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{lead.campaignSubject}</p>
+                </div>
+              )}
+
+              {lead.interestMessage && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    Customer's message
+                  </p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap bg-white dark:bg-slate-900 rounded-lg border border-blue-100 dark:border-blue-800 px-3 py-2.5">
+                    {lead.interestMessage}
+                  </p>
+                </div>
+              )}
+
+              {lead.campaignResponseAt && safeFormatDate(lead.campaignResponseAt) && (
+                <p className="text-xs text-blue-500 dark:text-blue-400">
+                  Responded {safeFormatDate(lead.campaignResponseAt)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <NewEstimateSheet

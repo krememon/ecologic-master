@@ -32,7 +32,7 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
 import * as stripeConnectService from "./services/stripeConnect";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, insertScheduleEventSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, insertScheduleEventSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments, campaigns, campaignRecipients } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -9188,19 +9188,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send emails
       if (channel === 'email' || channel === 'both') {
+        const { randomBytes } = await import('crypto');
+        const appBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'http://localhost:5000';
+
         for (const customer of emailEligible) {
+          // Generate a unique secure token for this recipient's "I'm Interested" link
+          const responseToken = randomBytes(32).toString('hex');
+
           const recipientRecord = await storage.createCampaignRecipient({
             campaignId: campaign.id,
             customerId: customer.id,
             channel: 'email',
             destination: customer.email!,
             status: 'queued',
+            responseToken,
           });
 
           // Generate unsubscribe URL for this recipient
           const { generateUnsubscribeUrl } = await import('./services/unsubscribe');
           const unsubscribeUrl = generateUnsubscribeUrl(company.id, customer.id, 'email');
           console.log(`[Campaign] Email unsubscribe URL for customer ${customer.id}: ${unsubscribeUrl}`);
+
+          const ctaUrl = `${appBase}/campaign-response/${responseToken}`;
+          console.log(`[Campaign] CTA URL for customer ${customer.id}: ${ctaUrl}`);
           
           const result = await sendBrandedCampaignEmail({
             to: customer.email!,
@@ -9210,6 +9220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             branding: emailBranding,
             company: company,
             unsubscribeUrl,
+            ctaUrl,
           });
 
           if (result.success) {
@@ -12439,6 +12450,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ ok: false, message: 'Something went wrong' });
     }
   });
+
+  // ─── Campaign Response (public "I'm Interested") ──────────────────────────
+
+  // GET /api/public/campaign-response/:token - Return campaign/recipient info for prefilling the form
+  app.get('/api/public/campaign-response/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token || token.length !== 64) {
+        return res.status(400).json({ ok: false, message: 'Invalid link' });
+      }
+
+      const [recipient] = await db
+        .select({
+          id: campaignRecipients.id,
+          customerId: campaignRecipients.customerId,
+          campaignId: campaignRecipients.campaignId,
+          campaignSubject: campaigns.subject,
+          companyId: campaigns.companyId,
+          customerFirstName: customers.firstName,
+          customerLastName: customers.lastName,
+          customerEmail: customers.email,
+          customerPhone: customers.phone,
+        })
+        .from(campaignRecipients)
+        .innerJoin(campaigns, eq(campaignRecipients.campaignId, campaigns.id))
+        .leftJoin(customers, eq(campaignRecipients.customerId, customers.id))
+        .where(eq(campaignRecipients.responseToken, token))
+        .limit(1);
+
+      if (!recipient) {
+        console.warn(`[CampaignResponse] Invalid token: ${token.substring(0, 8)}...`);
+        return res.status(404).json({ ok: false, message: 'Link not found or expired' });
+      }
+
+      console.log(`[CampaignResponse] Token validated: recipientId=${recipient.id} campaignId=${recipient.campaignId}`);
+
+      res.json({
+        ok: true,
+        campaignSubject: recipient.campaignSubject,
+        firstName: recipient.customerFirstName,
+        lastName: recipient.customerLastName,
+        email: recipient.customerEmail,
+        phone: recipient.customerPhone,
+      });
+    } catch (error) {
+      console.error('[CampaignResponse] Error validating token:', error);
+      res.status(500).json({ ok: false, message: 'Something went wrong' });
+    }
+  });
+
+  // POST /api/public/campaign-response/:token - Submit "I'm Interested" and create a lead
+  app.post('/api/public/campaign-response/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token || token.length !== 64) {
+        return res.status(400).json({ ok: false, message: 'Invalid link' });
+      }
+
+      const { name, email, phone, interestMessage } = req.body;
+      if (!interestMessage || typeof interestMessage !== 'string' || interestMessage.trim().length === 0) {
+        return res.status(400).json({ ok: false, message: 'Interest message is required' });
+      }
+
+      const [recipient] = await db
+        .select({
+          id: campaignRecipients.id,
+          customerId: campaignRecipients.customerId,
+          campaignId: campaignRecipients.campaignId,
+          campaignSubject: campaigns.subject,
+          companyId: campaigns.companyId,
+        })
+        .from(campaignRecipients)
+        .innerJoin(campaigns, eq(campaignRecipients.campaignId, campaigns.id))
+        .where(eq(campaignRecipients.responseToken, token))
+        .limit(1);
+
+      if (!recipient) {
+        console.warn(`[CampaignResponse] Submission with invalid token: ${token.substring(0, 8)}...`);
+        return res.status(404).json({ ok: false, message: 'Link not found or expired' });
+      }
+
+      // Parse name into first/last
+      const trimmedName = (name || '').trim();
+      const spaceIdx = trimmedName.indexOf(' ');
+      const firstName = spaceIdx > -1 ? trimmedName.substring(0, spaceIdx) : trimmedName;
+      const lastName = spaceIdx > -1 ? trimmedName.substring(spaceIdx + 1) : '';
+
+      // Create the lead
+      const lead = await storage.createLead(recipient.companyId, {
+        customerId: recipient.customerId,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        email: (email || '').trim() || null,
+        phone: (phone || '').trim() || null,
+        source: 'campaign',
+        campaignId: recipient.campaignId,
+        campaignSubject: recipient.campaignSubject || null,
+        interestMessage: interestMessage.trim(),
+        campaignResponseAt: new Date(),
+        description: interestMessage.trim(),
+        status: 'new',
+      } as any);
+
+      console.log(`[CampaignResponse] Lead created: leadId=${lead.id} campaignId=${recipient.campaignId} companyId=${recipient.companyId}`);
+
+      res.json({ ok: true, leadId: lead.id });
+    } catch (error) {
+      console.error('[CampaignResponse] Error creating lead:', error);
+      res.status(500).json({ ok: false, message: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   // GET /api/public/email-preferences - Get current email preferences (public, no auth)
   app.get('/api/public/email-preferences', async (req, res) => {

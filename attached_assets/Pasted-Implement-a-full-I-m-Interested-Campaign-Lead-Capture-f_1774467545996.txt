@@ -1,0 +1,271 @@
+Implement a full “I’m Interested” Campaign Lead Capture flow for EcoLogic.
+
+Goal
+
+When a company sends a campaign email through EcoLogic, the email should include an “I’m Interested” button.
+
+When the customer clicks that button:
+
+they are taken to a public EcoLogic page
+they can type what they are interested in
+when they submit, it instantly creates a new lead in the company’s Leads tab
+
+The new lead must clearly show:
+
+it came from a campaign
+which campaign it came from
+the customer’s submitted interest message
+Context
+
+We already have the existing Launch Campaign modal with:
+
+Subject
+Email Message
+Preview recipients
+Send Campaign
+
+That remains the source of truth.
+The exact subject/message entered there should be what gets sent in the email.
+
+The current campaign email already has EcoLogic branding/header/footer.
+We now need to add a clear CTA button inside that email:
+“I’m Interested”
+
+Required implementation
+1. Add CTA button to campaign emails
+
+Update the campaign email template so every sent campaign includes a prominent CTA button:
+I’m Interested
+
+Button behavior:
+
+opens a public campaign response page
+link must be unique and securely tied to:
+company
+campaign
+recipient/contact
+token
+
+Use the existing sent campaign subject/message exactly as entered in the Launch Campaign modal.
+Do not make the email cluttered.
+Keep the current EcoLogic branded style.
+
+2. Campaign tracking / backend data model
+
+Add whatever backend/schema is needed so campaigns can create leads properly.
+
+Need the ability to track:
+
+campaign id
+company id
+campaign subject snapshot
+campaign message snapshot
+recipient/customer id if applicable
+recipient name/email/phone if known
+secure token for public response link
+submission timestamp
+submission message / interest message
+
+If needed, create supporting tables like:
+
+campaign_recipients
+campaign_responses / campaign_submissions
+
+But final outcome must always create a real record in the main Leads system.
+
+For the created lead, store:
+
+source = campaign
+campaignId
+campaignSubjectSnapshot
+submittedMessage / interestMessage
+submittedAt
+customer name
+customer email
+customer phone
+companyId
+
+Important:
+Store campaign subject as a snapshot so if the campaign changes later, the lead still shows the original campaign name it came from.
+
+3. Public “I’m Interested” page
+
+Create a public no-login EcoLogic page that opens from the email CTA.
+
+This page should:
+
+be mobile friendly
+look clean and trustworthy
+match EcoLogic style
+not feel cluttered
+
+Form fields:
+
+name
+email
+phone
+what are you interested in? (main textarea)
+
+If recipient info is already known, prefill it where possible.
+
+The page should clearly guide the customer to submit interest.
+This is the main purpose of the page, so keep it simple.
+
+Example heading:
+Tell us what you’re interested in
+
+Example helper text:
+Let us know what service you need and we’ll follow up.
+
+Main textarea is the focus.
+
+4. Public route security
+
+This page must not require login, but it must be secure.
+
+Requirements:
+
+validate token server-side
+link must be tied to a real sent campaign recipient
+reject invalid/tampered tokens
+prevent accidental double-submit
+add basic rate limiting if easy
+do not allow random open spam submission without a valid recipient/campaign token
+
+If same recipient submits twice from same campaign:
+
+create separate leads unless there is already strong duplicate logic elsewhere
+do not silently merge them
+
+For duplicate-click prevention:
+
+disable submit button while posting
+server should also protect against rapid accidental duplicate submissions
+5. Lead creation behavior
+
+When customer submits the public form:
+
+create a new lead in the company’s Leads system
+source must be campaign
+attach campaign metadata
+attach submitted message
+attach recipient/customer info
+attach submitted timestamp
+
+The new lead should show up in Leads on normal refresh/reload.
+
+Do not break existing lead creation flows.
+
+6. Leads tab UI
+
+Update the lead card/list UI so campaign leads clearly show they came from a campaign.
+
+For campaign leads, show:
+
+customer name
+phone/email if available
+submitted message
+source badge: Campaign
+campaign subject/name
+submitted date/time
+
+Example:
+
+Source: Campaign
+Campaign: Spring Plumbing Promo
+Interest: “Need a quote for a tankless water heater”
+
+Important:
+Only show campaign-specific extra rows when source === campaign
+Do not make every lead card more cluttered.
+
+Nice touch:
+Add a small badge:
+From Campaign
+
+7. Lead details view
+
+If there is a lead details modal/drawer/page, include:
+
+source badge: Campaign
+campaign subject/name
+submitted message
+submitted timestamp
+original recipient info if available
+
+Keep it clean and consistent with EcoLogic styling.
+
+8. Campaign send flow integration
+
+Use the existing Launch Campaign modal as the creation point.
+Meaning:
+
+Subject entered there = campaign subject used in email + saved snapshot
+Email Message entered there = message body sent in email
+Preview recipients = recipients who receive unique response links
+On Send Campaign:
+create/send campaign records
+generate recipient-specific secure response links
+insert the “I’m Interested” CTA into the email
+
+Do not add weird extra setup steps for the sender.
+
+9. UX requirements
+
+Keep this EcoLogic style:
+
+modern
+simple
+dark/clean internal UI
+public page should still feel branded and trustworthy
+no weird bulky CRM look
+no unnecessary marketing fluff
+
+Public form page should have:
+
+one main CTA button
+simple success state after submit
+
+Success state example:
+Thanks — your request was sent.
+
+Optionally:
+We’ll follow up with you soon.
+
+10. Deliverables
+
+When done, give me:
+
+exact files changed
+schema changes
+new tables/fields
+new routes
+how token validation works
+how duplicate submit prevention works
+where the campaign source is shown in Leads UI
+any migration notes
+confirmation that existing campaign sending flow still works
+Guardrails
+do not break existing Leads flows
+do not break existing campaign sending
+do not clutter the Leads UI
+preserve EcoLogic aesthetic
+keep this simple for both contractor and customer
+add only targeted logs for:
+campaign send
+public page token validation
+public submission
+lead creation
+Exact desired end result
+
+User sends campaign email from Launch Campaign.
+Customer receives branded email with an “I’m Interested” button.
+Customer clicks it and lands on a public EcoLogic page.
+Customer types what they want.
+Customer submits.
+A brand new lead appears in the sender’s Leads tab showing:
+
+customer info
+interest message
+source = campaign
+campaign name/subject
