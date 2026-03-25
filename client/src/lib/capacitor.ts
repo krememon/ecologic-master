@@ -317,7 +317,18 @@ export async function exchangeNativeAuthCode(
 export async function startGoogleAuthNative(): Promise<void> {
   if (!isNativePlatform()) {
     if (isInsideIframe()) {
-      const appBaseUrl = (import.meta.env.VITE_APP_BASE_URL as string) || "";
+      // Determine the production base URL for the OAuth request.
+      // When the page is already served from the production domain (not Replit, not localhost),
+      // use the current origin directly so auth always originates from the correct branded domain.
+      // When embedded inside a Replit canvas/picard iframe, fall back to VITE_APP_BASE_URL to
+      // bounce the request out to the production domain cross-origin.
+      const currentOrigin = window.location.origin;
+      const isProductionOrigin =
+        !currentOrigin.includes("replit.") &&
+        !currentOrigin.includes("localhost") &&
+        !currentOrigin.includes("127.0.0.1");
+      const configuredBase = ((import.meta.env.VITE_APP_BASE_URL as string) || "").replace(/\/$/, "");
+      const appBaseUrl = isProductionOrigin ? currentOrigin : configuredBase;
       if (appBaseUrl) {
         const prodOrigin = appBaseUrl.replace(/\/$/, "");
         const returnTo = encodeURIComponent(window.location.origin);
