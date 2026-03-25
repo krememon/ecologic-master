@@ -320,10 +320,15 @@ export async function sendBrandedCampaignEmail({
 
   const resend = new Resend(resendApiKey);
   const resolvedFrom = getResendFrom();
-  console.log('[email] FROM used:', resolvedFrom);
-  
+
   const footerText = branding?.footerText || '';
-  const fromName = branding?.fromName || companyName;
+  // Use branding override → company name → fallback "EcoLogic"
+  const fromName = (branding?.fromName || companyName || 'EcoLogic').trim();
+
+  // Keep the verified sending address; only swap the display name
+  const sendingAddress = resolvedFrom.match(/<(.+)>/)?.[1] || resolvedFrom;
+  const campaignFrom = `${fromName} <${sendingAddress}>`;
+  console.log('[Campaign] FROM display name:', fromName, '→', campaignFrom);
   
   // Load header image as CID inline attachment for reliable Gmail display
   const attachments: Array<{
@@ -438,7 +443,7 @@ export async function sendBrandedCampaignEmail({
     }
     
     const { data, error } = await resend.emails.send({
-      from: resolvedFrom,
+      from: campaignFrom,
       to: [to],
       subject,
       html,
