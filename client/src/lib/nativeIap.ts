@@ -228,59 +228,90 @@ export async function restoreApplePurchases(): Promise<string | null> {
 
 // ─── GOOGLE PLAY — Product loading ────────────────────────────────────────────
 
-/**
- * Load available Google Play subscription products for the current Play Store locale.
- * Returns an empty array if the plugin is not available or products fail to load.
- */
+/** Diagnostic result returned alongside products — Android only. */
+export interface GooglePlayLoadResult {
+  products: IapProduct[];
+  error: string | null;
+  rawCount: number;
+}
+
 export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
-  if (!isNativeAndroid()) return [];
+  const { products } = await loadGooglePlayProductsDiag();
+  return products;
+}
+
+/**
+ * Same as loadGooglePlayProducts but returns a diagnostic result object so the
+ * calling component can surface the error and raw count in the debug UI.
+ */
+export async function loadGooglePlayProductsDiag(): Promise<GooglePlayLoadResult> {
+  if (!isNativeAndroid()) return { products: [], error: null, rawCount: 0 };
+
+  console.log("[ECOLOGIC-IAP] ══ Google Play product load START ══");
+  console.log("[ECOLOGIC-IAP] Platform:", getPlatform());
+  console.log("[ECOLOGIC-IAP] Requested product IDs:", JSON.stringify(ALL_GOOGLE_PLAY_PRODUCT_IDS));
 
   try {
-    const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
-    console.log("[native-iap] loading Google Play products:", ALL_GOOGLE_PLAY_PRODUCT_IDS.join(", "));
+    let NativePurchases: any;
+    let PURCHASE_TYPE: any;
+    try {
+      const mod = await import("@capgo/native-purchases");
+      NativePurchases = mod.NativePurchases;
+      PURCHASE_TYPE = mod.PURCHASE_TYPE;
+      console.log("[ECOLOGIC-IAP] Plugin import OK — NativePurchases:", !!NativePurchases);
+    } catch (importErr: any) {
+      const msg = `Plugin import failed: ${importErr?.message ?? String(importErr)}`;
+      console.error("[ECOLOGIC-IAP] FATAL —", msg);
+      return { products: [], error: msg, rawCount: 0 };
+    }
 
-    const { products } = await NativePurchases.getProducts({
+    console.log("[ECOLOGIC-IAP] Calling NativePurchases.getProducts with PURCHASE_TYPE.SUBS …");
+    const { products: rawProducts } = await NativePurchases.getProducts({
       productIdentifiers: ALL_GOOGLE_PLAY_PRODUCT_IDS,
       productType: PURCHASE_TYPE.SUBS,
     });
 
-    // ── Raw diagnostic log — shows EXACTLY what Google Play returned ──────────
-    // If this shows 0 products, the issue is Google Play Console / tester setup,
-    // NOT the app code. Check: product IDs match, app on internal track, tester added.
-    console.log(`[native-iap] Google Play raw response: ${products.length} product(s) from Play Store`);
-    products.forEach((p, i) => {
-      const raw = p as any;
-      console.log(
-        `[native-iap]  [${i}] id=${p.identifier} price=${p.priceString}`,
-        `basePlanId=${raw.subscriptionOfferDetails?.[0]?.basePlanId ?? raw.basePlanId ?? "(none)"}`,
-        `title="${p.title}"`
-      );
-    });
-    if (products.length === 0) {
-      console.warn(
-        "[native-iap] Google Play returned 0 products. Possible causes:\n" +
-        "  A) Product IDs in code don't match Play Console IDs\n" +
-        "  B) Subscriptions not published to internal/alpha/beta track\n" +
-        "  C) Tester account not added to testing program\n" +
-        "  D) App signed differently from Play Console build\n" +
-        `  Requested IDs: ${ALL_GOOGLE_PLAY_PRODUCT_IDS.join(", ")}`
-      );
+    console.log(`[ECOLOGIC-IAP] Raw response: ${rawProducts.length} product(s) returned by Google Play`);
+
+    if (rawProducts.length === 0) {
+      const warn =
+        "[ECOLOGIC-IAP] 0 products returned. Diagnose:\n" +
+        "  1) Do these IDs exist in Play Console → Monetize → Subscriptions?\n" +
+        `     ${ALL_GOOGLE_PLAY_PRODUCT_IDS.join(", ")}\n` +
+        "  2) Are subscriptions ACTIVE (not draft) in Play Console?\n" +
+        "  3) Is the app published to Internal Testing track?\n" +
+        "  4) Is the Samsung's Google account added as a tester + accepted opt-in link?\n" +
+        "  5) Is this APK release-signed with the SAME key registered in Play Console?";
+      console.warn(warn);
+      return { products: [], error: "0 products returned from Google Play. See [ECOLOGIC-IAP] logcat for diagnosis.", rawCount: 0 };
     }
 
-    const mapped: IapProduct[] = products
-      .filter(p => !!googlePlayProductIdToPlanKey[p.identifier])
-      .map(p => {
+    // Log every raw product the store returned
+    rawProducts.forEach((p: any, i: number) => {
+      const raw = p as any;
+      const offerDetails = raw.subscriptionOfferDetails;
+      console.log(
+        `[ECOLOGIC-IAP] Raw[${i}]:`,
+        `id="${p.identifier}"`,
+        `price="${p.priceString}"`,
+        `title="${p.title}"`,
+        `basePlanId="${raw.subscriptionOfferDetails?.[0]?.basePlanId ?? raw.basePlanId ?? "(none)"}"`,
+        `offerDetails=${offerDetails ? JSON.stringify(offerDetails).slice(0, 200) : "(none)"}`
+      );
+    });
+
+    const mapped: IapProduct[] = rawProducts
+      .filter((p: any) => !!googlePlayProductIdToPlanKey[p.identifier])
+      .map((p: any) => {
         const planKey = googlePlayProductIdToPlanKey[p.identifier];
         const raw = p as any;
-
-        // Try to extract base plan ID from Android subscriptionOfferDetails (Play Billing 5+)
-        // Fall back to the plan config, then to "monthly" as a safe default
         const planIdentifier: string =
           raw.subscriptionOfferDetails?.[0]?.basePlanId ||
           raw.basePlanId ||
           subscriptionPlans[planKey]?.googlePlayPlanIdentifier ||
           "monthly";
 
+        console.log(`[ECOLOGIC-IAP] Mapped: id="${p.identifier}" → planKey="${planKey}" planIdentifier="${planIdentifier}" price="${p.priceString}"`);
         return {
           identifier: p.identifier,
           planKey,
@@ -291,14 +322,23 @@ export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
         };
       });
 
-    console.log(
-      `[native-iap] Google Play: ${mapped.length} product(s) loaded —`,
-      mapped.map(p => `${p.identifier}[${p.planIdentifier}]=${p.priceString}`).join(", ") || "(none)"
-    );
-    return mapped;
+    const unmapped = rawProducts.filter((p: any) => !googlePlayProductIdToPlanKey[p.identifier]);
+    if (unmapped.length > 0) {
+      console.warn(
+        `[ECOLOGIC-IAP] ${unmapped.length} product(s) from Play Store did NOT match any known plan ID:`,
+        unmapped.map((p: any) => p.identifier).join(", ")
+      );
+    }
+
+    console.log(`[ECOLOGIC-IAP] ══ Google Play product load DONE: ${mapped.length}/${rawProducts.length} mapped ══`);
+    return { products: mapped, error: null, rawCount: rawProducts.length };
   } catch (err: any) {
-    console.error("[native-iap] loadGooglePlayProducts failed:", err.message);
-    return [];
+    const msg = err?.message ?? String(err);
+    const stack = err?.stack ?? "(no stack)";
+    console.error("[ECOLOGIC-IAP] loadGooglePlayProducts THREW:", msg);
+    console.error("[ECOLOGIC-IAP] Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    console.error("[ECOLOGIC-IAP] Stack:", stack);
+    return { products: [], error: msg, rawCount: 0 };
   }
 }
 

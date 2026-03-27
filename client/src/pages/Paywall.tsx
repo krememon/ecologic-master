@@ -13,6 +13,7 @@ import {
   isNativeAndroid,
   loadAppleProducts,
   loadGooglePlayProducts,
+  loadGooglePlayProductsDiag,
   purchaseAppleSubscription,
   purchaseGooglePlaySubscription,
   restoreApplePurchases,
@@ -37,6 +38,9 @@ export default function Paywall() {
   // Store products (all 4 plans loaded at once)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  // Android diagnostic state — shows in debug block
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rawProductCount, setRawProductCount] = useState<number | null>(null);
 
   // Selected plan — native uses this for Apple/Google IAP
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>("starter");
@@ -79,24 +83,40 @@ export default function Paywall() {
     const android = isNativeAndroid();
     setNativeIos(ios);
     setNativeAndroid(android);
-    console.log("[paywall] platform — nativeIos:", ios, "nativeAndroid:", android);
+    console.log("[ECOLOGIC-IAP] [paywall] platform detected — nativeIos:", ios, "nativeAndroid:", android);
   }, []);
 
   // Load store products when on a native platform
   useEffect(() => {
     if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
+    setLoadError(null);
+    setRawProductCount(null);
 
-    const loader = nativeIos ? loadAppleProducts() : loadGooglePlayProducts();
-    loader.then((loaded) => {
-      const store = nativeIos ? "Apple" : "Google Play";
-      console.log(
-        `[paywall] ${store} products loaded:`,
-        loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
-      );
-      setProducts(loaded);
-      setProductsLoading(false);
-    });
+    if (nativeAndroid) {
+      // Android — use diagnostic loader so we can surface error details
+      console.log("[ECOLOGIC-IAP] [paywall] Starting Android product load …");
+      loadGooglePlayProductsDiag().then((result) => {
+        console.log(
+          `[ECOLOGIC-IAP] [paywall] Android load done — rawCount=${result.rawCount} mapped=${result.products.length} error=${result.error ?? "none"}`
+        );
+        setRawProductCount(result.rawCount);
+        setLoadError(result.error);
+        setProducts(result.products);
+        setProductsLoading(false);
+      });
+    } else {
+      // iOS — unchanged
+      console.log("[ECOLOGIC-IAP] [paywall] Starting Apple product load …");
+      loadAppleProducts().then((loaded) => {
+        console.log(
+          `[ECOLOGIC-IAP] [paywall] Apple load done — ${loaded.length} product(s):`,
+          loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
+        );
+        setProducts(loaded);
+        setProductsLoading(false);
+      });
+    }
   }, [nativeIos, nativeAndroid]);
 
   // ── Helper: post to backend and refresh billing ─────────────────────────────
@@ -424,6 +444,19 @@ export default function Paywall() {
                 </div>
               );
             })()}
+
+            {/* ── Android-only diagnostic block (temporary) ──────────────── */}
+            {nativeAndroid && !productsLoading && (
+              <div className="mt-3 p-2.5 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">DIAG</span>{"\n"}
+                  Requested: ecologic_&#8203;starter/team/pro/scale_monthly{"\n"}
+                  Play returned: {rawProductCount !== null ? `${rawProductCount} product(s)` : "—"}{"\n"}
+                  Mapped: {products.length} plan(s){"\n"}
+                  {loadError && `Error: ${loadError}`}
+                </p>
+              </div>
+            )}
 
             <Button
               type="button"

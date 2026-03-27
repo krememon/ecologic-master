@@ -11,7 +11,7 @@ import {
   isNativeIos,
   isNativeAndroid,
   loadAppleProducts,
-  loadGooglePlayProducts,
+  loadGooglePlayProductsDiag,
   purchaseAppleSubscription,
   purchaseGooglePlaySubscription,
   restoreApplePurchases,
@@ -36,6 +36,9 @@ export default function OnboardingSubscription() {
   // Store products (all 4 plans loaded at once)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  // Android diagnostic state — surfaces in debug block
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rawProductCount, setRawProductCount] = useState<number | null>(null);
 
   // Company plan — derived from subscriptionPlan written at company creation (which maps from team size)
   const companyPlanKey: PlanKey = (
@@ -92,24 +95,38 @@ export default function OnboardingSubscription() {
     const android = isNativeAndroid();
     setNativeIos(ios);
     setNativeAndroid(android);
-    console.log("[onboarding-sub] platform — nativeIos:", ios, "nativeAndroid:", android);
+    console.log("[ECOLOGIC-IAP] [onboarding-sub] platform detected — nativeIos:", ios, "nativeAndroid:", android);
   }, []);
 
   // Load store products when on a native platform
   useEffect(() => {
     if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
+    setLoadError(null);
+    setRawProductCount(null);
 
-    const loader = nativeIos ? loadAppleProducts() : loadGooglePlayProducts();
-    loader.then((loaded) => {
-      const store = nativeIos ? "Apple" : "Google Play";
-      console.log(
-        `[onboarding-sub] ${store} products loaded:`,
-        loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
-      );
-      setProducts(loaded);
-      setProductsLoading(false);
-    });
+    if (nativeAndroid) {
+      console.log("[ECOLOGIC-IAP] [onboarding-sub] Starting Android product load …");
+      loadGooglePlayProductsDiag().then((result) => {
+        console.log(
+          `[ECOLOGIC-IAP] [onboarding-sub] Android load done — rawCount=${result.rawCount} mapped=${result.products.length} error=${result.error ?? "none"}`
+        );
+        setRawProductCount(result.rawCount);
+        setLoadError(result.error);
+        setProducts(result.products);
+        setProductsLoading(false);
+      });
+    } else {
+      console.log("[ECOLOGIC-IAP] [onboarding-sub] Starting Apple product load …");
+      loadAppleProducts().then((loaded) => {
+        console.log(
+          `[ECOLOGIC-IAP] [onboarding-sub] Apple load done — ${loaded.length} product(s):`,
+          loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
+        );
+        setProducts(loaded);
+        setProductsLoading(false);
+      });
+    }
   }, [nativeIos, nativeAndroid]);
 
   if (authLoading) {
@@ -491,6 +508,19 @@ export default function OnboardingSubscription() {
                 </div>
               )}
             </div>
+
+            {/* ── Android-only diagnostic block (temporary) ──────────────── */}
+            {nativeAndroid && !productsLoading && (
+              <div className="mt-3 p-2.5 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">DIAG</span>{"\n"}
+                  Requested: ecologic_&#8203;starter/team/pro/scale_monthly{"\n"}
+                  Play returned: {rawProductCount !== null ? `${rawProductCount} product(s)` : "—"}{"\n"}
+                  Mapped: {products.length} plan(s){"\n"}
+                  {loadError && `Error: ${loadError}`}
+                </p>
+              </div>
+            )}
 
             <Button
               type="button"

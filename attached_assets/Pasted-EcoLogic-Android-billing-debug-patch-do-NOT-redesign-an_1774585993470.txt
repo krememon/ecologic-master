@@ -1,0 +1,68 @@
+EcoLogic Android billing debug patch — do NOT redesign anything, do NOT touch unrelated paywall logic, and do NOT break iOS/web.
+
+Problem:
+On Samsung, the Android paywall says:
+“Subscription plans could not be loaded from Google Play”
+and Android Studio Logcat is not showing useful billing logs.
+We need strong, targeted Android billing diagnostics so we can see EXACTLY why Google Play products are not loading.
+
+Your task:
+Instrument the Android native purchase flow and paywall loading path with very clear logs and safe fallback UI messaging.
+
+What to add:
+1. In the Android native IAP loader/service (likely client/src/lib/nativeIap.ts or equivalent):
+   - log when product query starts
+   - log exact requested product IDs array
+   - log exact platform detected
+   - log raw response from Capgo/native-purchases / Google Play
+   - log parsed products count
+   - log each parsed product identifier + planIdentifier
+   - log any thrown error object in full
+   - if 0 products come back, log that explicitly
+
+2. In the paywall/onboarding subscription page:
+   - log when Android paywall starts loading plans
+   - log when load succeeds
+   - log when load fails
+   - surface the REAL failure reason in the red error box under the generic text, for example:
+     “Debug: 0 products returned from Google Play”
+     or
+     “Debug: requested IDs did not match returned products”
+     or
+     actual error.message if available
+   - keep it temporary, Android-only if possible
+
+3. Make logs easy to find in Android Studio Logcat:
+   - prefix every relevant log with one consistent tag, exactly:
+     [ECOLOGIC-IAP]
+   - use console.log / console.error in JS layer
+   - if there is any native Android layer wrapper available, log there too, but JS logs are enough
+
+4. Add one temporary debug block in the paywall UI for Android only:
+   - Requested IDs: ...
+   - Loaded count: ...
+   - Last load error: ...
+   Keep it small and unobtrusive under the red warning box.
+   This is temporary diagnostic UI only.
+
+5. Important:
+   - Do not change pricing layout
+   - Do not change plan card UI
+   - Do not alter iOS purchase flow
+   - Do not alter web/Stripe flow
+   - Do not “fix” by hiding the error
+   - We need diagnostics, not guesses
+
+Expected result:
+After rebuild and opening the paywall on Samsung, we should be able to see exactly:
+- which product IDs were requested
+- whether Google Play returned 0 products or mismatched products
+- what exact error object came back
+- whether this is code-side or Play Console-side
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Exact log lines I should look for in Logcat
+4. Exact temporary UI debug text that will show on Android paywall
+5. Exact rebuild commands to run next
