@@ -4596,11 +4596,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
 
             if (playStillActive) {
-              // Subscription renewed on Play — refresh DB so future status checks
+              // Subscription still active on Play — refresh DB so future status checks
               // won't trigger unnecessary reconcile calls.
+              // Preserve trial state: paymentState 2 = still in free trial period.
+              const reconcileIsTrial = txInfo.paymentState === 2;
               company = await storage.updateCompany(company.id, {
                 currentPeriodEnd: txInfo.expiresDate,
-                subscriptionStatus: 'active',
+                subscriptionStatus: reconcileIsTrial ? 'trialing' : 'active',
+                trialEndsAt: reconcileIsTrial ? txInfo.expiresDate : null,
                 billingUpdatedAt: new Date(),
               });
               console.log(
@@ -4871,19 +4874,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         // Store the purchaseToken in originalTransactionId (same column, different semantic context)
+        // paymentState 2 = free trial phase — store as 'trialing' so billing resolver
+        // and Dev Tools can distinguish trial from paid.  trialEndsAt stores the trial
+        // expiry so the trial row in Dev Tools shows the correct end date.
+        const isGooglePlayTrial = txInfo.paymentState === 2;
+
         console.log(
           `[ECOLOGIC-SUB] validate DB write — userId=${userId} companyId=${company.id}` +
           ` productId=${txInfo.productId} plan=${txInfo.planKey}` +
-          ` periodEnd=${txInfo.expiresDate.toISOString()} paymentState=${txInfo.paymentState}`
+          ` periodEnd=${txInfo.expiresDate.toISOString()} paymentState=${txInfo.paymentState}` +
+          ` isGooglePlayTrial=${isGooglePlayTrial}`
         );
 
         const updatedCompany = await storage.updateCompany(company.id, {
-          subscriptionStatus: 'active',
+          subscriptionStatus: isGooglePlayTrial ? 'trialing' : 'active',
           subscriptionPlan: txInfo.planKey,
           maxUsers: txInfo.userLimit,
           subscriptionPlatform: 'google_play',
           originalTransactionId: txInfo.purchaseToken,
           currentPeriodEnd: txInfo.expiresDate,
+          // Set trialEndsAt for the trial phase so billing resolver + Dev Tools can detect it.
+          // Explicitly null when paymentState=1 (paid) to clear any stale trial record.
+          trialEndsAt: isGooglePlayTrial ? txInfo.expiresDate : null,
           subscriptionCancelAtPeriodEnd: false,
           billingUpdatedAt: new Date(),
           onboardingCompleted: true,
@@ -5179,26 +5191,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const updates: Record<string, unknown> = {};
 
     switch (notificationType) {
-      case 4: // SUBSCRIPTION_PURCHASED
-      case 1: // SUBSCRIPTION_RECOVERED (from account hold)
-      case 2: // SUBSCRIPTION_RENEWED
-      case 7: // SUBSCRIPTION_RESTARTED
-        // Subscription is (back to) active — re-verify via API to get fresh expiry
+      case 4: // SUBSCRIPTION_PURCHASED (new purchase — may be trial or paid)
+      case 1: // SUBSCRIPTION_RECOVERED (from account hold — re-verify to get current state)
+      case 7: // SUBSCRIPTION_RESTARTED (re-subscribed after cancel/hold — could be trial again)
+        // Re-verify via Play API to get paymentState and determine trial vs paid.
         try {
           const txInfo = await verifyGooglePlayPurchase(purchaseToken, subscriptionId);
-          updates.subscriptionStatus = 'active';
+          const rtdnIsTrial = txInfo.paymentState === 2;
+          updates.subscriptionStatus = rtdnIsTrial ? 'trialing' : 'active';
+          updates.trialEndsAt = rtdnIsTrial ? txInfo.expiresDate : null;
           updates.subscriptionPlatform = 'google_play';
           updates.subscriptionPlan = txInfo.planKey;
           updates.maxUsers = txInfo.userLimit;
           updates.currentPeriodEnd = txInfo.expiresDate;
-          updates.originalTransactionId = purchaseToken; // keep in sync (same value)
+          updates.originalTransactionId = purchaseToken;
           console.log(
-            `[google-notify] re-verified — plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()}`
+            `[google-notify] re-verified — plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()}` +
+            ` paymentState=${txInfo.paymentState} isGooglePlayTrial=${rtdnIsTrial}`
           );
         } catch (err: any) {
           console.error('[google-notify] Re-verification via Play API failed:', err.message);
-          // Still mark active based on notification signal; expiry may be slightly stale
+          // Can't determine trial state — default to 'active' (safer than blocking access)
           updates.subscriptionStatus = 'active';
+          updates.subscriptionPlatform = 'google_play';
+        }
+        break;
+
+      case 2: // SUBSCRIPTION_RENEWED (trial → paid conversion, or paid renewal)
+        // Renewal always means the trial period has ended and a real payment was made.
+        // Clear trialEndsAt and set 'active' — re-verify to get the fresh period end.
+        try {
+          const txInfo = await verifyGooglePlayPurchase(purchaseToken, subscriptionId);
+          updates.subscriptionStatus = 'active';
+          updates.trialEndsAt = null; // trial is now over — subscription is paid
+          updates.subscriptionPlatform = 'google_play';
+          updates.subscriptionPlan = txInfo.planKey;
+          updates.maxUsers = txInfo.userLimit;
+          updates.currentPeriodEnd = txInfo.expiresDate;
+          updates.originalTransactionId = purchaseToken;
+          console.log(
+            `[google-notify] RENEWED — plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()} (trial cleared → paid active)`
+          );
+        } catch (err: any) {
+          console.error('[google-notify] Re-verification (RENEWED) failed:', err.message);
+          updates.subscriptionStatus = 'active';
+          updates.trialEndsAt = null;
           updates.subscriptionPlatform = 'google_play';
         }
         break;
@@ -20693,6 +20730,13 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       const hasTrial =
         c.subscriptionStatus === 'trialing' &&
         !!(c.trialEndsAt && new Date(c.trialEndsAt) > now);
+      // Google Play free trial: subscriptionStatus='trialing' + subscriptionPlatform='google_play'.
+      // Billing resolver returns source='google_play' for this case so access is consistent
+      // with paid Google Play subs. Dev Tools shows a distinct "Google Play Trial" label.
+      const googlePlayTrial =
+        c.subscriptionPlatform === 'google_play' &&
+        c.subscriptionStatus === 'trialing' &&
+        !!(c.trialEndsAt && new Date(c.trialEndsAt) > now);
 
       let effectiveLabel: string;
       let rawBillingState: string;
@@ -20732,11 +20776,20 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         allowed = true;
       } else if (billing.source === 'google_play') {
         const plan = c.subscriptionPlan ?? 'Unknown';
-        const end = c.currentPeriodEnd
-          ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : 'unknown date';
-        effectiveLabel = 'Full Access (Google Play Plan)';
-        rawBillingState = `Google Play · ${plan} plan · renews ${end}`;
+        if (googlePlayTrial) {
+          // Active Google Play free trial — show trial-specific label and end date
+          const trialEnd = c.trialEndsAt
+            ? new Date(c.trialEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'unknown date';
+          effectiveLabel = 'Full Access (Google Play Trial)';
+          rawBillingState = `Google Play · ${plan} plan · 7-day free trial · trial ends ${trialEnd}`;
+        } else {
+          const end = c.currentPeriodEnd
+            ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'unknown date';
+          effectiveLabel = 'Full Access (Google Play Plan)';
+          rawBillingState = `Google Play · ${plan} plan · renews ${end}`;
+        }
         allowed = true;
       } else if (billing.source === 'stripe') {
         const plan = c.subscriptionPlan ?? 'Unknown';
@@ -20794,6 +20847,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         devBypassEnvEnabled,
         hasActivePaid,
         hasTrial,
+        googlePlayTrial,
         subscriptionStatus: c.subscriptionStatus,
         subscriptionPlan: c.subscriptionPlan,
         subscriptionPlatform: c.subscriptionPlatform ?? null,

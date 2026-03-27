@@ -84,15 +84,22 @@ export function getEffectiveBillingAccess(company: any): BillingAccess {
   // ── 3. Active trial ──────────────────────────────────────────────────────
   //   Requires subscriptionStatus = 'trialing' AND a valid, future trialEndsAt.
   //   Missing trialEndsAt is treated as EXPIRED.
+  //
+  //   Google Play free trials are stored as 'trialing' + subscriptionPlatform='google_play'.
+  //   They use source='google_play' so billing attribution stays consistent with paid Google
+  //   Play subscriptions.  The legacy EcoLogic app signup trial (no platform) keeps source='trial'.
   if (company.subscriptionStatus === 'trialing') {
     const trialEnd = company.trialEndsAt ? new Date(company.trialEndsAt) : null;
     if (trialEnd && trialEnd > now) {
+      const platform = (company.subscriptionPlatform as string | null | undefined) ?? null;
+      // Google Play IAP trial → report as 'google_play' so billing identity is consistent
+      const source: BillingAccess['source'] = platform === 'google_play' ? 'google_play' : 'trial';
       return {
         allowed: true,
-        source: 'trial',
+        source,
         effectivePlan: company.subscriptionPlan || null,
         seatLimit: company.maxUsers || 1,
-        notes: [],
+        notes: platform === 'google_play' ? ['google_play_trial'] : [],
         blockReason: null,
       };
     }

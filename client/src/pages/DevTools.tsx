@@ -76,6 +76,7 @@ interface BillingSnapshot {
   devBypassEnvEnabled: boolean; // true if BYPASS_SUBSCRIPTION=1 in the server env
   hasActivePaid: boolean;   // true if active paid subscription (Apple, Google Play, or Stripe) with valid period
   hasTrial: boolean;
+  googlePlayTrial: boolean; // true if Google Play free trial (subscriptionStatus='trialing' + google_play platform)
   subscriptionStatus: string | null;
   subscriptionPlan: string | null;
   subscriptionPlatform: string | null;  // 'apple' | 'google_play' | 'stripe' | null (null = legacy Stripe record)
@@ -773,20 +774,28 @@ export default function DevTools() {
                   />
                   <FactItem
                     label="Subscription"
-                    value={billing.hasActivePaid
+                    value={billing.googlePlayTrial
                       ? (() => {
                           const planLabel = billing.subscriptionPlan ?? "plan";
-                          const store =
-                            billing.subscriptionPlatform === 'apple' ? 'Apple Plan' :
-                            billing.subscriptionPlatform === 'google_play' ? 'Google Play Plan' :
-                            'Web Plan';
-                          const end = billing.currentPeriodEnd
-                            ? `renews ${new Date(billing.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                            : "no renewal date";
-                          return `${store} (${planLabel}) · ${end}`;
+                          const trialEnd = billing.trialEndsAt
+                            ? `trial ends ${new Date(billing.trialEndsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            : "trial end unknown";
+                          return `Google Play Trial (${planLabel}) · ${trialEnd}`;
                         })()
-                      : "None"}
-                    positive={billing.hasActivePaid}
+                      : billing.hasActivePaid
+                        ? (() => {
+                            const planLabel = billing.subscriptionPlan ?? "plan";
+                            const store =
+                              billing.subscriptionPlatform === 'apple' ? 'Apple Plan' :
+                              billing.subscriptionPlatform === 'google_play' ? 'Google Play Plan' :
+                              'Web Plan';
+                            const end = billing.currentPeriodEnd
+                              ? `renews ${new Date(billing.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                              : "no renewal date";
+                            return `${store} (${planLabel}) · ${end}`;
+                          })()
+                        : "None"}
+                    positive={billing.hasActivePaid || billing.googlePlayTrial}
                   />
                   <FactItem
                     label="Trial"
