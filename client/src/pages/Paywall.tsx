@@ -13,7 +13,6 @@ import {
   isNativeAndroid,
   loadAppleProducts,
   loadGooglePlayProducts,
-  loadGooglePlayProductsDiag,
   purchaseAppleSubscription,
   purchaseGooglePlaySubscription,
   restoreApplePurchases,
@@ -38,10 +37,6 @@ export default function Paywall() {
   // Store products (all 4 plans loaded at once)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  // Android diagnostic state — shows in debug block
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [rawProductCount, setRawProductCount] = useState<number | null>(null);
-
   // Selected plan — native uses this for Apple/Google IAP
   const [selectedPlanKey, setSelectedPlanKey] = useState<PlanKey>("starter");
 
@@ -90,19 +85,15 @@ export default function Paywall() {
   useEffect(() => {
     if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
-    setLoadError(null);
-    setRawProductCount(null);
 
     if (nativeAndroid) {
-      // Android — use diagnostic loader so we can surface error details
       console.log("[ECOLOGIC-IAP] [paywall] Starting Android product load …");
-      loadGooglePlayProductsDiag().then((result) => {
+      loadGooglePlayProducts().then((loaded) => {
         console.log(
-          `[ECOLOGIC-IAP] [paywall] Android load done — rawCount=${result.rawCount} mapped=${result.products.length} error=${result.error ?? "none"}`
+          `[ECOLOGIC-IAP] [paywall] Android load done — ${loaded.length} product(s):`,
+          loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
         );
-        setRawProductCount(result.rawCount);
-        setLoadError(result.error);
-        setProducts(result.products);
+        setProducts(loaded);
         setProductsLoading(false);
       });
     } else {

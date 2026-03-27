@@ -11,7 +11,7 @@ import {
   isNativeIos,
   isNativeAndroid,
   loadAppleProducts,
-  loadGooglePlayProductsDiag,
+  loadGooglePlayProducts,
   purchaseAppleSubscription,
   purchaseGooglePlaySubscription,
   restoreApplePurchases,
@@ -36,10 +36,6 @@ export default function OnboardingSubscription() {
   // Store products (all 4 plans loaded at once)
   const [products, setProducts] = useState<IapProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  // Android diagnostic state — surfaces in debug block
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [rawProductCount, setRawProductCount] = useState<number | null>(null);
-
   // Company plan — derived from subscriptionPlan written at company creation (which maps from team size)
   const companyPlanKey: PlanKey = (
     user?.company?.subscriptionPlan && PLAN_ORDER.includes(user.company.subscriptionPlan as PlanKey)
@@ -102,18 +98,15 @@ export default function OnboardingSubscription() {
   useEffect(() => {
     if (!nativeIos && !nativeAndroid) return;
     setProductsLoading(true);
-    setLoadError(null);
-    setRawProductCount(null);
 
     if (nativeAndroid) {
       console.log("[ECOLOGIC-IAP] [onboarding-sub] Starting Android product load …");
-      loadGooglePlayProductsDiag().then((result) => {
+      loadGooglePlayProducts().then((loaded) => {
         console.log(
-          `[ECOLOGIC-IAP] [onboarding-sub] Android load done — rawCount=${result.rawCount} mapped=${result.products.length} error=${result.error ?? "none"}`
+          `[ECOLOGIC-IAP] [onboarding-sub] Android load done — ${loaded.length} product(s):`,
+          loaded.map(p => `${p.identifier}=${p.priceString}`).join(", ") || "(none)"
         );
-        setRawProductCount(result.rawCount);
-        setLoadError(result.error);
-        setProducts(result.products);
+        setProducts(loaded);
         setProductsLoading(false);
       });
     } else {
