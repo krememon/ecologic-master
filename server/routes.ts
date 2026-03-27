@@ -17640,6 +17640,31 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  /**
+   * GET /api/dev/google-play-env-check  (development only)
+   *
+   * Returns structured info about GOOGLE_PLAY_SERVICE_ACCOUNT_KEY without
+   * exposing the secret value itself. Use this to confirm the secret is
+   * present and parseable after adding it in Replit Secrets.
+   *
+   * Example response:
+   *   { ok: true, present: true, length: 2318, detectedFormat: "json",
+   *     parsed: true, clientEmail: "ecologic@project.iam.gserviceaccount.com" }
+   */
+  app.get('/api/dev/google-play-env-check', async (_req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      const { diagnoseServiceAccountKey } = await import("./googlePlayIap");
+      const diag = diagnoseServiceAccountKey();
+      console.log("[ECOLOGIC-GPLAY] /api/dev/google-play-env-check called —", JSON.stringify(diag));
+      return res.json({ ok: diag.parsed, ...diag });
+    } catch (error: any) {
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   app.get('/api/push/tokens/me', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

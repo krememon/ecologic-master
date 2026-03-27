@@ -43,60 +43,178 @@ interface ServiceAccountKey {
 let cachedAccessToken: string | null = null;
 let tokenExpiresAt = 0;
 
+// ---------------------------------------------------------------------------
+// Key diagnosis types (exported for the dev endpoint)
+// ---------------------------------------------------------------------------
+
+export interface ServiceAccountKeyDiagnosis {
+  present: boolean;
+  length: number;
+  detectedFormat: "json" | "base64" | "unknown" | "missing";
+  parsed: boolean;
+  clientEmail?: string;
+  error?: string;
+}
+
 /**
- * Parse GOOGLE_PLAY_SERVICE_ACCOUNT_KEY from env.
+ * Try every reasonable parsing strategy for the service account key env var.
  *
- * Accepts two formats:
- *   1. Raw JSON string  — paste the whole service-account JSON as-is.
- *   2. Base64-encoded JSON — useful when the key contains newlines that
- *      break some secret managers. Encode with:
- *        base64 -i service-account.json | tr -d '\n'
- *      and paste the resulting string into the secret.
+ * Strategies tried in order:
+ *   1. Trimmed raw JSON             — value starts with "{"
+ *   2. Raw JSON + unescape \\n→\n   — handles keys copy-pasted with escaped newlines
+ *   3. Base64 → UTF-8 → JSON        — base64-encoded JSON (no newline issues)
+ *   4. Base64 → UTF-8 + unescape \\n→\n
  *
- * Returns null (and logs an actionable error) if the env var is missing or
- * cannot be parsed in either format.
+ * Never logs the private key or the full secret.
+ */
+function tryParseServiceAccountJSON(text: string): ServiceAccountKey {
+  // Strategy 1 & 2: raw JSON (with/without escaped newlines)
+  if (text.startsWith("{")) {
+    // Strategy 1 — direct parse
+    try { return JSON.parse(text) as ServiceAccountKey; } catch (_) {}
+    // Strategy 2 — unescape literal \n sequences then parse
+    try { return JSON.parse(text.replace(/\\n/g, "\n")) as ServiceAccountKey; } catch (_) {}
+    // Neither worked — throw with the direct-parse error message
+    return JSON.parse(text) as ServiceAccountKey; // will throw
+  }
+
+  // Strategy 3 & 4: base64 → UTF-8
+  const decoded = Buffer.from(text, "base64").toString("utf8").trim();
+  // Strategy 3 — direct parse of decoded
+  try { return JSON.parse(decoded) as ServiceAccountKey; } catch (_) {}
+  // Strategy 4 — unescape then parse
+  return JSON.parse(decoded.replace(/\\n/g, "\n")) as ServiceAccountKey; // will throw if all fail
+}
+
+/**
+ * Full diagnostic read of GOOGLE_PLAY_SERVICE_ACCOUNT_KEY.
+ * Exported so the dev endpoint can return structured info.
+ */
+export function diagnoseServiceAccountKey(): ServiceAccountKeyDiagnosis {
+  // Try both access patterns — they resolve identically in Node but being
+  // explicit surfaces any env-injection oddities in edge environments.
+  const raw =
+    process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY ??
+    process.env["GOOGLE_PLAY_SERVICE_ACCOUNT_KEY"];
+
+  if (!raw || raw.trim().length === 0) {
+    return {
+      present: false,
+      length: 0,
+      detectedFormat: "missing",
+      parsed: false,
+      error: "GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set or is empty",
+    };
+  }
+
+  const trimmed = raw.trim();
+  const detectedFormat: ServiceAccountKeyDiagnosis["detectedFormat"] =
+    trimmed.startsWith("{") ? "json" :
+    /^[A-Za-z0-9+/=]+$/.test(trimmed.replace(/\s/g, "")) ? "base64" :
+    "unknown";
+
+  try {
+    const key = tryParseServiceAccountJSON(trimmed);
+
+    if (!key.client_email || !key.private_key) {
+      return {
+        present: true,
+        length: trimmed.length,
+        detectedFormat,
+        parsed: false,
+        error: `Parsed JSON is missing required fields. Has client_email=${!!key.client_email} private_key=${!!key.private_key}`,
+      };
+    }
+
+    return {
+      present: true,
+      length: trimmed.length,
+      detectedFormat,
+      parsed: true,
+      clientEmail: key.client_email,
+    };
+  } catch (e: any) {
+    return {
+      present: true,
+      length: trimmed.length,
+      detectedFormat,
+      parsed: false,
+      error: `Parse failed after all strategies: ${e?.message ?? String(e)}`,
+    };
+  }
+}
+
+/**
+ * Internal — returns the parsed key or null. Emits detailed [ECOLOGIC-GPLAY] logs.
  */
 function getServiceAccountKey(): ServiceAccountKey | null {
-  const raw = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY;
-  if (!raw) {
+  const raw =
+    process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY ??
+    process.env["GOOGLE_PLAY_SERVICE_ACCOUNT_KEY"];
+
+  const present = !!raw && raw.trim().length > 0;
+  const trimmed = raw?.trim() ?? "";
+
+  console.log(
+    `[ECOLOGIC-GPLAY] env check — present=${present} length=${trimmed.length}` +
+    ` looksLikeJson=${trimmed.startsWith("{")} looksLikeBase64=${/^[A-Za-z0-9+/=\s]+$/.test(trimmed) && !trimmed.startsWith("{")}`
+  );
+
+  if (!present) {
     console.error(
-      "[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set. " +
-      "Set it to the raw JSON (or base64-encoded JSON) of your Google service account key file."
+      "[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set or is empty.\n" +
+      "  In Replit Secrets, add:\n" +
+      "    Key:   GOOGLE_PLAY_SERVICE_ACCOUNT_KEY\n" +
+      "    Value: paste the raw contents of your service-account JSON file\n" +
+      "           OR the base64 encoding of that file"
     );
     return null;
   }
 
-  // ── Attempt 1: raw JSON ────────────────────────────────────────────────────
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("{")) {
+  // Try all parsing strategies with individual attempt logs
+  const strategies: Array<{ name: string; fn: () => ServiceAccountKey }> = [
+    { name: "raw-json",              fn: () => JSON.parse(trimmed) },
+    { name: "raw-json-unescape-\\n", fn: () => JSON.parse(trimmed.replace(/\\n/g, "\n")) },
+    {
+      name: "base64-json",
+      fn: () => {
+        const d = Buffer.from(trimmed, "base64").toString("utf8").trim();
+        return JSON.parse(d);
+      },
+    },
+    {
+      name: "base64-json-unescape-\\n",
+      fn: () => {
+        const d = Buffer.from(trimmed, "base64").toString("utf8").trim();
+        return JSON.parse(d.replace(/\\n/g, "\n"));
+      },
+    },
+  ];
+
+  for (const strategy of strategies) {
     try {
-      const parsed = JSON.parse(trimmed) as ServiceAccountKey;
-      console.log(
-        `[ECOLOGIC-GPLAY] Service account key parsed (raw JSON) — client_email: ${parsed.client_email}`
+      const key = strategy.fn();
+      if (key?.client_email && key?.private_key) {
+        console.log(
+          `[ECOLOGIC-GPLAY] Key parsed successfully via strategy "${strategy.name}" — client_email: ${key.client_email}`
+        );
+        return key;
+      }
+      console.warn(
+        `[ECOLOGIC-GPLAY] Strategy "${strategy.name}" parsed JSON but missing client_email/private_key fields`
       );
-      return parsed;
     } catch (e: any) {
-      console.error("[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY looks like JSON but failed to parse:", e.message);
-      return null;
+      console.log(`[ECOLOGIC-GPLAY] Strategy "${strategy.name}" failed: ${e?.message ?? e}`);
     }
   }
 
-  // ── Attempt 2: base64-encoded JSON ────────────────────────────────────────
-  try {
-    const decoded = Buffer.from(trimmed, "base64").toString("utf8");
-    const parsed = JSON.parse(decoded) as ServiceAccountKey;
-    console.log(
-      `[ECOLOGIC-GPLAY] Service account key parsed (base64-encoded JSON) — client_email: ${parsed.client_email}`
-    );
-    return parsed;
-  } catch {
-    console.error(
-      "[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is set but could not be parsed as " +
-      "raw JSON or base64-encoded JSON. " +
-      "Paste the raw service-account JSON, or its base64 encoding, into Replit Secrets."
-    );
-    return null;
-  }
+  console.error(
+    "[ECOLOGIC-GPLAY] All parsing strategies failed. Ensure the secret contains:\n" +
+    "  • The raw JSON from your service-account .json file, OR\n" +
+    "  • Its base64 encoding (run: base64 -i service-account.json | tr -d '\\n')\n" +
+    `  Raw value starts with: "${trimmed.slice(0, 40)}…" (length=${trimmed.length})`
+  );
+  return null;
 }
 
 /**
@@ -104,16 +222,23 @@ function getServiceAccountKey(): ServiceAccountKey | null {
  * available. Does NOT throw — startup must succeed regardless.
  */
 export function logGooglePlayVerificationStatus(): void {
-  const key = getServiceAccountKey();
-  if (key) {
+  console.log("[ECOLOGIC-GPLAY] ── Service account key startup check ──");
+  const diag = diagnoseServiceAccountKey();
+  console.log(
+    `[ECOLOGIC-GPLAY] present=${diag.present} length=${diag.length}` +
+    ` detectedFormat=${diag.detectedFormat} parsed=${diag.parsed}` +
+    (diag.clientEmail ? ` clientEmail=${diag.clientEmail}` : "") +
+    (diag.error ? ` error="${diag.error}"` : "")
+  );
+  if (diag.parsed) {
     console.log(
       `[ECOLOGIC-GPLAY] Google Play verification configured: yes` +
-      ` (account=${key.client_email} package=${GOOGLE_PLAY_PACKAGE_NAME})`
+      ` (account=${diag.clientEmail} package=${GOOGLE_PLAY_PACKAGE_NAME})`
     );
   } else {
     console.log(
       "[ECOLOGIC-GPLAY] Google Play verification configured: no" +
-      " — Android subscription validation will return 422 until GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is set."
+      " — Android subscription validation will return 422 until GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is set correctly."
     );
   }
 }

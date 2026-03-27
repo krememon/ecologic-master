@@ -1,0 +1,69 @@
+EcoLogic backend env fallback fix for Google Play verification.
+
+Do NOT redesign UI. Do NOT touch iOS flow. Do NOT touch Stripe/web flow. Minimal backend-only patch.
+
+Problem:
+The server startup log still says:
+
+[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set
+[ECOLOGIC-GPLAY] Google Play verification configured: no
+
+The user has already added the secret many times in Replit, so we need to make the backend more resilient and directly inspect all likely env sources / formatting issues instead of assuming the secret is unavailable.
+
+Your task:
+Find the Google Play verification backend code and patch it so it can successfully read and parse the service account key from Replit in multiple safe ways.
+
+What to implement:
+1. In the Google Play verification loader (likely server/googlePlayIap.ts), add robust env resolution for the key:
+   - process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY
+   - process.env["GOOGLE_PLAY_SERVICE_ACCOUNT_KEY"]
+   - trim whitespace safely
+   - detect if the value is:
+     a) raw JSON
+     b) base64-encoded JSON
+     c) JSON string with escaped newlines
+2. Parsing logic:
+   - if value starts with "{" → parse as raw JSON
+   - else try base64 decode then parse as JSON
+   - if raw JSON parse fails, try replacing \\n with \n where appropriate
+3. Add strong startup diagnostics with prefix:
+   [ECOLOGIC-GPLAY]
+   including:
+   - whether env key exists at all
+   - raw length of env string
+   - whether it looks like json or base64
+   - whether parse succeeded
+   - parsed client_email if successful
+   Do NOT log the private key or full secret.
+4. If parsing fails, return a clear reason:
+   - missing env
+   - invalid json
+   - invalid base64
+   - decoded text not json
+5. Add a temporary debug endpoint available only in development:
+   GET /api/dev/google-play-env-check
+   Response shape:
+   {
+     ok: boolean,
+     present: boolean,
+     length: number,
+     detectedFormat: "json" | "base64" | "unknown",
+     parsed: boolean,
+     clientEmail?: string,
+     error?: string
+   }
+   This endpoint must NOT return the secret itself.
+6. Keep all existing Google Play verification behavior unchanged once parsing succeeds.
+7. Do not bypass verification.
+8. Do not fake success.
+9. Do not modify Apple verification.
+
+Important:
+The goal is to stop guessing and make the backend accept the Replit secret in whichever of the common safe formats the user pasted.
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Exact startup logs I should expect
+4. Exact dev endpoint output I should check
+5. Any one-time follow-up step I need after the patch
