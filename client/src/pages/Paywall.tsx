@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import logoImg from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1774579909052.png";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle, Zap } from "lucide-react";
@@ -67,8 +66,12 @@ export default function Paywall() {
 
   const storePrice = storeProduct?.priceString ?? `$${displayPlan.price}`;
 
-  // If products finished loading but the selected plan isn't available in the store
+  // True when Android/iOS finished loading but returned zero products at all
+  const noProductsLoaded = isNativeApp && !productsLoading && products.length === 0;
+  // True when products loaded, some came back, but the selected plan isn't among them
   const planUnavailable = isNativeApp && !productsLoading && products.length > 0 && !storeProduct;
+  // Combined guard — purchase must be blocked whenever there's no real store product
+  const purchaseBlocked = isNativeApp && (productsLoading || noProductsLoaded || planUnavailable);
 
   // Detect platform once on mount
   useEffect(() => {
@@ -280,7 +283,9 @@ export default function Paywall() {
     );
   } else if (isNativeApp) {
     subscribeBtnLabel = productsLoading
-      ? "Loading..."
+      ? "Loading plans..."
+      : noProductsLoaded
+      ? "Plans Unavailable"
       : planUnavailable
       ? "Not Available"
       : `Subscribe · ${storePrice}/mo`;
@@ -293,11 +298,17 @@ export default function Paywall() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img
-              src={logoImg}
-              alt="EcoLogic"
-              className="h-20 w-auto mx-auto mb-2 object-contain"
-            />
+            <h1
+              className="text-6xl mx-auto mb-2 text-[#0B0B0D] dark:text-white"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+              }}
+            >
+              EcoLogic
+            </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Professional contractor management
             </p>
@@ -394,6 +405,14 @@ export default function Paywall() {
                     ))}
                   </div>
 
+                  {noProductsLoaded && (
+                    <div className="flex items-center gap-2 mt-3 p-2.5 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                      <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                      <p className="text-xs text-red-700 dark:text-red-300">
+                        Subscription plans could not be loaded from{nativeIos ? " App Store" : " Google Play"}. Please check your connection and try again.
+                      </p>
+                    </div>
+                  )}
                   {planUnavailable && (
                     <div className="flex items-center gap-2 mt-3 p-2.5 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800">
                       <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -410,7 +429,7 @@ export default function Paywall() {
               type="button"
               onClick={handleSubscribe}
               className="w-full"
-              disabled={isLoading || (isNativeApp && (productsLoading || planUnavailable))}
+              disabled={isLoading || purchaseBlocked}
             >
               {subscribeBtnLabel}
             </Button>

@@ -244,6 +244,29 @@ export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
       productType: PURCHASE_TYPE.SUBS,
     });
 
+    // ── Raw diagnostic log — shows EXACTLY what Google Play returned ──────────
+    // If this shows 0 products, the issue is Google Play Console / tester setup,
+    // NOT the app code. Check: product IDs match, app on internal track, tester added.
+    console.log(`[native-iap] Google Play raw response: ${products.length} product(s) from Play Store`);
+    products.forEach((p, i) => {
+      const raw = p as any;
+      console.log(
+        `[native-iap]  [${i}] id=${p.identifier} price=${p.priceString}`,
+        `basePlanId=${raw.subscriptionOfferDetails?.[0]?.basePlanId ?? raw.basePlanId ?? "(none)"}`,
+        `title="${p.title}"`
+      );
+    });
+    if (products.length === 0) {
+      console.warn(
+        "[native-iap] Google Play returned 0 products. Possible causes:\n" +
+        "  A) Product IDs in code don't match Play Console IDs\n" +
+        "  B) Subscriptions not published to internal/alpha/beta track\n" +
+        "  C) Tester account not added to testing program\n" +
+        "  D) App signed differently from Play Console build\n" +
+        `  Requested IDs: ${ALL_GOOGLE_PLAY_PRODUCT_IDS.join(", ")}`
+      );
+    }
+
     const mapped: IapProduct[] = products
       .filter(p => !!googlePlayProductIdToPlanKey[p.identifier])
       .map(p => {
