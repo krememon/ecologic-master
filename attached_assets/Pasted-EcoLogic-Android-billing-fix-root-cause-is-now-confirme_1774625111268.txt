@@ -1,0 +1,57 @@
+EcoLogic Android billing fix — root cause is now confirmed from Logcat.
+
+Do NOT redesign UI. Do NOT touch iOS/web purchase flow. Minimal Android-only fix.
+
+Confirmed facts from Logcat:
+- Requested IDs:
+  ecologic_starter_monthly
+  ecologic_team_monthly
+  ecologic_pro_monthly
+  ecologic_scale_monthly
+- Google Play returned 4 products successfully
+- But each returned product has identifier "monthly"
+- Returned titles are:
+  Starter
+  Team
+  Pro
+  Scale
+- Current code rejects them because it tries to match returned identifier against ecologic_*_monthly
+- Result: rawCount=4, mapped=0, plans unavailable
+
+Task:
+Fix Android product mapping so returned Google Play subscription products are matched correctly even when the plugin returns base plan identifier "monthly" instead of the subscription product ID.
+
+Required behavior:
+1. In Android native IAP mapping logic, if returned identifier is "monthly" (or otherwise not unique), use additional fields to map products:
+   - title / name
+   - price
+   - any product metadata available from the plugin
+2. Prefer matching by normalized title first:
+   - "Starter" -> starter
+   - "Team" -> team
+   - "Pro" -> pro
+   - "Scale" -> scale
+3. Build mapped store products for all 4 plans even when identifier is only "monthly"
+4. Preserve planIdentifier/base plan handling for purchase
+5. Make purchase use the correct values required by the plugin for Android subscriptions based on the actual returned product shape
+6. Keep iOS unchanged
+7. Keep web unchanged
+
+Implementation details:
+- Update client/src/lib/nativeIap.ts
+- Add robust Android-only mapping fallback:
+  a) try exact ID match first
+  b) if no exact ID match, match by normalized title/name to plan key
+- Log exactly which fallback matched:
+  [ECOLOGIC-IAP] Fallback mapped by title: "Starter" -> starter
+- Keep the temporary debug logs for now
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Explain exactly how purchase payload is built after the fix
+4. Rebuild commands to run
+5. Expected Logcat output after fix, including:
+   - Raw response: 4 product(s)
+   - Fallback mapped by title...
+   - Google Play product load DONE: 4/4 mapped

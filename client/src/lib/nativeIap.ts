@@ -235,6 +235,26 @@ export interface GooglePlayLoadResult {
   rawCount: number;
 }
 
+/**
+ * Title-to-plan-key fallback for Android.
+ *
+ * Google Play Billing Library 5+ can return the base plan ID ("monthly") as the
+ * product identifier instead of the subscription product ID. When that happens,
+ * we use the product title to identify which plan the product corresponds to.
+ *
+ * Titles come from Play Console and are expected to be exactly:
+ *   "Starter", "Team", "Pro", "Scale"
+ * but we match case-insensitively and check for containment to be safe.
+ */
+function titleToPlanKey(title: string): string | null {
+  const t = title.trim().toLowerCase();
+  if (t === "starter" || t.includes("starter")) return "starter";
+  if (t === "team"    || t.includes("team"))    return "team";
+  if (t === "pro"     || t.includes("pro"))     return "pro";
+  if (t === "scale"   || t.includes("scale"))   return "scale";
+  return null;
+}
+
 export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
   const { products } = await loadGooglePlayProductsDiag();
   return products;
@@ -243,6 +263,17 @@ export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
 /**
  * Same as loadGooglePlayProducts but returns a diagnostic result object so the
  * calling component can surface the error and raw count in the debug UI.
+ *
+ * Mapping strategy (Android):
+ *   1. Exact ID match:  googlePlayProductIdToPlanKey[p.identifier]
+ *   2. Title fallback:  titleToPlanKey(p.title)
+ *
+ * When the title fallback is used (i.e. the plugin returned "monthly" as the
+ * identifier), `identifier` in the returned IapProduct is set to the real
+ * subscription product ID from our config (e.g. "ecologic_starter_monthly")
+ * and `planIdentifier` is set to the raw identifier from the plugin ("monthly").
+ * This ensures `purchaseGooglePlaySubscription` calls the plugin with the
+ * correct subscription product ID + base plan ID pair.
  */
 export async function loadGooglePlayProductsDiag(): Promise<GooglePlayLoadResult> {
   if (!isNativeAndroid()) return { products: [], error: null, rawCount: 0 };
@@ -286,48 +317,77 @@ export async function loadGooglePlayProductsDiag(): Promise<GooglePlayLoadResult
       return { products: [], error: "0 products returned from Google Play. See [ECOLOGIC-IAP] logcat for diagnosis.", rawCount: 0 };
     }
 
-    // Log every raw product the store returned
+    // Log every raw product the store returned before mapping
     rawProducts.forEach((p: any, i: number) => {
-      const raw = p as any;
-      const offerDetails = raw.subscriptionOfferDetails;
+      const offerDetails = p.subscriptionOfferDetails;
       console.log(
         `[ECOLOGIC-IAP] Raw[${i}]:`,
         `id="${p.identifier}"`,
         `price="${p.priceString}"`,
         `title="${p.title}"`,
-        `basePlanId="${raw.subscriptionOfferDetails?.[0]?.basePlanId ?? raw.basePlanId ?? "(none)"}"`,
+        `basePlanId="${p.subscriptionOfferDetails?.[0]?.basePlanId ?? p.basePlanId ?? "(none)"}"`,
         `offerDetails=${offerDetails ? JSON.stringify(offerDetails).slice(0, 200) : "(none)"}`
       );
     });
 
-    const mapped: IapProduct[] = rawProducts
-      .filter((p: any) => !!googlePlayProductIdToPlanKey[p.identifier])
-      .map((p: any) => {
-        const planKey = googlePlayProductIdToPlanKey[p.identifier];
-        const raw = p as any;
-        const planIdentifier: string =
-          raw.subscriptionOfferDetails?.[0]?.basePlanId ||
-          raw.basePlanId ||
-          subscriptionPlans[planKey]?.googlePlayPlanIdentifier ||
-          "monthly";
+    // ── Mapping with two-pass fallback ────────────────────────────────────────
+    // Track which plan keys have already been claimed so duplicate identifiers
+    // (e.g. four products all returning id="monthly") each map to a unique plan.
+    const usedPlanKeys = new Set<string>();
+    const mapped: IapProduct[] = [];
 
-        console.log(`[ECOLOGIC-IAP] Mapped: id="${p.identifier}" → planKey="${planKey}" planIdentifier="${planIdentifier}" price="${p.priceString}"`);
-        return {
-          identifier: p.identifier,
-          planKey,
-          priceString: p.priceString,
-          title: p.title,
-          description: p.description,
-          planIdentifier,
-        };
-      });
+    for (const p of rawProducts as any[]) {
+      const rawIdentifier: string = p.identifier ?? "";
+      const rawTitle: string     = p.title       ?? "";
 
-    const unmapped = rawProducts.filter((p: any) => !googlePlayProductIdToPlanKey[p.identifier]);
-    if (unmapped.length > 0) {
-      console.warn(
-        `[ECOLOGIC-IAP] ${unmapped.length} product(s) from Play Store did NOT match any known plan ID:`,
-        unmapped.map((p: any) => p.identifier).join(", ")
+      // Resolve the base plan identifier from offer details or the raw identifier field
+      const basePlanFromOffers: string =
+        p.subscriptionOfferDetails?.[0]?.basePlanId || p.basePlanId || "";
+
+      // ── Pass 1: exact product-ID match ──────────────────────────────────────
+      let planKey: string | null = googlePlayProductIdToPlanKey[rawIdentifier] ?? null;
+      let resolvedProductId: string = rawIdentifier;    // the subscription product ID for purchase
+      let planIdentifier: string    = basePlanFromOffers || rawIdentifier || "monthly";
+      let matchMethod = "exact-id";
+
+      // ── Pass 2: title-based fallback ────────────────────────────────────────
+      if (!planKey) {
+        planKey = titleToPlanKey(rawTitle);
+        if (planKey) {
+          // Use the canonical product ID from our config for the purchase call.
+          // The raw identifier from the plugin ("monthly") becomes the planIdentifier.
+          resolvedProductId = subscriptionPlans[planKey]?.googlePlayProductId ?? rawIdentifier;
+          planIdentifier    = basePlanFromOffers || rawIdentifier || "monthly";
+          matchMethod       = "title-fallback";
+          console.log(`[ECOLOGIC-IAP] Fallback mapped by title: "${rawTitle}" -> ${planKey} (productId will be "${resolvedProductId}", planIdentifier="${planIdentifier}")`);
+        }
+      }
+
+      if (!planKey) {
+        console.warn(`[ECOLOGIC-IAP] Could not map product: id="${rawIdentifier}" title="${rawTitle}" — skipping`);
+        continue;
+      }
+
+      if (usedPlanKeys.has(planKey)) {
+        console.warn(`[ECOLOGIC-IAP] Plan key "${planKey}" already claimed — duplicate product id="${rawIdentifier}" title="${rawTitle}" skipped`);
+        continue;
+      }
+
+      usedPlanKeys.add(planKey);
+
+      console.log(
+        `[ECOLOGIC-IAP] Mapped [${matchMethod}]: rawId="${rawIdentifier}" → planKey="${planKey}"`,
+        `productId="${resolvedProductId}" planIdentifier="${planIdentifier}" price="${p.priceString}"`
       );
+
+      mapped.push({
+        identifier: resolvedProductId,
+        planKey,
+        priceString: p.priceString,
+        title: p.title,
+        description: p.description,
+        planIdentifier,
+      });
     }
 
     console.log(`[ECOLOGIC-IAP] ══ Google Play product load DONE: ${mapped.length}/${rawProducts.length} mapped ══`);
@@ -358,11 +418,18 @@ export async function purchaseGooglePlaySubscription(
 ): Promise<GooglePlayPurchaseResult> {
   const resolvedPlanId = planIdentifier || "monthly";
   console.log(
-    "[native-iap] Google Play purchase — productId:", productId,
-    "planIdentifier:", resolvedPlanId
+    "[ECOLOGIC-IAP] Google Play purchase START —",
+    `productIdentifier="${productId}"`,
+    `planIdentifier="${resolvedPlanId}"`
   );
 
   const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
+
+  console.log("[ECOLOGIC-IAP] Calling purchaseProduct with:", JSON.stringify({
+    productIdentifier: productId,
+    planIdentifier: resolvedPlanId,
+    productType: "SUBS",
+  }));
 
   const transaction = await NativePurchases.purchaseProduct({
     productIdentifier: productId,
@@ -370,7 +437,7 @@ export async function purchaseGooglePlaySubscription(
     productType: PURCHASE_TYPE.SUBS,
   });
 
-  console.log("[native-iap] Google Play purchase succeeded — transactionId:", transaction.transactionId);
+  console.log("[ECOLOGIC-IAP] Google Play purchase succeeded — transactionId:", transaction.transactionId);
 
   // On Android, @capgo/native-purchases exposes purchaseToken on the transaction object
   const purchaseToken = (transaction as any).purchaseToken as string | undefined;
