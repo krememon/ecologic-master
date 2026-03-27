@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { isNativePlatform, getPlatform } from "@/lib/capacitor";
 import { parseDateOnly } from "@/lib/dateUtils";
 import { type Job, type Client, type Estimate, type Customer } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
@@ -63,6 +64,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Jobs() {
+  const isAndroid = isNativePlatform() && getPlatform() === 'android';
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { role } = useCan();
@@ -1992,7 +1994,7 @@ export default function Jobs() {
                   </span>
                 );
               })()}
-              <CardHeader className="pb-3">
+              <CardHeader className={isAndroid ? "pb-2" : "pb-3"}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 pr-20 min-w-0">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -2008,15 +2010,15 @@ export default function Jobs() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 space-y-3">
+              <CardContent className={isAndroid ? "pt-0 space-y-2" : "pt-0 space-y-3"}>
                 {(job.location || job.startDate) && (
-                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                  <div className={isAndroid ? "flex flex-col gap-1.5 text-sm text-slate-500 dark:text-slate-400" : "flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400"}>
                     {job.location && (
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 flex-1 min-w-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        className="flex items-center gap-1.5 min-w-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -2024,7 +2026,7 @@ export default function Jobs() {
                       </a>
                     )}
                     {job.startDate && (
-                      <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <Calendar className="h-3.5 w-3.5" />
                         <span>
                           {(() => {
