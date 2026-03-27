@@ -540,15 +540,31 @@ export default function OnboardingSubscription() {
                 )}
                 {isRestoring ? "Restoring..." : "Restore Purchases"}
               </button>
+
+              {/* Android-only: logout sits directly below Restore Purchases,
+                  clear of the system nav bar */}
+              {nativeAndroid && (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-2 mt-1"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Log out
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="mt-6 text-center">
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500">
-              <LogOut className="w-4 h-4 mr-2" />
-              Log out
-            </Button>
-          </div>
+          {/* Log out — hidden on Android (moved above into the Restore section) */}
+          {!nativeAndroid && (
+            <div className="mt-6 text-center">
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500">
+                <LogOut className="w-4 h-4 mr-2" />
+                Log out
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
