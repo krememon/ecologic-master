@@ -42,11 +42,13 @@ export function isNativeAndroid(): boolean {
 
 /** A store product (App Store or Google Play) mapped to an EcoLogic plan. */
 export interface IapProduct {
-  identifier: string;   // Store product ID, e.g. "com.ecologic.app.team.monthly" or "ecologic_team_monthly"
-  planKey: string;      // EcoLogic plan key, e.g. "team"
-  priceString: string;  // Localised price, e.g. "$79.99"
+  identifier: string;      // Store product ID, e.g. "ecologic_team_monthly"
+  planKey: string;         // EcoLogic plan key, e.g. "team"
+  priceString: string;     // Localised price, e.g. "$79.99"
   title: string;
   description: string;
+  /** Android only — base plan ID required by Play Billing Library 5+, e.g. "monthly" */
+  planIdentifier?: string;
 }
 
 /** Result of a Google Play purchase — both fields are needed for backend validation. */
@@ -244,15 +246,32 @@ export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
 
     const mapped: IapProduct[] = products
       .filter(p => !!googlePlayProductIdToPlanKey[p.identifier])
-      .map(p => ({
-        identifier: p.identifier,
-        planKey: googlePlayProductIdToPlanKey[p.identifier],
-        priceString: p.priceString,
-        title: p.title,
-        description: p.description,
-      }));
+      .map(p => {
+        const planKey = googlePlayProductIdToPlanKey[p.identifier];
+        const raw = p as any;
 
-    console.log(`[native-iap] Google Play: ${mapped.length} product(s) loaded`);
+        // Try to extract base plan ID from Android subscriptionOfferDetails (Play Billing 5+)
+        // Fall back to the plan config, then to "monthly" as a safe default
+        const planIdentifier: string =
+          raw.subscriptionOfferDetails?.[0]?.basePlanId ||
+          raw.basePlanId ||
+          subscriptionPlans[planKey]?.googlePlayPlanIdentifier ||
+          "monthly";
+
+        return {
+          identifier: p.identifier,
+          planKey,
+          priceString: p.priceString,
+          title: p.title,
+          description: p.description,
+          planIdentifier,
+        };
+      });
+
+    console.log(
+      `[native-iap] Google Play: ${mapped.length} product(s) loaded —`,
+      mapped.map(p => `${p.identifier}[${p.planIdentifier}]=${p.priceString}`).join(", ") || "(none)"
+    );
     return mapped;
   } catch (err: any) {
     console.error("[native-iap] loadGooglePlayProducts failed:", err.message);
@@ -271,14 +290,20 @@ export async function loadGooglePlayProducts(): Promise<IapProduct[]> {
  * Throws if the purchase is cancelled, fails, or purchaseToken is missing.
  */
 export async function purchaseGooglePlaySubscription(
-  productId: string
+  productId: string,
+  planIdentifier?: string
 ): Promise<GooglePlayPurchaseResult> {
-  console.log("[native-iap] Google Play purchase started — productId:", productId);
+  const resolvedPlanId = planIdentifier || "monthly";
+  console.log(
+    "[native-iap] Google Play purchase — productId:", productId,
+    "planIdentifier:", resolvedPlanId
+  );
 
   const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
 
   const transaction = await NativePurchases.purchaseProduct({
     productIdentifier: productId,
+    planIdentifier: resolvedPlanId,
     productType: PURCHASE_TYPE.SUBS,
   });
 

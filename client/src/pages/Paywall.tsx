@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import logoImg from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1774579909052.png";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle, Zap } from "lucide-react";
@@ -170,12 +171,19 @@ export default function Paywall() {
   const handleAndroidPurchase = async () => {
     if (isLoading) return;
     setIsLoading(true);
-    console.log("[paywall] Google Play purchase started — productId:", googleProductId);
+
+    // Use the loaded store product's identifier + planIdentifier when available
+    const productId = storeProduct?.identifier ?? googleProductId;
+    const planId = storeProduct?.planIdentifier;
+    console.log(
+      "[paywall] Google Play purchase — productId:", productId,
+      "planIdentifier:", planId ?? "(fallback to monthly)"
+    );
 
     try {
       let result;
       try {
-        result = await purchaseGooglePlaySubscription(googleProductId);
+        result = await purchaseGooglePlaySubscription(productId, planId);
         console.log("[paywall] Google Play purchase succeeded — token length:", result.purchaseToken.length);
       } catch (err: any) {
         console.error("[paywall] Google Play purchase failed:", err.message);
@@ -285,18 +293,11 @@ export default function Paywall() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1
-              className="text-5xl md:text-6xl mx-auto mb-2"
-              style={{
-                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.05,
-                color: "#0B0B0D",
-              }}
-            >
-              EcoLogic
-            </h1>
+            <img
+              src={logoImg}
+              alt="EcoLogic"
+              className="h-20 w-auto mx-auto mb-2 object-contain"
+            />
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Professional contractor management
             </p>

@@ -5,6 +5,8 @@ export interface SubscriptionPlan {
   productId: string;
   appleProductId: string;
   googlePlayProductId: string;
+  /** Google Play base plan ID — required by Play Billing Library 5+ when purchasing a subscription */
+  googlePlayPlanIdentifier: string;
 }
 
 export const subscriptionPlans: Record<string, SubscriptionPlan> = {
@@ -15,6 +17,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     productId: "ecologic_starter",
     appleProductId: "ecologic_starter",
     googlePlayProductId: "ecologic_starter_monthly",
+    googlePlayPlanIdentifier: "monthly",
   },
   team: {
     label: "Team",
@@ -23,6 +26,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     productId: "ecologic_team",
     appleProductId: "ecologic_team",
     googlePlayProductId: "ecologic_team_monthly",
+    googlePlayPlanIdentifier: "monthly",
   },
   pro: {
     label: "Pro",
@@ -31,6 +35,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     productId: "ecologic_pro",
     appleProductId: "ecologic_pro",
     googlePlayProductId: "ecologic_pro_monthly",
+    googlePlayPlanIdentifier: "monthly",
   },
   scale: {
     label: "Scale",
@@ -39,6 +44,7 @@ export const subscriptionPlans: Record<string, SubscriptionPlan> = {
     productId: "ecologic_scale",
     appleProductId: "ecologic_scale",
     googlePlayProductId: "ecologic_scale_monthly",
+    googlePlayPlanIdentifier: "monthly",
   },
 };
 

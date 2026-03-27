@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import logoImg from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1774579909052.png";
 import { Loader2, Users, CheckCircle, LogOut, RotateCcw, Shield, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -204,12 +205,19 @@ export default function OnboardingSubscription() {
   const handleAndroidPurchase = async () => {
     if (isLoading) return;
     setIsLoading(true);
-    console.log("[onboarding-sub] Google Play purchase started — productId:", googleProductId);
+
+    // Use the loaded store product's identifier + planIdentifier when available
+    const productId = storeProduct?.identifier ?? googleProductId;
+    const planId = storeProduct?.planIdentifier;
+    console.log(
+      "[onboarding-sub] Google Play purchase — productId:", productId,
+      "planIdentifier:", planId ?? "(fallback to monthly)"
+    );
 
     try {
       let result;
       try {
-        result = await purchaseGooglePlaySubscription(googleProductId);
+        result = await purchaseGooglePlaySubscription(productId, planId);
         console.log("[onboarding-sub] Google Play purchase succeeded — token length:", result.purchaseToken.length);
       } catch (err: any) {
         console.error("[onboarding-sub] Google Play purchase failed:", err.message);
@@ -349,7 +357,11 @@ export default function OnboardingSubscription() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">EcoLogic</h1>
+            <img
+              src={logoImg}
+              alt="EcoLogic"
+              className="h-20 w-auto mx-auto mb-2 object-contain"
+            />
             <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
           </div>
 
