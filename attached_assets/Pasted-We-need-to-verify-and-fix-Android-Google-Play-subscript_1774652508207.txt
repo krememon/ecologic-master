@@ -1,0 +1,53 @@
+We need to verify and fix Android Google Play subscription offer handling so EcoLogic properly shows and sells the new 7-day free trial offers we added in Google Play Console.
+
+Problem:
+- We added 7-day free trial offers in Google Play Console for the Android subscriptions.
+- In the app, when the user goes to subscribe, the free trial does not appear.
+- We need to determine whether the Android billing flow is correctly fetching and using eligible subscription offers.
+
+Goal:
+Make Android subscription purchase flow use the correct Google Play offer details so eligible users see:
+- 7-day free trial
+- then normal monthly billing
+
+What to inspect:
+1. Android billing integration end-to-end
+   - where product details are queried
+   - whether it uses modern ProductDetails API
+   - whether subscription offers are being read from ProductDetails.SubscriptionOfferDetails
+2. Purchase launch flow
+   - whether the selected subscription offer passes the correct offerToken into launchBillingFlow
+3. UI/paywall data source
+   - whether pricing/trial text is hardcoded instead of coming from returned Play product details
+4. Restore / purchase success / backend sync flow
+   - preserve existing behavior while fixing offer selection
+
+Required fix:
+- Ensure Android queries subscription ProductDetails
+- Read all eligible SubscriptionOfferDetails returned by Google Play
+- Choose the correct eligible offer for each plan:
+  - prefer a free-trial eligible offer when available
+  - otherwise fall back to base plan
+- Pass the matching offerToken into the Play billing flow
+- Update paywall display so Android reflects the returned Play offer, e.g.:
+  - Start 7-Day Free Trial
+  - Then $X/month unless canceled
+
+Important:
+- Do not break existing subscriptions
+- Do not change iOS/web billing behavior
+- Keep backend as source of truth after purchase
+- Add targeted logs only for:
+  - queried product details
+  - available subscription offers
+  - chosen offerToken
+  - purchase result
+  - backend sync result
+
+Deliverables:
+1. Root cause
+2. Exact files changed
+3. What was wrong in the Android billing flow
+4. What offer logic is now used
+5. How to test on Samsung with a Google Play tester account
+6. Confirm fallback behavior when user is not eligible for trial

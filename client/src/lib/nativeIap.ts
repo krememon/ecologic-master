@@ -44,11 +44,18 @@ export function isNativeAndroid(): boolean {
 export interface IapProduct {
   identifier: string;      // Store product ID, e.g. "ecologic_team_monthly"
   planKey: string;         // EcoLogic plan key, e.g. "team"
+  /** Always the regular monthly price — never the trial phase $0.00 price. */
   priceString: string;     // Localised price, e.g. "$79.99"
   title: string;
   description: string;
   /** Android only — base plan ID required by Play Billing Library 5+, e.g. "monthly" */
   planIdentifier?: string;
+  /** Android only — the offerToken for the selected offer (trial or base). Logged on purchase. */
+  offerToken?: string;
+  /** Android only — null for base plan offers, e.g. "free-trial" for promotional offers. */
+  offerId?: string | null;
+  /** Android only — true when the selected offer has a free trial pricing phase. */
+  hasTrial?: boolean;
 }
 
 /** Result of a Google Play purchase — both fields are needed for backend validation. */
@@ -317,80 +324,152 @@ export async function loadGooglePlayProductsDiag(): Promise<GooglePlayLoadResult
       return { products: [], error: "0 products returned from Google Play. See [ECOLOGIC-IAP] logcat for diagnosis.", rawCount: 0 };
     }
 
-    // Log every raw product the store returned before mapping
+    // Log every raw product the store returned before mapping.
+    // Note: getProducts() returns ONE Product per offer — a subscription with a
+    // base plan offer AND a 7-day trial offer will appear as TWO products in this
+    // list, both with identifier = "monthly" (the base plan ID) but different
+    // offerTokens and offerIds (null = base plan, non-null = promotional/trial).
     rawProducts.forEach((p: any, i: number) => {
-      const offerDetails = p.subscriptionOfferDetails;
       console.log(
         `[ECOLOGIC-IAP] Raw[${i}]:`,
         `id="${p.identifier}"`,
-        `price="${p.priceString}"`,
-        `title="${p.title}"`,
-        `basePlanId="${p.subscriptionOfferDetails?.[0]?.basePlanId ?? p.basePlanId ?? "(none)"}"`,
-        `offerDetails=${offerDetails ? JSON.stringify(offerDetails).slice(0, 200) : "(none)"}`
+        `planIdentifier="${p.planIdentifier ?? "(none)"}"`,
+        `price=${p.price}`,
+        `priceString="${p.priceString}"`,
+        `offerId=${JSON.stringify(p.offerId ?? null)}`,
+        `offerToken="${String(p.offerToken ?? "").slice(0, 30)}..."`,
+        `title="${p.title}"`
       );
     });
 
-    // ── Mapping with two-pass fallback ────────────────────────────────────────
-    // Track which plan keys have already been claimed so duplicate identifiers
-    // (e.g. four products all returning id="monthly") each map to a unique plan.
-    const usedPlanKeys = new Set<string>();
-    const mapped: IapProduct[] = [];
+    // ── Phase 1: map every raw product to a typed offer record ────────────────
+    // The plugin returns one product per offer, so we collect them all before
+    // selecting the best offer per plan.
+
+    interface RawOffer {
+      planKey: string;
+      resolvedProductId: string;  // subscription product ID for purchaseProduct()
+      planIdentifier: string;     // base plan ID for purchaseProduct()
+      matchMethod: string;
+      rawPrice: number;
+      rawPriceString: string;
+      offerToken: string;
+      offerId: string | null;
+      title: string;
+      description: string;
+    }
+
+    const planOffers: Record<string, RawOffer[]> = {};
 
     for (const p of rawProducts as any[]) {
       const rawIdentifier: string = p.identifier ?? "";
       const rawTitle: string     = p.title       ?? "";
+      // On Android, p.identifier = basePlanId ("monthly") and
+      // p.planIdentifier = subscription product ID ("ecologic_starter_monthly").
+      // The basePlanId becomes our planIdentifier for the purchase call.
+      const basePlanId: string   = rawIdentifier || "monthly";
+      const subProductId: string = p.planIdentifier ?? "";  // subscription product ID
+      const rawPrice: number     = typeof p.price === "number" ? p.price : parseFloat(String(p.price ?? "0")) || 0;
+      const rawPriceString: string = p.priceString ?? "";
+      const offerToken: string   = p.offerToken ?? "";
+      const offerId: string | null = p.offerId ?? null;
 
-      // Resolve the base plan identifier from offer details or the raw identifier field
-      const basePlanFromOffers: string =
-        p.subscriptionOfferDetails?.[0]?.basePlanId || p.basePlanId || "";
+      // ── Plan-key resolution (same two-pass logic as before) ─────────────────
+      // Pass 1: try exact match on the subscription product ID from the plugin
+      let planKey: string | null = null;
+      let resolvedProductId      = "";
+      let matchMethod            = "";
 
-      // ── Pass 1: exact product-ID match ──────────────────────────────────────
-      let planKey: string | null = googlePlayProductIdToPlanKey[rawIdentifier] ?? null;
-      let resolvedProductId: string = rawIdentifier;    // the subscription product ID for purchase
-      let planIdentifier: string    = basePlanFromOffers || rawIdentifier || "monthly";
-      let matchMethod = "exact-id";
-
-      // ── Pass 2: title-based fallback ────────────────────────────────────────
+      if (subProductId) {
+        planKey = googlePlayProductIdToPlanKey[subProductId] ?? null;
+        if (planKey) {
+          resolvedProductId = subProductId;
+          matchMethod       = "exact-subProductId";
+        }
+      }
+      // Pass 1b: try exact match on the raw identifier (in case it's the product ID)
+      if (!planKey && rawIdentifier) {
+        planKey = googlePlayProductIdToPlanKey[rawIdentifier] ?? null;
+        if (planKey) {
+          resolvedProductId = rawIdentifier;
+          matchMethod       = "exact-rawId";
+        }
+      }
+      // Pass 2: title-based fallback
       if (!planKey) {
         planKey = titleToPlanKey(rawTitle);
         if (planKey) {
-          // Use the canonical product ID from our config for the purchase call.
-          // The raw identifier from the plugin ("monthly") becomes the planIdentifier.
-          resolvedProductId = subscriptionPlans[planKey]?.googlePlayProductId ?? rawIdentifier;
-          planIdentifier    = basePlanFromOffers || rawIdentifier || "monthly";
+          resolvedProductId = subProductId || subscriptionPlans[planKey]?.googlePlayProductId || rawIdentifier;
           matchMethod       = "title-fallback";
-          console.log(`[ECOLOGIC-IAP] Fallback mapped by title: "${rawTitle}" -> ${planKey} (productId will be "${resolvedProductId}", planIdentifier="${planIdentifier}")`);
+          console.log(`[ECOLOGIC-IAP] Title fallback: "${rawTitle}" → planKey="${planKey}" productId="${resolvedProductId}"`);
         }
       }
 
       if (!planKey) {
-        console.warn(`[ECOLOGIC-IAP] Could not map product: id="${rawIdentifier}" title="${rawTitle}" — skipping`);
+        console.warn(`[ECOLOGIC-IAP] Could not map: id="${rawIdentifier}" subId="${subProductId}" title="${rawTitle}" — skipping`);
         continue;
       }
 
-      if (usedPlanKeys.has(planKey)) {
-        console.warn(`[ECOLOGIC-IAP] Plan key "${planKey}" already claimed — duplicate product id="${rawIdentifier}" title="${rawTitle}" skipped`);
-        continue;
-      }
-
-      usedPlanKeys.add(planKey);
-
-      console.log(
-        `[ECOLOGIC-IAP] Mapped [${matchMethod}]: rawId="${rawIdentifier}" → planKey="${planKey}"`,
-        `productId="${resolvedProductId}" planIdentifier="${planIdentifier}" price="${p.priceString}"`
-      );
-
-      mapped.push({
-        identifier: resolvedProductId,
+      if (!planOffers[planKey]) planOffers[planKey] = [];
+      planOffers[planKey].push({
         planKey,
-        priceString: p.priceString,
-        title: p.title,
-        description: p.description,
-        planIdentifier,
+        resolvedProductId,
+        planIdentifier: basePlanId,
+        matchMethod,
+        rawPrice,
+        rawPriceString,
+        offerToken,
+        offerId,
+        title: rawTitle,
+        description: p.description ?? "",
       });
     }
 
-    console.log(`[ECOLOGIC-IAP] ══ Google Play product load DONE: ${mapped.length}/${rawProducts.length} mapped ══`);
+    // ── Phase 2: select the best offer per plan ───────────────────────────────
+    // A free-trial offer has offerId !== null (e.g. "free-trial") AND rawPrice === 0
+    // (the first pricing phase of a trial is always $0).
+    // We prefer the trial offer when available; the regular monthly price is taken
+    // from the base plan offer (offerId === null) so priceString is always correct.
+
+    const mapped: IapProduct[] = [];
+
+    for (const [planKey, offers] of Object.entries(planOffers)) {
+      // Identify trial and base offers
+      const trialOffer = offers.find(o => o.offerId !== null && o.rawPrice === 0);
+      const baseOffer  = offers.find(o => o.offerId === null);
+      const selected   = trialOffer ?? baseOffer ?? offers[0];
+      const hasTrial   = !!trialOffer;
+
+      // priceString must always show the regular monthly price, even for trial products.
+      // If a trial offer was selected, pull the regular price from the base plan offer.
+      const regularPriceString = hasTrial
+        ? (baseOffer?.rawPriceString || `$${subscriptionPlans[planKey]?.price ?? "?"}`)
+        : selected.rawPriceString;
+
+      console.log(
+        `[ECOLOGIC-IAP] ✓ Selected offer for planKey="${planKey}":`,
+        `method=${selected.matchMethod}`,
+        `hasTrial=${hasTrial}`,
+        `offerId=${JSON.stringify(selected.offerId)}`,
+        `offerToken="${selected.offerToken.slice(0, 30)}..."`,
+        `priceString="${regularPriceString}"`,
+        `totalOffers=${offers.length}`
+      );
+
+      mapped.push({
+        identifier: selected.resolvedProductId,
+        planKey,
+        priceString: regularPriceString,
+        title: selected.title,
+        description: selected.description,
+        planIdentifier: selected.planIdentifier,
+        offerToken: selected.offerToken || undefined,
+        offerId: selected.offerId,
+        hasTrial,
+      });
+    }
+
+    console.log(`[ECOLOGIC-IAP] ══ Google Play product load DONE: ${mapped.length} plan(s) from ${rawProducts.length} raw offer(s) ══`);
     return { products: mapped, error: null, rawCount: rawProducts.length };
   } catch (err: any) {
     const msg = err?.message ?? String(err);
@@ -414,14 +493,24 @@ export async function loadGooglePlayProductsDiag(): Promise<GooglePlayLoadResult
  */
 export async function purchaseGooglePlaySubscription(
   productId: string,
-  planIdentifier?: string
+  planIdentifier?: string,
+  expectedOfferToken?: string
 ): Promise<GooglePlayPurchaseResult> {
   const resolvedPlanId = planIdentifier || "monthly";
   console.log(
     "[ECOLOGIC-IAP] Google Play purchase START —",
     `productIdentifier="${productId}"`,
-    `planIdentifier="${resolvedPlanId}"`
+    `planIdentifier="${resolvedPlanId}"`,
+    `expectedOfferToken="${expectedOfferToken ? expectedOfferToken.slice(0, 30) + "..." : "(none — base plan)"}"`
   );
+  if (expectedOfferToken) {
+    console.log(
+      "[ECOLOGIC-IAP] NOTE: A trial offerToken was detected. The plugin will select the first",
+      `offer with basePlanId="${resolvedPlanId}" from Google Play's SubscriptionOfferDetails list.`,
+      "If the trial offer comes first in that list, the trial will be applied; otherwise the base",
+      "plan will be used. Check Play Console → Subscription → offer ordering if trial is not shown."
+    );
+  }
 
   const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
 

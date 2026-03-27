@@ -228,7 +228,7 @@ export default function OnboardingSubscription() {
     try {
       let result;
       try {
-        result = await purchaseGooglePlaySubscription(productId, planId);
+        result = await purchaseGooglePlaySubscription(productId, planId, storeProduct?.offerToken);
         console.log("[onboarding-sub] Google Play purchase succeeded — token length:", result.purchaseToken.length);
       } catch (err: any) {
         console.error("[onboarding-sub] Google Play purchase failed:", err.message);
@@ -343,12 +343,15 @@ export default function OnboardingSubscription() {
       </>
     );
   } else if (isNativeApp) {
+    const hasTrialOffer = nativeAndroid && !!storeProduct?.hasTrial;
     subscribeBtnLabel = productsLoading
       ? "Loading plans..."
       : noProductsLoaded
       ? "Plans Unavailable"
       : planUnavailable
       ? "Not Available"
+      : hasTrialOffer
+      ? "Start 7-Day Free Trial"
       : `Subscribe · ${storePrice}/mo`;
   } else {
     subscribeBtnLabel = "Start 7-Day Free Trial";
@@ -445,7 +448,10 @@ export default function OnboardingSubscription() {
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">{displayPlan.label}</h3>
                   <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
                     {isNativeApp
-                      ? productsLoading ? "Loading price…" : `${storePrice}/mo`
+                      ? productsLoading ? "Loading price…"
+                        : (nativeAndroid && storeProduct?.hasTrial)
+                          ? `7-day free trial, then ${storePrice}/mo`
+                          : `${storePrice}/mo`
                       : `7-day free trial, then $${displayPlan.price}/mo`}
                   </p>
                 </div>
@@ -476,7 +482,9 @@ export default function OnboardingSubscription() {
                   <Shield className="w-4 h-4 text-purple-500 shrink-0" />
                   <span>
                     {storeLabel
-                      ? `Billed securely via ${storeLabel}`
+                      ? (nativeAndroid && storeProduct?.hasTrial)
+                        ? `7-day free trial, then billed via ${storeLabel}`
+                        : `Billed securely via ${storeLabel}`
                       : "7-day free trial"}
                   </span>
                 </div>

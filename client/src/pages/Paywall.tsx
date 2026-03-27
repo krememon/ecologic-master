@@ -197,7 +197,7 @@ export default function Paywall() {
     try {
       let result;
       try {
-        result = await purchaseGooglePlaySubscription(productId, planId);
+        result = await purchaseGooglePlaySubscription(productId, planId, storeProduct?.offerToken);
         console.log("[paywall] Google Play purchase succeeded — token length:", result.purchaseToken.length);
       } catch (err: any) {
         console.error("[paywall] Google Play purchase failed:", err.message);
@@ -293,12 +293,15 @@ export default function Paywall() {
       </>
     );
   } else if (isNativeApp) {
+    const hasTrialOffer = nativeAndroid && !!storeProduct?.hasTrial;
     subscribeBtnLabel = productsLoading
       ? "Loading plans..."
       : noProductsLoaded
       ? "Plans Unavailable"
       : planUnavailable
       ? "Not Available"
+      : hasTrialOffer
+      ? "Start 7-Day Free Trial"
       : `Subscribe · ${storePrice}/mo`;
   } else {
     subscribeBtnLabel = `Continue with ${displayPlan.label}`;
@@ -382,8 +385,9 @@ export default function Paywall() {
               };
               const activePlanKey = isNativeApp ? selectedPlanKey : webSelectedPlanKey;
               const bullets = planBullets[activePlanKey] ?? planBullets.starter;
+              const hasTrialOffer = nativeAndroid && !!storeProduct?.hasTrial;
               const priceDisplay = isNativeApp
-                ? (productsLoading ? "Loading…" : `${storePrice}/mo`)
+                ? (productsLoading ? "Loading…" : hasTrialOffer ? `7-day free trial, then ${storePrice}/mo` : `${storePrice}/mo`)
                 : `$${displayPlan.price}/mo`;
 
               return (
