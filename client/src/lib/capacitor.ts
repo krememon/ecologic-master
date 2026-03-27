@@ -526,6 +526,10 @@ export async function openAppSettings(): Promise<void> {
 export async function registerPushNotifications(): Promise<PushResult> {
   console.log("[notif] platform", Capacitor.getPlatform(), "native?", isNativePlatform());
   if (!isNativePlatform()) return { success: false, error: "failed" };
+  if (Capacitor.getPlatform() === "android") {
+    console.log("[push] Android push temporarily skipped until Firebase is configured");
+    return { success: false, error: "unimplemented" };
+  }
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");

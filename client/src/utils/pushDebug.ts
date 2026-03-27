@@ -7,6 +7,10 @@ export async function initPushDebug() {
     console.log("[push-debug] Not native platform, skipping");
     return;
   }
+  if (Capacitor.getPlatform() === "android") {
+    console.log("[push] Android push temporarily skipped until Firebase is configured");
+    return;
+  }
   if (listenersAttached) return;
   listenersAttached = true;
 
@@ -60,6 +64,10 @@ export async function initPushDebug() {
 export async function manualRegister() {
   if (!Capacitor.isNativePlatform()) {
     console.log("[push-debug] Not native platform");
+    return;
+  }
+  if (Capacitor.getPlatform() === "android") {
+    console.log("[push] Android push temporarily skipped until Firebase is configured");
     return;
   }
   console.log("[push-debug] Manual register() pressed");
