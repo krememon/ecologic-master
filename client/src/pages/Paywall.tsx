@@ -141,7 +141,7 @@ export default function Paywall() {
     await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
 
     toast({ title: "Subscription active!", description: "Welcome back to EcoLogic." });
-    setLocation("/jobs", { replace: true });
+    setLocation("/", { replace: true });
   };
 
   // ── Apple purchase ──────────────────────────────────────────────────────────
