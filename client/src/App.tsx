@@ -94,6 +94,7 @@ import UpgradePlan from "@/pages/UpgradePlan";
 // even reaches the guard.
 import {
   isNativePlatform,
+  getPlatform,
   closeSystemBrowser,
   stopPolling,
   exchangeNativeAuthCode,
