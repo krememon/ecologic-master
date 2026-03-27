@@ -1,0 +1,55 @@
+We need to debug a billing state mismatch between Android and Dev Tools.
+
+Problem:
+- On the Android phone, the company/account appears to have an active Google Play subscription.
+- In Dev Tools > Billing Controls for that same company, it shows:
+  - Subscription: None
+  - Trial: None
+  - Billing Source: None
+  - Paywall: Showing
+- Screenshot also shows DEV: Subscription bypass, so we need to be careful not to confuse bypassed access with real billing state.
+
+Goal:
+Find why Android/Google Play access is not reflected in backend billing status / Dev Tools, and make backend the clear source of truth.
+
+What to inspect:
+1. All Android subscription success handlers
+   - where purchase success is handled
+   - where restore purchases is handled
+   - where acknowledgment/verification is handled
+2. The exact backend endpoint that stores Google Play subscription state for a company
+3. Dev Tools billing resolver
+   - what fields it reads
+   - whether it only reads DB state and not live entitlement state
+4. Any local device caching that can unlock the app without backend sync
+5. Any company/account mismatch risk
+   - user logged into one company on phone but viewing another company in Dev Tools
+
+Deliverables:
+1. Trace the full flow:
+   - Android purchase success
+   - verification
+   - backend sync/write
+   - Dev Tools read path
+2. Identify the exact break point where state is getting lost
+3. Fix it so that:
+   - after Android purchase success, backend subscription state is immediately persisted
+   - restore purchases also sync backend
+   - Dev Tools shows the same real subscription source of truth
+4. Add targeted logs only, not noisy logs:
+   - Android purchase success payload
+   - backend subscription sync request
+   - backend DB write result
+   - billing resolver output for the company
+5. Do not change UI styling unless needed for tiny debug visibility
+6. Preserve existing billing architecture and paywall logic
+
+Important:
+- Backend must remain the source of truth
+- Do not rely on device-only premium state
+- If DEV bypass is affecting this flow, make that obvious in logs and keep it separated from real subscription state
+- Return with:
+  - exact files changed
+  - root cause
+  - how to reproduce
+  - how to verify fix on Android device and in Dev Tools

@@ -72,6 +72,8 @@ interface BillingSnapshot {
   source: string;
   hasFreeAccess: boolean;   // true if adminFreeAccess OR adminBypassSubscription
   hasUserBypass: boolean;   // true if any user at this company has subscriptionBypass=true
+  hasDevBypass: boolean;    // true if BYPASS_SUBSCRIPTION=1 AND a dev account email is a member
+  devBypassEnvEnabled: boolean; // true if BYPASS_SUBSCRIPTION=1 in the server env
   hasActivePaid: boolean;   // true if active paid subscription (Apple, Google Play, or Stripe) with valid period
   hasTrial: boolean;
   subscriptionStatus: string | null;
@@ -743,6 +745,20 @@ export default function DevTools() {
 
                 {/* Quick facts */}
                 <div className="space-y-0.5">
+                  {billing.hasDevBypass && (
+                    <FactItem
+                      label="Dev ENV Bypass"
+                      value="BYPASS_SUBSCRIPTION=1 — dev email in allowlist. Access granted server-side WITHOUT reading DB subscription."
+                      positive={true}
+                    />
+                  )}
+                  {billing.devBypassEnvEnabled && !billing.hasDevBypass && (
+                    <FactItem
+                      label="Dev ENV Bypass"
+                      value="BYPASS_SUBSCRIPTION=1 is ON, but no dev account email is a member of this company."
+                      positive={undefined}
+                    />
+                  )}
                   {billing.hasUserBypass && (
                     <FactItem
                       label="User Override"
@@ -790,6 +806,7 @@ export default function DevTools() {
                       billing.source === 'free_access' ? 'Free Access' :
                       billing.source === 'trial' ? 'Trial' :
                       billing.source === 'user_bypass' ? 'User Override' :
+                      billing.source === 'dev_bypass' ? 'Dev ENV Bypass' :
                       'None'
                     }
                     positive={billing.allowed ? true : undefined}

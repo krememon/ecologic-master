@@ -20655,17 +20655,28 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       if (!rows.length) return null;
       const c = rows[0];
 
-      // Check if any user at this company has a personal subscriptionBypass flag.
+      // Check if any user at this company has a personal subscriptionBypass flag,
+      // or is a dev account email that would be granted access through the ENV bypass.
       // Users have no direct companyId — they link to companies through companyMembers.
       // This mirrors the real app's access path: user-level bypass is checked BEFORE
       // company-level billing in /api/subscriptions/status.
       const { companyMembers } = await import('@shared/schema');
       const memberRows = await db
-        .select({ subscriptionBypass: users.subscriptionBypass })
+        .select({ subscriptionBypass: users.subscriptionBypass, email: users.email })
         .from(users)
         .innerJoin(companyMembers, eq(companyMembers.userId, users.id))
         .where(eq(companyMembers.companyId, companyId));
       const hasUserBypass = memberRows.some(u => u.subscriptionBypass === true);
+
+      // ENV-level dev bypass: BYPASS_SUBSCRIPTION=1 + email in DEV_ALLOWLIST.
+      // /api/subscriptions/status returns active:true via this path WITHOUT reading the DB,
+      // which is why Dev Tools (which reads the DB) can show "Paywall" while the app works.
+      const devBypassEnvEnabled = process.env.BYPASS_SUBSCRIPTION === '1';
+      let hasDevBypass = false;
+      if (devBypassEnvEnabled) {
+        const { isDevAccount } = await import('./devAuth');
+        hasDevBypass = memberRows.some(u => isDevAccount({ email: u.email }));
+      }
 
       const billing = getEffectiveBillingAccess(c);
       const now = new Date();
@@ -20695,7 +20706,11 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       // 5. Trial
       // 6. Blocked
 
-      if (hasUserBypass) {
+      if (hasDevBypass) {
+        effectiveLabel = 'Full Access (Dev ENV Bypass)';
+        rawBillingState = 'BYPASS_SUBSCRIPTION=1 active — dev account email in allowlist. App grants access WITHOUT checking the DB. Real DB subscription state shown in fields below.';
+        allowed = true;
+      } else if (hasUserBypass) {
         effectiveLabel = 'Full Access (User Override)';
         rawBillingState = 'A user at this company has a personal access override enabled';
         allowed = true;
@@ -20752,15 +20767,31 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         rawBillingState = reasonMap[billing.blockReason ?? ''] ?? `No valid access (${billing.blockReason ?? 'unknown'})`;
       }
 
+      const resolvedSource = hasDevBypass ? 'dev_bypass' : hasUserBypass ? 'user_bypass' : billing.source;
+      console.log(
+        `[admin-billing] snapshot — companyId=${companyId}` +
+        ` resolvedSource=${resolvedSource}` +
+        ` allowed=${allowed}` +
+        ` devBypassEnvEnabled=${devBypassEnvEnabled}` +
+        ` hasDevBypass=${hasDevBypass}` +
+        ` hasUserBypass=${hasUserBypass}` +
+        ` subscriptionStatus=${c.subscriptionStatus ?? 'null'}` +
+        ` subscriptionPlatform=${c.subscriptionPlatform ?? 'null'}` +
+        ` subscriptionPlan=${c.subscriptionPlan ?? 'null'}` +
+        ` periodEnd=${c.currentPeriodEnd ? new Date(c.currentPeriodEnd).toISOString() : 'null'}`
+      );
+
       return {
         companyId: c.id,
         companyCode: c.companyCode,
         effectiveLabel,
         rawBillingState,
         allowed,
-        source: hasUserBypass ? 'user_bypass' : billing.source,
+        source: resolvedSource,
         hasFreeAccess,
         hasUserBypass,
+        hasDevBypass,
+        devBypassEnvEnabled,
         hasActivePaid,
         hasTrial,
         subscriptionStatus: c.subscriptionStatus,
