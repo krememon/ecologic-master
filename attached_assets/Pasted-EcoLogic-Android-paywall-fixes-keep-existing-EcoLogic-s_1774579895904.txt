@@ -1,0 +1,67 @@
+EcoLogic Android paywall fixes — keep existing EcoLogic styling/vibe, do not redesign the page, and do not touch unrelated onboarding/paywall logic.
+
+We need to fix 2 Android wrapper issues on the subscription/paywall screen:
+
+ISSUE 1 — wrong EcoLogic logo
+Right now the Android paywall is showing plain “EcoLogic” text at the top.
+Replace that with the actual EcoLogic logo asset instead.
+Use the real EcoLogic logo image already used elsewhere in the app/brand assets.
+Keep sizing clean and centered like the current layout.
+Do not make it tiny — it should look like the real branded logo, not plain text.
+Do not change the rest of the page structure.
+
+ISSUE 2 — Android products are not actually loaded
+The paywall UI shows plan cards, but purchase fails with:
+“planIdentifier cannot be empty if productType is subs”
+That means Android subscription products/offers are not being mapped/loaded correctly before purchase.
+We need the Android Google Play products to actually load and bind to each plan.
+
+Your task:
+1. Find the Android subscription/paywall code path
+2. Find where Capgo/native-purchases products are fetched and where the selected plan is converted into a purchase request
+3. Fix Android so each plan uses the actual loaded store product + offer/plan identifier required for Google Play subscriptions
+4. Make sure tapping Starter/Team/Pro/Scale selects the real loaded Android product data, not just hardcoded display pricing
+5. If products are not loaded yet, disable purchase button and show safe loading/fallback behavior instead of attempting broken purchase
+6. Keep iOS behavior intact
+7. Keep web/Stripe paywall behavior intact unless absolutely necessary
+8. Do not break the existing paywall flow or styling
+
+Implementation requirements:
+- Preserve current EcoLogic aesthetic
+- Minimal changes only
+- No duplicate buttons
+- No weird UI changes
+- Keep plan cards and button layout basically the same
+- The displayed price on Android should come from the loaded store product when available
+- The purchase call must include the correct Google Play subscription product + required plan/offer identifier
+- Add targeted logs only, for example:
+  - loaded Android products
+  - selected Android product
+  - selected offer/plan identifier
+  - purchase payload being sent
+- Remove any useless noisy logs
+
+What to inspect:
+- Paywall/subscription onboarding page/component
+- Native purchases helper/service
+- Product mapping between app plans (Starter/Team/Pro/Scale) and Google Play products
+- Any Android-only wrapper purchase branch
+- Any logic currently using hardcoded plan data instead of store-returned product data
+
+Expected behavior after fix:
+- Actual EcoLogic logo appears at top
+- Android products load from Google Play/native purchases
+- Tapping a plan selects the correct native product
+- Subscribe button launches purchase flow without the “planIdentifier cannot be empty if productType is subs” error
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Brief explanation of root cause
+4. Any env/config values or product IDs I must verify in Google Play / app config
+5. Exact test steps for Samsung:
+   - open paywall
+   - confirm products loaded
+   - select each tier
+   - tap subscribe
+   - confirm purchase sheet opens without the old error
