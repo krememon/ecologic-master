@@ -1,0 +1,62 @@
+EcoLogic expired-subscription lockout fix.
+
+Problem:
+When I cancel a subscription in DevTools / make a company inactive, EcoLogic still shows parts of the app shell after reopening.
+Example:
+- top header still visible
+- menu icon visible
+- bell visible
+- + button visible
+- expired subscription paywall shows inside the page content
+So the lockout is only partial.
+
+Goal:
+When subscription access is inactive/expired/blocked, the user should NOT see or interact with the normal app shell.
+The subscription gate must fully take over the screen.
+
+What to fix:
+1. Find the global subscription/paywall gate logic
+2. Find where the main app shell/header/nav is rendered
+3. If subscription status is blocked/inactive/expired:
+   - do not render the normal app shell
+   - do not render menu/header/bell/fab/normal page chrome
+   - render only the subscription/paywall screen
+4. Make this apply consistently on:
+   - cold app launch
+   - reopen after force close
+   - logout/login
+   - DevTools cancellation / comp removal / expired status
+5. Make sure there is no flash of protected UI before the gate resolves
+6. Gate must wait for definitive subscription status before rendering shell
+7. Preserve current active-subscriber behavior
+8. Do not redesign the paywall UI
+
+Important:
+- Full lockout means the paywall becomes the whole screen
+- No partial access
+- No protected header/nav chrome visible
+- No floating action button
+- No notifications bell
+- No drawer/menu access
+
+Likely files to inspect:
+- app/root layout
+- authenticated shell layout
+- subscription/paywall gate
+- routes protected by subscription status
+- any mobile header/fab wrappers
+
+Add targeted logs:
+[ECOLOGIC-SUB] shell gate check — status=...
+[ECOLOGIC-SUB] rendering full paywall lockout
+[ECOLOGIC-SUB] rendering protected app shell
+
+Deliverables:
+1. exact files changed
+2. exact code diff
+3. root cause found
+4. exact test steps:
+   - cancel subscription in DevTools
+   - force close app
+   - reopen
+   - confirm only paywall is visible and no shell/header/nav/fab shows

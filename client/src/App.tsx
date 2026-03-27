@@ -558,6 +558,36 @@ function AuthenticatedRouter() {
     localStorage.removeItem("onboardingIndustry");
   }
 
+  // ── Subscription shell gate ──────────────────────────────────────────────
+  // Full-screen lockout: if the owner's subscription is inactive / expired /
+  // blocked, render ONLY the Paywall component — no Layout, no header, no
+  // sidebar, no mobile nav, no FAB, no notifications bell.
+  //
+  // This is the definitive gate that runs regardless of how the user arrived
+  // (cold start, force-close + reopen, DevTools cancel, in-app status change).
+  //
+  // Guard conditions:
+  //   • subLoading=false  — subscription status is fully resolved (no spinner race)
+  //   • !subActive        — access is blocked
+  //   • role=OWNER        — non-owners inherit access; never locked out here
+  //   • subBypass=false   — dev-bypass accounts are exempt
+  const isOwnerRole = user?.role === 'OWNER';
+  console.log(
+    `[ECOLOGIC-SUB] shell gate check —` +
+    ` subActive=${subActive}` +
+    ` subLoading=${subLoading}` +
+    ` subBypass=${subBypass}` +
+    ` role=${user?.role ?? 'none'}` +
+    ` hasCompany=${hasCompany}`
+  );
+
+  if (isAuthenticated && hasCompany && !subLoading && !subActive && isOwnerRole && !subBypass) {
+    console.log('[ECOLOGIC-SUB] rendering full paywall lockout — no shell chrome');
+    return <Paywall />;
+  }
+
+  console.log('[ECOLOGIC-SUB] rendering protected app shell');
+
   return (
     <Layout>
       {subBypass && (
