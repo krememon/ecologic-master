@@ -1,0 +1,86 @@
+EcoLogic Android subscription persistence bug fix.
+
+Problem:
+Android Google Play purchase now succeeds, but as soon as the user fully exits and reopens the app, EcoLogic sends them back to the paywall again.
+
+This means one of these is happening:
+1. the successful purchase is not being persisted correctly on the backend
+2. the app’s startup subscription status check is reading stale/incorrect data
+3. Android restore / existing subscription recognition is not running on launch
+4. the paywall gate is firing before subscription status has finished loading
+5. company/user mismatch is causing the active subscription to be written to one company but checked against another
+
+We need a targeted fix. Do NOT redesign UI. Do NOT touch iOS flow. Do NOT touch web/Stripe flow unless absolutely necessary. Minimal changes only.
+
+Your task:
+Audit and fix the full Android subscription persistence/status path from purchase success through app relaunch.
+
+Inspect these areas:
+- POST /api/subscriptions/validate success path
+- wherever active subscription status is written to DB
+- /api/subscriptions/status
+- auth bootstrap / app startup gate / paywall redirect logic
+- Android native purchases helper / restore existing purchase path
+- any companyId / userId lookup used when writing or reading subscription state
+
+What to verify:
+1. After successful Google Play validation, exactly what DB fields are written?
+2. Which companyId is written during validation?
+3. Which companyId is checked on app relaunch for /api/subscriptions/status?
+4. Does the app block on paywall before status fetch is complete?
+5. Is there a cached status that wrongly resets to blocked on cold launch?
+6. Is there Android-specific restore/query logic that should run on startup to reconcile existing purchases?
+
+Implement:
+1. Add targeted logs with these prefixes:
+   - [ECOLOGIC-SUB]
+   - [ECOLOGIC-GPLAY]
+2. On successful validate, log:
+   - userId
+   - companyId
+   - productId
+   - plan
+   - DB write result
+   - effective subscription state after write
+3. In /api/subscriptions/status, log:
+   - userId
+   - companyId
+   - record found or not
+   - computed active/blocked result
+   - reason
+4. In startup paywall gate, log:
+   - when status fetch starts
+   - when it resolves
+   - whether gate waited for it
+   - why redirect happens
+5. Make the paywall gate wait for definitive subscription status before redirecting.
+   Do not default to blocked while status is still loading.
+6. If Android has an existing active native subscription on launch, add a safe restore/reconcile check:
+   - query existing purchases / entitlements if supported by current plugin
+   - if an active purchase exists but backend status is blocked, re-hit the validate/reconcile path
+   - do this Android-only
+7. Ensure the same companyId is used consistently:
+   - purchase validation write
+   - startup status read
+   - access gate
+8. Preserve current working purchase flow.
+9. Do not introduce duplicate requests or redirect loops.
+
+Expected behavior after fix:
+- user buys Android subscription
+- backend writes active subscription for correct company
+- user force closes app
+- reopens app
+- app reads active subscription correctly and stays past paywall
+- if backend and Play are temporarily out of sync, Android restore/reconcile fixes it automatically
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Root cause found
+4. Exact logs I should look for after purchase and after relaunch
+5. Exact test steps:
+   - buy subscription
+   - force close app
+   - reopen app
+   - confirm not redirected to paywall

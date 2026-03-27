@@ -181,13 +181,16 @@ function getNextOnboardingRoute(params: {
 }): string | null {
   const { user, onboardingChoice, onboardingIndustry, subActive } = params;
   
-  console.log("[auth] getNextOnboardingRoute", {
-    hasCompany: !!user?.company,
-    companyId: user?.company?.id,
-    onboardingCompleted: user?.company?.onboardingCompleted,
-    onboardingChoice,
-    subActive,
-  });
+  const isAndroidNative = isNativePlatform() && getPlatform() === "android";
+  console.log(
+    `[ECOLOGIC-SUB] [routing] getNextOnboardingRoute —` +
+    ` platform=${isAndroidNative ? "android" : isNativePlatform() ? "ios" : "web"}` +
+    ` hasCompany=${!!user?.company}` +
+    ` companyId=${user?.company?.id ?? "none"}` +
+    ` onboardingCompleted=${user?.company?.onboardingCompleted ?? false}` +
+    ` subActive=${subActive}` +
+    ` role=${user?.role ?? "none"}`
+  );
 
   if (user?.company) {
     const { onboardingCompleted } = user.company;
@@ -420,6 +423,60 @@ function AuthenticatedRouter() {
   const coldStartReady = isAuthenticated && hasCompany && !subLoading && subActive;
   useColdStartRedirect(coldStartReady);
 
+  // ── Android cold-start reconcile ────────────────────────────────────────────
+  // When the app reopens on Android and the backend says "blocked", automatically
+  // query Google Play for an existing active subscription and re-validate it.
+  // This heals the case where the DB and Play are momentarily out of sync.
+  // Runs at most once per session. Android only. Does nothing on iOS or web.
+  const reconcileAttemptedRef = React.useRef(false);
+  React.useEffect(() => {
+    const isAndroid = isNativePlatform() && getPlatform() === "android";
+    if (!isAndroid) return;
+    if (subLoading) return;
+    if (subActive) return;
+    if (!isAuthenticated || !hasCompany) return;
+    if (reconcileAttemptedRef.current) return;
+    reconcileAttemptedRef.current = true;
+
+    console.log("[ECOLOGIC-SUB] [reconcile] Android cold start — sub is blocked, querying Google Play for existing purchases...");
+
+    (async () => {
+      try {
+        const { restoreGooglePlayPurchases } = await import("@/lib/nativeIap");
+        const result = await restoreGooglePlayPurchases();
+        if (!result) {
+          console.log("[ECOLOGIC-SUB] [reconcile] No restorable Google Play purchase found — staying on paywall");
+          return;
+        }
+        console.log(`[ECOLOGIC-SUB] [reconcile] Found purchase — productId=${result.productId}, re-validating with backend...`);
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        try {
+          const sid = localStorage.getItem("nativeSessionId");
+          if (sid) headers["Authorization"] = `Bearer ${sid}`;
+        } catch {}
+
+        const res = await fetch("/api/subscriptions/validate", {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({ platform: "google_play", purchaseToken: result.purchaseToken, productId: result.productId }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          console.log(`[ECOLOGIC-SUB] [reconcile] Re-validation SUCCESS — plan=${data.planKey} — refreshing billing status`);
+          queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        } else {
+          console.warn(`[ECOLOGIC-SUB] [reconcile] Re-validation failed: ${data.message ?? res.status}`);
+        }
+      } catch (err: any) {
+        console.error("[ECOLOGIC-SUB] [reconcile] Error during reconcile:", err.message);
+      }
+    })();
+  }, [isAuthenticated, hasCompany, subLoading, subActive]);
+
   const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
 
@@ -432,8 +489,15 @@ function AuthenticatedRouter() {
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry, subActive })
     : null;
 
-  // Show loading screen ONLY while genuinely in-flight and the safety timer hasn't expired.
-  if (!authTimedOut && (isLoading || (isAuthenticated && hasCompany && subLoading))) {
+  // ── Loading screen ──────────────────────────────────────────────────────────
+  // Auth loading: respect the 8-second timeout (prevents hanging spinner when
+  //   auth itself fails to resolve — e.g. server unreachable on cold start).
+  // Sub loading: NEVER bypass with the timeout — do NOT default to "blocked"
+  //   while the billing check is still in-flight. This is the key fix for the
+  //   Android paywall-on-relaunch bug: without this guard, authTimedOut=true
+  //   caused the gate to fire with subActive=false before the query resolved.
+  const subStillPending = isAuthenticated && hasCompany && subLoading;
+  if ((!authTimedOut && isLoading) || subStillPending) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFFFFF' }}>
         <div className="text-center">

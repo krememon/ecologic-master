@@ -467,7 +467,7 @@ export async function purchaseGooglePlaySubscription(
  * Returns null if no active/restorable subscription is found.
  */
 export async function restoreGooglePlayPurchases(): Promise<GooglePlayPurchaseResult | null> {
-  console.log("[native-iap] Google Play restore started");
+  console.log("[ECOLOGIC-IAP] Google Play restore started");
 
   try {
     const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
@@ -476,27 +476,43 @@ export async function restoreGooglePlayPurchases(): Promise<GooglePlayPurchaseRe
       productType: PURCHASE_TYPE.SUBS,
     });
 
-    console.log(`[native-iap] Google Play restore found ${purchases.length} purchase(s)`);
+    console.log(`[ECOLOGIC-IAP] Google Play restore — ${purchases.length} purchase(s) returned by Play`);
 
     for (const tx of purchases) {
-      const pid = (tx as any).productIdentifier ?? "";
-      const token = (tx as any).purchaseToken as string | undefined;
-      const isKnown = ALL_GOOGLE_PLAY_PRODUCT_IDS.includes(pid);
-      const hasToken = !!token;
+      const pid: string   = (tx as any).productIdentifier ?? "";
+      const title: string = (tx as any).title ?? "";
+      const token         = (tx as any).purchaseToken as string | undefined;
+      const hasToken      = !!token;
 
-      if (isKnown && hasToken) {
-        console.log("[native-iap] Google Play restore — matched productId:", pid);
+      console.log(`[ECOLOGIC-IAP] Google Play restore — tx: id="${pid}" title="${title}" hasToken=${hasToken}`);
+
+      if (!hasToken) {
+        console.log("[ECOLOGIC-IAP] Google Play restore — skipping tx with no purchaseToken");
+        continue;
+      }
+
+      // ── Pass 1: exact product-ID match ──────────────────────────────────────
+      if (ALL_GOOGLE_PLAY_PRODUCT_IDS.includes(pid)) {
+        console.log(`[ECOLOGIC-IAP] Google Play restore — matched by exact ID: "${pid}"`);
         return { purchaseToken: token!, productId: pid };
       }
 
-      if (!isKnown) console.log("[native-iap] Google Play restore — skipping unknown productId:", pid);
-      if (!hasToken) console.log("[native-iap] Google Play restore — skipping tx with no purchaseToken, productId:", pid);
+      // ── Pass 2: title-based fallback (Play Billing 5+ returns "monthly") ────
+      // When the plugin returns "monthly" as productIdentifier, resolve via title.
+      const planKey = titleToPlanKey(title);
+      if (planKey) {
+        const resolvedProductId = subscriptionPlans[planKey]?.googlePlayProductId ?? pid;
+        console.log(`[ECOLOGIC-IAP] Google Play restore — matched by title: "${title}" → planKey="${planKey}" resolvedProductId="${resolvedProductId}"`);
+        return { purchaseToken: token!, productId: resolvedProductId };
+      }
+
+      console.log(`[ECOLOGIC-IAP] Google Play restore — could not map id="${pid}" title="${title}" — skipping`);
     }
 
-    console.log("[native-iap] Google Play restore — no restorable EcoLogic subscription found");
+    console.log("[ECOLOGIC-IAP] Google Play restore — no restorable EcoLogic subscription found");
     return null;
   } catch (err: any) {
-    console.error("[native-iap] Google Play restore failed:", err.message);
+    console.error("[ECOLOGIC-IAP] Google Play restore failed:", err.message);
     return null;
   }
 }

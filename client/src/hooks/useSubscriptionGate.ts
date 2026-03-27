@@ -57,24 +57,27 @@ export function useSubscriptionGate({
     queryKey: ["/api/subscriptions/status", userId || ""],
     queryFn: async () => {
       const platform = native ? "native" : "web";
-      console.log(`[sub-gate] checking billing — platform=${platform} userId=${userId}`);
+      const t0 = Date.now();
+      console.log(`[ECOLOGIC-SUB] [gate] fetch START — platform=${platform} userId=${userId}`);
       const res = await fetch("/api/subscriptions/status", {
         credentials: "include",
         cache: "no-store",
         headers: getNativeBearerHeader(),
       });
+      const elapsed = Date.now() - t0;
       if (res.status === 401) {
-        console.warn("[sub-gate] 401 — session expired or not authenticated");
+        console.warn(`[ECOLOGIC-SUB] [gate] 401 after ${elapsed}ms — session expired or not authenticated`);
         return null;
       }
       if (!res.ok) {
+        console.error(`[ECOLOGIC-SUB] [gate] error ${res.status} after ${elapsed}ms`);
         throw new Error(`${res.status}: ${res.statusText}`);
       }
       const json = await res.json() as SubscriptionStatus;
       if (json.active) {
-        console.log(`[sub-gate] ACCESS GRANTED — platform=${platform} status=${json.status} plan=${json.planKey ?? "none"} bypass=${json.bypass ?? false}`);
+        console.log(`[ECOLOGIC-SUB] [gate] ACCESS GRANTED — platform=${platform} status=${json.status} plan=${json.planKey ?? "none"} bypass=${json.bypass ?? false} elapsed=${elapsed}ms`);
       } else {
-        console.log(`[sub-gate] ACCESS DENIED — platform=${platform} status=${json.status} → routing to paywall`);
+        console.log(`[ECOLOGIC-SUB] [gate] ACCESS DENIED — platform=${platform} status=${json.status} reason=${json.reason ?? "(none)"} elapsed=${elapsed}ms → routing to paywall`);
       }
       return json;
     },
@@ -123,7 +126,13 @@ export function useSubscriptionGate({
   if (!loggedRef.current && isFetched) {
     loggedRef.current = true;
     const platform = native ? "native" : "web";
-    console.log(`[sub-gate] resolved — platform=${platform} active=${active} source=${subStatus?.status ?? "none"} stillLoading=${stillLoading}`);
+    console.log(
+      `[ECOLOGIC-SUB] [gate] resolved — platform=${platform}` +
+      ` active=${active}` +
+      ` source=${subStatus?.status ?? "none"}` +
+      ` plan=${subStatus?.planKey ?? "none"}` +
+      ` stillLoading=${stillLoading}`
+    );
   }
 
   return {

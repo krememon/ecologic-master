@@ -4525,14 +4525,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.getUserCompany(userId);
       if (!company) {
         console.log(`[access] BLOCKED userId=${userId} email=${userEmail} reason=no_company`);
+        console.log(`[ECOLOGIC-SUB] status result — userId=${userId} companyId=none active=false reason=no_company`);
         return res.json({ active: false, status: 'no_company' });
       }
+
+      console.log(
+        `[ECOLOGIC-SUB] status check — userId=${userId} companyId=${company.id}` +
+        ` subscriptionStatus=${company.subscriptionStatus ?? 'null'}` +
+        ` subscriptionPlan=${company.subscriptionPlan ?? 'null'}` +
+        ` subscriptionPlatform=${company.subscriptionPlatform ?? 'null'}` +
+        ` currentPeriodEnd=${company.currentPeriodEnd instanceof Date ? company.currentPeriodEnd.toISOString() : String(company.currentPeriodEnd ?? 'null')}` +
+        ` onboardingCompleted=${company.onboardingCompleted}`
+      );
 
       // Non-owner members (SUPERVISOR, TECHNICIAN) inherit access from the company.
       // Paywall / subscription purchase is the owner's responsibility — employees are
       // never personally gated regardless of the company's billing state.
       if (user?.role && user.role !== 'OWNER') {
         console.log(`[access] GRANTED userId=${userId} email=${userEmail} role=${user.role} companyId=${company.id} reason=employee_member`);
+        console.log(`[ECOLOGIC-SUB] status result — userId=${userId} companyId=${company.id} active=true reason=employee_member`);
         return res.json({
           active: true,
           status: 'member_access',
@@ -4548,8 +4559,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (billing.allowed) {
         console.log(`[access] GRANTED userId=${userId} email=${userEmail} companyId=${company.id} companyCode=${company.companyCode ?? '?'} source=${billing.source} plan=${billing.effectivePlan ?? 'none'}`);
+        console.log(`[ECOLOGIC-SUB] status result — userId=${userId} companyId=${company.id} active=true source=${billing.source} plan=${billing.effectivePlan ?? 'none'}`);
       } else {
         console.log(`[access] BLOCKED userId=${userId} email=${userEmail} companyId=${company.id} companyCode=${company.companyCode ?? '?'} reason=${billing.blockReason ?? 'no_access'} → paywall`);
+        console.log(`[ECOLOGIC-SUB] status result — userId=${userId} companyId=${company.id} active=false reason=${billing.blockReason ?? 'no_access'} subscriptionStatus=${company.subscriptionStatus ?? 'null'} currentPeriodEnd=${company.currentPeriodEnd instanceof Date ? company.currentPeriodEnd.toISOString() : String(company.currentPeriodEnd ?? 'null')}`);
       }
 
       res.json({
@@ -4765,16 +4778,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         // Store the purchaseToken in originalTransactionId (same column, different semantic context)
-        await storage.updateCompany(company.id, {
+        console.log(
+          `[ECOLOGIC-SUB] validate DB write — userId=${userId} companyId=${company.id}` +
+          ` productId=${txInfo.productId} plan=${txInfo.planKey}` +
+          ` periodEnd=${txInfo.expiresDate.toISOString()} paymentState=${txInfo.paymentState}`
+        );
+
+        const updatedCompany = await storage.updateCompany(company.id, {
           subscriptionStatus: 'active',
           subscriptionPlan: txInfo.planKey,
           maxUsers: txInfo.userLimit,
           subscriptionPlatform: 'google_play',
           originalTransactionId: txInfo.purchaseToken,
           currentPeriodEnd: txInfo.expiresDate,
+          subscriptionCancelAtPeriodEnd: false,
+          billingUpdatedAt: new Date(),
           onboardingCompleted: true,
         });
 
+        const { getEffectiveBillingAccess: postWriteCheck } = await import('./billingResolver');
+        const postWriteBilling = postWriteCheck(updatedCompany);
+        console.log(
+          `[ECOLOGIC-SUB] validate write done — companyId=${company.id}` +
+          ` status=${updatedCompany.subscriptionStatus}` +
+          ` plan=${updatedCompany.subscriptionPlan}` +
+          ` periodEnd=${updatedCompany.currentPeriodEnd instanceof Date ? updatedCompany.currentPeriodEnd.toISOString() : String(updatedCompany.currentPeriodEnd)}` +
+          ` onboardingCompleted=${updatedCompany.onboardingCompleted}` +
+          ` → billingAllowed=${postWriteBilling.allowed} source=${postWriteBilling.source}`
+        );
         console.log(`[iap-validate] Google Play — written to company=${company.id} status=active plan=${txInfo.planKey}`);
 
         return res.json({
