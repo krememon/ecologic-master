@@ -437,10 +437,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             </div>
 
             {/* Navigation */}
-            <nav
-              className="flex-1 overflow-y-auto min-h-0 p-4"
-              style={isAndroid ? { paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)' } : undefined}
-            >
+            <nav className="flex-1 overflow-y-auto min-h-0 p-4">
               <div className="space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
@@ -484,7 +481,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
               )}
 
               {/* Settings + Logout */}
-              <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div
+                className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800"
+                style={isAndroid ? { paddingBottom: 56 } : undefined}
+              >
                 <Link href="/settings" onClick={handleNavItemClick}>
                   <div className={cn(
                     "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105 mb-1",
