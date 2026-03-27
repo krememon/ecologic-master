@@ -1,0 +1,85 @@
+EcoLogic Android subscription/paywall follow-up fixes.
+
+We have 2 exact issues to fix. Keep EcoLogic’s current aesthetic/style. Do not redesign the page. Do not touch unrelated onboarding/paywall logic. Minimal targeted changes only.
+
+ISSUE 1 — Logo sizing/style is still wrong
+Current problem:
+The new Android paywall logo does not match the rest of the app’s branding. It is too small and visually off compared to the existing EcoLogic branding used elsewhere.
+
+What I want:
+Match the same visual treatment as the existing EcoLogic header/logo style already used in the app.
+Reference the existing app branding and make the paywall header match that same size/proportions/spacing.
+Do NOT use tiny text/logo treatment.
+Do NOT invent a new style.
+Use the same feel as the provided reference image:
+- larger EcoLogic wordmark
+- proper spacing under the WRAPPER pill
+- subtitle sits underneath correctly
+- overall header block should visually match the rest of EcoLogic
+
+Your task for issue 1:
+1. Find the current paywall/onboarding subscription header/logo implementation
+2. Compare it to the existing EcoLogic logo/header treatment used elsewhere in the app
+3. Reuse the same asset/styling pattern so the paywall header matches the rest of the app
+4. Keep the WRAPPER pill and subtitle layout clean
+5. Do not affect iOS/web layouts unless they already share this exact component and the change improves consistency
+
+ISSUE 2 — Android purchase now says “Product not found”
+Current state:
+We fixed the earlier planIdentifier issue, but now Android purchase fails with:
+“Purchase failed — Product not found”
+
+Important context:
+This likely means the app is still not correctly aligned with the actual Google Play subscription product data / track setup / identifiers being returned by native purchases.
+
+Your task for issue 2:
+1. Audit the Android native purchases flow end-to-end
+2. Verify exactly what product IDs the app is requesting on Android
+3. Verify how loaded products are mapped to Starter / Team / Pro / Scale
+4. Add targeted logs for:
+   - requested Android product IDs
+   - raw loaded products returned from native purchases
+   - selected product ID
+   - selected base plan / offer / plan identifier
+   - exact purchase payload being sent
+5. Make the Android paywall purchase button refuse to call purchase if the selected plan does not have a verified loaded native product attached
+6. Show a clear safe UI state if products are not actually loaded instead of attempting a broken purchase
+7. Keep iOS purchase flow unchanged
+8. Keep web/Stripe flow unchanged
+
+Very important:
+Do NOT assume the issue is only frontend.
+Inspect for mismatch between:
+- shared/subscriptionPlans.ts IDs
+- nativeIap.ts requested IDs
+- Android package/bundle ID usage
+- Capgo/native-purchases returned identifiers
+- any environment/config values used only on Android
+
+Need a root-cause-focused answer:
+I want to know whether the remaining Android issue is because of:
+A. wrong product IDs in code
+B. wrong base plan IDs in code
+C. products not being returned by Google Play at all
+D. purchase being called before products finish loading
+E. app/build/test setup mismatch for Google Play native billing
+
+Implementation requirements:
+- no weird UI changes
+- no duplicate buttons
+- preserve existing vibe
+- add only useful logs
+- do not break current working Android build
+- do not remove the current plan cards layout
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Exact root cause found
+4. Exact requested Android product IDs found in code
+5. Exact loaded product IDs returned by native purchases
+6. Whether the issue is code-side or Google Play Console / testing setup side
+7. Exact Samsung test steps after patch
+
+Also:
+If the issue turns out to be Google Play Console / tester / track setup and not code, say that clearly instead of pretending it is fixed in code.
