@@ -76,7 +76,9 @@ interface BillingSnapshot {
   devBypassEnvEnabled: boolean; // true if BYPASS_SUBSCRIPTION=1 in the server env
   hasActivePaid: boolean;   // true if active paid subscription (Apple, Google Play, or Stripe) with valid period
   hasTrial: boolean;
-  googlePlayTrial: boolean; // true if Google Play free trial (subscriptionStatus='trialing' + google_play platform)
+  googlePlayTrial: boolean;    // true if Google Play free trial (subscriptionStatus='trialing' + google_play platform)
+  googlePlayHadTrial: boolean; // true if Google Play paid sub that converted from a free trial (trialEndsAt preserved in DB)
+  trialEndedMinutesAgo: number | null; // minutes since trial ended, null if not applicable or >60 min
   subscriptionStatus: string | null;
   subscriptionPlan: string | null;
   subscriptionPlatform: string | null;  // 'apple' | 'google_play' | 'stripe' | null (null = legacy Stripe record)
@@ -803,8 +805,18 @@ export default function DevTools() {
                       ? `Active · ends ${billing.trialEndsAt
                           ? new Date(billing.trialEndsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                           : "unknown"}`
-                      : "None"}
-                    positive={billing.hasTrial ? true : undefined}
+                      : billing.googlePlayHadTrial
+                        ? (() => {
+                            const endDate = billing.trialEndsAt
+                              ? new Date(billing.trialEndsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : "unknown";
+                            const recentTag = billing.trialEndedMinutesAgo !== null && billing.trialEndedMinutesAgo < 60
+                              ? ` · ${billing.trialEndedMinutesAgo}m ago`
+                              : "";
+                            return `Ended ${endDate}${recentTag} · converted to paid`;
+                          })()
+                        : "None"}
+                    positive={billing.hasTrial ? true : billing.googlePlayHadTrial ? undefined : undefined}
                   />
                   <FactItem
                     label="Billing Source"

@@ -4598,18 +4598,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (playStillActive) {
               // Subscription still active on Play — refresh DB so future status checks
               // won't trigger unnecessary reconcile calls.
-              // Preserve trial state: paymentState 2 = still in free trial period.
               const reconcileIsTrial = txInfo.paymentState === 2;
+              const previousStatus = company.subscriptionStatus;
+
+              // Detect trial → paid transition in reconcile path (can happen when
+              // the reconcile runs right as the trial period expires and paymentState
+              // flips from 2 → 1 before the RTDN RENEWED notification arrives).
+              const trialJustConverted =
+                previousStatus === 'trialing' && !reconcileIsTrial;
+
+              // trialEndsAt is a permanent historical record — only SET it (never clear it).
+              // When still in trial: update to current expiry (may drift slightly).
+              // When now paid: omit the key entirely so the DB retains the trial end date
+              // for "Trial Ended" observability in Dev Tools.
+              const trialEndsAtUpdate = reconcileIsTrial
+                ? { trialEndsAt: txInfo.expiresDate }
+                : {}; // paid phase — leave DB value alone (historical record)
+
               company = await storage.updateCompany(company.id, {
                 currentPeriodEnd: txInfo.expiresDate,
                 subscriptionStatus: reconcileIsTrial ? 'trialing' : 'active',
-                trialEndsAt: reconcileIsTrial ? txInfo.expiresDate : null,
+                ...trialEndsAtUpdate,
                 billingUpdatedAt: new Date(),
               });
-              console.log(
-                `[ECOLOGIC-SUB] reconcile updated DB — companyId=${company.id}` +
-                ` newPeriodEnd=${txInfo.expiresDate.toISOString()}`
-              );
+
+              if (trialJustConverted) {
+                console.log(
+                  `[ECOLOGIC-SUB] reconcile PHASE CHANGE — companyId=${company.id}` +
+                  ` trialing → active (trial converted to paid during reconcile)` +
+                  ` newPeriodEnd=${txInfo.expiresDate.toISOString()}` +
+                  ` trialEndsAt preserved=${company.trialEndsAt ? (company.trialEndsAt as Date).toISOString() : 'null'}`
+                );
+              } else {
+                console.log(
+                  `[ECOLOGIC-SUB] reconcile updated DB — companyId=${company.id}` +
+                  ` status=${reconcileIsTrial ? 'trialing' : 'active'}` +
+                  ` newPeriodEnd=${txInfo.expiresDate.toISOString()}`
+                );
+              }
             } else {
               console.log(
                 `[ECOLOGIC-SUB] reconcile — Google Play confirms expired/canceled` +
@@ -4873,18 +4899,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `paymentState=${txInfo.paymentState} autoRenewing=${txInfo.autoRenewing}`
         );
 
-        // Store the purchaseToken in originalTransactionId (same column, different semantic context)
         // paymentState 2 = free trial phase — store as 'trialing' so billing resolver
-        // and Dev Tools can distinguish trial from paid.  trialEndsAt stores the trial
-        // expiry so the trial row in Dev Tools shows the correct end date.
+        // and Dev Tools can distinguish trial from paid.  trialEndsAt is stored as a
+        // PERMANENT historical record (never cleared) so "Trial Ended" is visible in
+        // Dev Tools even after the trial converts to a paid subscription.
         const isGooglePlayTrial = txInfo.paymentState === 2;
 
-        console.log(
-          `[ECOLOGIC-SUB] validate DB write — userId=${userId} companyId=${company.id}` +
-          ` productId=${txInfo.productId} plan=${txInfo.planKey}` +
-          ` periodEnd=${txInfo.expiresDate.toISOString()} paymentState=${txInfo.paymentState}` +
-          ` isGooglePlayTrial=${isGooglePlayTrial}`
-        );
+        if (isGooglePlayTrial) {
+          console.log(
+            `[ECOLOGIC-SUB] validate PHASE START — Google Play free trial` +
+            ` userId=${userId} companyId=${company.id}` +
+            ` plan=${txInfo.planKey} trialEnds=${txInfo.expiresDate.toISOString()}`
+          );
+        } else {
+          console.log(
+            `[ECOLOGIC-SUB] validate DB write — userId=${userId} companyId=${company.id}` +
+            ` productId=${txInfo.productId} plan=${txInfo.planKey}` +
+            ` periodEnd=${txInfo.expiresDate.toISOString()} paymentState=${txInfo.paymentState}` +
+            ` isGooglePlayTrial=${isGooglePlayTrial}`
+          );
+        }
 
         const updatedCompany = await storage.updateCompany(company.id, {
           subscriptionStatus: isGooglePlayTrial ? 'trialing' : 'active',
@@ -5218,24 +5252,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         break;
 
       case 2: // SUBSCRIPTION_RENEWED (trial → paid conversion, or paid renewal)
-        // Renewal always means the trial period has ended and a real payment was made.
-        // Clear trialEndsAt and set 'active' — re-verify to get the fresh period end.
+        // Renewal means a payment was collected — trial is definitively over if it was running.
+        // DO NOT clear trialEndsAt: preserve it as a permanent historical record so Dev Tools
+        // can show "Trial Ended {date}" even after the paid phase is active.
         try {
           const txInfo = await verifyGooglePlayPurchase(purchaseToken, subscriptionId);
+          const wasTrialing = company.subscriptionStatus === 'trialing';
           updates.subscriptionStatus = 'active';
-          updates.trialEndsAt = null; // trial is now over — subscription is paid
+          // trialEndsAt intentionally omitted — keep DB value intact as history
           updates.subscriptionPlatform = 'google_play';
           updates.subscriptionPlan = txInfo.planKey;
           updates.maxUsers = txInfo.userLimit;
           updates.currentPeriodEnd = txInfo.expiresDate;
           updates.originalTransactionId = purchaseToken;
-          console.log(
-            `[google-notify] RENEWED — plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()} (trial cleared → paid active)`
-          );
+          if (wasTrialing) {
+            console.log(
+              `[google-notify] RENEWED — PHASE CHANGE trialing → active (trial converted to paid)` +
+              ` companyId=${company.id} plan=${txInfo.planKey}` +
+              ` paidPeriodEnd=${txInfo.expiresDate.toISOString()}` +
+              ` trialEndsAt preserved=${company.trialEndsAt ? (company.trialEndsAt as Date).toISOString() : 'null'}`
+            );
+          } else {
+            console.log(
+              `[google-notify] RENEWED — paid renewal` +
+              ` companyId=${company.id} plan=${txInfo.planKey} expires=${txInfo.expiresDate.toISOString()}`
+            );
+          }
         } catch (err: any) {
           console.error('[google-notify] Re-verification (RENEWED) failed:', err.message);
+          // Can't re-verify — mark active without touching trialEndsAt (preserve historical record)
           updates.subscriptionStatus = 'active';
-          updates.trialEndsAt = null;
           updates.subscriptionPlatform = 'google_play';
         }
         break;
@@ -20738,6 +20784,21 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         c.subscriptionStatus === 'trialing' &&
         !!(c.trialEndsAt && new Date(c.trialEndsAt) > now);
 
+      // Google Play had-trial: subscription is now paid but trialEndsAt is still present in the DB,
+      // meaning the user went through the free trial before converting.  trialEndsAt is intentionally
+      // preserved (never cleared) so this fact is observable even after the trial ends.
+      // In Play Billing Lab the trial is ~3 minutes — by the time Dev Tools refreshes, the trial
+      // may already be over and the subscription active, but we can still surface "Trial Ended".
+      const googlePlayHadTrial =
+        c.subscriptionPlatform === 'google_play' &&
+        c.subscriptionStatus === 'active' &&
+        !!(c.trialEndsAt); // DB still holds the trial end date → trial history present
+
+      // Minutes since trial ended (for "recently" label in Dev Tools)
+      const trialEndedMinutesAgo = googlePlayHadTrial && c.trialEndsAt
+        ? Math.round((now.getTime() - new Date(c.trialEndsAt).getTime()) / 60000)
+        : null;
+
       let effectiveLabel: string;
       let rawBillingState: string;
       let allowed: boolean;
@@ -20783,6 +20844,17 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
             : 'unknown date';
           effectiveLabel = 'Full Access (Google Play Trial)';
           rawBillingState = `Google Play · ${plan} plan · 7-day free trial · trial ends ${trialEnd}`;
+        } else if (googlePlayHadTrial) {
+          // Paid subscription that converted from a free trial — show renewal + trial history
+          const end = c.currentPeriodEnd
+            ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'unknown date';
+          const trialEndDate = new Date(c.trialEndsAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const recentSuffix = trialEndedMinutesAgo !== null && trialEndedMinutesAgo < 60
+            ? ` (${trialEndedMinutesAgo}m ago)`
+            : '';
+          effectiveLabel = 'Full Access (Google Play Plan)';
+          rawBillingState = `Google Play · ${plan} plan · renews ${end} · trial ended ${trialEndDate}${recentSuffix}`;
         } else {
           const end = c.currentPeriodEnd
             ? new Date(c.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -20848,6 +20920,8 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         hasActivePaid,
         hasTrial,
         googlePlayTrial,
+        googlePlayHadTrial,
+        trialEndedMinutesAgo,
         subscriptionStatus: c.subscriptionStatus,
         subscriptionPlan: c.subscriptionPlan,
         subscriptionPlatform: c.subscriptionPlatform ?? null,
