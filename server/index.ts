@@ -1295,6 +1295,9 @@ app.use((req, res, next) => {
     } else {
       console.log('[subscriptions] DEV BYPASS disabled');
     }
+    import('./googlePlayIap').then(({ logGooglePlayVerificationStatus }) => {
+      logGooglePlayVerificationStatus();
+    });
     startOverdueInvoiceChecker();
     startJobScheduler();
   });

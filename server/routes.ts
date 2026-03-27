@@ -4720,6 +4720,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (platform === 'google_play') {
         const { purchaseToken, productId } = req.body;
 
+        console.log(
+          `[ECOLOGIC-GPLAY] validate request — userId=${userId} company=${company.id}` +
+          ` productId="${productId ?? '(missing)'}"` +
+          ` purchaseToken present=${!!purchaseToken} length=${purchaseToken?.length ?? 0}`
+        );
+
         if (!purchaseToken || typeof purchaseToken !== 'string') {
           return res.status(400).json({
             ok: false,
@@ -4737,7 +4743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           txInfo = await verifyGooglePlayPurchase(purchaseToken, productId);
         } catch (err: any) {
-          console.error('[iap-validate] Google Play verification failed:', err.message);
+          console.error('[ECOLOGIC-GPLAY] Verification FAILED:', err.message);
           return res.status(422).json({ ok: false, message: `Google Play verification failed: ${err.message}` });
         }
 

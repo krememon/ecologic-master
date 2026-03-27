@@ -1,0 +1,50 @@
+EcoLogic Android Google Play verification fix.
+
+Do NOT redesign UI. Do NOT touch iOS purchase flow. Do NOT touch web/Stripe flow. Minimal backend-only fix plus safe error handling.
+
+Confirmed current issue:
+Android Google Play purchase sheet opens successfully, but backend validation fails with:
+422: {"ok":false,"message":"Google Play verification failed: [google-play] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set — cannot call Google Play Developer API"}
+
+Goal:
+Set up backend support for Google Play purchase verification using a service account JSON key stored in env, and make the Android subscription validation route use it correctly.
+
+Tasks:
+1. Find the backend Android subscription validation code, likely the route handling:
+   POST /api/subscriptions/validate
+2. Find where Google Play verification is implemented
+3. Confirm which env vars are expected for Google Play verification
+4. Update the implementation so it reads the Google Play service account JSON safely from env:
+   GOOGLE_PLAY_SERVICE_ACCOUNT_KEY
+5. Support either of these env formats:
+   - full raw JSON string
+   - base64-encoded JSON string
+6. Parse the key safely and initialize the Google Play Developer API client correctly
+7. Keep detailed targeted logs with prefix:
+   [ECOLOGIC-GPLAY]
+8. If env is missing or malformed, return a clean actionable backend error
+9. If verification succeeds, continue existing subscription unlock flow unchanged
+10. Do not break Apple validation
+
+Implementation requirements:
+- minimal changes only
+- backend-only unless a tiny frontend error message improvement is needed
+- preserve existing validation route shape
+- no fake success fallback
+- no bypass of verification
+
+Also add:
+- clear startup/backend log that says whether Google Play verification is configured:
+  [ECOLOGIC-GPLAY] Google Play verification configured: yes/no
+- log when Android validation starts
+- log package name, product id, purchase token presence
+- log exact Google API call being made
+- log verification success/failure reason
+
+Deliverables:
+1. exact files changed
+2. exact code diff
+3. exact env vars required
+4. exact format I should paste into Replit Secrets for GOOGLE_PLAY_SERVICE_ACCOUNT_KEY
+5. exact Google Play Console / Google Cloud steps if a service account key must be created or linked
+6. exact test steps after patch

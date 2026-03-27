@@ -37,19 +37,84 @@ export const GOOGLE_PLAY_PACKAGE_NAME =
 interface ServiceAccountKey {
   client_email: string;
   private_key: string;
+  project_id?: string;
 }
 
 let cachedAccessToken: string | null = null;
 let tokenExpiresAt = 0;
 
+/**
+ * Parse GOOGLE_PLAY_SERVICE_ACCOUNT_KEY from env.
+ *
+ * Accepts two formats:
+ *   1. Raw JSON string  — paste the whole service-account JSON as-is.
+ *   2. Base64-encoded JSON — useful when the key contains newlines that
+ *      break some secret managers. Encode with:
+ *        base64 -i service-account.json | tr -d '\n'
+ *      and paste the resulting string into the secret.
+ *
+ * Returns null (and logs an actionable error) if the env var is missing or
+ * cannot be parsed in either format.
+ */
 function getServiceAccountKey(): ServiceAccountKey | null {
   const raw = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY;
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as ServiceAccountKey;
-  } catch {
-    console.error("[google-play] Failed to parse GOOGLE_PLAY_SERVICE_ACCOUNT_KEY as JSON");
+  if (!raw) {
+    console.error(
+      "[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set. " +
+      "Set it to the raw JSON (or base64-encoded JSON) of your Google service account key file."
+    );
     return null;
+  }
+
+  // ── Attempt 1: raw JSON ────────────────────────────────────────────────────
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as ServiceAccountKey;
+      console.log(
+        `[ECOLOGIC-GPLAY] Service account key parsed (raw JSON) — client_email: ${parsed.client_email}`
+      );
+      return parsed;
+    } catch (e: any) {
+      console.error("[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY looks like JSON but failed to parse:", e.message);
+      return null;
+    }
+  }
+
+  // ── Attempt 2: base64-encoded JSON ────────────────────────────────────────
+  try {
+    const decoded = Buffer.from(trimmed, "base64").toString("utf8");
+    const parsed = JSON.parse(decoded) as ServiceAccountKey;
+    console.log(
+      `[ECOLOGIC-GPLAY] Service account key parsed (base64-encoded JSON) — client_email: ${parsed.client_email}`
+    );
+    return parsed;
+  } catch {
+    console.error(
+      "[ECOLOGIC-GPLAY] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is set but could not be parsed as " +
+      "raw JSON or base64-encoded JSON. " +
+      "Paste the raw service-account JSON, or its base64 encoding, into Replit Secrets."
+    );
+    return null;
+  }
+}
+
+/**
+ * Called once at server startup to log whether Google Play verification is
+ * available. Does NOT throw — startup must succeed regardless.
+ */
+export function logGooglePlayVerificationStatus(): void {
+  const key = getServiceAccountKey();
+  if (key) {
+    console.log(
+      `[ECOLOGIC-GPLAY] Google Play verification configured: yes` +
+      ` (account=${key.client_email} package=${GOOGLE_PLAY_PACKAGE_NAME})`
+    );
+  } else {
+    console.log(
+      "[ECOLOGIC-GPLAY] Google Play verification configured: no" +
+      " — Android subscription validation will return 422 until GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is set."
+    );
   }
 }
 
@@ -60,15 +125,21 @@ function getServiceAccountKey(): ServiceAccountKey | null {
  */
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
-  if (cachedAccessToken && now < tokenExpiresAt) return cachedAccessToken;
+  if (cachedAccessToken && now < tokenExpiresAt) {
+    console.log("[ECOLOGIC-GPLAY] Using cached access token (expires in ~" +
+      Math.round((tokenExpiresAt - now) / 1000) + "s)");
+    return cachedAccessToken;
+  }
 
   const key = getServiceAccountKey();
   if (!key) {
     throw new Error(
-      "[google-play] GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set — " +
-      "cannot call Google Play Developer API"
+      "GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is not set or could not be parsed — " +
+      "set it in Replit Secrets (raw JSON or base64-encoded JSON of your service account key file)"
     );
   }
+
+  console.log(`[ECOLOGIC-GPLAY] Requesting new access token for ${key.client_email} …`);
 
   const nowSec = Math.floor(now / 1000);
   const assertion = jwtSign(
@@ -94,12 +165,16 @@ async function getAccessToken(): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`[google-play] Token exchange failed: ${res.status} ${text}`);
+    throw new Error(
+      `[ECOLOGIC-GPLAY] Token exchange failed: HTTP ${res.status} — ${text}. ` +
+      "Ensure the service account has 'Financial data readers' role in Play Console → Users and permissions."
+    );
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number };
   cachedAccessToken = data.access_token;
   tokenExpiresAt = now + (data.expires_in - 60) * 1000; // expire 60s early for safety
+  console.log(`[ECOLOGIC-GPLAY] Access token obtained — expires in ${data.expires_in}s`);
   return cachedAccessToken;
 }
 
@@ -133,13 +208,25 @@ export async function verifyGooglePlayPurchase(
   purchaseToken: string,
   productId: string
 ): Promise<GooglePlayTransactionInfo> {
+  console.log(
+    `[ECOLOGIC-GPLAY] verifyGooglePlayPurchase START — productId="${productId}"` +
+    ` package="${GOOGLE_PLAY_PACKAGE_NAME}"` +
+    ` purchaseToken present=${!!purchaseToken} length=${purchaseToken?.length ?? 0}`
+  );
+
   const planKey = googlePlayProductIdToPlanKey[productId];
   if (!planKey) {
+    const knownIds = Object.keys(googlePlayProductIdToPlanKey).join(", ");
+    console.error(
+      `[ECOLOGIC-GPLAY] Unknown productId="${productId}". Known IDs: ${knownIds}`
+    );
     throw new Error(
-      `[google-play] Unknown product ID: "${productId}". ` +
-      `Known IDs: ${Object.keys(googlePlayProductIdToPlanKey).join(", ")}`
+      `Unknown Google Play product ID: "${productId}". ` +
+      `Known IDs: ${knownIds}`
     );
   }
+
+  console.log(`[ECOLOGIC-GPLAY] Product ID matched → planKey="${planKey}"`);
 
   const plan = subscriptionPlans[planKey];
   const accessToken = await getAccessToken();
@@ -149,13 +236,19 @@ export async function verifyGooglePlayPurchase(
     `${encodeURIComponent(GOOGLE_PLAY_PACKAGE_NAME)}/purchases/subscriptions/` +
     `${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
 
+  console.log(`[ECOLOGIC-GPLAY] Calling Google Play Developer API: GET ${url.replace(purchaseToken, purchaseToken.slice(0, 12) + "…")}`);
+
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`[google-play] Developer API returned ${res.status}: ${text}`);
+    console.error(`[ECOLOGIC-GPLAY] Developer API returned HTTP ${res.status}: ${text}`);
+    throw new Error(
+      `Google Play Developer API returned ${res.status}: ${text}. ` +
+      "Ensure the service account has 'Financial data readers' role in Play Console → Users and permissions → Add users."
+    );
   }
 
   const data = (await res.json()) as {
@@ -169,10 +262,20 @@ export async function verifyGooglePlayPurchase(
     linkedPurchaseToken?: string;
   };
 
+  console.log(
+    `[ECOLOGIC-GPLAY] API response — paymentState=${data.paymentState}` +
+    ` autoRenewing=${data.autoRenewing}` +
+    ` orderId="${data.orderId}"` +
+    ` expiryTimeMillis=${data.expiryTimeMillis}`
+  );
+
   const expiresMs = parseInt(data.expiryTimeMillis, 10);
   if (isNaN(expiresMs)) {
-    throw new Error("[google-play] API response missing or invalid expiryTimeMillis");
+    console.error("[ECOLOGIC-GPLAY] expiryTimeMillis missing or invalid in API response");
+    throw new Error("Google Play API response missing or invalid expiryTimeMillis");
   }
+
+  console.log(`[ECOLOGIC-GPLAY] Verification SUCCESS — plan="${planKey}" expires=${new Date(expiresMs).toISOString()}`);
 
   return {
     purchaseToken,
