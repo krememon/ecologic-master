@@ -445,19 +445,6 @@ export default function Paywall() {
               );
             })()}
 
-            {/* ── Android-only diagnostic block (temporary) ──────────────── */}
-            {nativeAndroid && !productsLoading && (
-              <div className="mt-3 p-2.5 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
-                <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 leading-relaxed">
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">DIAG</span>{"\n"}
-                  Requested: ecologic_&#8203;starter/team/pro/scale_monthly{"\n"}
-                  Play returned: {rawProductCount !== null ? `${rawProductCount} product(s)` : "—"}{"\n"}
-                  Mapped: {products.length} plan(s){"\n"}
-                  {loadError && `Error: ${loadError}`}
-                </p>
-              </div>
-            )}
-
             <Button
               type="button"
               onClick={handleSubscribe}
