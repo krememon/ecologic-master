@@ -150,6 +150,16 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       return false;
     }
   });
+  // Android-only bottom safe-area detection — used to push the logout button above
+  // the system navigation bar. Does not affect iOS or web.
+  const [isAndroid] = useState<boolean>(() => {
+    try {
+      const cap = (window as any).Capacitor;
+      return !!cap?.isNativePlatform?.() && cap?.getPlatform?.() === 'android';
+    } catch {
+      return false;
+    }
+  });
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -427,7 +437,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto min-h-0 p-4">
+            <nav
+              className="flex-1 overflow-y-auto min-h-0 p-4"
+              style={isAndroid ? { paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)' } : undefined}
+            >
               <div className="space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
