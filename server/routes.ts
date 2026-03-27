@@ -4522,21 +4522,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(userId);
       if (!company) {
         console.log(`[access] BLOCKED userId=${userId} email=${userEmail} reason=no_company`);
         console.log(`[ECOLOGIC-SUB] status result — userId=${userId} companyId=none active=false reason=no_company`);
         return res.json({ active: false, status: 'no_company' });
       }
 
+      const periodEndRaw = company.currentPeriodEnd;
+      const periodEndDate = periodEndRaw ? new Date(periodEndRaw) : null;
       console.log(
         `[ECOLOGIC-SUB] status check — userId=${userId} companyId=${company.id}` +
         ` subscriptionStatus=${company.subscriptionStatus ?? 'null'}` +
         ` subscriptionPlan=${company.subscriptionPlan ?? 'null'}` +
         ` subscriptionPlatform=${company.subscriptionPlatform ?? 'null'}` +
-        ` currentPeriodEnd=${company.currentPeriodEnd instanceof Date ? company.currentPeriodEnd.toISOString() : String(company.currentPeriodEnd ?? 'null')}` +
+        ` currentPeriodEnd=${periodEndDate ? periodEndDate.toISOString() : 'null'}` +
         ` onboardingCompleted=${company.onboardingCompleted}`
       );
+
+      // ── Google Play server-side reconcile ────────────────────────────────────
+      // When the stored currentPeriodEnd is expired or within 10 minutes of
+      // expiring, re-query Google Play Developer API to check whether the
+      // subscription has auto-renewed. This keeps test-subscription flows working
+      // (Google cycles test subs every 5 min) and handles any case where the DB
+      // falls behind Play's renewal clock.
+      //
+      // Triggered only when ALL of:
+      //   • subscriptionPlatform === 'google_play'
+      //   • subscriptionStatus   === 'active'   (Play said active when we last validated)
+      //   • currentPeriodEnd is set AND is within the reconcile window
+      //   • originalTransactionId  (the stored purchaseToken) is present
+      //   • subscriptionPlan resolves to a known Google Play product ID
+      const RECONCILE_WINDOW_MS = 10 * 60 * 1000; // 10 min ahead — covers test-sub cycles
+      const needsReconcile =
+        company.subscriptionPlatform === 'google_play' &&
+        company.subscriptionStatus   === 'active' &&
+        !!company.originalTransactionId &&
+        !!periodEndDate &&
+        (periodEndDate.getTime() - Date.now()) < RECONCILE_WINDOW_MS;
+
+      if (needsReconcile) {
+        const purchaseToken = company.originalTransactionId!;
+        try {
+          const { subscriptionPlans: spMap } = await import('@shared/subscriptionPlans');
+          const productId = company.subscriptionPlan
+            ? spMap[company.subscriptionPlan as string]?.googlePlayProductId ?? null
+            : null;
+
+          console.log(
+            `[ECOLOGIC-SUB] Google Play reconcile on status check START —` +
+            ` companyId=${company.id}` +
+            ` productId=${productId ?? '(unknown)'}` +
+            ` tokenPresent=${!!purchaseToken}` +
+            ` storedPeriodEnd=${periodEndDate!.toISOString()}` +
+            ` msUntilExpiry=${periodEndDate!.getTime() - Date.now()}`
+          );
+
+          if (productId) {
+            const { verifyGooglePlayPurchase } = await import('./googlePlayIap');
+            const txInfo = await verifyGooglePlayPurchase(purchaseToken, productId);
+
+            const playStillActive =
+              (txInfo.paymentState === 1 || txInfo.paymentState === 2) &&
+              txInfo.expiresDate > new Date();
+
+            console.log(
+              `[ECOLOGIC-SUB] reconcile result —` +
+              ` playStillActive=${playStillActive}` +
+              ` newPeriodEnd=${txInfo.expiresDate.toISOString()}` +
+              ` autoRenewing=${txInfo.autoRenewing}` +
+              ` paymentState=${txInfo.paymentState}` +
+              ` orderId=${txInfo.orderId}`
+            );
+
+            if (playStillActive) {
+              // Subscription renewed on Play — refresh DB so future status checks
+              // won't trigger unnecessary reconcile calls.
+              company = await storage.updateCompany(company.id, {
+                currentPeriodEnd: txInfo.expiresDate,
+                subscriptionStatus: 'active',
+                billingUpdatedAt: new Date(),
+              });
+              console.log(
+                `[ECOLOGIC-SUB] reconcile updated DB — companyId=${company.id}` +
+                ` newPeriodEnd=${txInfo.expiresDate.toISOString()}`
+              );
+            } else {
+              console.log(
+                `[ECOLOGIC-SUB] reconcile — Google Play confirms expired/canceled` +
+                ` paymentState=${txInfo.paymentState}` +
+                ` autoRenewing=${txInfo.autoRenewing}` +
+                ` expiresDate=${txInfo.expiresDate.toISOString()}`
+              );
+            }
+          } else {
+            console.warn(
+              `[ECOLOGIC-SUB] reconcile skipped — could not resolve productId from` +
+              ` subscriptionPlan="${company.subscriptionPlan ?? '(null)'}"`
+            );
+          }
+        } catch (reconcileErr: any) {
+          // Non-fatal: if Google Play API fails (e.g. network blip, service account
+          // not yet permissioned), fall back to the stale DB state and log the reason.
+          console.warn(
+            `[ECOLOGIC-SUB] reconcile error — falling back to stale DB state:` +
+            ` ${reconcileErr?.message ?? String(reconcileErr)}`
+          );
+        }
+      }
 
       // Non-owner members (SUPERVISOR, TECHNICIAN) inherit access from the company.
       // Paywall / subscription purchase is the owner's responsibility — employees are

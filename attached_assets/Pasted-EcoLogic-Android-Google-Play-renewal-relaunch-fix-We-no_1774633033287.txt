@@ -1,0 +1,63 @@
+EcoLogic Android Google Play renewal/relaunch fix.
+
+We now have the exact root cause from logs.
+
+Confirmed facts:
+- Purchase/verification works
+- Backend startup log shows Google Play verification configured: yes
+- /api/subscriptions/status is returning blocked because reason=subscription_expired
+- But the DB record still shows:
+  subscriptionStatus=active
+  subscriptionPlan=starter
+  subscriptionPlatform=google_play
+  currentPeriodEnd=2026-03-27T17:07:38.152Z
+- The status check happened at 5:36 PM, so the stored currentPeriodEnd is already in the past
+- This means the relaunch block is no longer a redirect timing bug. It is now a stale/expired period-end bug.
+
+Goal:
+On Android/Google Play subscriptions, do not rely only on stale stored currentPeriodEnd at relaunch.
+Add a safe reconcile/refresh path that checks Google Play and updates the backend subscription record before deciding to block the user for expiration.
+
+What to inspect:
+- /api/subscriptions/status
+- the access gate / blocked reason computation
+- Google Play verification/reconcile helpers
+- any stored purchaseToken / productId / subscription metadata
+- Android restore/reconcile on app cold start
+
+Implement:
+1. Add backend reconcile logic for Google Play when status check sees:
+   - subscriptionPlatform = google_play
+   - subscriptionStatus = active
+   - but currentPeriodEnd is in the past or close to expiry
+2. Use the stored purchase token / product id / company subscription record to re-query Google Play Developer API
+3. If Google Play says the subscription is still active / renewed:
+   - update currentPeriodEnd
+   - keep status active
+   - return active=true
+4. If Google Play says actually expired/canceled:
+   - keep blocked
+   - return the real reason
+5. Add targeted logs:
+   [ECOLOGIC-SUB] Google Play reconcile on status check START
+   [ECOLOGIC-SUB] reconcile inputs — companyId, productId, token present?, stored currentPeriodEnd
+   [ECOLOGIC-SUB] reconcile result — active/expired, new currentPeriodEnd, autoRenewing, paymentState
+6. On Android client startup, if backend says expired for google_play, optionally trigger a restore/reconcile attempt once before hard redirecting to paywall
+7. Preserve iOS behavior
+8. Preserve web/Stripe behavior
+9. Do not bypass payment checks
+
+Most important:
+The app should not kick a valid Google Play subscriber to the paywall just because the locally stored currentPeriodEnd is stale during test-renewal timing.
+
+Deliverables:
+1. Exact files changed
+2. Exact code diff
+3. Root cause summary
+4. Exact logs I should expect after relaunch
+5. Exact retest steps:
+   - buy subscription
+   - wait past one 5-minute test renewal
+   - force close app
+   - reopen
+   - confirm it stays unlocked if Play still says active
