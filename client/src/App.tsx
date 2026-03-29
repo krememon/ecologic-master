@@ -451,16 +451,25 @@ function AuthenticatedRouter() {
         const { restoreGooglePlayPurchases } = await import("@/lib/nativeIap");
         const result = await restoreGooglePlayPurchases();
         if (!result) {
-          console.log("[ECOLOGIC-SUB] [reconcile] No restorable Google Play purchase found — staying on paywall");
+          console.log("[ECOLOGIC-GPLAY-RESTORE] no active restorable purchase found — staying on paywall");
           return;
         }
-        console.log(`[ECOLOGIC-SUB] [reconcile] Found purchase — productId=${result.productId}, re-validating with backend...`);
+        console.log(
+          `[ECOLOGIC-GPLAY-RESTORE] restored productId=${result.productId}` +
+          ` token suffix=…${result.purchaseToken.slice(-8)}`
+        );
 
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         try {
           const sid = localStorage.getItem("nativeSessionId");
           if (sid) headers["Authorization"] = `Bearer ${sid}`;
         } catch {}
+
+        console.log(
+          `[ECOLOGIC-GPLAY-RESTORE] DB before validate — subStatus=${(user as any)?.company?.subscriptionStatus ?? "?"}` +
+          ` periodEnd=${(user as any)?.company?.currentPeriodEnd ?? "?"}`
+        );
+        console.log("[ECOLOGIC-GPLAY-RESTORE] sending validate for restored purchase");
 
         const res = await fetch("/api/subscriptions/validate", {
           method: "POST",
@@ -471,11 +480,18 @@ function AuthenticatedRouter() {
         const data = await res.json();
 
         if (res.ok && data.ok) {
-          console.log(`[ECOLOGIC-SUB] [reconcile] Re-validation SUCCESS — plan=${data.planKey} — refreshing billing status`);
+          console.log(
+            `[ECOLOGIC-GPLAY-RESTORE] DB after validate — plan=${data.planKey}` +
+            ` periodEnd=${data.currentPeriodEnd ?? "?"} status=active`
+          );
+          console.log("[ECOLOGIC-GPLAY-RESTORE] re-validation SUCCESS — refreshing billing status");
           queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
           queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         } else {
-          console.warn(`[ECOLOGIC-SUB] [reconcile] Re-validation failed: ${data.message ?? res.status}`);
+          console.warn(
+            `[ECOLOGIC-GPLAY-RESTORE] re-validation failed: ${data.message ?? res.status}` +
+            ` — Play likely confirmed subscription expired`
+          );
         }
       } catch (err: any) {
         console.error("[ECOLOGIC-SUB] [reconcile] Error during reconcile:", err.message);

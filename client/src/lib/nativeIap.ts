@@ -556,7 +556,7 @@ export async function purchaseGooglePlaySubscription(
  * Returns null if no active/restorable subscription is found.
  */
 export async function restoreGooglePlayPurchases(): Promise<GooglePlayPurchaseResult | null> {
-  console.log("[ECOLOGIC-IAP] Google Play restore started");
+  console.log("[ECOLOGIC-GPLAY-RESTORE] restore started");
 
   try {
     const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
@@ -565,24 +565,35 @@ export async function restoreGooglePlayPurchases(): Promise<GooglePlayPurchaseRe
       productType: PURCHASE_TYPE.SUBS,
     });
 
-    console.log(`[ECOLOGIC-IAP] Google Play restore — ${purchases.length} purchase(s) returned by Play`);
+    console.log(`[ECOLOGIC-GPLAY-RESTORE] available purchases count=${purchases.length}`);
 
     for (const tx of purchases) {
-      const pid: string   = (tx as any).productIdentifier ?? "";
-      const title: string = (tx as any).title ?? "";
-      const token         = (tx as any).purchaseToken as string | undefined;
-      const hasToken      = !!token;
+      const pid: string        = (tx as any).productIdentifier ?? "";
+      const title: string      = (tx as any).title ?? "";
+      const token              = (tx as any).purchaseToken as string | undefined;
+      const orderId: string    = (tx as any).transactionId ?? (tx as any).orderId ?? "";
+      // Android does not expose expirationDate on the Transaction type, but log it
+      // defensively in case a future plugin version adds it.
+      const expiry: string     = (tx as any).expirationDate ?? (tx as any).expireDate ?? "(not exposed)";
+      const hasToken           = !!token;
+      const tokenSuffix        = token ? `…${token.slice(-8)}` : "(none)";
 
-      console.log(`[ECOLOGIC-IAP] Google Play restore — tx: id="${pid}" title="${title}" hasToken=${hasToken}`);
+      console.log(
+        `[ECOLOGIC-GPLAY-RESTORE] tx: productId="${pid}" orderId="${orderId}"` +
+        ` tokenSuffix=${tokenSuffix} title="${title}" expiry=${expiry}`
+      );
 
       if (!hasToken) {
-        console.log("[ECOLOGIC-IAP] Google Play restore — skipping tx with no purchaseToken");
+        console.log(`[ECOLOGIC-GPLAY-RESTORE] stale purchase ignored — productId="${pid}" no purchaseToken`);
         continue;
       }
 
       // ── Pass 1: exact product-ID match ──────────────────────────────────────
       if (ALL_GOOGLE_PLAY_PRODUCT_IDS.includes(pid)) {
-        console.log(`[ECOLOGIC-IAP] Google Play restore — matched by exact ID: "${pid}"`);
+        console.log(
+          `[ECOLOGIC-GPLAY-RESTORE] restored productId=${pid} orderId="${orderId}" token suffix=${tokenSuffix}`
+        );
+        console.log("[ECOLOGIC-GPLAY-RESTORE] sending validate for restored purchase");
         return { purchaseToken: token!, productId: pid };
       }
 
@@ -591,17 +602,23 @@ export async function restoreGooglePlayPurchases(): Promise<GooglePlayPurchaseRe
       const planKey = titleToPlanKey(title);
       if (planKey) {
         const resolvedProductId = subscriptionPlans[planKey]?.googlePlayProductId ?? pid;
-        console.log(`[ECOLOGIC-IAP] Google Play restore — matched by title: "${title}" → planKey="${planKey}" resolvedProductId="${resolvedProductId}"`);
+        console.log(
+          `[ECOLOGIC-GPLAY-RESTORE] restored productId=${resolvedProductId} (via title="${title}"` +
+          ` planKey="${planKey}") orderId="${orderId}" token suffix=${tokenSuffix}`
+        );
+        console.log("[ECOLOGIC-GPLAY-RESTORE] sending validate for restored purchase");
         return { purchaseToken: token!, productId: resolvedProductId };
       }
 
-      console.log(`[ECOLOGIC-IAP] Google Play restore — could not map id="${pid}" title="${title}" — skipping`);
+      console.log(
+        `[ECOLOGIC-GPLAY-RESTORE] stale purchase ignored — id="${pid}" title="${title}" could not map to EcoLogic plan`
+      );
     }
 
-    console.log("[ECOLOGIC-IAP] Google Play restore — no restorable EcoLogic subscription found");
+    console.log("[ECOLOGIC-GPLAY-RESTORE] no active restorable purchase found");
     return null;
   } catch (err: any) {
-    console.error("[ECOLOGIC-IAP] Google Play restore failed:", err.message);
+    console.error("[ECOLOGIC-GPLAY-RESTORE] restore failed:", err.message);
     return null;
   }
 }

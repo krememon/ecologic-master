@@ -1,0 +1,74 @@
+We need to fix the Android Google Play subscription/paywall issue first.
+
+What the logs prove:
+- `/api/subscriptions/status` is loading successfully
+- Google Play verification is succeeding technically
+- But Google Play returns the purchase as expired/canceled:
+  - `paymentState=0`
+  - `autoRenewing=false`
+  - `playStillActive=false`
+- Server then correctly blocks access with `reason=subscription_expired`
+So this is NOT a loading bug. It is a Google Play purchase state / restore / validation handling problem.
+
+Goal:
+Make Android correctly restore or validate the ACTIVE Google Play subscription for this user/company, and stop using expired/canceled purchase data.
+
+Audit and fix all of this:
+
+1. Identify exactly which Google Play token/order is being used
+- Inspect the current stored Google Play fields for companyId=541
+- Log and verify:
+  - purchaseToken
+  - productId
+  - orderId
+  - currentPeriodEnd
+  - subscriptionStatus
+  - autoRenewing if stored
+- Confirm whether the app is restoring an OLD token instead of the latest active token
+
+2. Audit Android restore/validation flow
+Files to inspect:
+- client/src/App.tsx
+- onboarding/paywall Android purchase restore logic
+- any native purchases wrapper integration
+- POST /api/subscriptions/validate
+- GET /api/subscriptions/status
+- Google Play verification helper
+- DB write logic for Google Play subscription fields
+
+3. Fix restore logic
+We need the Android app to do one of these correctly:
+- restore the currently active Google Play purchase from the device/account
+- validate that active purchase
+- write the NEWEST valid purchase token/order/periodEnd to the DB
+- stop reconciling against stale/expired purchase data
+
+4. Very important
+If the only stored Google Play token is expired/canceled, but the device/account has a newer valid subscription, the app must:
+- find it
+- send it to `/api/subscriptions/validate`
+- overwrite the stale token atomically
+
+5. Add targeted logs only
+- [ECOLOGIC-GPLAY-RESTORE] available purchases count=...
+- [ECOLOGIC-GPLAY-RESTORE] restored productId=... orderId=... token suffix=...
+- [ECOLOGIC-GPLAY-RESTORE] sending validate for restored purchase
+- [ECOLOGIC-GPLAY-RESTORE] DB before validate ...
+- [ECOLOGIC-GPLAY-RESTORE] DB after validate ...
+- [ECOLOGIC-GPLAY-RESTORE] no active restorable purchase found
+- [ECOLOGIC-GPLAY-RESTORE] stale purchase ignored
+
+6. Guardrails
+- Do NOT break Apple or Stripe
+- Do NOT fake active access if Google Play truly says expired
+- Do NOT keep using stale token/order data if a newer active purchase exists
+- If there is truly no active purchase, say so clearly in the deliverables
+
+7. Deliverables
+Return:
+- exact root cause
+- whether the device/account actually has an active restorable Google Play subscription
+- exact old token/order being used now
+- exact new token/order if restored
+- exact files changed
+- exact reason user is hitting paywall

@@ -4662,12 +4662,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 );
               }
             } else {
+              const isDefinitelyExpired = txInfo.expiresDate < new Date();
+              const isCanceled          = !txInfo.autoRenewing;
+
               console.log(
                 `[ECOLOGIC-SUB] reconcile — Google Play confirms expired/canceled` +
                 ` paymentState=${txInfo.paymentState}` +
                 ` autoRenewing=${txInfo.autoRenewing}` +
-                ` expiresDate=${txInfo.expiresDate.toISOString()}`
+                ` expiresDate=${txInfo.expiresDate.toISOString()}` +
+                ` isDefinitelyExpired=${isDefinitelyExpired}` +
+                ` isCanceled=${isCanceled}`
               );
+
+              if (isDefinitelyExpired && isCanceled) {
+                // Play definitively confirms: subscription expired + user did not
+                // set auto-renew.  Update DB so billing resolver returns a clean
+                // 'no_active_subscription' and we stop hitting Play API on every
+                // status check (reconcile only fires when status === 'active').
+                try {
+                  company = await storage.updateCompany(company.id, {
+                    subscriptionStatus: 'canceled',
+                    billingUpdatedAt: new Date(),
+                  });
+                  console.log(
+                    `[ECOLOGIC-SUB] reconcile — DB updated to canceled — companyId=${company.id}` +
+                    ` Play confirmed autoRenewing=false expiresDate=${txInfo.expiresDate.toISOString()}`
+                  );
+                } catch (updateErr: any) {
+                  console.warn(
+                    `[ECOLOGIC-SUB] reconcile — failed to update DB to canceled:` +
+                    ` ${updateErr?.message ?? String(updateErr)}`
+                  );
+                }
+              } else if (!isCanceled) {
+                // autoRenewing=true → payment is still processing. Play may issue a
+                // RENEWED RTDN shortly — don't downgrade status; wait for the webhook.
+                console.log(
+                  `[ECOLOGIC-SUB] reconcile — payment pending (autoRenewing=true` +
+                  ` paymentState=${txInfo.paymentState}) — not downgrading, awaiting renewal RTDN`
+                );
+              }
             }
           } else {
             console.warn(
