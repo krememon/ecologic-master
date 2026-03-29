@@ -42,6 +42,7 @@ public class LocationService extends Service {
     public static final String EXTRA_AUTH_TOKEN = "authToken";
 
     private static final String TAG = "EcoLogic.LocService";
+    private static final String GEO_TAG = "[ANDROID-GEO-SERVICE]";
     private static final String CHANNEL_ID = "ecologic_location_tracking";
     private static final int NOTIFICATION_ID = 1001;
 
@@ -60,21 +61,23 @@ public class LocationService extends Service {
 
     private Location lastSentLocation = null;
     private long lastSentTime = 0;
+    private int locationCount = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         networkExecutor = Executors.newSingleThreadExecutor();
-        Log.i(TAG, "LocationService created");
+        Log.i(TAG, GEO_TAG + " onCreate — service created");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || ACTION_STOP.equals(intent.getAction())) {
-            Log.i(TAG, "onStartCommand: STOP");
+            Log.i(TAG, GEO_TAG + " onStartCommand — STOP received");
             stopTracking();
             stopSelf();
+            Log.i(TAG, GEO_TAG + " stopSelf called");
             return START_NOT_STICKY;
         }
 
@@ -85,16 +88,23 @@ public class LocationService extends Service {
         if (apiBaseUrl == null) apiBaseUrl = "";
         if (authToken == null) authToken = "";
 
-        Log.i(TAG, "onStartCommand: START sessionId=" + sessionId + " apiBase=" + apiBaseUrl);
+        Log.i(TAG, GEO_TAG + " onStartCommand — START sessionId=" + sessionId
+                + " apiBase=" + apiBaseUrl
+                + " tokenPresent=" + (!authToken.isEmpty()));
 
         createNotificationChannel();
         Notification notification = buildNotification();
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+            Log.i(TAG, GEO_TAG + " startForeground success — notification posted");
+        } catch (Exception e) {
+            Log.e(TAG, GEO_TAG + " startForeground FAILED: " + e.getMessage(), e);
         }
 
         startLocationUpdates();
@@ -102,6 +112,9 @@ public class LocationService extends Service {
     }
 
     private void startLocationUpdates() {
+        Log.i(TAG, GEO_TAG + " fused location request start — interval=" + INTERVAL_MS
+                + "ms fastest=" + FASTEST_INTERVAL_MS + "ms dist=" + DISTANCE_THRESHOLD_M + "m");
+
         LocationRequest locationRequest = new LocationRequest.Builder(
                 Priority.PRIORITY_HIGH_ACCURACY, INTERVAL_MS)
                 .setMinUpdateIntervalMillis(FASTEST_INTERVAL_MS)
@@ -121,19 +134,29 @@ public class LocationService extends Service {
         try {
             fusedLocationClient.requestLocationUpdates(
                     locationRequest, locationCallback, Looper.getMainLooper());
-            Log.i(TAG, "Location updates started interval=" + INTERVAL_MS + "ms distance=" + DISTANCE_THRESHOLD_M + "m");
+            Log.i(TAG, GEO_TAG + " fused location updates registered successfully");
         } catch (SecurityException e) {
-            Log.e(TAG, "Missing location permission: " + e.getMessage());
+            Log.e(TAG, GEO_TAG + " fused location SECURITY EXCEPTION — missing permission: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e(TAG, GEO_TAG + " fused location unexpected error: " + e.getMessage(), e);
         }
     }
 
     private void onNewLocation(Location location) {
+        locationCount++;
         float accuracy = location.getAccuracy();
-        Log.d(TAG, "onNewLocation lat=" + location.getLatitude()
-                + " lng=" + location.getLongitude() + " acc=" + accuracy);
+        Log.d(TAG, GEO_TAG + " location #" + locationCount
+                + " lat=" + location.getLatitude()
+                + " lng=" + location.getLongitude()
+                + " acc=" + accuracy);
+
+        if (locationCount == 1) {
+            Log.i(TAG, GEO_TAG + " first location received — sessionId=" + sessionId
+                    + " lat=" + location.getLatitude() + " lng=" + location.getLongitude());
+        }
 
         if (accuracy > ACCURACY_LIMIT_M) {
-            Log.d(TAG, "Skipping point — accuracy " + accuracy + " > limit " + ACCURACY_LIMIT_M);
+            Log.d(TAG, GEO_TAG + " skipping point — accuracy " + accuracy + " > limit " + ACCURACY_LIMIT_M);
             return;
         }
 
@@ -142,13 +165,13 @@ public class LocationService extends Service {
 
         if (lastSentLocation == null) {
             shouldSend = true;
-            Log.d(TAG, "First qualifying point — sending");
+            Log.d(TAG, GEO_TAG + " first qualifying point — sending");
         } else {
             float moved = lastSentLocation.distanceTo(location);
             long elapsed = now - lastSentTime;
             if (moved >= DISTANCE_THRESHOLD_M || elapsed >= INTERVAL_MS) {
                 shouldSend = true;
-                Log.d(TAG, "Sending — moved=" + moved + "m elapsed=" + elapsed + "ms");
+                Log.d(TAG, GEO_TAG + " sending — moved=" + moved + "m elapsed=" + elapsed + "ms");
             }
         }
 
@@ -184,6 +207,8 @@ public class LocationService extends Service {
                 body.put("points", points);
 
                 String targetUrl = apiBaseUrl + "/api/location/batch";
+                Log.i(TAG, GEO_TAG + " batch upload — url=" + targetUrl + " sessionId=" + sessionId);
+
                 URL url = new URL(targetUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
@@ -201,11 +226,14 @@ public class LocationService extends Service {
                 }
 
                 int code = conn.getResponseCode();
-                Log.i(TAG, "Batch → HTTP " + code + " sessionId=" + sessionId
-                        + " lat=" + location.getLatitude() + " lng=" + location.getLongitude());
+                if (code >= 200 && code < 300) {
+                    Log.i(TAG, GEO_TAG + " batch upload success — HTTP " + code + " sessionId=" + sessionId);
+                } else {
+                    Log.w(TAG, GEO_TAG + " batch upload failed — HTTP " + code + " sessionId=" + sessionId);
+                }
                 conn.disconnect();
             } catch (Exception e) {
-                Log.e(TAG, "sendToBackend failed: " + e.getMessage());
+                Log.e(TAG, GEO_TAG + " batch upload failed — " + e.getMessage(), e);
             }
         });
     }
@@ -214,7 +242,7 @@ public class LocationService extends Service {
         if (locationCallback != null && fusedLocationClient != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
             locationCallback = null;
-            Log.i(TAG, "Location updates removed");
+            Log.i(TAG, GEO_TAG + " fused location updates removed");
         }
     }
 
@@ -224,7 +252,7 @@ public class LocationService extends Service {
         if (networkExecutor != null) {
             networkExecutor.shutdown();
         }
-        Log.i(TAG, "LocationService destroyed");
+        Log.i(TAG, GEO_TAG + " onDestroy — service destroyed");
         super.onDestroy();
     }
 

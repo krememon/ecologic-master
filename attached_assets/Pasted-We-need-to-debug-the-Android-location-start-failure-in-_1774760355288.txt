@@ -1,0 +1,91 @@
+We need to debug the Android location start failure in EcoLogic.
+
+Current evidence:
+- Clock-in succeeds and returns a valid timeSessionId
+- UI shows: "Location tracking error — Could not start location tracking. Please try clocking out and back in."
+- There are NO native Android logs from LocationTrackingPlugin or LocationService
+- There are NO /api/location/batch requests after clock-in
+- So the failure is likely happening before the native foreground service ever starts
+
+Goal:
+Find the exact failure point and fix it so Android clock-in actually starts native location tracking.
+
+Required debugging tasks:
+
+1. Audit the exact Android start path
+Files:
+- client/src/pages/Home.tsx
+- client/src/services/geoTracking.ts
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/LocationService.java
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- android/app/src/main/AndroidManifest.xml
+
+2. Add targeted logs at every step of the Android start flow
+JS logs:
+- [ANDROID-GEO] clock-in success, sessionId=...
+- [ANDROID-GEO] about to check permissions
+- [ANDROID-GEO] permission status result=...
+- [ANDROID-GEO] about to request foreground permission
+- [ANDROID-GEO] foreground permission result=...
+- [ANDROID-GEO] about to start native plugin
+- [ANDROID-GEO] plugin start payload sessionId/apiBaseUrl/tokenPresent=...
+- [ANDROID-GEO] plugin start success
+- [ANDROID-GEO] plugin start error raw=...
+- [ANDROID-GEO] final catch message=...
+
+Native logs in LocationTrackingPlugin.java:
+- [ANDROID-GEO-NATIVE] checkPermissions called
+- [ANDROID-GEO-NATIVE] requestForegroundPermission called
+- [ANDROID-GEO-NATIVE] requestBackgroundPermission called
+- [ANDROID-GEO-NATIVE] start called
+- [ANDROID-GEO-NATIVE] start payload sessionId=... apiBaseUrl=... tokenPresent=...
+- [ANDROID-GEO-NATIVE] service intent dispatched
+- [ANDROID-GEO-NATIVE] start failed: ...
+
+Native logs in LocationService.java:
+- [ANDROID-GEO-SERVICE] onCreate
+- [ANDROID-GEO-SERVICE] onStartCommand
+- [ANDROID-GEO-SERVICE] startForeground success
+- [ANDROID-GEO-SERVICE] fused location request start
+- [ANDROID-GEO-SERVICE] first location received
+- [ANDROID-GEO-SERVICE] batch upload success
+- [ANDROID-GEO-SERVICE] batch upload failed
+- [ANDROID-GEO-SERVICE] stopSelf
+
+3. Surface the REAL error to the UI
+Right now the UI only says “Could not start location tracking.”
+Change the catch so the toast/log also includes the real error message/stringified object from the plugin call.
+
+4. Verify the Capacitor plugin bridge end-to-end
+Check all of these carefully:
+- The JS plugin registration name EXACTLY matches the native @CapacitorPlugin name
+- MainActivity registration is correct for the Capacitor version in this project
+- The plugin methods are annotated correctly and accessible
+- `npx cap sync android` was run after adding the plugin
+- No stale build is being run on device
+- The start() method name and payload keys match exactly between JS and Java
+- The JS registration is not returning an empty web stub on Android by mistake
+- No helper is incorrectly deciding Android is “web” instead of native
+
+5. Verify start payload validity
+Before calling native start, log and validate:
+- sessionId exists and is numeric/string valid
+- apiBaseUrl is non-empty and correct
+- authToken exists
+If any is missing, fail with a specific message, not generic toast.
+
+6. Verify permissions path
+- If permission is not granted, request it
+- If request is denied, emit exact denied status
+- If permission is already granted, continue to start
+- Do not show generic “start failed” for permission-denied cases
+
+7. Deliverables
+Return:
+- exact root cause
+- exact file(s) changed
+- exact broken line/path
+- exact raw error that was previously hidden
+- final Samsung test steps
