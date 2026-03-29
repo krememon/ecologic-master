@@ -182,6 +182,8 @@ export default function Home() {
     return () => clearInterval(id);
   }, [timeData?.isClockedIn]);
 
+  const isAndroidNative = Capacitor.getPlatform() === 'android';
+
   // Android: restore location tracking when app launches while user is already clocked in
   useEffect(() => {
     if (!isAndroidNative || !timeData?.isClockedIn) return;
@@ -210,7 +212,6 @@ export default function Home() {
   const [jobPickerMode, setJobPickerMode] = useState<'clockIn' | 'switch'>('clockIn');
   const [jobSearchQuery, setJobSearchQuery] = useState('');
 
-  const isAndroidNative = Capacitor.getPlatform() === 'android';
   type AndroidGeoStatus = 'active' | 'needs_permission' | 'services_off' | null;
   const [androidGeoStatus, setAndroidGeoStatus] = useState<AndroidGeoStatus>(null);
 
