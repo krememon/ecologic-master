@@ -11,6 +11,7 @@ import { useCan } from "@/hooks/useCan";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCompactCurrency } from "@/lib/utils";
 import geoTracking from "@/services/geoTracking";
+import { Capacitor } from '@capacitor/core';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +37,9 @@ import {
   Coffee,
   Building,
   MoreHorizontal,
-  ArrowRightLeft
+  ArrowRightLeft,
+  MapPin,
+  MapPinOff
 } from "lucide-react";
 import { format, isToday, isTomorrow, startOfDay, subDays, isAfter, parseISO } from "date-fns";
 import { parseDateOnly } from "@/lib/dateUtils";
@@ -179,6 +182,19 @@ export default function Home() {
     return () => clearInterval(id);
   }, [timeData?.isClockedIn]);
 
+  // Android: restore location tracking when app launches while user is already clocked in
+  useEffect(() => {
+    if (!isAndroidNative || !timeData?.isClockedIn) return;
+    if (!geoTracking.isAndroidServiceActive()) {
+      const storedId = localStorage.getItem('geoSessionId');
+      if (storedId) {
+        console.log('[geo] resume: restarting android service for stored session', storedId);
+        geoTracking.start(parseInt(storedId, 10));
+      }
+    }
+    setTimeout(refreshAndroidGeoStatus, 1500);
+  }, [isAndroidNative, timeData?.isClockedIn]);
+
   // Live hours today = server snapshot + seconds elapsed since that snapshot
   const liveTechHoursToday =
     timeData?.role === 'technician' && timeData.isClockedIn
@@ -194,6 +210,20 @@ export default function Home() {
   const [jobPickerMode, setJobPickerMode] = useState<'clockIn' | 'switch'>('clockIn');
   const [jobSearchQuery, setJobSearchQuery] = useState('');
 
+  const isAndroidNative = Capacitor.getPlatform() === 'android';
+  type AndroidGeoStatus = 'active' | 'needs_permission' | 'services_off' | null;
+  const [androidGeoStatus, setAndroidGeoStatus] = useState<AndroidGeoStatus>(null);
+
+  const refreshAndroidGeoStatus = () => {
+    if (!isAndroidNative) return;
+    geoTracking.checkAndroidPermissions().then((s) => {
+      if (!s) return;
+      if (s.status === 'location_services_off') setAndroidGeoStatus('services_off');
+      else if (s.status === 'needs_foreground_permission') setAndroidGeoStatus('needs_permission');
+      else setAndroidGeoStatus('active');
+    });
+  };
+
   const clockInMutation = useMutation({
     mutationFn: async (data: { jobId?: number; category?: string; estimateId?: number }) => {
       const res = await apiRequest('POST', '/api/time/clock-in', data);
@@ -206,15 +236,17 @@ export default function Home() {
       setJobSearchQuery('');
       if (data?.timeSessionId) {
         console.log('[geo] clock-in success, sessionId=', data.timeSessionId);
+        if (isAndroidNative) {
+          localStorage.setItem('geoSessionId', String(data.timeSessionId));
+        }
         try {
-          console.log('[geo] calling geoTracking.start...');
           geoTracking.start(data.timeSessionId);
-          console.log('[geo] geoTracking.start resolved');
         } catch (err) {
           console.error('[geo] geoTracking.start FAILED', err);
         }
-      } else {
-        console.log('[geo] clock-in success but no timeSessionId in response', data);
+        if (isAndroidNative) {
+          setTimeout(refreshAndroidGeoStatus, 1500);
+        }
       }
     },
     onError: () => {
@@ -245,6 +277,9 @@ export default function Home() {
         } catch (err) {
           console.error('[geo] geoTracking.start FAILED on switch', err);
         }
+        if (isAndroidNative) {
+          setTimeout(refreshAndroidGeoStatus, 1500);
+        }
       }
     },
     onError: () => {
@@ -260,6 +295,10 @@ export default function Home() {
     mutationFn: () => apiRequest('POST', '/api/time/clock-out'),
     onSuccess: () => {
       geoTracking.stop();
+      if (isAndroidNative) {
+        localStorage.removeItem('geoSessionId');
+        setAndroidGeoStatus(null);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
     },
@@ -644,6 +683,31 @@ export default function Home() {
                           )}
                         </Button>
                       </div>
+
+                      {isAndroidNative && androidGeoStatus && (
+                        <div className={`flex items-center gap-1.5 pt-1 text-xs font-medium ${
+                          androidGeoStatus === 'active'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-amber-600 dark:text-amber-400'
+                        }`}>
+                          {androidGeoStatus === 'active' ? (
+                            <>
+                              <MapPin className="h-3 w-3" />
+                              Live location active
+                            </>
+                          ) : androidGeoStatus === 'needs_permission' ? (
+                            <>
+                              <MapPinOff className="h-3 w-3" />
+                              Location permission required
+                            </>
+                          ) : (
+                            <>
+                              <MapPinOff className="h-3 w-3" />
+                              Location services off
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>

@@ -48,7 +48,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Native PDF Share (iOS)**: On native iPhone, tapping the download button on invoice/estimate PDFs fetches the file, writes it to the app cache via `@capacitor/filesystem`, and opens the native iOS share/save sheet (`@capacitor/share`) so users can save to Files, Notes, AirDrop, etc. Web keeps standard anchor-download behavior.
 - **Leads Management**: Dedicated section for tracking potential customers with RBAC.
 - **Time Tracking**: Job-aware clock-in/out for technicians, aggregated "Labor Today" for managers, and auto clock-out.
-- **Geo-Tracking**: GPS tracking tied to clock-in/clock-out, with live crew positions shown on the Schedule map.
+- **Geo-Tracking**: GPS tracking tied to clock-in/clock-out, with live crew positions shown on the Schedule map. Android uses a native foreground service (`LocationService.java`) with FusedLocationProviderClient for true background tracking; iOS uses `@capacitor/geolocation` watchPosition; web uses `navigator.geolocation`. Custom Capacitor plugin `LocationTrackingPlugin.java` bridges JS↔native. Tracking state persisted in `localStorage` (`geoSessionId`) to survive app restarts while clocked in. Auth forwarded to service via Bearer token from `nativeSessionId`.
 - **Timesheet Editing**: Manager-only timesheet editing with audit trails and RBAC.
 - **Archival**: Automatic archival for estimates and jobs with a restore option.
 - **Schedule Month View**: Full monthly calendar grid with job/estimate/event indicators and navigation.

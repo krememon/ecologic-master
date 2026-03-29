@@ -1,0 +1,106 @@
+We need to implement REAL Android live location tracking for EcoLogic technicians while clocked in.
+
+Goal:
+When a user clocks in on Android, EcoLogic should begin continuous live location tracking and keep updating location even if the app is backgrounded/minimized. When the user clocks out, tracking must stop immediately.
+
+Important rules:
+- Only track while the user is clocked in.
+- Android must use the correct native permission + foreground service approach.
+- Do NOT break iOS or web.
+- Keep existing EcoLogic logic/UI intact unless needed for this feature.
+- Add targeted logs only. No junk logs.
+
+What Android must support:
+1. Request precise location permission.
+2. Request background location permission for Android if needed for tracking while app is not on screen.
+3. Start a native Android foreground service of type location while clocked in.
+4. Show the required persistent Android notification while tracking is active.
+5. Send live location updates to the existing EcoLogic backend on an interval and/or distance threshold.
+6. Stop service + watcher fully on clock-out, logout, forced clock-out, and timesheet/session end.
+7. Restore tracking state correctly if the app resumes while the user is still clocked in.
+8. Fail gracefully if permission is denied or location services are off.
+
+Implement exactly this:
+
+A. Permission flow
+- Add a clear Android-only permission flow:
+  - First request foreground precise location.
+  - Then, if background tracking is required, guide the user to grant “Allow all the time” / background location from Android settings as needed.
+- Add helper logic that checks:
+  - foreground location granted
+  - background location granted
+  - device location services enabled
+- Return a clean structured status object to the client so UI can show:
+  - ready
+  - needs foreground permission
+  - needs background permission
+  - location services off
+
+B. Native Android background tracking
+- Implement a native Android foreground service dedicated to location tracking.
+- Use foreground service type = location.
+- Add all required Android manifest declarations/permissions for:
+  - fine location
+  - coarse location if needed
+  - background location
+  - foreground service
+  - foreground service location type permission if required by current Android SDK target
+- Ensure the service starts only when the user is clocked in.
+- Ensure the service stops fully when no longer clocked in.
+- Persistent notification text should be simple, like:
+  “EcoLogic is tracking your work location while clocked in.”
+
+C. Tracking behavior
+- Keep the existing EcoLogic location batching/live update pattern if already present.
+- Use sensible tracking thresholds like:
+  - update every ~60 seconds
+  - or sooner if moved more than ~50 meters
+- Do not spam the backend.
+- Do not track while off the clock.
+- Include accuracy, lat, lng, timestamp, and any existing metadata already used by backend.
+
+D. App integration
+- Wire this into the existing clock-in / clock-out flow.
+- On successful clock-in:
+  - validate permissions
+  - if valid, start Android tracking service
+  - if invalid, show a clear blocking message explaining location access is required for live tracking while clocked in
+- On clock-out:
+  - stop watcher
+  - stop foreground service
+  - clear any local tracking state
+- On app resume:
+  - if user is still clocked in and tracking should be active, re-check and resume/confirm service state
+
+E. UI
+- Add a small Android-only status indicator/message in the clock-in area or timesheet area:
+  - “Live location active”
+  - or “Location permission required”
+- Keep styling matching EcoLogic.
+- Hidden not disabled where possible.
+- No ugly debug UI.
+
+F. Deliverables
+1. Exact files changed
+2. Exact manifest/service/native files added or edited
+3. Exact client files changed
+4. Any Capacitor plugin installs required
+5. Any sync/build steps required
+6. Final test checklist for Samsung device:
+   - install build
+   - grant foreground location
+   - grant background location
+   - clock in
+   - minimize app
+   - move physically
+   - verify live location updates arrive
+   - clock out
+   - verify tracking fully stops
+
+G. Constraints
+- Do not touch unrelated UI.
+- Do not remove current iOS behavior.
+- Do not rely on web-only geolocation for Android background tracking.
+- Use production-safe Android behavior, not a fake timer/watcher that dies in background.
+
+Before finishing, run a full codebase check for any existing geoTracking / clock-in / timesheet / location-batch logic and hook into the existing source of truth rather than duplicating it.

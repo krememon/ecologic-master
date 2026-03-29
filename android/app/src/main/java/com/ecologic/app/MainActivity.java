@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(LocationTrackingPlugin.class);
         super.onCreate(savedInstanceState);
 
         if (SHOW_WRAPPER_BADGE) {

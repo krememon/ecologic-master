@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { LocationTracking } from '@/lib/androidLocationTracking';
 
 interface GeoPoint {
   lat: number;
@@ -31,6 +32,9 @@ let flushIntervalId: ReturnType<typeof setInterval> | null = null;
 let lastSentPoint: { lat: number; lng: number; time: number } | null = null;
 let lastKnownCoords: { lat: number; lng: number; accuracy: number } | null = null;
 let pointCount = 0;
+
+// Android-specific state
+let androidServiceActive = false;
 
 function log(...args: any[]) {
   console.log('[geo]', ...args);
@@ -105,10 +109,87 @@ function handleCoords(lat: number, lng: number, accuracy: number, speed: number 
   }
 }
 
+// ─── Android native foreground-service path ────────────────────────────────
+
+async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground' | 'needs_background' | 'services_off' | 'error'> {
+  log('android: checking permissions...');
+
+  let status = await LocationTracking.checkPermissions();
+  log('android: perm status=' + status.status);
+
+  if (status.status === 'location_services_off') {
+    log('android: device location services are OFF — cannot track');
+    return 'services_off';
+  }
+
+  if (status.status === 'needs_foreground_permission') {
+    log('android: requesting foreground location permission...');
+    status = await LocationTracking.requestForegroundPermission();
+    log('android: after request, status=' + status.status);
+    if (!status.hasForegroundPermission) {
+      log('android: foreground permission DENIED — tracking unavailable');
+      return 'needs_foreground';
+    }
+  }
+
+  // Request background permission — optional but improves reliability on some OEMs.
+  // Foreground service type=location works without it, but we ask for completeness.
+  if (status.status === 'needs_background_permission') {
+    log('android: requesting background location permission...');
+    const bgStatus = await LocationTracking.requestBackgroundPermission();
+    log('android: background perm result=' + bgStatus.status);
+    // Continue even if background denied — the foreground service still works.
+  }
+
+  const apiBaseUrl = window.location.origin;
+  const authToken = typeof localStorage !== 'undefined'
+    ? (localStorage.getItem('nativeSessionId') || '')
+    : '';
+
+  log('android: starting LocationService sessionId=' + sessionId + ' apiBase=' + apiBaseUrl);
+
+  try {
+    await LocationTracking.start({ sessionId, apiBaseUrl, authToken });
+    androidServiceActive = true;
+    log('android: LocationService started');
+
+    // Grab a one-time position for the JS-side lastKnownCoords (used by map fallback)
+    try {
+      const { Geolocation } = await import('@capacitor/geolocation');
+      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
+      lastKnownCoords = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      };
+      log('android: initial coords lat=' + pos.coords.latitude.toFixed(6) + ' lng=' + pos.coords.longitude.toFixed(6));
+    } catch (e) {
+      log('android: initial position fix failed (non-fatal)', e);
+    }
+
+    return 'ok';
+  } catch (e: any) {
+    log('android: failed to start LocationService', e?.message || e);
+    return 'error';
+  }
+}
+
+async function stopAndroid() {
+  if (!androidServiceActive) return;
+  try {
+    await LocationTracking.stop();
+    androidServiceActive = false;
+    log('android: LocationService stopped');
+  } catch (e) {
+    log('android: stop failed (non-fatal)', e);
+  }
+}
+
+// ─── iOS / Capacitor Geolocation path (unchanged) ──────────────────────────
+
 async function startNative(sessionId: number) {
   const { Geolocation } = await import('@capacitor/geolocation');
 
-  // Check current permission state first
   log('native: checking permissions...');
   let currentStatus = 'prompt';
   try {
@@ -119,7 +200,6 @@ async function startNative(sessionId: number) {
     log('native: checkPermissions error', e);
   }
 
-  // Request permission if not already granted (shows iOS dialog on first request)
   if (currentStatus !== 'granted') {
     log('native: requesting permissions (currentStatus=' + currentStatus + ')...');
     try {
@@ -134,7 +214,6 @@ async function startNative(sessionId: number) {
     log('native: permission already granted — skipping request dialog');
   }
 
-  // Bail out cleanly if denied — do NOT attempt watchPosition
   if (currentStatus === 'denied') {
     log('native: location permission DENIED — tracking unavailable. Ask user to enable Location in iOS Settings > EcoLogic.');
     return;
@@ -271,15 +350,19 @@ function startWeb() {
   }
 }
 
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export type AndroidTrackingResult = 'ok' | 'needs_foreground' | 'needs_background' | 'services_off' | 'error' | 'not_android';
+
 const geoTracking = {
-  start(newSessionId: number) {
+  start(newSessionId: number): void {
     const platform = Capacitor.getPlatform();
     const native = Capacitor.isNativePlatform();
     log('start sessionId=' + newSessionId, 'platform=' + platform, 'isNative=' + native);
     log('userAgent=' + navigator.userAgent.substring(0, 120));
 
-    if (watchId !== null || webWatchId !== null) {
-      log('stopping previous watch before starting new one');
+    if (watchId !== null || webWatchId !== null || androidServiceActive) {
+      log('stopping previous tracker before starting new one');
       this.stop();
     }
 
@@ -287,31 +370,56 @@ const geoTracking = {
     lastSentPoint = null;
     pointCount = 0;
 
-    if (native) {
-      log('using NATIVE Capacitor Geolocation plugin');
-      startNative(newSessionId);
-    } else {
-      log('using WEB navigator.geolocation');
-      startWeb();
-    }
-
-    flushIntervalId = setInterval(() => {
-      log('heartbeat tick — pointCount=' + pointCount + ' sessionId=' + currentSessionId);
-      if (lastKnownCoords && currentSessionId !== null) {
-        const elapsed = lastSentPoint ? Date.now() - lastSentPoint.time : Infinity;
-        if (elapsed >= HEARTBEAT_MS) {
-          log('heartbeat keepalive — sending last known coords');
-          lastSentPoint = { lat: lastKnownCoords.lat, lng: lastKnownCoords.lng, time: Date.now() };
-          sendOnePoint(lastKnownCoords.lat, lastKnownCoords.lng, lastKnownCoords.accuracy, 'heartbeat');
+    if (platform === 'android') {
+      log('android: delegating to native foreground service');
+      startAndroid(newSessionId).then((result) => {
+        log('android: startAndroid result=' + result);
+        if (result !== 'ok' && result !== 'needs_background') {
+          log('android: tracking NOT active — result=' + result);
         }
-      }
-    }, 30000);
+      }).catch((e) => {
+        log('android: startAndroid threw', e);
+      });
+    } else if (native) {
+      log('iOS: using Capacitor Geolocation watchPosition');
+      startNative(newSessionId);
+      flushIntervalId = setInterval(() => {
+        log('heartbeat tick — pointCount=' + pointCount + ' sessionId=' + currentSessionId);
+        if (lastKnownCoords && currentSessionId !== null) {
+          const elapsed = lastSentPoint ? Date.now() - lastSentPoint.time : Infinity;
+          if (elapsed >= HEARTBEAT_MS) {
+            log('heartbeat keepalive — sending last known coords');
+            lastSentPoint = { lat: lastKnownCoords.lat, lng: lastKnownCoords.lng, time: Date.now() };
+            sendOnePoint(lastKnownCoords.lat, lastKnownCoords.lng, lastKnownCoords.accuracy, 'heartbeat');
+          }
+        }
+      }, 30000);
+    } else {
+      log('web: using navigator.geolocation');
+      startWeb();
+      flushIntervalId = setInterval(() => {
+        log('heartbeat tick — pointCount=' + pointCount + ' sessionId=' + currentSessionId);
+        if (lastKnownCoords && currentSessionId !== null) {
+          const elapsed = lastSentPoint ? Date.now() - lastSentPoint.time : Infinity;
+          if (elapsed >= HEARTBEAT_MS) {
+            log('heartbeat keepalive — sending last known coords');
+            lastSentPoint = { lat: lastKnownCoords.lat, lng: lastKnownCoords.lng, time: Date.now() };
+            sendOnePoint(lastKnownCoords.lat, lastKnownCoords.lng, lastKnownCoords.accuracy, 'heartbeat');
+          }
+        }
+      }, 30000);
+    }
 
     log('start() complete');
   },
 
   async stop() {
-    log('stop sessionId=' + currentSessionId + ' totalPoints=' + pointCount);
+    const platform = Capacitor.getPlatform();
+    log('stop sessionId=' + currentSessionId + ' totalPoints=' + pointCount + ' platform=' + platform);
+
+    if (platform === 'android') {
+      await stopAndroid();
+    }
 
     if (watchId !== null) {
       try {
@@ -347,6 +455,20 @@ const geoTracking = {
 
   isActive() {
     return currentSessionId !== null;
+  },
+
+  isAndroidServiceActive() {
+    return androidServiceActive;
+  },
+
+  async checkAndroidPermissions() {
+    if (Capacitor.getPlatform() !== 'android') return null;
+    try {
+      return await LocationTracking.checkPermissions();
+    } catch (e) {
+      log('checkAndroidPermissions error', e);
+      return null;
+    }
   },
 };
 
