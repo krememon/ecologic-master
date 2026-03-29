@@ -112,33 +112,37 @@ function handleCoords(lat: number, lng: number, accuracy: number, speed: number 
 // ─── Android native foreground-service path ────────────────────────────────
 
 async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground' | 'needs_background' | 'services_off' | 'error'> {
-  log('android: checking permissions...');
+  console.log('[ANDROID-GEO] clock-in detected — sessionId=' + sessionId);
 
   let status = await LocationTracking.checkPermissions();
-  log('android: perm status=' + status.status);
+  console.log('[ANDROID-GEO] permission status before request: ' + status.status +
+    ' hasFg=' + status.hasForegroundPermission +
+    ' hasBg=' + status.hasBackgroundPermission +
+    ' locationOn=' + status.locationServicesEnabled);
 
   if (status.status === 'location_services_off') {
-    log('android: device location services are OFF — cannot track');
+    console.log('[ANDROID-GEO] location services off — cannot track');
     return 'services_off';
   }
 
   if (status.status === 'needs_foreground_permission') {
-    log('android: requesting foreground location permission...');
+    console.log('[ANDROID-GEO] requesting foreground permission');
     status = await LocationTracking.requestForegroundPermission();
-    log('android: after request, status=' + status.status);
+    console.log('[ANDROID-GEO] foreground permission result: ' + status.status +
+      ' hasFg=' + status.hasForegroundPermission);
     if (!status.hasForegroundPermission) {
-      log('android: foreground permission DENIED — tracking unavailable');
+      console.log('[ANDROID-GEO] foreground permission DENIED — tracking unavailable');
       return 'needs_foreground';
     }
   }
 
-  // Request background permission — optional but improves reliability on some OEMs.
-  // Foreground service type=location works without it, but we ask for completeness.
+  // Background permission — optional but request for OEM completeness.
+  // The foreground service works without it; we continue even if denied.
   if (status.status === 'needs_background_permission') {
-    log('android: requesting background location permission...');
+    console.log('[ANDROID-GEO] requesting background permission');
     const bgStatus = await LocationTracking.requestBackgroundPermission();
-    log('android: background perm result=' + bgStatus.status);
-    // Continue even if background denied — the foreground service still works.
+    console.log('[ANDROID-GEO] background permission result: ' + bgStatus.status);
+    // Non-blocking — foreground service works without background permission
   }
 
   const apiBaseUrl = window.location.origin;
@@ -146,14 +150,14 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
     ? (localStorage.getItem('nativeSessionId') || '')
     : '';
 
-  log('android: starting LocationService sessionId=' + sessionId + ' apiBase=' + apiBaseUrl);
+  console.log('[ANDROID-GEO] starting native tracking — sessionId=' + sessionId + ' apiBase=' + apiBaseUrl);
 
   try {
     await LocationTracking.start({ sessionId, apiBaseUrl, authToken });
     androidServiceActive = true;
-    log('android: LocationService started');
+    console.log('[ANDROID-GEO] native tracking started — sessionId=' + sessionId);
 
-    // Grab a one-time position for the JS-side lastKnownCoords (used by map fallback)
+    // Grab a one-time position for the JS-side lastKnownCoords (map fallback)
     try {
       const { Geolocation } = await import('@capacitor/geolocation');
       const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
@@ -169,7 +173,7 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
 
     return 'ok';
   } catch (e: any) {
-    log('android: failed to start LocationService', e?.message || e);
+    console.log('[ANDROID-GEO] native tracking failed: ' + (e?.message || String(e)));
     return 'error';
   }
 }
@@ -355,7 +359,11 @@ function startWeb() {
 export type AndroidTrackingResult = 'ok' | 'needs_foreground' | 'needs_background' | 'services_off' | 'error' | 'not_android';
 
 const geoTracking = {
-  start(newSessionId: number): void {
+  // Returns a Promise<AndroidTrackingResult> on Android so callers can react to
+  // the permission outcome and show appropriate UI.  On iOS/web the async work
+  // is still fire-and-forget but the function still returns a resolved promise
+  // with 'not_android' so call sites can await safely on all platforms.
+  async start(newSessionId: number): Promise<AndroidTrackingResult> {
     const platform = Capacitor.getPlatform();
     const native = Capacitor.isNativePlatform();
     log('start sessionId=' + newSessionId, 'platform=' + platform, 'isNative=' + native);
@@ -363,7 +371,7 @@ const geoTracking = {
 
     if (watchId !== null || webWatchId !== null || androidServiceActive) {
       log('stopping previous tracker before starting new one');
-      this.stop();
+      await this.stop();
     }
 
     currentSessionId = newSessionId;
@@ -372,14 +380,14 @@ const geoTracking = {
 
     if (platform === 'android') {
       log('android: delegating to native foreground service');
-      startAndroid(newSessionId).then((result) => {
+      try {
+        const result = await startAndroid(newSessionId);
         log('android: startAndroid result=' + result);
-        if (result !== 'ok' && result !== 'needs_background') {
-          log('android: tracking NOT active — result=' + result);
-        }
-      }).catch((e) => {
-        log('android: startAndroid threw', e);
-      });
+        return result;
+      } catch (e: any) {
+        console.log('[ANDROID-GEO] native tracking failed: ' + (e?.message || String(e)));
+        return 'error';
+      }
     } else if (native) {
       log('iOS: using Capacitor Geolocation watchPosition');
       startNative(newSessionId);
@@ -394,6 +402,7 @@ const geoTracking = {
           }
         }
       }, 30000);
+      return 'not_android';
     } else {
       log('web: using navigator.geolocation');
       startWeb();
@@ -408,9 +417,8 @@ const geoTracking = {
           }
         }
       }, 30000);
+      return 'not_android';
     }
-
-    log('start() complete');
   },
 
   async stop() {

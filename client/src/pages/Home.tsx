@@ -184,17 +184,23 @@ export default function Home() {
 
   const isAndroidNative = Capacitor.getPlatform() === 'android';
 
-  // Android: restore location tracking when app launches while user is already clocked in
+  // Android: restore location tracking when app launches while user is already clocked in.
+  // Guard: skip if geoTracking.isActive() — means we just called start() from clock-in
+  // onSuccess and the permission flow is already in-flight (prevents double-start race).
   useEffect(() => {
     if (!isAndroidNative || !timeData?.isClockedIn) return;
-    if (!geoTracking.isAndroidServiceActive()) {
+    if (!geoTracking.isAndroidServiceActive() && !geoTracking.isActive()) {
       const storedId = localStorage.getItem('geoSessionId');
       if (storedId) {
         console.log('[geo] resume: restarting android service for stored session', storedId);
-        geoTracking.start(parseInt(storedId, 10));
+        geoTracking.start(parseInt(storedId, 10)).then((result) => {
+          console.log('[ANDROID-GEO] resume start result:', result);
+          if (result === 'ok') setAndroidGeoStatus('active');
+          else if (result === 'needs_foreground' || result === 'needs_background') setAndroidGeoStatus('needs_permission');
+          else if (result === 'services_off') setAndroidGeoStatus('services_off');
+        });
       }
     }
-    setTimeout(refreshAndroidGeoStatus, 1500);
   }, [isAndroidNative, timeData?.isClockedIn]);
 
   // Live hours today = server snapshot + seconds elapsed since that snapshot
@@ -215,16 +221,6 @@ export default function Home() {
   type AndroidGeoStatus = 'active' | 'needs_permission' | 'services_off' | null;
   const [androidGeoStatus, setAndroidGeoStatus] = useState<AndroidGeoStatus>(null);
 
-  const refreshAndroidGeoStatus = () => {
-    if (!isAndroidNative) return;
-    geoTracking.checkAndroidPermissions().then((s) => {
-      if (!s) return;
-      if (s.status === 'location_services_off') setAndroidGeoStatus('services_off');
-      else if (s.status === 'needs_foreground_permission') setAndroidGeoStatus('needs_permission');
-      else setAndroidGeoStatus('active');
-    });
-  };
-
   const clockInMutation = useMutation({
     mutationFn: async (data: { jobId?: number; category?: string; estimateId?: number }) => {
       const res = await apiRequest('POST', '/api/time/clock-in', data);
@@ -240,14 +236,40 @@ export default function Home() {
         if (isAndroidNative) {
           localStorage.setItem('geoSessionId', String(data.timeSessionId));
         }
-        try {
-          geoTracking.start(data.timeSessionId);
-        } catch (err) {
-          console.error('[geo] geoTracking.start FAILED', err);
-        }
-        if (isAndroidNative) {
-          setTimeout(refreshAndroidGeoStatus, 1500);
-        }
+        // Async IIFE: await the full permission + start flow so we can update UI
+        // based on the actual outcome (permission granted, denied, services off, etc.)
+        (async () => {
+          try {
+            const result = await geoTracking.start(data.timeSessionId);
+            if (isAndroidNative) {
+              if (result === 'ok') {
+                setAndroidGeoStatus('active');
+              } else if (result === 'needs_foreground' || result === 'needs_background') {
+                setAndroidGeoStatus('needs_permission');
+                toast({
+                  title: "Location access required",
+                  description: "Location access is required to track employees while clocked in. Please grant permission in Settings.",
+                  variant: "destructive",
+                });
+              } else if (result === 'services_off') {
+                setAndroidGeoStatus('services_off');
+                toast({
+                  title: "Location services off",
+                  description: "Enable Location in Android Settings to track location while clocked in.",
+                  variant: "destructive",
+                });
+              } else if (result === 'error') {
+                toast({
+                  title: "Location tracking error",
+                  description: "Could not start location tracking. Please try clocking out and back in.",
+                  variant: "destructive",
+                });
+              }
+            }
+          } catch (err) {
+            console.error('[ANDROID-GEO] native tracking failed:', err);
+          }
+        })();
       }
     },
     onError: () => {
@@ -273,14 +295,41 @@ export default function Home() {
       const newSessionId = data?.started?.id;
       if (newSessionId) {
         console.log('[geo] switch success, new sessionId=', newSessionId);
-        try {
-          geoTracking.start(newSessionId);
-        } catch (err) {
-          console.error('[geo] geoTracking.start FAILED on switch', err);
-        }
         if (isAndroidNative) {
-          setTimeout(refreshAndroidGeoStatus, 1500);
+          localStorage.setItem('geoSessionId', String(newSessionId));
         }
+        (async () => {
+          try {
+            const result = await geoTracking.start(newSessionId);
+            if (isAndroidNative) {
+              if (result === 'ok') {
+                setAndroidGeoStatus('active');
+              } else if (result === 'needs_foreground' || result === 'needs_background') {
+                setAndroidGeoStatus('needs_permission');
+                toast({
+                  title: "Location access required",
+                  description: "Location access is required to track employees while clocked in. Please grant permission in Settings.",
+                  variant: "destructive",
+                });
+              } else if (result === 'services_off') {
+                setAndroidGeoStatus('services_off');
+                toast({
+                  title: "Location services off",
+                  description: "Enable Location in Android Settings to track location while clocked in.",
+                  variant: "destructive",
+                });
+              } else if (result === 'error') {
+                toast({
+                  title: "Location tracking error",
+                  description: "Could not start location tracking. Please try clocking out and back in.",
+                  variant: "destructive",
+                });
+              }
+            }
+          } catch (err) {
+            console.error('[ANDROID-GEO] native tracking failed on switch:', err);
+          }
+        })();
       }
     },
     onError: () => {

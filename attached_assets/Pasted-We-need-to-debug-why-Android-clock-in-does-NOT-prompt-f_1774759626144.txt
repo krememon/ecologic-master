@@ -1,0 +1,63 @@
+We need to debug why Android clock-in does NOT prompt for location permission/tracking.
+
+Current symptom:
+- User opens EcoLogic on Samsung
+- User clocks in
+- No Android location permission prompt appears
+- Live tracking does not clearly begin
+
+Goal:
+On Android, clock-in must ALWAYS run the permission/status flow before starting tracking.
+
+Audit and fix this exact flow:
+
+1. Find the Android clock-in path in:
+- Home.tsx
+- geoTracking.ts
+- androidLocationTracking.ts
+- any timesheet/clock-in action helpers
+
+2. Confirm the sequence on Android is exactly:
+A. user clocks in
+B. call checkAndroidPermissions()
+C. if status is `needs_foreground_permission` → call requestForegroundPermission()
+D. re-check permissions
+E. if status is `needs_background_permission` → show clear Android message and route user through background permission/settings flow
+F. if status is `location_services_off` → block and show message
+G. only if status is `ready` → call start(sessionId, apiBaseUrl, authToken)
+
+3. Fix any bug where:
+- start() is called before requestForegroundPermission()
+- checkPermissions() incorrectly returns ready
+- Android branch is skipped
+- clock-in success path never triggers geo start
+- permission request happens only on resume instead of on initial clock-in
+- errors are swallowed silently
+
+4. Add targeted logs only:
+- [ANDROID-GEO] clock-in detected
+- [ANDROID-GEO] permission status before request: ...
+- [ANDROID-GEO] requesting foreground permission
+- [ANDROID-GEO] foreground permission result: ...
+- [ANDROID-GEO] requesting background permission
+- [ANDROID-GEO] location services off
+- [ANDROID-GEO] starting native tracking
+- [ANDROID-GEO] native tracking started
+- [ANDROID-GEO] native tracking failed: ...
+
+5. UI requirement
+If permission is not ready, show a clear blocking message on Android:
+“Location access is required to track employees while clocked in.”
+
+6. Important checks
+- Verify LocationTrackingPlugin.checkPermissions() is actually returning the right status values
+- Verify requestForegroundPermission() is really called from JS
+- Verify AndroidManifest permissions are present
+- Verify no old local state marks tracking as already active when it really is not
+- Verify the Home.tsx effect is not only restoring tracking on app launch but also starting it on fresh clock-in
+
+7. Deliverables
+- exact file(s) changed
+- exact reason the permission prompt was not appearing
+- exact corrected clock-in sequence
+- exact logs to watch in Android Studio Logcat
