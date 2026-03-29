@@ -59,6 +59,17 @@ import { Products, CountryCode } from "plaid";
 import { verifyAppleTransaction, verifyAppleNotification, APPLE_BUNDLE_ID } from "./appleIap";
 import { verifyGooglePlayPurchase, decodeGooglePlayNotification, GOOGLE_PLAY_NOTIFICATION_TYPES } from "./googlePlayIap";
 
+// ── Google Play validation in-flight guard ────────────────────────────────────
+// Keyed by companyId → start timestamp (ms). Set at the START of a Google Play
+// /api/subscriptions/validate request; cleared when it completes.
+//
+// Purpose: prevent /api/subscriptions/status from marking the company "blocked"
+// due to stale token data while a fresh validate is writing the new token.
+// Entries older than GPLAY_SYNC_GRACE_MS are ignored to avoid stale locks if a
+// validate request crashes without clearing.
+const gplayValidationInProgress = new Map<number, number>();
+const GPLAY_SYNC_GRACE_MS = 30_000; // 30 seconds
+
 // Initialize Stripe only if secret key is available and valid
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeKeyPrefix = stripeSecretKey.slice(0, 7);
@@ -4554,12 +4565,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       //   • originalTransactionId  (the stored purchaseToken) is present
       //   • subscriptionPlan resolves to a known Google Play product ID
       const RECONCILE_WINDOW_MS = 10 * 60 * 1000; // 10 min ahead — covers test-sub cycles
+
+      // Skip reconcile entirely if a fresh /api/subscriptions/validate is in
+      // progress for this company — the validate write wins; reconciling with
+      // the old token would race against it and could produce confusing logs.
+      const gplaySyncTs = gplayValidationInProgress.get(company.id);
+      const gplaySyncing = !!gplaySyncTs && (Date.now() - gplaySyncTs) < GPLAY_SYNC_GRACE_MS;
+      if (gplaySyncing) {
+        console.log(
+          `[ECOLOGIC-GPLAY-RACE] status started — companyId=${company.id}` +
+          ` validation in progress, skipping stale token reconcile`
+        );
+      }
+
       const needsReconcile =
         company.subscriptionPlatform === 'google_play' &&
         company.subscriptionStatus   === 'active' &&
         !!company.originalTransactionId &&
         !!periodEndDate &&
-        (periodEndDate.getTime() - Date.now()) < RECONCILE_WINDOW_MS;
+        (periodEndDate.getTime() - Date.now()) < RECONCILE_WINDOW_MS &&
+        !gplaySyncing; // skip reconcile while fresh validate is writing
 
       if (needsReconcile) {
         const purchaseToken = company.originalTransactionId!;
@@ -4657,6 +4682,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `[ECOLOGIC-SUB] reconcile error — falling back to stale DB state:` +
             ` ${reconcileErr?.message ?? String(reconcileErr)}`
           );
+        }
+      }
+
+      // ── Google Play syncing guard ─────────────────────────────────────────────
+      // If a fresh /api/subscriptions/validate is in-flight for this company,
+      // preserve the current access level instead of potentially downgrading to
+      // "blocked" from stale token data.  The validate write will update the DB
+      // within seconds; this guard prevents the brief paywall flash while it does.
+      // Only applies to Google Play — Apple and Stripe have different boot flows.
+      if (company.subscriptionPlatform === 'google_play') {
+        const guardTs = gplayValidationInProgress.get(company.id);
+        if (guardTs && (Date.now() - guardTs) < GPLAY_SYNC_GRACE_MS) {
+          const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
+          const guardStatus = company.subscriptionStatus === 'trialing' ? 'google_play' : 'google_play';
+          console.log(
+            `[ECOLOGIC-GPLAY-RACE] stale token ignored — companyId=${company.id}` +
+            ` validation in progress, preserving access`
+          );
+          console.log(
+            `[ECOLOGIC-GPLAY-RACE] active access preserved during sync — companyId=${company.id}` +
+            ` subscriptionStatus=${company.subscriptionStatus} plan=${company.subscriptionPlan ?? 'null'}`
+          );
+          return res.json({
+            active: true,
+            status: guardStatus,
+            planKey: company.subscriptionPlan ?? null,
+            userLimit: company.maxUsers ?? 1,
+            currentPeriodEnd: periodEnd,
+            billingSource: 'google_play',
+            notes: ['syncing'],
+          });
         }
       }
 
@@ -4874,10 +4930,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
+        // ── In-flight guard: mark this company as validating ──────────────────
+        // Any concurrent /api/subscriptions/status call will see this marker and
+        // preserve access instead of downgrading from stale token data.
+        gplayValidationInProgress.set(company.id, Date.now());
+        console.log(
+          `[ECOLOGIC-GPLAY-RACE] validate started — companyId=${company.id}` +
+          ` productId="${productId}" purchaseToken(first12)=${purchaseToken.slice(0, 12)}…`
+        );
+
         let txInfo;
         try {
           txInfo = await verifyGooglePlayPurchase(purchaseToken, productId);
         } catch (err: any) {
+          gplayValidationInProgress.delete(company.id);
           console.error('[ECOLOGIC-GPLAY] Verification FAILED:', err.message);
           return res.status(422).json({ ok: false, message: `Google Play verification failed: ${err.message}` });
         }
@@ -4886,6 +4952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Only grant 'active' access for paymentState 1 or 2 (received/trial)
         const validPayment = txInfo.paymentState === 1 || txInfo.paymentState === 2;
         if (!validPayment) {
+          gplayValidationInProgress.delete(company.id);
           console.warn(`[iap-validate] Google Play — paymentState=${txInfo.paymentState} — not granting access`);
           return res.status(422).json({
             ok: false,
@@ -4946,6 +5013,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ` → billingAllowed=${postWriteBilling.allowed} source=${postWriteBilling.source}`
         );
         console.log(`[iap-validate] Google Play — written to company=${company.id} status=active plan=${txInfo.planKey}`);
+
+        // Clear the in-flight guard — new token is now the source of truth.
+        // Any subsequent /api/subscriptions/status calls will use the fresh DB data.
+        gplayValidationInProgress.delete(company.id);
+        console.log(
+          `[ECOLOGIC-GPLAY-RACE] final token committed — companyId=${company.id}` +
+          ` plan=${txInfo.planKey} periodEnd=${txInfo.expiresDate.toISOString()} syncing=false`
+        );
 
         return res.json({
           ok: true,

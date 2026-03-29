@@ -1,0 +1,67 @@
+We need to fix an Android app "crash" that is actually a Google Play subscription validation race condition.
+
+What the logs show:
+- `/api/subscriptions/status` runs first and reconciles against an OLD Google Play purchase token
+- server marks the company blocked / subscription_expired
+- then `/api/subscriptions/validate` runs with the NEW valid purchase token
+- DB is updated back to active
+- then status becomes active again
+- during this blocked -> active flip, auth/user calls repeat and websocket disconnects/reconnects, making the app look like it crashed
+
+Goal:
+Make Android Google Play subscription validation deterministic so the app never briefly falls into blocked/paywall state when a fresh valid purchase is being processed.
+
+Fix requirements:
+1. Source of truth
+- For Google Play, if a fresh validation is in progress or just completed, do NOT let `/api/subscriptions/status` block the user using stale stored token data.
+- Prevent the temporary blocked state caused by stale token reconcile.
+
+2. Backend changes
+- Audit all Google Play subscription logic in:
+  - `/api/subscriptions/status`
+  - `/api/subscriptions/validate`
+  - any billing resolver / reconcile helpers
+- If validate receives a new purchaseToken and verification succeeds, immediately make that token the only active token used for future reconcile/status checks.
+- Clear/replace stale Google Play token data atomically.
+- Ensure status check cannot reconcile against an old token once a new validated token is written.
+
+3. Pending validation guard
+- Add a short-lived server-side guard for Google Play such as:
+  - `subscriptionSyncing=true` or similar
+  - while syncing, do not downgrade to blocked from stale data
+- If a valid Google Play validation succeeds, preserve active access during the handoff.
+- Do not show paywall during this transition.
+
+4. Client changes
+- Audit Android paywall / onboarding / app boot flow.
+- If Google Play purchase restoration or validation is in flight, do not redirect to paywall yet.
+- Add a temporary “verifying subscription” state instead of blocked redirect.
+- Prevent router thrash / auth loop while validation is pending.
+
+5. Logging
+Add targeted logs only:
+- `[ECOLOGIC-GPLAY-RACE] status started`
+- `[ECOLOGIC-GPLAY-RACE] validate started`
+- `[ECOLOGIC-GPLAY-RACE] stale token ignored`
+- `[ECOLOGIC-GPLAY-RACE] active access preserved during sync`
+- `[ECOLOGIC-GPLAY-RACE] final token committed`
+- `[ECOLOGIC-GPLAY-RACE] paywall prevented during validation`
+
+6. Deliverables
+- Exact files changed
+- Exact race condition found
+- Exact fix implemented
+- Why it caused the apparent crash
+- Final Android test flow:
+  1. launch app
+  2. restore/validate Google Play subscription
+  3. ensure app never briefly redirects to paywall
+  4. ensure no auth loop
+  5. ensure no websocket churn from billing flip
+  6. ensure active subscription stays active on reopen
+
+Important constraints:
+- Do NOT break Stripe or Apple billing
+- Do NOT change unrelated UI
+- Do NOT remove reconcile logic entirely
+- Fix this at the source of truth so Google Play cannot briefly downgrade active users from stale token data

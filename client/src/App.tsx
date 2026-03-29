@@ -429,6 +429,10 @@ function AuthenticatedRouter() {
   // query Google Play for an existing active subscription and re-validate it.
   // This heals the case where the DB and Play are momentarily out of sync.
   // Runs at most once per session. Android only. Does nothing on iOS or web.
+  //
+  // gplayReconciling: while true, show "Verifying subscription..." instead of
+  // <Paywall> so the user never sees a paywall flash during the token hand-off.
+  const [gplayReconciling, setGplayReconciling] = React.useState(false);
   const reconcileAttemptedRef = React.useRef(false);
   React.useEffect(() => {
     const isAndroid = isNativePlatform() && getPlatform() === "android";
@@ -439,7 +443,8 @@ function AuthenticatedRouter() {
     if (reconcileAttemptedRef.current) return;
     reconcileAttemptedRef.current = true;
 
-    console.log("[ECOLOGIC-SUB] [reconcile] Android cold start — sub is blocked, querying Google Play for existing purchases...");
+    console.log("[ECOLOGIC-GPLAY-RACE] paywall prevented during validation — Android cold start, querying Google Play for existing purchases...");
+    setGplayReconciling(true);
 
     (async () => {
       try {
@@ -474,6 +479,8 @@ function AuthenticatedRouter() {
         }
       } catch (err: any) {
         console.error("[ECOLOGIC-SUB] [reconcile] Error during reconcile:", err.message);
+      } finally {
+        setGplayReconciling(false);
       }
     })();
   }, [isAuthenticated, hasCompany, subLoading, subActive]);
@@ -582,6 +589,21 @@ function AuthenticatedRouter() {
   );
 
   if (isAuthenticated && hasCompany && !subLoading && !subActive && isOwnerRole && !subBypass) {
+    // On Android: if the cold-start reconcile is actively querying Google Play
+    // and re-validating the purchase token, show a neutral "Verifying..." spinner
+    // instead of the full Paywall. This prevents the brief paywall flash that
+    // made the app appear to crash during the stale-token → fresh-token handoff.
+    if (gplayReconciling) {
+      console.log('[ECOLOGIC-GPLAY-RACE] paywall prevented during validation — showing verifying screen');
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFFFFF' }}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
+            <p className="text-slate-600 text-sm font-medium">Verifying your subscription...</p>
+          </div>
+        </div>
+      );
+    }
     console.log('[ECOLOGIC-SUB] rendering full paywall lockout — no shell chrome');
     return <Paywall />;
   }
