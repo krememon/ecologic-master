@@ -259,9 +259,12 @@ export default function Home() {
                   variant: "destructive",
                 });
               } else if (result === 'error') {
+                const rawErr = geoTracking.getLastAndroidError();
                 toast({
                   title: "Location tracking error",
-                  description: "Could not start location tracking. Please try clocking out and back in.",
+                  description: rawErr
+                    ? `Could not start location tracking: ${rawErr}`
+                    : "Could not start location tracking. Please try clocking out and back in.",
                   variant: "destructive",
                 });
               }
@@ -319,9 +322,12 @@ export default function Home() {
                   variant: "destructive",
                 });
               } else if (result === 'error') {
+                const rawErr = geoTracking.getLastAndroidError();
                 toast({
                   title: "Location tracking error",
-                  description: "Could not start location tracking. Please try clocking out and back in.",
+                  description: rawErr
+                    ? `Could not start location tracking: ${rawErr}`
+                    : "Could not start location tracking. Please try clocking out and back in.",
                   variant: "destructive",
                 });
               }

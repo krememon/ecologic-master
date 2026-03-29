@@ -39,11 +39,24 @@ public class LocationTrackingPlugin extends Plugin {
     private static final String TAG = "EcoLogic.LocPlugin";
     private static final String GEO_TAG = "[ANDROID-GEO-NATIVE]";
 
+    // ── Canary / bridge-test method ───────────────────────────────────────────
+    // Call ping() from JS to confirm the native bridge is reachable.
+    // If this is never entered, the plugin is not registered in this APK build.
+    @PluginMethod
+    public void ping(PluginCall call) {
+        Log.i(TAG, GEO_TAG + " ping entered — native bridge IS reachable");
+        JSObject result = new JSObject();
+        result.put("ok", true);
+        result.put("platform", "android");
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void checkPermissions(PluginCall call) {
+        Log.i(TAG, GEO_TAG + " checkPermissions entered");
         boolean fg = hasForegroundPermission();
         boolean bg = hasBackgroundPermission();
-        Log.i(TAG, GEO_TAG + " checkPermissions called — hasFg=" + fg + " hasBg=" + bg);
+        Log.i(TAG, GEO_TAG + " checkPermissions — hasFg=" + fg + " hasBg=" + bg);
         JSObject status = buildPermissionStatus();
         Log.i(TAG, GEO_TAG + " checkPermissions result status=" + status.getString("status"));
         call.resolve(status);
@@ -51,7 +64,8 @@ public class LocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void requestForegroundPermission(PluginCall call) {
-        Log.i(TAG, GEO_TAG + " requestForegroundPermission called — hasFg=" + hasForegroundPermission());
+        Log.i(TAG, GEO_TAG + " requestForegroundPermission entered");
+        Log.i(TAG, GEO_TAG + " requestForegroundPermission — hasFg=" + hasForegroundPermission());
         if (hasForegroundPermission()) {
             Log.i(TAG, GEO_TAG + " requestForegroundPermission — already granted, resolving immediately");
             call.resolve(buildPermissionStatus());
@@ -70,7 +84,8 @@ public class LocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void requestBackgroundPermission(PluginCall call) {
-        Log.i(TAG, GEO_TAG + " requestBackgroundPermission called — SDK=" + Build.VERSION.SDK_INT);
+        Log.i(TAG, GEO_TAG + " requestBackgroundPermission entered");
+        Log.i(TAG, GEO_TAG + " requestBackgroundPermission — SDK=" + Build.VERSION.SDK_INT);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             Log.i(TAG, GEO_TAG + " requestBackgroundPermission — SDK < Q, not required");
             call.resolve(buildPermissionStatus());
@@ -94,6 +109,7 @@ public class LocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
+        Log.i(TAG, GEO_TAG + " start entered");
         long sessionId = call.getLong("sessionId", -1L);
         String apiBaseUrl = call.getString("apiBaseUrl", "");
         String authToken = call.getString("authToken", "");
@@ -136,7 +152,7 @@ public class LocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        Log.i(TAG, GEO_TAG + " stop called");
+        Log.i(TAG, GEO_TAG + " stop entered");
         Context ctx = getContext();
         Intent intent = new Intent(ctx, LocationService.class);
         intent.setAction(LocationService.ACTION_STOP);

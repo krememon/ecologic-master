@@ -1,0 +1,115 @@
+We need to stop guessing and hard-verify why Android native location tracking is never starting.
+
+Current hard evidence:
+- App loads fine
+- Billing active
+- Clock-in succeeds and returns timeSessionId
+- UI shows generic toast: "Could not start location tracking"
+- No /api/location/batch calls happen
+- No native Android logs from LocationTrackingPlugin or LocationService appear in Logcat
+- Therefore failure is likely BEFORE the native foreground service starts
+
+Goal:
+Prove exactly whether the JS bridge is calling the native Capacitor plugin, and fix it.
+
+Do this exactly:
+
+1. Audit the plugin registration end-to-end
+Check all of these files:
+- client/src/lib/androidLocationTracking.ts
+- client/src/services/geoTracking.ts
+- client/src/pages/Home.tsx
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- android/app/src/main/AndroidManifest.xml
+
+2. Verify the plugin name matches EXACTLY
+- In Java: `@CapacitorPlugin(name = "...")`
+- In JS: `registerPlugin("...")`
+These must match EXACTLY, character for character.
+If they do not, fix it.
+
+3. Verify the JS side is not falling back to the web stub on Android
+In `androidLocationTracking.ts`:
+- add a startup log that prints:
+  - Capacitor.getPlatform()
+  - Capacitor.isNativePlatform()
+  - whether the plugin object has checkPermissions/start functions
+- if the plugin is missing, throw a very specific error:
+  "Android location plugin unavailable"
+Do NOT silently no-op.
+
+4. Force raw error visibility
+In the Android start path catch block:
+- log the FULL raw error object
+- stringify name/message/stack
+- show the real message in the toast temporarily
+Example:
+`Could not start location tracking: Plugin not implemented`
+or
+`...: start is not a function`
+or
+`...: missing authToken`
+No more generic toast only.
+
+5. Add canary logs at the first line of every native plugin method
+In LocationTrackingPlugin.java add logs at the FIRST line of:
+- checkPermissions
+- requestForegroundPermission
+- requestBackgroundPermission
+- start
+- stop
+
+Use:
+- [ANDROID-GEO-NATIVE] checkPermissions entered
+- [ANDROID-GEO-NATIVE] requestForegroundPermission entered
+- [ANDROID-GEO-NATIVE] start entered
+etc.
+
+If these NEVER appear in Logcat, the plugin bridge is broken.
+
+6. Add one temporary native test method
+In LocationTrackingPlugin.java add:
+- `@PluginMethod`
+- method name: `ping`
+- returns `{ ok: true, platform: "android" }`
+
+In JS, on app load or before clock-in, call:
+- `AndroidLocationTracking.ping()`
+
+Log result:
+- [ANDROID-GEO] ping success ...
+- [ANDROID-GEO] ping failed ...
+
+This is the fastest way to prove whether JS can reach the native plugin at all.
+
+7. Verify MainActivity registration is correct for this project’s Capacitor version
+- If manual registration is required, confirm it is correct and not in the wrong place
+- If auto-registration should be used, remove broken/manual registration and wire it the correct way for this Capacitor setup
+- Make sure no stale plugin registration pattern is being used
+
+8. Verify build/sync/install path
+After fixing, do all of these:
+- npx cap sync android
+- Android Studio Clean Project
+- uninstall EcoLogic app from Samsung completely
+- rebuild and reinstall fresh
+We need to eliminate stale native build artifacts.
+
+9. Verify payload before native start
+Before calling plugin.start(), hard log:
+- sessionId
+- apiBaseUrl
+- authToken present yes/no
+- platform
+If any are missing, fail with exact message.
+
+10. Deliverables
+Return:
+- exact root cause
+- exact file(s) changed
+- exact plugin name in Java
+- exact plugin registration name in JS
+- whether ping() succeeded
+- exact raw error shown from JS
+- exact Logcat lines proving native plugin entered
