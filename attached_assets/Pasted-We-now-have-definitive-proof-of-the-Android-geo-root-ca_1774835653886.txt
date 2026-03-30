@@ -1,0 +1,83 @@
+We now have definitive proof of the Android geo root cause.
+
+Proof from Logcat:
+- JS loads and runs on Android
+- ping() fails: `"LocationTracking" plugin is not implemented on android`
+- checkPermissions() fails with the same UNIMPLEMENTED error
+- this happens across app restarts and fresh clock-ins
+Therefore the installed APK still does NOT expose the native Capacitor plugin named `LocationTracking`.
+
+Goal:
+Fix native plugin registration/discovery so Capacitor can actually find and invoke `LocationTracking` on Android.
+
+Do this exactly:
+
+1. Stop assuming it is only a stale APK.
+Prove registration/discovery at source.
+
+2. Audit plugin declaration and registration end-to-end
+Check all of these:
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- android/app/src/main/assets/capacitor.plugins.json (if generated / present after sync)
+- any generated Capacitor plugin registries
+- android/app/build/generated/... if relevant for plugin discovery only (read only, do not edit generated outputs directly)
+
+3. Verify exact plugin naming
+JS must use:
+- registerPlugin("LocationTracking")
+Java must use exactly:
+- @CapacitorPlugin(name = "LocationTracking")
+If there is ANY mismatch, fix it.
+
+4. Verify plugin package/import path
+Confirm:
+- package declaration in LocationTrackingPlugin.java matches file path
+- MainActivity imports the exact same class
+- no duplicate plugin class exists in another package
+- no old/stale class with same name exists
+
+5. Verify the plugin is actually compiled into the app module
+Add proof logs:
+- in MainActivity before registration:
+  [ANDROID-GEO-NATIVE] registering LocationTracking plugin class=com.ecologic.app.LocationTrackingPlugin
+- static initializer or constructor in LocationTrackingPlugin:
+  [ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded
+
+6. Check Capacitor 8 registration behavior carefully
+Do NOT assume old patterns.
+If manual `registerPlugin(LocationTrackingPlugin.class)` is not the correct/complete pattern for this Capacitor 8 setup, fix it to the correct pattern.
+If auto-registration is expected, make sure the plugin is discoverable by that mechanism.
+If a generated plugin manifest/json is missing the plugin, find out why and fix that.
+
+7. Add one temporary native proof method if needed
+If not already exposed successfully, keep `ping()` and make it the first proof target.
+We need:
+- JS ping success
+- then JS checkPermissions success entry
+Only after ping succeeds do we move on.
+
+8. Mandatory clean reinstall after fix
+After code changes:
+- uninstall EcoLogic from Samsung
+- close Android Studio
+- delete:
+  - android/.gradle
+  - android/build
+  - android/app/build
+- run npx cap sync android
+- reopen Android Studio
+- Clean Project
+- Rebuild Project
+- reinstall on Samsung
+
+9. Deliverables
+Return:
+- exact root cause
+- exact registration/discovery failure
+- exact files changed
+- exact generated/plugin registry evidence before and after
+- exact Logcat proof after reinstall showing:
+  - ping success
+  - checkPermissions entered
