@@ -1,0 +1,71 @@
+Stop theorizing. We already have the root cause from Logcat:
+
+"LocationTracking" plugin is not implemented on android
+code=UNIMPLEMENTED
+
+That means the installed APK does NOT expose the native Capacitor plugin. I do NOT want more guesses. I want hard proof and exact fixes only.
+
+Do these exact actions now:
+
+1. Open and inspect these files:
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- android/app/src/main/assets/capacitor.plugins.json (if it exists after sync)
+- android/app/build/generated/** only for inspection if needed
+- android/app/src/main/AndroidManifest.xml
+
+2. Report the EXACT values, not summaries:
+- the exact JS registerPlugin name string
+- the exact @CapacitorPlugin(name = "...") string
+- the exact Java package declaration in LocationTrackingPlugin.java
+- the exact import line used in MainActivity.java
+- the exact line where registerPlugin(LocationTrackingPlugin.class) is called
+
+3. Check whether the plugin appears in any generated Capacitor plugin registry/json after sync.
+I want a yes/no answer with the exact file path and exact entry text.
+
+4. Add proof logs right now:
+In MainActivity:
+- log before registration:
+  [ANDROID-GEO-NATIVE] registering LocationTracking plugin class=<full class name>
+
+In LocationTrackingPlugin:
+- static initializer or constructor log:
+  [ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded
+
+5. If capacitor.plugins.json or generated registry does NOT contain LocationTracking, fix the discovery/registration issue at the source.
+Do not just say “stale APK.”
+
+6. If manual registration is correct, prove it by showing:
+- exact MainActivity code
+- exact plugin class package
+- exact plugin annotation
+- exact generated registry state
+
+7. After code changes, do the full clean cycle:
+- uninstall EcoLogic from Samsung
+- delete android/.gradle
+- delete android/build
+- delete android/app/build
+- npx cap sync android
+- rebuild app
+- reinstall on Samsung
+
+8. Final proof required from Logcat after reinstall:
+I want these exact lines:
+- [ANDROID-GEO-NATIVE] registering LocationTracking plugin ...
+- [ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded
+- [ANDROID-GEO] ping success
+- [ANDROID-GEO-NATIVE] checkPermissions entered
+
+9. Deliverables:
+- exact root cause
+- exact file(s) changed
+- exact before/after code for MainActivity registration
+- exact before/after code for plugin annotation/package if changed
+- whether generated Capacitor plugin registry contains LocationTracking
+- exact Logcat proof after reinstall
+
+Important:
+Do not give me another theory. Give me exact strings, exact file paths, exact code, and exact proof.
