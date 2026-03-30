@@ -1,0 +1,77 @@
+We need the actual root cause of Android geo not working. The latest server log narrows it down:
+
+Facts proven by logs:
+- Billing/paywall is no longer blocking
+- Access is granted
+- App loads successfully
+- Clock-in succeeds and returns a valid timeSessionId
+- But there are NO /api/location/batch requests after clock-in
+
+So the break is between:
+A) successful clock-in
+and
+B) first location batch upload
+
+Goal:
+Prove exactly where the Android geo start flow dies, and fix it.
+
+Tasks:
+1. Audit the full clock-in → geo start path
+Check:
+- client/src/pages/Home.tsx
+- client/src/services/geoTracking.ts
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/LocationService.java
+
+2. Add hard logs at every step
+JS:
+- [ANDROID-GEO] clock-in success sessionId=...
+- [ANDROID-GEO] about to start geo after clock-in
+- [ANDROID-GEO] permission status result=...
+- [ANDROID-GEO] about to call plugin.start
+- [ANDROID-GEO] plugin.start payload sessionId=... apiBaseUrl=... tokenPresent=...
+- [ANDROID-GEO] plugin.start success
+- [ANDROID-GEO] plugin.start failed raw=...
+- [ANDROID-GEO] final error=...
+
+Native plugin:
+- [ANDROID-GEO-NATIVE] start entered
+- [ANDROID-GEO-NATIVE] start payload sessionId=... apiBaseUrl=... tokenPresent=...
+- [ANDROID-GEO-NATIVE] service intent dispatched
+- [ANDROID-GEO-NATIVE] start failed: ...
+
+Native service:
+- [ANDROID-GEO-SERVICE] onCreate
+- [ANDROID-GEO-SERVICE] onStartCommand
+- [ANDROID-GEO-SERVICE] startForeground success
+- [ANDROID-GEO-SERVICE] fused location request start
+- [ANDROID-GEO-SERVICE] first location received
+- [ANDROID-GEO-SERVICE] upload attempt
+- [ANDROID-GEO-SERVICE] upload success
+- [ANDROID-GEO-SERVICE] upload failed: ...
+
+3. Surface the real error
+Do not show generic “Could not start location tracking.”
+Temporarily show the actual raw error string from the failed step.
+
+4. Validate payload
+Before plugin.start(), hard-validate:
+- sessionId exists
+- apiBaseUrl exists
+- authToken exists
+If any are missing, throw exact error.
+
+5. Add a ping test if not already present
+- JS calls plugin.ping()
+- log success/failure
+This proves if JS can reach the native plugin at all.
+
+6. Deliverables
+Return:
+- exact step where it fails
+- exact raw error
+- whether JS reached plugin.start
+- whether native plugin.start ran
+- whether service onStartCommand ran
+- whether any upload attempt happened
