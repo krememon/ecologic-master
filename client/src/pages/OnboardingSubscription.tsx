@@ -273,24 +273,20 @@ export default function OnboardingSubscription() {
     }
   };
 
-  // ── Web trial activation (unchanged) ───────────────────────────────────────
+  // ── Web Stripe Checkout (7-day free trial via create-checkout-session) ────────
   const handleStartTrial = async () => {
     if (isLoading) return;
     setIsLoading(true);
+    console.log("[onboarding-sub] Web checkout — plan:", companyPlanKey);
     try {
-      const res = await apiRequest("POST", "/api/subscriptions/dev-activate", {});
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to start subscription");
-      }
-      localStorage.removeItem("onboardingChoice");
-      localStorage.removeItem("onboardingIndustry");
-      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/", { replace: true });
+      const res = await apiRequest("POST", "/api/billing/create-checkout-session", { planKey: companyPlanKey });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || "Failed to create checkout session");
+      window.location.href = data.url;
     } catch (error: any) {
+      console.error("[onboarding-sub] Web checkout error:", error.message);
       setIsLoading(false);
-      toast({ title: "Error", description: error.message || "Failed to start trial. Please try again.", variant: "destructive" });
+      toast({ title: "Checkout failed", description: error.message || "Could not start checkout. Please try again.", variant: "destructive" });
     }
   };
 
