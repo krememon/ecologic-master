@@ -39,6 +39,11 @@ public class LocationTrackingPlugin extends Plugin {
     private static final String TAG = "EcoLogic.LocPlugin";
     private static final String GEO_TAG = "[ANDROID-GEO-NATIVE]";
 
+    // Fires when the class is first loaded by the JVM — proves the class is in the APK.
+    static {
+        Log.i("EcoLogic.LocPlugin", "[ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded");
+    }
+
     // ── Canary / bridge-test method ───────────────────────────────────────────
     // Call ping() from JS to confirm the native bridge is reachable.
     // If this is never entered, the plugin is not registered in this APK build.

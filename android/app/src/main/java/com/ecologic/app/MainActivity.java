@@ -3,6 +3,7 @@ package com.ecologic.app;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -13,12 +14,16 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final String TAG = "EcoLogic.Main";
+
     // WRAPPER BADGE: Set to false to hide the debug overlay
     private static final boolean SHOW_WRAPPER_BADGE = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] registering LocationTracking plugin class=com.ecologic.app.LocationTrackingPlugin");
         registerPlugin(LocationTrackingPlugin.class);
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] registerPlugin(LocationTrackingPlugin.class) call completed");
         super.onCreate(savedInstanceState);
 
         if (SHOW_WRAPPER_BADGE) {
