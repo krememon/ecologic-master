@@ -1,0 +1,111 @@
+We are unblocked from the paywall now. Next issue only: Android geo-location tracking still is not working.
+
+Current status:
+- Android app builds and opens
+- Company 541 is unblocked by admin_bypass_subscription=true
+- User can get into EcoLogic
+- But Android live location tracking still does not start/work while clocked in
+
+Goal:
+Fix Android live location tracking end-to-end for Samsung device testing.
+
+What to audit right now:
+1. Clock-in flow
+- Verify the exact Android clock-in path actually calls the geo start flow after successful clock-in
+- Confirm the returned `timeSessionId` is passed through correctly
+- Confirm no early return / swallowed error stops Android geo start
+
+2. Permission flow
+- Verify Android requests/checks:
+  - foreground precise location
+  - background location if required
+  - location services enabled
+- Confirm the app is not silently assuming permission is already granted when it is not
+- If permission is denied or incomplete, show the exact reason in UI/logs
+
+3. Plugin bridge
+Audit:
+- client/src/lib/androidLocationTracking.ts
+- client/src/services/geoTracking.ts
+- client/src/pages/Home.tsx
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+- android/app/src/main/java/com/ecologic/app/LocationService.java
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- android/app/src/main/AndroidManifest.xml
+
+Verify:
+- JS registerPlugin name EXACTLY matches native @CapacitorPlugin name
+- Methods names and payload keys match exactly
+- The Android path is not falling back to a web/no-op stub
+- The plugin is actually being called from JS
+
+4. Native service
+Verify the foreground service really starts on clock-in and only stops on clock-out:
+- service intent created correctly
+- startForeground succeeds
+- notification appears
+- fused location provider starts
+- location callbacks fire
+- uploads go to /api/location/batch
+
+5. Logging — add targeted logs only
+JS logs:
+- [ANDROID-GEO] clock-in success sessionId=...
+- [ANDROID-GEO] starting Android geo flow
+- [ANDROID-GEO] permission status=...
+- [ANDROID-GEO] starting native plugin
+- [ANDROID-GEO] plugin start payload sessionId=... apiBaseUrl=... tokenPresent=...
+- [ANDROID-GEO] plugin start success
+- [ANDROID-GEO] plugin start failed raw=...
+- [ANDROID-GEO] final error message=...
+
+Native plugin logs:
+- [ANDROID-GEO-NATIVE] checkPermissions entered
+- [ANDROID-GEO-NATIVE] requestForegroundPermission entered
+- [ANDROID-GEO-NATIVE] requestBackgroundPermission entered
+- [ANDROID-GEO-NATIVE] start entered
+- [ANDROID-GEO-NATIVE] start payload sessionId=... apiBaseUrl=... tokenPresent=...
+- [ANDROID-GEO-NATIVE] service intent dispatched
+- [ANDROID-GEO-NATIVE] start failed: ...
+
+Native service logs:
+- [ANDROID-GEO-SERVICE] onCreate
+- [ANDROID-GEO-SERVICE] onStartCommand
+- [ANDROID-GEO-SERVICE] startForeground success
+- [ANDROID-GEO-SERVICE] fused location request start
+- [ANDROID-GEO-SERVICE] first location received
+- [ANDROID-GEO-SERVICE] batch upload success
+- [ANDROID-GEO-SERVICE] batch upload failed
+- [ANDROID-GEO-SERVICE] stopSelf
+
+6. Real error surfacing
+Right now do NOT show a vague message like “Could not start location tracking.”
+Temporarily surface the actual raw error string/message from the plugin bridge to the UI/logs.
+
+7. Add a temporary plugin ping test
+Add a simple native plugin method:
+- ping() -> returns { ok: true, platform: 'android' }
+
+Call it from JS before clock-in or before start().
+Log:
+- [ANDROID-GEO] ping success ...
+- [ANDROID-GEO] ping failed ...
+
+This will prove whether JS can reach the native plugin at all.
+
+8. Deliverables
+Return:
+- exact root cause
+- exact file(s) changed
+- exact raw error found
+- whether ping() succeeded
+- whether native plugin start() was entered
+- whether service started
+- whether /api/location/batch was hit
+- final Samsung test steps
+
+Constraints:
+- Do not touch billing/paywall logic
+- Do not touch unrelated UI
+- Do not break iOS/web
+- Do not edit generated build folders
