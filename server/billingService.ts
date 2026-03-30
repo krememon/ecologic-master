@@ -50,6 +50,7 @@ export async function syncSubscriptionToCompany(
     status: string;
     current_period_end: number;
     cancel_at_period_end: boolean;
+    trial_end?: number | null;
     items?: { data: Array<{ price: { id: string } }> };
     metadata?: Record<string, string>;
     customer?: string;
@@ -87,6 +88,13 @@ export async function syncSubscriptionToCompany(
 
   // Only write currentPeriodEnd if it is a valid date
   if (currentPeriodEnd !== null) updates.currentPeriodEnd = currentPeriodEnd;
+
+  // Write trialEndsAt when the subscription is in a trial state so the billing resolver
+  // can confirm the trial is still valid and grant access.
+  if (subscriptionStatus === 'trialing' && typeof sub.trial_end === 'number' && sub.trial_end > 0) {
+    updates.trialEndsAt = new Date(sub.trial_end * 1000);
+    console.log(`[billing-sync] trialEndsAt set to ${updates.trialEndsAt.toISOString()} from sub.trial_end=${sub.trial_end}`);
+  }
 
   if (planKey) updates.subscriptionPlan = planKey;
   if (maxUsers !== undefined) updates.maxUsers = maxUsers;
