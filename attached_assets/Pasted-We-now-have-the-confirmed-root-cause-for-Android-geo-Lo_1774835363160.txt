@@ -1,0 +1,87 @@
+We now have the confirmed root cause for Android geo:
+
+Logcat proves:
+- JS runs on Android
+- `registerPlugin("LocationTracking")` exists on JS side
+- `ping()` fails with `"LocationTracking" plugin is not implemented on android`
+- `checkPermissions()` fails with the same UNIMPLEMENTED error
+Therefore the native Android plugin is NOT registered/packaged into the installed APK under the expected Capacitor plugin name.
+
+Goal:
+Fix native Capacitor plugin registration so `LocationTracking` is actually implemented on Android.
+
+Do this exactly:
+
+1. Verify plugin naming match
+Check:
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+
+JS must use:
+- `registerPlugin("LocationTracking")`
+
+Java must use exactly:
+- `@CapacitorPlugin(name = "LocationTracking")`
+
+If not exact, fix it.
+
+2. Verify all plugin methods are exposed
+In `LocationTrackingPlugin.java`, confirm these all have `@PluginMethod`:
+- ping
+- checkPermissions
+- requestForegroundPermission
+- requestBackgroundPermission
+- start
+- stop
+
+3. Fix plugin registration for Capacitor 8
+Audit:
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- any Capacitor plugin auto-registration behavior for this project
+
+Make sure the plugin is actually registered in the correct Capacitor 8 way.
+If manual registration is required, ensure:
+- correct import
+- correct class
+- correct placement of `registerPlugin(LocationTrackingPlugin.class)`
+
+4. Verify package/class path
+Confirm:
+- package declaration matches file path
+- MainActivity imports the exact same class
+- no duplicate or stale plugin class exists elsewhere
+- plugin compiles into the APK
+
+5. Add proof logs
+In MainActivity:
+- `[ANDROID-GEO-NATIVE] registering LocationTracking plugin`
+
+In LocationTrackingPlugin class load/init:
+- `[ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded`
+
+6. Mandatory clean rebuild/install
+After fixing:
+- uninstall EcoLogic from Samsung completely
+- close Android Studio
+- delete:
+  - android/.gradle
+  - android/build
+  - android/app/build
+- run `npx cap sync android`
+- reopen Android Studio
+- Clean Project
+- Rebuild Project
+- reinstall on Samsung
+
+7. Final proof required
+After reinstall, Logcat must show:
+- `[ANDROID-GEO] ping success`
+- `[ANDROID-GEO-NATIVE] checkPermissions entered`
+
+Deliverables:
+- exact root cause
+- exact plugin annotation name in Java
+- exact registerPlugin name in JS
+- exact MainActivity registration fix
+- exact files changed
+- exact Logcat proof after reinstall
