@@ -9,6 +9,7 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -21,10 +22,15 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // ── PROOF LOG — must appear in Logcat if this APK was built from current source ──
+        Log.e("EcoLogic.PROOF", "MAINACTIVITY ONCREATE IS RUNNING FROM CURRENT SOURCE");
         Log.i(TAG, "[ANDROID-GEO-NATIVE] registering LocationTracking plugin class=com.ecologic.app.LocationTrackingPlugin");
         registerPlugin(LocationTrackingPlugin.class);
         Log.i(TAG, "[ANDROID-GEO-NATIVE] registerPlugin(LocationTrackingPlugin.class) call completed");
         super.onCreate(savedInstanceState);
+
+        // ── PROOF TOAST — visible on screen if this APK was built from current source ──
+        Toast.makeText(this, "MAINACTIVITY CURRENT SOURCE", Toast.LENGTH_LONG).show();
 
         if (SHOW_WRAPPER_BADGE) {
             addWrapperBadge();

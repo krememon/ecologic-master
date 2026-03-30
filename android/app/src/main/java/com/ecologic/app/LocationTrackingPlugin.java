@@ -41,6 +41,7 @@ public class LocationTrackingPlugin extends Plugin {
 
     // Fires when the class is first loaded by the JVM — proves the class is in the APK.
     static {
+        Log.e("EcoLogic.PROOF", "LOCATIONTRACKINGPLUGIN CLASS LOADED FROM CURRENT SOURCE");
         Log.i("EcoLogic.LocPlugin", "[ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded");
     }
 
