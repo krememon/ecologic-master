@@ -74,11 +74,35 @@ public class LocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
-        long sessionId = call.getLong("sessionId", -1L);
+        // ── Robust sessionId parsing ──────────────────────────────────────────────
+        // Capacitor deserializes JSON numbers as Integer (not Long) when the value
+        // fits in 32 bits. call.getLong() does a direct (Long) cast which silently
+        // returns the default -1 for Integer values. We must read the raw JSON token
+        // and handle Integer, Long, and String forms ourselves.
+        long sessionId = -1L;
+        Object rawSessionId = null;
+        try { rawSessionId = call.getData().opt("sessionId"); } catch (Exception ignored) {}
+
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] raw sessionId from call as Long=" + call.getLong("sessionId", -999L));
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] raw sessionId from call as String=" + call.getString("sessionId", "(null)"));
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] raw sessionId JSON type=" + (rawSessionId == null ? "null" : rawSessionId.getClass().getSimpleName()) + " value=" + rawSessionId);
+
+        if (rawSessionId instanceof Long) {
+            sessionId = (Long) rawSessionId;
+        } else if (rawSessionId instanceof Integer) {
+            sessionId = ((Integer) rawSessionId).longValue();
+        } else if (rawSessionId instanceof Double) {
+            sessionId = ((Double) rawSessionId).longValue();
+        } else if (rawSessionId instanceof String) {
+            try { sessionId = Long.parseLong((String) rawSessionId); } catch (NumberFormatException ignored) {}
+        }
+
+        Log.i(TAG, "[ANDROID-GEO-NATIVE] final parsed sessionId=" + sessionId);
+
         String apiBaseUrl = call.getString("apiBaseUrl", "");
         String authToken = call.getString("authToken", "");
         Log.i(TAG, "[ANDROID-GEO-NATIVE] start entered sessionId=" + sessionId + " tokenPresent=" + (authToken != null && !authToken.isEmpty()));
-        if (sessionId < 0) { call.reject("sessionId required"); return; }
+        if (sessionId < 0) { call.reject("sessionId required — parsed value was " + sessionId + " raw type=" + (rawSessionId == null ? "null" : rawSessionId.getClass().getSimpleName())); return; }
         if (!hasForegroundPermission()) { call.reject("Foreground location permission not granted"); return; }
         Context ctx = getContext();
         Intent intent = new Intent(ctx, LocationService.class);

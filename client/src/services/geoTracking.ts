@@ -216,12 +216,17 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
   }
 
   // ── Step 6: call the native plugin ───────────────────────────────────────
+  // Explicitly coerce sessionId to a plain JS number so the Capacitor bridge
+  // serializes it as a JSON integer — not a string, BigInt, or float.
+  const sessionIdNumeric = Number(sessionId);
+  console.log('[ANDROID-GEO] sessionId typeof before plugin.start=' + typeof sessionId);
+  console.log('[ANDROID-GEO] sessionId numeric before plugin.start=' + sessionIdNumeric + ' isFinite=' + isFinite(sessionIdNumeric) + ' isInteger=' + Number.isInteger(sessionIdNumeric));
   console.log('[ANDROID-GEO] about to call plugin.start');
-  console.log('[ANDROID-GEO] plugin.start payload sessionId=' + sessionId +
+  console.log('[ANDROID-GEO] plugin.start payload sessionId=' + sessionIdNumeric +
     ' apiBaseUrl=' + apiBaseUrl +
     ' tokenPresent=' + (authToken.length > 0));
   try {
-    await LocationTracking.start({ sessionId, apiBaseUrl, authToken });
+    await LocationTracking.start({ sessionId: sessionIdNumeric, apiBaseUrl, authToken });
     androidServiceActive = true;
     console.log('[ANDROID-GEO] plugin.start success — service is running');
 
