@@ -1,0 +1,87 @@
+We now have the confirmed root cause for Android geo.
+
+Confirmed by Logcat:
+- JS runs on Android
+- ping() fails with: `"LocationTracking" plugin is not implemented on android`
+- checkPermissions() fails with the same UNIMPLEMENTED error
+- therefore the native Android plugin is NOT registered in the APK under the expected Capacitor plugin name
+
+Goal:
+Fix the Capacitor native plugin registration so the `LocationTracking` plugin is actually implemented on Android.
+
+Do this exactly:
+
+1. Verify the plugin name matches EXACTLY
+Check:
+- client/src/lib/androidLocationTracking.ts
+- android/app/src/main/java/com/ecologic/app/LocationTrackingPlugin.java
+
+The JS side uses:
+- `registerPlugin("LocationTracking")`
+
+The Java side MUST have:
+- `@CapacitorPlugin(name = "LocationTracking")`
+
+If the annotation name differs even slightly, fix it.
+
+2. Verify method annotations
+In LocationTrackingPlugin.java confirm all exposed methods have `@PluginMethod`:
+- ping
+- checkPermissions
+- requestForegroundPermission
+- requestBackgroundPermission
+- start
+- stop
+
+3. Verify plugin registration approach for this Capacitor version
+Check Capacitor 8 Android plugin registration for this app.
+Audit:
+- android/app/src/main/java/com/ecologic/app/MainActivity.java
+- any generated Capacitor plugin registries
+
+Fix whichever is correct for Capacitor 8:
+- if manual registration is required, ensure `registerPlugin(LocationTrackingPlugin.class)` is present and in the correct place
+- if auto-registration is expected, ensure the plugin is in a package/path Capacitor actually discovers, or use the correct explicit registration pattern
+
+4. Verify package/class path consistency
+Confirm:
+- Java package declaration in `LocationTrackingPlugin.java`
+- file path matches package
+- MainActivity imports the exact same class
+- no duplicate stale plugin class exists elsewhere
+- class compiles into the APK
+
+5. Add one native startup proof log
+In MainActivity on app launch, log:
+- `[ANDROID-GEO-NATIVE] registering LocationTracking plugin`
+And in LocationTrackingPlugin class static/init or load path, log:
+- `[ANDROID-GEO-NATIVE] LocationTrackingPlugin class loaded`
+We need proof the APK contains it.
+
+6. Clean native rebuild required
+After code fix, do all of these:
+- uninstall EcoLogic app from Samsung completely
+- close Android Studio
+- delete:
+  - android/.gradle
+  - android/build
+  - android/app/build
+- run `npx cap sync android`
+- reopen Android Studio
+- Clean Project
+- Rebuild Project
+- reinstall on Samsung
+
+7. Final proof required
+After rebuild, Logcat must show:
+- `[ANDROID-GEO] ping success ...`
+- `[ANDROID-GEO-NATIVE] checkPermissions entered`
+If ping still says UNIMPLEMENTED, registration is still broken.
+
+Deliverables:
+- exact root cause
+- exact plugin annotation name in Java
+- exact registerPlugin name in JS
+- exact MainActivity/plugin registration fix
+- exact files changed
+- exact Logcat proof after rebuild
