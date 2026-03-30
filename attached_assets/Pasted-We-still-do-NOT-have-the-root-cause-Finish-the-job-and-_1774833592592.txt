@@ -1,0 +1,79 @@
+We still do NOT have the root cause. Finish the job and prove the exact failing step.
+
+What is already confirmed:
+- Native plugin logs exist
+- Native service logs exist
+- ping() exists
+- permission flow exists
+- raw error surfacing exists
+- Billing is unblocked
+- Clock-in succeeds and returns a valid timeSessionId
+- But there are still NO /api/location/batch calls after clock-in
+
+Therefore the likely failure area is:
+between successful clock-in in Home.tsx and the actual geoTracking.start()/plugin.start handoff.
+
+Do this now:
+
+1. Add the missing JS-side logs exactly where needed
+In Home.tsx:
+- immediately after successful clock-in response:
+  `[ANDROID-GEO] clock-in success sessionId=...`
+- immediately before calling any geo start logic:
+  `[ANDROID-GEO] about to start geo after clock-in sessionId=...`
+
+In geoTracking.ts startAndroid():
+- first line:
+  `[ANDROID-GEO] startAndroid entered sessionId=...`
+- before permission check:
+  `[ANDROID-GEO] checking permissions`
+- after permission result:
+  `[ANDROID-GEO] permission status result=...`
+- if auth token missing:
+  `[ANDROID-GEO] missing authToken before plugin start`
+  and THROW exact error
+- immediately before plugin.start():
+  `[ANDROID-GEO] about to call plugin.start`
+- plugin payload log:
+  `[ANDROID-GEO] plugin.start payload sessionId=... apiBaseUrl=... tokenPresent=...`
+- on success:
+  `[ANDROID-GEO] plugin.start success`
+- on failure:
+  `[ANDROID-GEO] plugin.start failed raw=...`
+  `[ANDROID-GEO] final error=...`
+
+2. Hard-validate required payload before native start
+Before plugin.start(), fail loudly if any missing:
+- sessionId
+- apiBaseUrl
+- authToken
+
+No vague errors.
+Throw exact messages:
+- "Missing sessionId for Android geo start"
+- "Missing apiBaseUrl for Android geo start"
+- "Missing authToken for Android geo start"
+
+3. Verify actual function call chain
+Trace the exact call chain and report it:
+- Home.tsx clock-in success handler
+- function it calls next
+- whether geoTracking.start() is definitely invoked
+- whether any conditional/early return prevents it
+
+4. Native confirmation
+Because native logs already exist, after the JS logs are added, confirm which is true:
+- JS never reaches plugin.start
+- JS reaches plugin.start but native start never enters
+- native start enters but service never starts
+- service starts but no upload occurs
+
+5. Deliverables
+Return:
+- exact failing line / step
+- exact raw error text
+- exact call chain from clock-in success to geoTracking.start
+- whether authToken/sessionId/apiBaseUrl were present
+- whether plugin.start was actually invoked
+- whether native start entered
+- root cause in one sentence

@@ -207,7 +207,7 @@ public class LocationService extends Service {
                 body.put("points", points);
 
                 String targetUrl = apiBaseUrl + "/api/location/batch";
-                Log.i(TAG, GEO_TAG + " batch upload — url=" + targetUrl + " sessionId=" + sessionId);
+                Log.i(TAG, GEO_TAG + " upload attempt — url=" + targetUrl + " sessionId=" + sessionId);
 
                 URL url = new URL(targetUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();

@@ -232,15 +232,17 @@ export default function Home() {
       setShowJobPicker(false);
       setJobSearchQuery('');
       if (data?.timeSessionId) {
-        console.log('[geo] clock-in success, sessionId=', data.timeSessionId);
+        console.log('[ANDROID-GEO] clock-in success sessionId=' + data.timeSessionId);
         if (isAndroidNative) {
           localStorage.setItem('geoSessionId', String(data.timeSessionId));
         }
         // Async IIFE: await the full permission + start flow so we can update UI
         // based on the actual outcome (permission granted, denied, services off, etc.)
         (async () => {
+          console.log('[ANDROID-GEO] about to start geo after clock-in sessionId=' + data.timeSessionId + ' isAndroidNative=' + isAndroidNative);
           try {
             const result = await geoTracking.start(data.timeSessionId);
+            console.log('[ANDROID-GEO] geoTracking.start returned result=' + result);
             if (isAndroidNative) {
               if (result === 'ok') {
                 setAndroidGeoStatus('active');

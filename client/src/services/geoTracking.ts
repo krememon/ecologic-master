@@ -125,28 +125,19 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
   // Reset error from any previous attempt
   lastAndroidErrorMessage = null;
 
-  console.log('[ANDROID-GEO] clock-in success, sessionId=' + sessionId);
+  console.log('[ANDROID-GEO] startAndroid entered sessionId=' + sessionId);
   console.log('[ANDROID-GEO] isNativePlatform=' + Capacitor.isNativePlatform() + ' platform=' + Capacitor.getPlatform());
 
-  // ── Step 1: validate inputs before touching the native bridge ─────────────
+  // ── Step 1: validate sessionId ─────────────────────────────────────────────
   if (!sessionId || isNaN(sessionId) || sessionId <= 0) {
-    console.log('[ANDROID-GEO] INVALID sessionId=' + sessionId + ' — aborting');
-    return 'error';
-  }
-  const apiBaseUrl = window.location.origin;
-  const authToken = typeof localStorage !== 'undefined'
-    ? (localStorage.getItem('nativeSessionId') || '')
-    : '';
-  console.log('[ANDROID-GEO] plugin start payload sessionId=' + sessionId +
-    ' apiBaseUrl=' + apiBaseUrl +
-    ' tokenPresent=' + (authToken.length > 0));
-  if (!apiBaseUrl) {
-    console.log('[ANDROID-GEO] INVALID apiBaseUrl — aborting');
+    const msg = 'Missing or invalid sessionId for Android geo start (got ' + sessionId + ')';
+    lastAndroidErrorMessage = msg;
+    console.log('[ANDROID-GEO] final error=' + msg);
     return 'error';
   }
 
   // ── Step 2: checkPermissions ──────────────────────────────────────────────
-  console.log('[ANDROID-GEO] about to check permissions');
+  console.log('[ANDROID-GEO] checking permissions');
   let status: any;
   try {
     status = await LocationTracking.checkPermissions();
@@ -155,8 +146,10 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
       ' hasBg=' + status.hasBackgroundPermission +
       ' locationOn=' + status.locationServicesEnabled);
   } catch (e: any) {
-    lastAndroidErrorMessage = 'checkPermissions failed: ' + strErr(e);
+    const msg = 'checkPermissions failed: ' + strErr(e);
+    lastAndroidErrorMessage = msg;
     console.log('[ANDROID-GEO] checkPermissions THREW raw=' + strErr(e));
+    console.log('[ANDROID-GEO] final error=' + msg);
     return 'error';
   }
 
@@ -173,8 +166,10 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
       console.log('[ANDROID-GEO] foreground permission result=' + status.status +
         ' hasFg=' + status.hasForegroundPermission);
     } catch (e: any) {
-      lastAndroidErrorMessage = 'requestForegroundPermission failed: ' + strErr(e);
+      const msg = 'requestForegroundPermission failed: ' + strErr(e);
+      lastAndroidErrorMessage = msg;
       console.log('[ANDROID-GEO] requestForegroundPermission THREW raw=' + strErr(e));
+      console.log('[ANDROID-GEO] final error=' + msg);
       return 'error';
     }
     if (!status.hasForegroundPermission) {
@@ -191,16 +186,38 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
       console.log('[ANDROID-GEO] background permission result=' + bgStatus.status);
     } catch (e: any) {
       console.log('[ANDROID-GEO] requestBackgroundPermission THREW raw=' + strErr(e) + ' (continuing)');
-      // Non-fatal — foreground service still works
+      // Non-fatal — foreground service still works with foreground-only permission
     }
   }
 
-  // ── Step 5: start the native foreground service ───────────────────────────
-  console.log('[ANDROID-GEO] about to start native plugin sessionId=' + sessionId);
+  // ── Step 5: build and hard-validate the native start payload ─────────────
+  const apiBaseUrl = window.location.origin;
+  const authToken = typeof localStorage !== 'undefined'
+    ? (localStorage.getItem('nativeSessionId') || '')
+    : '';
+
+  if (!apiBaseUrl) {
+    const msg = 'Missing apiBaseUrl for Android geo start (window.location.origin was empty)';
+    lastAndroidErrorMessage = msg;
+    console.log('[ANDROID-GEO] final error=' + msg);
+    return 'error';
+  }
+  if (!authToken) {
+    const msg = 'Missing authToken for Android geo start (nativeSessionId not in localStorage)';
+    lastAndroidErrorMessage = msg;
+    console.log('[ANDROID-GEO] final error=' + msg);
+    return 'error';
+  }
+
+  // ── Step 6: call the native plugin ───────────────────────────────────────
+  console.log('[ANDROID-GEO] about to call plugin.start');
+  console.log('[ANDROID-GEO] plugin.start payload sessionId=' + sessionId +
+    ' apiBaseUrl=' + apiBaseUrl +
+    ' tokenPresent=' + (authToken.length > 0));
   try {
     await LocationTracking.start({ sessionId, apiBaseUrl, authToken });
     androidServiceActive = true;
-    console.log('[ANDROID-GEO] plugin start success — service is running');
+    console.log('[ANDROID-GEO] plugin.start success — service is running');
 
     // One-time position fix for the JS-side lastKnownCoords (map fallback)
     try {
@@ -220,8 +237,8 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
   } catch (e: any) {
     const errStr = strErr(e);
     lastAndroidErrorMessage = 'plugin.start() failed: ' + errStr;
-    console.log('[ANDROID-GEO] plugin start error raw=' + errStr);
-    console.log('[ANDROID-GEO] final catch message=' + (e?.message || String(e)));
+    console.log('[ANDROID-GEO] plugin.start failed raw=' + errStr);
+    console.log('[ANDROID-GEO] final error=' + (e?.message || String(e)));
     return 'error';
   }
 }
