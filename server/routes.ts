@@ -21521,6 +21521,7 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         success_url: `${appUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/billing`,
         subscription_data: {
+          trial_period_days: 7,
           metadata: { companyId: String(company.id), companyCode: company.companyCode || '', planKey, initiatedByUserId: userId },
         },
         metadata: { companyId: String(company.id), planKey },
