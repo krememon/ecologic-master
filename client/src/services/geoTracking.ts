@@ -192,9 +192,14 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
 
   // ── Step 5: build and hard-validate the native start payload ─────────────
   const apiBaseUrl = window.location.origin;
+  const authTokenKey = 'nativeSessionId';
   const authToken = typeof localStorage !== 'undefined'
-    ? (localStorage.getItem('nativeSessionId') || '')
+    ? (localStorage.getItem(authTokenKey) || '')
     : '';
+
+  console.log('[ANDROID-GEO] auth token lookup key=' + authTokenKey + ' found=' + (authToken.length > 0));
+  console.log('[ANDROID-GEO] mobile auth source resolved from localStorage key=' + authTokenKey);
+  console.log('[ANDROID-GEO] final auth token present before plugin.start=' + (authToken.length > 0));
 
   if (!apiBaseUrl) {
     const msg = 'Missing apiBaseUrl for Android geo start (window.location.origin was empty)';
@@ -205,6 +210,7 @@ async function startAndroid(sessionId: number): Promise<'ok' | 'needs_foreground
   if (!authToken) {
     const msg = 'Missing authToken for Android geo start (nativeSessionId not in localStorage)';
     lastAndroidErrorMessage = msg;
+    console.log('[ANDROID-GEO] geo start blocked because auth token missing — nativeSessionId is empty in localStorage');
     console.log('[ANDROID-GEO] final error=' + msg);
     return 'error';
   }

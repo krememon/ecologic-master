@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Capacitor } from "@capacitor/core";
 
 type WizardStep = "email" | "password" | "code";
 
@@ -220,8 +221,20 @@ export default function SignInWizard() {
         email,
         code: getCodeString(),
       });
-      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
-      
+      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+
+      // On native Android/iOS: the server returns sessionId when x-client-type=mobile
+      // is present. Store it as nativeSessionId so Bearer auth works for geo tracking
+      // and all subsequent API calls.
+      const isNative = Capacitor.isNativePlatform();
+      console.log("[ANDROID-GEO] verify-code response sessionId=" + (data?.sessionId || "NONE") + " isNative=" + isNative);
+      if (isNative && data?.sessionId) {
+        localStorage.setItem("nativeSessionId", data.sessionId);
+        console.log("[ANDROID-GEO] mobile auth source resolved from verify-code response — nativeSessionId stored");
+      } else if (isNative && !data?.sessionId) {
+        console.warn("[ANDROID-GEO] geo start blocked because auth token missing — verify-code returned no sessionId on native");
+      }
+
       // Invalidate auth cache and force refresh
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       

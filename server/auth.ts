@@ -984,7 +984,8 @@ export function setupAuth(app: Express) {
             return res.status(500).json({ message: "Unable to complete sign in." });
           }
           
-          console.log("[auth] verify-code: session saved successfully for user:", user.email);
+          const isMobile = req.headers['x-client-type'] === 'mobile';
+          console.log("[auth] verify-code: session saved successfully for user:", user.email, "isMobile:", isMobile, "sessionID:", req.sessionID);
           return res.json({
             ok: true,
             user: {
@@ -993,6 +994,7 @@ export function setupAuth(app: Express) {
               firstName: user.firstName,
               lastName: user.lastName,
             },
+            ...(isMobile ? { sessionId: req.sessionID } : {}),
           });
         });
       });

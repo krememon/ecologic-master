@@ -6,15 +6,24 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * The canvas/picard origin uses exchange-code via relative URL to get a
  * same-domain session cookie, so Bearer is not needed there either.
  */
-function getNativeAuthHeaders(): Record<string, string> {
+function isNativeCapacitor(): boolean {
   try {
     const cap = (window as any).Capacitor;
-    const isNative = !!(cap?.getPlatform?.() && cap.getPlatform() !== "web");
-    if (!isNative) return {};
+    return !!(cap?.getPlatform?.() && cap.getPlatform() !== "web");
+  } catch {
+    return false;
+  }
+}
+
+function getNativeAuthHeaders(): Record<string, string> {
+  try {
+    if (!isNativeCapacitor()) return {};
     const sessionId = typeof localStorage !== "undefined"
       ? localStorage.getItem("nativeSessionId")
       : null;
-    if (sessionId) return { Authorization: `Bearer ${sessionId}` };
+    const headers: Record<string, string> = { "x-client-type": "mobile" };
+    if (sessionId) headers["Authorization"] = `Bearer ${sessionId}`;
+    return headers;
   } catch {
     // localStorage not available (e.g. SSR context)
   }
