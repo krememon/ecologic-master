@@ -202,7 +202,8 @@ async function sendPasswordResetEmail(email: string, token: string) {
   const { Resend } = await import("resend");
   const resend = new Resend(resendApiKey);
   
-  const { error } = await resend.emails.send({
+  console.log("[password-reset] Calling Resend API — from:", getResendFrom(), "to:", email);
+  const { data, error } = await resend.emails.send({
     from: getResendFrom(),
     reply_to: 'no-reply@ecologicc.com',
     to: email,
@@ -220,13 +221,13 @@ async function sendPasswordResetEmail(email: string, token: string) {
       </div>
     `,
   });
-  
+
   if (error) {
-    console.error("[password-reset] Resend API error:", error);
+    console.error("[password-reset] Resend API rejected — error:", JSON.stringify(error));
     throw new Error("Failed to send password reset email");
   }
-  
-  console.log("[password-reset] Email sent successfully to:", email);
+
+  console.log("[password-reset] Resend accepted — messageId:", data?.id, "to:", email);
 }
 
 // Send signature request email to customer

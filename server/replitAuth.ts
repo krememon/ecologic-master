@@ -869,43 +869,7 @@ export async function setupAuth(app: Express) {
     console.log("[AppleAuth] Apple Sign-In not configured (missing env vars)");
   }
 
-  // Password reset routes
-  app.post("/api/forgot-password", async (req, res) => {
-    try {
-      const { email } = req.body;
-      
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        // Don't reveal if email exists for security
-        return res.json({ message: "If an account with this email exists, you'll receive a password reset link." });
-      }
-
-      // Generate reset token
-      const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      await storage.setResetPasswordToken(email, resetToken, resetExpires);
-
-      // For development, we'll return the token. In production, send email
-      if (process.env.NODE_ENV === 'development') {
-        return res.json({ 
-          message: "Reset token generated", 
-          resetToken,
-          resetUrl: `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`
-        });
-      }
-
-      // TODO: Send email with reset link in production
-      res.json({ message: "If an account with this email exists, you'll receive a password reset link." });
-    } catch (error) {
-      console.error("Forgot password error:", error);
-      res.status(500).json({ message: "Server error" });
-    }
-  });
+  // Note: /api/forgot-password is handled by auth.ts (uses Resend to send actual email)
 
   app.post("/api/reset-password", async (req, res) => {
     try {
