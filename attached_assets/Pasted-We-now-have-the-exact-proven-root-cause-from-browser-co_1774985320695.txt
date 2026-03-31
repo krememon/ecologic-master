@@ -1,0 +1,93 @@
+We now have the exact proven root cause from browser console evidence.
+
+PROVEN ERROR
+Google console shows:
+
+Places API error: ApiTargetBlockedMapError
+
+This means the current Google Maps API key is NOT authorized to use the Places service/API.
+The Maps JavaScript script is loading, but Places/autocomplete is being blocked by the key's API restrictions in Google Cloud Console.
+
+THIS IS THE ROOT CAUSE
+Not a generic loader issue.
+Not a missing key.
+Not duplicate scripts.
+The key is specifically blocked from the Places target/service.
+
+WHAT TO DO NOW
+
+1) CONFIRM APP CODE STATUS
+Based on the latest console logs:
+- Maps JS is loading
+- libraries=places is present
+- google.maps.places is available
+- Autocomplete is attempting to attach
+
+So app code is likely now functionally correct enough for this flow.
+Do not keep refactoring code unless you find another proven runtime issue.
+
+2) FIX GOOGLE CLOUD CONSOLE CONFIG
+Go to the Google Cloud Console for the key being used by VITE_GOOGLE_MAPS_API_KEY and fix the key restrictions.
+
+Check these exact settings:
+
+A. API RESTRICTIONS
+If API restrictions are enabled on the key, make sure the key allows ALL required APIs for EcoLogic web address autocomplete.
+
+At minimum enable/allow:
+- Maps JavaScript API
+- Places API
+
+Also verify whether any of these are needed by current code paths:
+- Geocoding API
+- Places API (New) only if the app has migrated to new endpoints/components
+- Address Validation API only if explicitly used somewhere else
+
+Most important right now:
+- Maps JavaScript API
+- Places API
+
+B. APPLICATION RESTRICTIONS
+If the key is restricted by HTTP referrers, ensure allowed referrers include the actual domains used for testing and production, such as:
+- app.ecologicc.com/*
+- *.replit.dev/*
+- *.repl.co/*
+- localhost/*
+- localhost:*
+- 127.0.0.1/*
+Only include the exact ones we actually use, but make sure current test origin is covered.
+
+C. BILLING / ENABLED APIS
+Verify the Google Cloud project has:
+- billing enabled
+- Maps JavaScript API enabled
+- Places API enabled
+
+3) KEEP EXISTING DIAGNOSTIC LOGS FOR NOW
+Keep the current logs temporarily so we can verify the issue is gone after the Cloud Console changes.
+
+4) OPTIONAL NOTE
+Console also shows:
+"As of March 1st, 2025, google.maps.places.Autocomplete is not available to new customers..."
+That is not the current blocker. The current blocker is ApiTargetBlockedMapError.
+Do not change to PlaceAutocompleteElement right now unless truly necessary for this fix.
+Solve the key restriction problem first.
+
+DELIVERABLES
+1) Confirm exact Google Cloud Console changes required
+2) Tell me whether the current key had API restrictions enabled
+3) Tell me whether Places API was missing from allowed services
+4) Confirm whether Maps JavaScript API and Places API are both enabled now
+5) Confirm whether current testing origins are allowed
+6) After fixing Cloud Console settings, retest and report:
+   - address suggestions appear
+   - no Google error popup
+   - selecting suggestion fills address correctly
+   - Schedule map still works
+
+FINAL RESPONSE FORMAT
+1) Exact root cause
+2) Is app code now correct enough? yes/no
+3) Exact Google Cloud Console changes made
+4) Exact files changed in code, if any additional code changes were needed
+5) Final test result

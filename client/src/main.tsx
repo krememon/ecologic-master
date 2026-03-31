@@ -30,6 +30,40 @@ window.addEventListener("unhandledrejection", (e) => {
   );
 };
 
+// ── Maps API proactive preload ──────────────────────────────────────────────
+// Inject the Maps JS API script immediately (before React mounts) so that
+// gm_authFailure fires on every page load and we can capture the exact error
+// code in browser logs.  Uses id='google-map-script' — the same id that
+// @react-google-maps/api uses — so the library deduplicates and never injects
+// a second script tag.
+(function injectMapsPreload() {
+  const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+  if (!mapsKey) {
+    console.error("[GoogleMaps][preload] VITE_GOOGLE_MAPS_API_KEY is EMPTY — Maps cannot load");
+    return;
+  }
+  if (document.getElementById("google-map-script")) return; // already injected
+  (window as any).__ecologicMapsInit = function () {
+    const g = (window as any).google;
+    console.log(
+      "[GoogleMaps][preload] Maps API loaded OK",
+      "| origin:", window.location.origin,
+      "| key suffix:", mapsKey.slice(-6),
+      "| google.maps:", !!g?.maps,
+      "| google.maps.places:", !!g?.maps?.places,
+    );
+  };
+  const s = document.createElement("script");
+  s.id = "google-map-script";
+  s.async = true;
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}&libraries=places&callback=__ecologicMapsInit`;
+  s.onerror = (e) => console.error("[GoogleMaps][preload] Script onerror — possible network block or bad URL", e);
+  document.head.appendChild(s);
+  console.log("[GoogleMaps][preload] Script tag injected",
+    "| key suffix:", mapsKey.slice(-6),
+    "| src (key redacted):", s.src.replace(mapsKey, "REDACTED"));
+})();
+
 // Returns true ONLY for Capacitor native (iOS/Android).
 // Web always uses session cookies — Bearer is never needed on web.
 // (The canvas/picard origin uses the same Express process as production, so
