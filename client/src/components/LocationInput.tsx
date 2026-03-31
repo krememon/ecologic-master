@@ -43,9 +43,11 @@ export default function LocationInput({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSelectingRef = useRef(false);
   const autocompleteInitRef = useRef(false);
-  // Stable ref so the autocomplete listener always calls the latest callback
+  // Stable refs so autocomplete listeners always call the latest callbacks
   const onAddressSelectedRef = useRef(onAddressSelected);
   useEffect(() => { onAddressSelectedRef.current = onAddressSelected; });
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -95,13 +97,21 @@ export default function LocationInput({
 
     ac.addListener('place_changed', () => {
       const p = ac.getPlace();
-      if (!p?.address_components) return;
+      console.log('[LocationInput][place_changed] raw place:', p?.formatted_address ?? '(no formatted_address)', '| has address_components:', !!p?.address_components);
+      if (!p?.address_components) {
+        console.warn('[LocationInput][place_changed] No address_components — selection ignored');
+        return;
+      }
       const parsed = parseAddressComponents(p.address_components);
-      onAddressSelectedRef.current({
+      const addr = {
         ...parsed,
         place_id: p.place_id || '',
         formatted_address: p.formatted_address || '',
-      });
+      };
+      console.log('[LocationInput][place_changed] parsed:', addr);
+      // Update the controlled input value so the text field shows the selected address
+      onChangeRef.current(p.formatted_address || parsed.street || '');
+      onAddressSelectedRef.current(addr);
     });
 
     const repositionPacContainer = () => {

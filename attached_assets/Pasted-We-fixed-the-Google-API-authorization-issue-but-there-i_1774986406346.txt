@@ -1,0 +1,98 @@
+We fixed the Google API authorization issue, but there is still a functional bug in the web address autocomplete flow.
+
+PROBLEM
+Google address suggestions now appear, but when the user clicks a suggestion:
+- it does NOT properly fill the address field / parsed location fields
+- instead, it appears to close the modal/tab or dismiss the UI unexpectedly
+
+So autocomplete is partially working, but selection behavior is broken.
+
+GOAL
+Fix web address selection so when a user clicks a Google suggestion:
+1) the suggestion is selected properly
+2) the street address field is filled
+3) any existing city/state/zip/lat/lng parsing still runs correctly
+4) the modal stays open normally
+5) the form does NOT unexpectedly close/dismiss/reset
+
+WHAT TO AUDIT
+
+1) SELECTION HANDLER
+- Inspect the exact selection flow for the web job location input
+- Find where the Google autocomplete/place selection callback fires
+- Confirm the selected place result is being read correctly
+- Confirm the code actually writes the formatted address back into the controlled input/form state
+
+2) FORM / MODAL INTERACTION
+- Check whether clicking a Google suggestion is triggering:
+  - modal close
+  - blur handler
+  - outside-click handler
+  - form submit
+  - Escape/Enter behavior
+  - focus trap issue
+  - event propagation issue
+- Very likely the Google suggestions dropdown click is being treated like an outside click or submit event
+
+3) CONTROLLED INPUT STATE
+- Confirm the address input is not immediately being overwritten/reset by parent state
+- Confirm selected suggestion updates the real source-of-truth state for the form
+- Check for race conditions between:
+  - onChange
+  - onBlur
+  - place_changed / selection callback
+  - modal close logic
+  - form re-render/reset
+
+4) GOOGLE PLACE PARSING
+- Verify the selected place object is parsed correctly into:
+  - street address
+  - city
+  - state
+  - zip
+  - lat/lng
+- If parsing fails, log exactly why
+- Do not silently swallow selection errors
+
+5) WEB-ONLY BEHAVIOR
+- Since the issue is specifically on web, inspect whether the modal/dialog implementation on desktop web is interfering with the Google dropdown
+- Check z-index, pointer events, focus trapping, click-away listeners, portal behavior, and dialog dismissal hooks
+
+LIKELY ROOT CAUSES TO CHECK
+- click on suggestion is triggering modal outside-click close
+- Enter key on suggestion is submitting the form
+- controlled field updates are not wired to the selected place callback
+- selection callback fires but parent state immediately resets
+- dialog focus trap / blur handler interferes with Google’s injected dropdown
+
+DEBUGGING
+Add targeted logs for:
+- when autocomplete attaches
+- when a suggestion is selected
+- selected place payload
+- parsed address result
+- field state before/after selection
+- whether modal close handler fires
+- whether form submit fires
+- whether outside-click handler fires
+
+DELIVERABLES
+1) Fix web suggestion selection behavior
+2) Make selected address populate correctly
+3) Prevent the modal/tab from unexpectedly closing
+4) Preserve existing address parsing behavior
+5) List exact files changed
+6) Explain exact root cause
+7) Give a short manual test plan for:
+   - open new/edit job modal
+   - type address
+   - click suggestion
+   - verify field fills
+   - verify modal stays open
+   - verify city/state/zip fill if applicable
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the location modal
+- Do not change working mobile/tablet behavior unless shared code requires it
+- Reuse the existing location parsing/state flow where possible

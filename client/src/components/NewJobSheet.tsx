@@ -956,7 +956,20 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* LOCATION Modal */}
       <Dialog open={locationModalOpen} onOpenChange={setLocationModalOpen}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+        <DialogContent
+          hideCloseButton
+          className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden"
+          onPointerDownOutside={(e) => {
+            if ((e.detail.originalEvent.target as Element)?.closest?.('.pac-container')) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            if (((e as CustomEvent).detail?.originalEvent?.target as Element)?.closest?.('.pac-container')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
             <DialogHeader className="p-0">
               <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Job Location</DialogTitle>

@@ -285,7 +285,19 @@ function AddCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden rounded-2xl">
+      <DialogContent
+        className="sm:max-w-md p-0 gap-0 overflow-hidden rounded-2xl"
+        onPointerDownOutside={(e) => {
+          if ((e.detail.originalEvent.target as Element)?.closest?.('.pac-container')) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (((e as CustomEvent).detail?.originalEvent?.target as Element)?.closest?.('.pac-container')) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="px-4 h-14 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
           <Button
             variant="ghost"
