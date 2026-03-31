@@ -1,0 +1,68 @@
+We are past code guessing. Now I need you to verify the runtime/browser evidence and finish the fix.
+
+CURRENT STATUS
+You added diagnostics, but that is not the solution yet.
+Google autofill on web is still broken.
+
+NOW DO THIS EXACTLY
+
+STEP 1 — CAPTURE THE REAL ERROR
+Open the broken web address modal and inspect DevTools Console + Network.
+
+I need the exact output from:
+- [GoogleMaps][gm_authFailure]
+- [LocationInput][diag]
+- [ScheduleMap][diag]
+
+Also inspect Network requests for:
+- maps.googleapis.com
+- maps/api/js
+- places.googleapis.com
+
+Report back:
+1) exact Google error code
+2) request status codes
+3) current origin/domain
+4) whether the API key is present
+5) whether libraries=places is present
+6) whether scripts are loading once or multiple times
+
+STEP 2 — IF IT IS A GOOGLE CLOUD CONSOLE ISSUE, FIX IT
+If the console/network evidence shows any of these:
+- RefererNotAllowedMapError
+- BillingNotEnabledMapError
+- ApiNotActivatedMapError
+- InvalidKeyMapError
+- MissingKeyMapError
+
+Then clearly separate:
+A) code is now correct
+B) Google Cloud key/project config is wrong
+
+If it is a Google Cloud config issue, tell me the EXACT required settings changes, including:
+- which APIs must be enabled
+- whether billing must be enabled
+- exact HTTP referrer patterns that must be added
+- whether app.ecologicc.com must be added
+- whether current Replit preview domain must be added
+- whether localhost should be added too
+
+STEP 3 — ONLY MAKE CODE CHANGES IF RUNTIME EVIDENCE PROVES THEY ARE STILL NEEDED
+Do not keep changing code unless console/network proves there is still a code issue.
+
+STEP 4 — GIVE ME FINAL ANSWER IN THIS FORMAT
+
+1) Exact browser/Google error code:
+2) Exact root cause:
+3) Is the app code now correct? yes/no
+4) Is the remaining issue in Google Cloud Console? yes/no
+5) Exact code files changed:
+6) Exact Google Cloud Console changes required:
+7) Exact manual verification steps after final fix:
+
+IMPORTANT
+- I do not want more theory
+- I want the actual proven cause from console/network evidence
+- If this is a referrer restriction issue, say it directly
+- If this is billing/API activation, say it directly
+- If code is still wrong, prove it from evidence
