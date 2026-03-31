@@ -1,28 +1,48 @@
-import { Loader } from '@googlemaps/js-api-loader';
+import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 
-let loaded = false;
+// @googlemaps/js-api-loader v2 removed the Loader class.
+// We now use the functional API: setOptions() + importLibrary().
+// IMPORTANT: if @react-google-maps/api has already loaded the Maps script (via useJsApiLoader /
+// useLoadScript with id='google-map-script'), we skip loading entirely and reuse window.google.
 
-export async function loadMapsOnce() {
-  if (loaded && (window as any).google?.maps?.places) return (window as any).google;
+let loadPromise: Promise<any> | null = null;
 
-  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  if (!key) {
-    console.error('[MapsLoader] Missing VITE_GOOGLE_MAPS_API_KEY env variable');
-    throw new Error('Missing VITE_GOOGLE_MAPS_API_KEY');
+export async function loadMapsOnce(): Promise<any> {
+  // Fast path: already fully loaded by any loader (including @react-google-maps/api).
+  if ((window as any).google?.maps?.places) {
+    console.log('[MapsLoader] Google Maps + Places already loaded — skipping re-load');
+    return (window as any).google;
   }
 
-  try {
-    const loader = new Loader({ apiKey: key, libraries: ['places'] });
-    await (loader as any).load();
-  } catch (err: any) {
-    console.error('[MapsLoader] Google Maps JS API load failed:', err.message || err);
+  if (loadPromise) return loadPromise;
+
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  console.log('[MapsLoader] key present:', Boolean(key), 'host:', window.location.hostname);
+
+  if (!key) {
+    const err = new Error('Missing VITE_GOOGLE_MAPS_API_KEY');
+    console.error('[MapsLoader]', err.message);
     throw err;
   }
 
-  if (!(window as any).google?.maps?.places) {
-    console.error('[MapsLoader] Places library not available after load');
-    throw new Error('Places library failed to load');
-  }
-  loaded = true;
-  return (window as any).google;
+  loadPromise = (async () => {
+    try {
+      console.log('[MapsLoader] Starting load via setOptions/importLibrary...');
+      setOptions({ apiKey: key });
+      await importLibrary('places');
+
+      if (!(window as any).google?.maps?.places) {
+        throw new Error('Places library not available after import');
+      }
+
+      console.log('[MapsLoader] Loaded successfully');
+      return (window as any).google as typeof window.google;
+    } catch (err: any) {
+      console.error('[MapsLoader] Load failed:', err.message ?? err);
+      loadPromise = null;
+      throw err;
+    }
+  })();
+
+  return loadPromise;
 }

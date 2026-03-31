@@ -1,0 +1,73 @@
+We need to fix the Google Map not loading on EcoLogic web.
+
+PROBLEM
+On web, the Schedule > Map view is rendering the Google Maps error:
+"Oops! Something went wrong. This page didn't load Google Maps correctly."
+
+GOAL
+Make the Google Map load properly on web in the Schedule map view.
+
+WHAT TO CHECK
+
+1) GOOGLE MAPS API LOADING
+- Inspect how the Google Maps JavaScript API is being loaded on web
+- Verify the API key is present at runtime
+- Verify the frontend is reading the correct env var name
+- Confirm the script is not loading with an empty/undefined key
+- Confirm the map component waits for the API to finish loading before rendering
+
+2) GOOGLE CLOUD / API KEY RESTRICTIONS
+- Check whether the current key has the right APIs enabled
+- At minimum verify the correct Maps JavaScript API is enabled
+- If places/geocoding/etc are used by this screen, verify those too
+- Check whether HTTP referrer restrictions are blocking requests from the current web domain
+- Verify the production/staging/web domain is allowed in the Google Cloud key restrictions
+- Check whether localhost and Replit/dev origins need to be included for testing
+
+3) FRONTEND MAP COMPONENT
+- Inspect the exact Schedule Map component
+- Confirm it is using the correct map loader/library
+- Confirm no duplicate script loaders are conflicting
+- Confirm the component is not crashing and then falling back to the Google error state
+- Add a clean fallback/log if the key is missing instead of generic broken behavior
+
+4) ENV / BUILD CONFIG
+- Verify the correct public env var is exposed to the client build
+- Verify the web app build actually receives the key in production/runtime
+- Check for mismatch between server-only env vars and Vite client env vars
+- If using Vite, make sure the client-facing env var naming is correct
+
+5) DEBUGGING
+Add targeted logs only for:
+- whether API key exists on client
+- whether loader started
+- whether loader succeeded/failed
+- exact Google Maps loader error
+- current host/origin for restriction debugging
+
+DO NOT
+- Do not redesign the schedule page
+- Do not touch mobile native map behavior unless shared code requires it
+- Do not remove the map feature
+- Do not hardcode secrets into source files
+
+DELIVERABLES
+1) Fix the web Google Map loading issue
+2) Explain exact root cause
+3) List exact files changed
+4) State whether the issue was:
+   - missing API key
+   - wrong env var
+   - referrer restriction
+   - disabled Google API
+   - loader/component bug
+   - or a combination
+5) Give short manual test steps for:
+   - web dev
+   - web production/staging
+   - Schedule > Map view load confirmation
+
+IMPORTANT
+- Keep the fix tight and production-safe
+- Preserve existing schedule behavior
+- Make the map reliably load on web

@@ -58,9 +58,12 @@ export function LocationAutocomplete({
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   const { isLoaded, loadError } = useLoadScript({
+    // IMPORTANT: This id must match the one used in ScheduleMapView (useJsApiLoader).
+    // Mismatched ids cause two separate <script> tags to be injected, which triggers
+    // the Google Maps "Oops! Something went wrong" error.
+    id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
     libraries,
-    id: 'ecologic-places-loader',
   });
 
   useEffect(() => {

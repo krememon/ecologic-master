@@ -285,12 +285,34 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
-  
+
+  // Diagnostic: log key presence and origin for debugging referrer-restriction issues.
+  useEffect(() => {
+    console.log('[ScheduleMap] apiKey present:', hasApiKey,
+      '| host:', window.location.hostname,
+      '| origin:', window.location.origin);
+  }, [hasApiKey]);
+
   const { isLoaded, loadError } = useJsApiLoader({
+    // id MUST match the id used by LocationAutocomplete (useLoadScript).
+    // Mismatched ids cause two separate <script> tags → Google Maps "Oops!" error.
     id: 'google-map-script',
     googleMapsApiKey: apiKey,
     libraries: LIBRARIES
   });
+
+  useEffect(() => {
+    if (loadError) {
+      console.error('[ScheduleMap] Maps load error:', loadError.message ?? loadError,
+        '| host:', window.location.hostname);
+    }
+  }, [loadError]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      console.log('[ScheduleMap] Maps API loaded successfully');
+    }
+  }, [isLoaded]);
 
   const role = (userRole || '').toUpperCase();
   const isSelf = (locUserId: string) => userId && locUserId === userId;
