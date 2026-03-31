@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 export type Address = {
   street: string; city: string; state: string; postalCode: string;
   country: string; place_id: string; formatted_address: string;
+  lat?: number; lng?: number;
 };
 
 interface Prediction {
@@ -91,7 +92,7 @@ export default function LocationInput({
     console.log('[LocationInput] Attaching google.maps.places.Autocomplete — Places API available:', !!(window as any).google?.maps?.places);
 
     const ac = new google.maps.places.Autocomplete(inputRef.current!, {
-      fields: ['address_components', 'formatted_address', 'place_id'],
+      fields: ['address_components', 'formatted_address', 'place_id', 'geometry'],
       types: ['address'],
     });
 
@@ -103,12 +104,15 @@ export default function LocationInput({
         return;
       }
       const parsed = parseAddressComponents(p.address_components);
+      const loc = p.geometry?.location;
       const addr = {
         ...parsed,
         place_id: p.place_id || '',
         formatted_address: p.formatted_address || '',
+        lat: typeof loc?.lat === 'function' ? loc.lat() : undefined,
+        lng: typeof loc?.lng === 'function' ? loc.lng() : undefined,
       };
-      console.log('[LocationInput][place_changed] parsed:', addr);
+      console.log('[LocationInput][place_changed] parsed:', addr.formatted_address, '| lat:', addr.lat, '| lng:', addr.lng);
       // Update the controlled input value so the text field shows the selected address
       onChangeRef.current(p.formatted_address || parsed.street || '');
       onAddressSelectedRef.current(addr);
@@ -185,6 +189,9 @@ export default function LocationInput({
       const data = await resp.json();
       if (data.status === 'OK' && data.result?.address_components) {
         const parsed = parseAddressComponents(data.result.address_components);
+        const geoLoc = data.result.geometry?.location;
+        const lat = typeof geoLoc?.lat === 'number' ? geoLoc.lat : undefined;
+        const lng = typeof geoLoc?.lng === 'number' ? geoLoc.lng : undefined;
         onAddressSelectedRef.current({
           street: parsed.street || prediction.description,
           city: parsed.city,
@@ -193,6 +200,8 @@ export default function LocationInput({
           country: parsed.country,
           place_id: prediction.place_id,
           formatted_address: data.result.formatted_address || prediction.description,
+          lat,
+          lng,
         });
       } else {
         onAddressSelectedRef.current({

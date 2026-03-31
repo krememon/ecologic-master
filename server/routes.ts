@@ -6517,7 +6517,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobUpdateData.completedAt = new Date();
         }
       }
-      
+
+      // Backend geocoding safety net: if location text changed but no valid coordinates
+      // were provided (frontend sent null or omitted them), geocode the new address.
+      const newLocation = jobUpdateData.location ?? existingJob.location;
+      const updatedLat = jobUpdateData.locationLat;
+      const updatedLng = jobUpdateData.locationLng;
+      const locationChanged = jobUpdateData.location !== undefined && jobUpdateData.location !== existingJob.location;
+      const coordsMissing = updatedLat === null || updatedLat === undefined || updatedLng === null || updatedLng === undefined;
+      if (locationChanged && coordsMissing && newLocation) {
+        try {
+          const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
+          if (mapsKey) {
+            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(newLocation)}&key=${mapsKey}`;
+            const geoResp = await fetch(geoUrl);
+            const geoData = await geoResp.json();
+            if (geoData.status === 'OK' && geoData.results?.[0]?.geometry?.location) {
+              const { lat, lng } = geoData.results[0].geometry.location;
+              jobUpdateData.locationLat = lat;
+              jobUpdateData.locationLng = lng;
+              console.log(`[JobUpdate] Server geocoded new address: lat=${lat} lng=${lng}`);
+            } else {
+              console.warn('[JobUpdate] Server geocoding returned no results for:', newLocation, '| status:', geoData.status);
+              jobUpdateData.locationLat = null;
+              jobUpdateData.locationLng = null;
+            }
+          }
+        } catch (geocodeErr) {
+          console.error('[JobUpdate] Server geocoding failed:', geocodeErr);
+          jobUpdateData.locationLat = null;
+          jobUpdateData.locationLng = null;
+        }
+      }
+
       const updatedJob = await storage.updateJob(jobId, jobUpdateData);
 
       if (status === 'completed' && existingJob.status !== 'completed') {

@@ -147,8 +147,8 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [city, setCity] = useState("");
   const [locationState, setLocationState] = useState("");
   const [postalCode, setPostalCode] = useState("");
-  const [locationLat, setLocationLat] = useState<number | undefined>();
-  const [locationLng, setLocationLng] = useState<number | undefined>();
+  const [locationLat, setLocationLat] = useState<number | null | undefined>();
+  const [locationLng, setLocationLng] = useState<number | null | undefined>();
   const [locationPlaceId, setLocationPlaceId] = useState("");
   const [locationIsManualOverride, setLocationIsManualOverride] = useState(false);
   const [priority, setPriority] = useState("medium");
@@ -449,8 +449,8 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       location?: string;
       city?: string;
       postalCode?: string;
-      locationLat?: number;
-      locationLng?: number;
+      locationLat?: number | null;
+      locationLng?: number | null;
       locationPlaceId?: string;
       priority?: string;
       customerId?: number;
@@ -506,8 +506,8 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       location?: string;
       city?: string;
       postalCode?: string;
-      locationLat?: number;
-      locationLng?: number;
+      locationLat?: number | null;
+      locationLng?: number | null;
       locationPlaceId?: string;
       priority?: string;
       customerId?: number;
@@ -991,6 +991,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                   setLocationPlaceId(addr.place_id);
                   setLocation(addr.formatted_address || addr.street);
                   setLocationIsManualOverride(true);
+                  // Update coordinates — use null to explicitly clear stale coords when not provided
+                  setLocationLat(addr.lat ?? null);
+                  setLocationLng(addr.lng ?? null);
                 }}
                 placeholder="Street Address"
               />

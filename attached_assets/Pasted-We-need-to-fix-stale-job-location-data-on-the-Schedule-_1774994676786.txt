@@ -1,0 +1,86 @@
+We need to fix stale job location data on the Schedule map.
+
+PROBLEM
+If a job originally has one address (example: 321 Astor Dr) and then the user edits that job location to a new address (example: 22 Split Cedar Dr), the Schedule > Map view still shows the OLD location/address.
+
+So the job address update is not fully propagating to the map data.
+
+GOAL
+When a job’s address/location is edited and saved, the Schedule map must reflect the NEW location immediately/correctly.
+
+WHAT TO AUDIT
+
+1) SOURCE OF TRUTH
+- Find exactly what Schedule > Map is using as its source of location data
+- Confirm whether it reads:
+  - job.address / job.location
+  - stored lat/lng columns
+  - cached geocoded fields
+  - stale schedule-specific snapshot data
+- Identify whether the map pin is based on address text, coordinates, or both
+
+2) JOB EDIT SAVE FLOW
+- Inspect the full edit-job location save pipeline
+- Confirm when a user changes the address, all related fields are updated correctly:
+  - street address
+  - city/state/zip
+  - lat/lng
+  - formatted address
+  - any geocode cache / location object / derived fields
+- Check whether only the text field is changing while coordinates remain old
+
+3) MAP QUERY / CACHE
+- Audit the Schedule map query
+- Check whether the map is using stale cached React Query data or equivalent
+- Confirm the correct query invalidation/refetch happens after a job edit
+- If the edit modal saves successfully, Schedule map data should refresh and not keep old markers
+
+4) BACKEND PERSISTENCE
+- Verify the backend job update route actually saves the new location and coordinates
+- Confirm no old lat/lng survives when address changes
+- Confirm no old map marker data is being reused from a prior geocode result
+
+5) GEOCODING / RECOMPUTE
+- If location changes, ensure coordinates are recalculated from the new address
+- If geocoding fails, do not silently keep the old coordinates tied to the new text address
+- Either:
+  - update both address + coordinates correctly
+  - or clear stale coordinates so old map pins do not remain
+
+6) SCHEDULE MAP RENDERING
+- Confirm markers use the latest saved values
+- Confirm marker labels/info cards also use latest address
+- Make sure there is no stale memoization keyed incorrectly
+
+LIKELY ROOT CAUSES TO CHECK
+- address text updates but lat/lng stays old
+- job update route does not recompute/replace coordinates
+- schedule map query not invalidated after edit
+- schedule map reads stale cached job list
+- map marker logic prefers old coordinates over updated address without refresh
+
+DEBUGGING
+Add targeted logs only for:
+- job update payload before save
+- saved address + saved lat/lng after update
+- schedule map query response for that job
+- marker data used for rendering
+- query invalidation/refetch after edit
+
+DELIVERABLES
+1) Fix Schedule map so edited job locations update correctly
+2) Ensure old address/coordinates do not persist after a location edit
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - create/edit a job with address A
+   - confirm map pin shows address A
+   - edit same job to address B
+   - confirm map pin updates to address B
+   - refresh page and confirm address B still shows
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign Schedule map
+- Do not break existing job edit flow
+- Preserve current map behavior otherwise
