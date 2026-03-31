@@ -4319,7 +4319,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log("[companies] create: userId=", userId, "provider=", (req.user as any)?.provider);
-      
+
+      // Guard: prevent creating a second company if the user already has a membership.
+      // This stops ghost/duplicate companies from being created during onboarding retries.
+      const existingMembership = await storage.getUserCompany(userId);
+      if (existingMembership) {
+        console.warn(`[companies] create blocked — userId=${userId} already in companyId=${existingMembership.id}`);
+        return res.status(409).json({ code: 'ALREADY_HAS_COMPANY', message: 'You already belong to a company' });
+      }
+
       const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
@@ -4367,6 +4375,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if user already belongs to a company
       const existingCompany = await storage.getUserCompany(userId);
       if (existingCompany) {
+        // Determine if this is a ghost/abandoned company the user owns but never finished setting up.
+        // A ghost company: onboarding not completed + user is the owner + no other members.
+        const [memberCount] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(companyMembers)
+          .where(eq(companyMembers.companyId, existingCompany.id));
+        const isGhostCompany =
+          !existingCompany.onboardingCompleted &&
+          existingCompany.ownerId === userId &&
+          (memberCount?.count ?? 0) <= 1;
+
+        if (isGhostCompany) {
+          console.warn(`[join-company] userId=${userId} blocked by ghost companyId=${existingCompany.id} — returning specific error`);
+          return res.status(400).json({
+            code: 'GHOST_COMPANY',
+            message: "Your account has an incomplete company setup. Please contact support to clear it so you can join as an employee.",
+          });
+        }
+
         return res.status(400).json({ 
           code: 'ALREADY_IN_COMPANY',
           message: "You already belong to a company" 
