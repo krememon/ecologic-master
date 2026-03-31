@@ -12,6 +12,24 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[UnhandledRejection]", e.reason);
 });
 
+// Google Maps auth-failure handler — fires BEFORE "This page can't load Google Maps correctly"
+// popup appears. The error code reveals the exact cause:
+//   RefererNotAllowedMapError  → API key restricted to specific domains, current origin not allowed
+//   InvalidKeyMapError         → API key is malformed or wrong
+//   MissingKeyMapError         → No API key passed to the loader
+//   ApiNotActivatedMapError    → Maps JavaScript API not enabled on the Cloud project
+//   BillingNotEnabledMapError  → Billing not enabled on the Cloud project
+(window as any).gm_authFailure = function () {
+  console.error(
+    "[GoogleMaps][gm_authFailure] API key authentication FAILED.",
+    "| error code may be one of: RefererNotAllowedMapError, InvalidKeyMapError, MissingKeyMapError, ApiNotActivatedMapError, BillingNotEnabledMapError",
+    "| current origin:", window.location.origin,
+    "| host:", window.location.hostname,
+    "| key suffix:", (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "").slice(-6) || "(empty)",
+    "| window.google present:", !!(window as any).google,
+  );
+};
+
 // Returns true ONLY for Capacitor native (iOS/Android).
 // Web always uses session cookies — Bearer is never needed on web.
 // (The canvas/picard origin uses the same Express process as production, so

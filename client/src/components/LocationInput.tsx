@@ -49,7 +49,7 @@ export default function LocationInput({
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
-  // Use the same loader id as ScheduleMapView and LocationAutocomplete so
+  // Use the same loader id as ScheduleMapView so
   // @react-google-maps/api deduplicates the script and never injects it twice.
   const { isLoaded, loadError } = useLoadScript({
     id: 'google-map-script',
@@ -58,21 +58,35 @@ export default function LocationInput({
   });
 
   useEffect(() => {
+    // ── Diagnostic snapshot (runs every time isLoaded/loadError changes) ──
+    const mapsScriptTags = Array.from(document.querySelectorAll('script[src*="maps.googleapis.com"]')).map((s) => (s as HTMLScriptElement).src.replace(/key=[^&]+/, 'key=REDACTED'));
+    console.log(
+      '[LocationInput][diag] isLoaded:', isLoaded,
+      '| loadError:', loadError?.message ?? loadError ?? null,
+      '| apiKey present:', !!apiKey,
+      '| apiKey suffix:', apiKey.slice(-6) || '(empty)',
+      '| origin:', window.location.origin,
+      '| window.google:', !!(window as any).google,
+      '| window.google.maps:', !!(window as any).google?.maps,
+      '| window.google.maps.places:', !!(window as any).google?.maps?.places,
+      '| maps script tags:', mapsScriptTags.length, mapsScriptTags,
+    );
+
     if (loadError) {
-      console.warn('[LocationInput] Google Maps failed to load, switching to backend:', loadError.message ?? loadError);
+      console.error('[LocationInput] Google Maps script FAILED to load — switching to backend fallback. Error:', loadError.message ?? loadError);
       setUseBackend(true);
       return;
     }
 
     if (!isLoaded || !inputRef.current || autocompleteInitRef.current) return;
     if (!apiKey) {
-      console.warn('[LocationInput] No API key, switching to backend');
+      console.warn('[LocationInput] No API key — switching to backend fallback');
       setUseBackend(true);
       return;
     }
 
     autocompleteInitRef.current = true;
-    console.log('[LocationInput] Attaching google.maps.places.Autocomplete');
+    console.log('[LocationInput] Attaching google.maps.places.Autocomplete — Places API available:', !!(window as any).google?.maps?.places);
 
     const ac = new google.maps.places.Autocomplete(inputRef.current!, {
       fields: ['address_components', 'formatted_address', 'place_id'],

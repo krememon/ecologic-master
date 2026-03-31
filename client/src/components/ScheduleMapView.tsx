@@ -288,14 +288,17 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   // Diagnostic: log key presence and origin for debugging referrer-restriction issues.
   useEffect(() => {
-    console.log('[ScheduleMap] apiKey present:', hasApiKey,
+    const mapsScriptTags = Array.from(document.querySelectorAll('script[src*="maps.googleapis.com"]')).map((s) => (s as HTMLScriptElement).src.replace(/key=[^&]+/, 'key=REDACTED'));
+    console.log('[ScheduleMap][diag] apiKey present:', hasApiKey,
+      '| apiKey suffix:', apiKey.slice(-6) || '(empty)',
       '| host:', window.location.hostname,
-      '| origin:', window.location.origin);
-  }, [hasApiKey]);
+      '| origin:', window.location.origin,
+      '| maps script tags:', mapsScriptTags.length, mapsScriptTags);
+  }, [hasApiKey, apiKey]);
 
   const { isLoaded, loadError } = useJsApiLoader({
-    // id MUST match the id used by LocationAutocomplete (useLoadScript).
-    // Mismatched ids cause two separate <script> tags → Google Maps "Oops!" error.
+    // id MUST match the id used by LocationInput (useLoadScript).
+    // Mismatched ids cause two separate <script> tags → Google Maps auth-failure popup.
     id: 'google-map-script',
     googleMapsApiKey: apiKey,
     libraries: LIBRARIES

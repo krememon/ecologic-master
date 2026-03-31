@@ -1,0 +1,117 @@
+The previous fix was NOT enough. Google autofill on web is still broken, and we need to debug this more aggressively.
+
+CURRENT FACT
+Even after moving LocationInput onto @react-google-maps/api, the address field still shows the Google popup:
+"This page can't load Google Maps correctly."
+
+That means the issue is NOT resolved yet.
+
+GOAL
+Find the actual remaining root cause and fully fix Google address autocomplete on web.
+
+IMPORTANT
+Do not assume the loader unification solved it.
+We now need to inspect the real browser/runtime cause.
+
+DEBUG THIS EXACTLY
+
+1) CHECK THE REAL GOOGLE ERROR CODE
+Open browser DevTools console on the broken page and capture the EXACT Google Maps error code/message.
+Examples could be:
+- RefererNotAllowedMapError
+- InvalidKeyMapError
+- ApiNotActivatedMapError
+- BillingNotEnabledMapError
+- MissingKeyMapError
+- TOSViolationMapError
+- or duplicate loader/init issues
+
+I need the exact Google error, not just the popup text.
+
+2) CHECK NETWORK REQUESTS
+In DevTools Network tab, filter for:
+- maps.googleapis.com
+- places.googleapis.com
+- maps/api/js
+Inspect failed requests and report:
+- request URL
+- status code
+- response/error text if visible
+- whether the key is present
+- whether libraries=places is present
+- whether referrer/origin looks correct
+
+3) VERIFY API KEY / RESTRICTIONS
+Do not guess.
+Confirm whether the current key used by the web app:
+- is valid
+- has Maps JavaScript API enabled
+- has Places API enabled if required
+- has billing enabled on the Google project
+- allows the current web origin/referrer being used right now
+Check all applicable origins:
+- app.ecologicc.com
+- current Replit preview/dev origin
+- localhost if used
+
+4) CHECK WHETHER ANOTHER SCRIPT LOAD STILL EXISTS
+Search the codebase for ALL Google Maps script loading paths:
+- useLoadScript
+- useJsApiLoader
+- @googlemaps/js-api-loader
+- google.maps.importLibrary
+- script tags with maps.googleapis.com
+- window.google.maps related bootstrapping
+I want confirmation of every remaining loader entry point.
+There may still be another map loader somewhere.
+
+5) CHECK MODAL-SPECIFIC / AUTOCOMPLETE-SPECIFIC USAGE
+The error is happening specifically inside the job location modal/autofill flow.
+Audit whether:
+- autocomplete is being initialized before API fully loads
+- an Autocomplete widget is being attached multiple times
+- StrictMode double-mount is causing duplicate init
+- modal open/close rerenders cause Google init to fire twice
+- Places library is missing at the moment this field mounts
+
+6) TEMPORARY DEBUG LOGS
+Add targeted logs for:
+- current hostname/origin
+- API key present true/false
+- loader state in LocationInput
+- loader state in LocationAutocomplete
+- whether window.google exists
+- whether window.google.maps.places exists
+- whether autocomplete init starts more than once
+- exact caught errors, not generic failures
+
+EXPECTED DELIVERABLES
+I need a REAL diagnosis this time:
+
+1) The exact Google/browser error code
+2) The actual root cause
+3) Exact files changed
+4) Exact fix applied
+5) Whether this was:
+   - referrer restriction
+   - billing/API activation issue
+   - still duplicate script loading
+   - duplicate autocomplete init
+   - modal lifecycle bug
+   - wrong key
+   - or a combination
+
+VERY IMPORTANT
+- Do not just say "loader conflict" again unless you can prove it from console/network evidence
+- Do not just make code guesses without verifying runtime evidence
+- If this turns out to be a Google Cloud Console restriction problem, say that clearly
+- If code and console both need changes, separate them clearly
+
+FINAL VERIFICATION AFTER FIX
+1) Web → open new/edit job modal
+2) Type address
+3) Suggestions appear without any Google popup
+4) Select suggestion
+5) Address populates correctly
+6) Go to Schedule map and confirm map still works
+7) Return to job modal and confirm autocomplete still works
