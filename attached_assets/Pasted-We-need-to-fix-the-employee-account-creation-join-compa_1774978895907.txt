@@ -1,0 +1,111 @@
+We need to fix the employee account creation / join company onboarding flow. Right now the flow has duplicated choice screens and incorrect routing/state after joining.
+
+PROBLEM SUMMARY
+There are currently effectively 2 onboarding choice screens in the account creation flow.
+
+Observed broken behavior:
+1) User creates an employee account
+2) User chooses "Join a company"
+3) User enters the employee/company invite code
+4) User clicks the join/next button
+5) Instead of finishing properly, the app sends them to another "How will you use EcoLogic?" choice screen
+
+That second choice screen should NOT appear in the employee join flow.
+
+Even worse:
+- On that second choice screen, if the user clicks "Create a company"
+- It still puts them into an employee account/session
+- So the routing/state is inconsistent and broken
+
+GOAL
+There should be only ONE choice screen in this entire onboarding branch.
+The screen shown in the screenshot ("How will you use EcoLogic?") should be the initial choice screen only.
+If a user chooses the employee/join-company route, they should never be sent back to another choice screen afterward.
+
+DESIRED FLOW
+
+CORRECT OWNER FLOW
+1) User signs up
+2) User sees the single onboarding choice screen
+3) User chooses "Create a company"
+4) User completes owner/company creation flow
+5) User lands in the proper owner account experience
+
+CORRECT EMPLOYEE FLOW
+1) User signs up
+2) User sees the single onboarding choice screen
+3) User chooses "Join a company"
+4) User enters invite/company code
+5) User successfully joins the company
+6) User lands directly in the correct employee account experience
+7) No second choice screen
+8) No ability to accidentally run owner onboarding after already joining as employee
+
+WHAT TO AUDIT
+Please inspect the full onboarding/account-routing logic for:
+- initial post-signup routing
+- onboarding choice screen rendering conditions
+- owner/create-company route
+- employee/join-company route
+- any onboarding completion flags
+- any user/company membership checks
+- any session/auth refresh after join-company succeeds
+- any redirect guards that may still think user is unconfigured
+- any stale frontend state/query cache causing the second screen to render
+
+LIKELY ROOT ISSUE TO CHECK
+This feels like one or more of these:
+- join-company succeeds but onboarding completion state is not updated
+- user membership/company context is not refreshed after join
+- route guard only checks "hasCompanyOwnerProfile" and not general company membership
+- onboarding screen condition is too broad and shows for employees who are already attached to a company
+- create-company action on the second screen is using stale state and incorrectly available when it should not be
+
+REQUIREMENTS
+
+1) ONLY ONE CHOICE SCREEN
+- The "How will you use EcoLogic?" screen should only appear once at the beginning
+- Never show it again after join-company success
+- Never show it to a user who is already attached to a company in any role
+
+2) EMPLOYEE JOIN SUCCESS BEHAVIOR
+- After successful company join, immediately refresh the authenticated user/company state
+- Route directly into the proper employee app experience
+- Do not require manual refresh
+
+3) OWNER VS EMPLOYEE GUARDING
+- If the user has already joined a company as an employee, they should not be able to fall into a stray create-company onboarding branch
+- If needed, hide or block owner onboarding once membership already exists
+- Preserve intended product rules, but remove this broken mixed-state behavior
+
+4) PRESERVE RBAC
+- Do not break role assignment
+- The joined employee must remain an employee/member account, not owner/admin by accident
+- Keep current seat-limit / join-company validations intact
+
+5) DEBUG LOGS
+Add targeted logs around:
+- initial onboarding screen render decision
+- join-company success response
+- membership/company state after join
+- redirect target after join
+- why onboarding choice screen is being shown
+Do not add noisy unrelated logs
+
+DELIVERABLES
+1) Fix the duplicate onboarding choice screen issue
+2) Fix employee join flow so it lands directly in the employee account experience
+3) Prevent the broken "create company from second screen" mixed-state issue
+4) List exact files changed
+5) Explain the exact root cause
+6) Provide a short manual test plan for:
+   - new owner signup flow
+   - new employee signup + join company flow
+   - ensure no second choice screen appears
+   - ensure employee lands in correct company account immediately
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the whole onboarding system
+- Do not break owner onboarding
+- Do not break join-company seat checks or membership logic

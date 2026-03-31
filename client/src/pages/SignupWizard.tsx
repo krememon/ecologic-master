@@ -434,9 +434,15 @@ export default function SignupWizard() {
   const handleRoleSelect = (role: "owner" | "employee") => {
     setUserPath(role);
     localStorage.setItem("onboardingChoice", role);
-    console.log("[onboarding] choice saved:", role);
+    console.log("[signup-wizard] role selected:", role);
+
+    // Persist to DB immediately so the auth router always sees the correct
+    // onboardingChoice even if the user refreshes mid-flow.
+    apiRequest("POST", "/api/auth/onboarding-choice", { choice: role }).catch((err) => {
+      console.warn("[signup-wizard] failed to persist onboarding choice to DB:", err);
+    });
+
     if (role === "owner") {
-      // Redirect to Industry Grid page (Step 3)
       setLocation("/onboarding/industry");
     } else {
       goToStep("invite");
@@ -511,26 +517,31 @@ export default function SignupWizard() {
   
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.inviteCode.trim()) {
       setErrors({ inviteCode: "Enter your invite code" });
       return;
     }
-    
+
     setIsLoading(true);
     try {
+      console.log("[signup-wizard] join-company attempt with invite code");
       const res = await apiRequest("POST", "/api/join-company", {
         inviteCode: formData.inviteCode,
       });
-      
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "Invalid invite code");
       }
-      
+
+      console.log("[signup-wizard] join-company success — hard-navigating to dashboard");
       localStorage.removeItem("onboardingChoice");
-      setLocation("/");
+      // Hard navigation forces a fresh auth fetch so the app sees the new
+      // company membership immediately without stale-cache routing issues.
+      window.location.href = "/";
     } catch (error: any) {
+      console.error("[signup-wizard] join-company failed:", error.message);
       setErrors({ inviteCode: error.message });
     } finally {
       setIsLoading(false);

@@ -54,6 +54,7 @@ export default function JoinCompany() {
     setIsJoining(true);
     
     try {
+      console.log("[join-company] submitting invite code");
       const res = await apiRequest("POST", "/api/join-company", {
         inviteCode: inviteCode.trim(),
       });
@@ -67,19 +68,15 @@ export default function JoinCompany() {
         throw new Error(error.message || "Failed to join company");
       }
 
-      // Invalidate all queries to refresh data with new company
-      await queryClient.invalidateQueries();
-      
+      console.log("[join-company] success — hard-navigating to dashboard to ensure fresh auth state");
       localStorage.removeItem("onboardingChoice");
-      
-      toast({
-        title: "Success",
-        description: "You've joined the company successfully!",
-      });
 
-      // Redirect to dashboard using replace to prevent back-button issues
-      setLocation("/", { replace: true });
+      // Hard navigation forces the React app to start fresh so the new
+      // company membership is fetched cleanly — prevents stale-cache routing
+      // from sending the user back to the choice screen.
+      window.location.href = "/";
     } catch (error: any) {
+      console.error("[join-company] failed:", error.message);
       toast({
         title: "Error",
         description: error.message || "Failed to join company",

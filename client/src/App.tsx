@@ -224,10 +224,12 @@ function getNextOnboardingRoute(params: {
   }
   
   if (!onboardingChoice) {
+    console.log("[app-router] no onboardingChoice — routing to choice screen (userId=" + user?.id + ")");
     return "/onboarding/choice";
   }
-  
+
   if (onboardingChoice === "employee") {
+    console.log("[app-router] onboardingChoice=employee, no company yet — routing to join-company");
     return "/join-company";
   }
   
