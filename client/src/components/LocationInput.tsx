@@ -161,7 +161,7 @@ export default function LocationInput({
       const data = await resp.json();
       if (data.status === 'OK' && data.result?.address_components) {
         const parsed = parseAddressComponents(data.result.address_components);
-        onAddressSelected({
+        onAddressSelectedRef.current({
           street: parsed.street || prediction.description,
           city: parsed.city,
           state: parsed.state,
@@ -171,7 +171,7 @@ export default function LocationInput({
           formatted_address: data.result.formatted_address || prediction.description,
         });
       } else {
-        onAddressSelected({
+        onAddressSelectedRef.current({
           street: prediction.description,
           city: '', state: '', postalCode: '', country: '',
           place_id: prediction.place_id,
@@ -179,7 +179,7 @@ export default function LocationInput({
         });
       }
     } catch {
-      onAddressSelected({
+      onAddressSelectedRef.current({
         street: prediction.description,
         city: '', state: '', postalCode: '', country: '',
         place_id: prediction.place_id,
@@ -187,7 +187,7 @@ export default function LocationInput({
       });
     }
     setTimeout(() => { isSelectingRef.current = false; }, 100);
-  }, [onChange, onAddressSelected]);
+  }, [onChange]);
 
   const handleChange = useCallback((val: string) => {
     onChange(val);
