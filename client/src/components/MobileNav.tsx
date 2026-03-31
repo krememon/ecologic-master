@@ -141,15 +141,6 @@ interface MobileNavProps {
 export default function MobileNav({ user, company }: MobileNavProps) {
   const { isOpen, toggle: toggleSidebar, close: closeSidebar } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  // Detect Capacitor native context so the iPad action bar only renders in the native wrapper
-  const [isNative] = useState<boolean>(() => {
-    try {
-      const cap = (window as any).Capacitor;
-      return !!cap?.isNativePlatform?.();
-    } catch {
-      return false;
-    }
-  });
   // Android-only bottom safe-area detection — used to push the logout button above
   // the system navigation bar. Does not affect iOS or web.
   const [isAndroid] = useState<boolean>(() => {
@@ -376,29 +367,26 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         </div>
       </div>
 
-      {/* iPad Native Action Bar — shown on sm+ screens only inside the native Capacitor wrapper.
-          On the web or iPhone this is either hidden (sm:hidden on mobile header handles iPhone)
-          or not rendered at all (isNative=false on web). This gives iPad a persistent
-          header strip with the bell and + button without changing iPhone or web desktop. */}
-      {isNative && (
-        <div className="hidden sm:flex items-center justify-end px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800" style={{ minHeight: '52px' }}>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setNotificationsOpen(true)}
-              className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-            <GlobalCreateMenu />
-          </div>
+      {/* Desktop / iPad Action Bar — shown on sm+ screens (web desktop, iPad native, Android tablet).
+          iPhone is handled by the sm:hidden mobile header above.
+          hidden sm:flex ensures this is invisible on phone-sized viewports. */}
+      <div className="hidden sm:flex items-center justify-end px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800" style={{ minHeight: '52px' }}>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setNotificationsOpen(true)}
+            className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+          <GlobalCreateMenu />
         </div>
-      )}
+      </div>
 
       {/* Mobile Menu Overlay */}
       <div className={cn(

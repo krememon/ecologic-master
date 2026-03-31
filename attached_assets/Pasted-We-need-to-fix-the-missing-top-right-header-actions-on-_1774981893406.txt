@@ -1,0 +1,77 @@
+We need to fix the missing top-right header actions on EcoLogic web.
+
+PROBLEM
+On web, pages like the employee Timesheets screen are missing the top-right header actions:
+- notification bell
+- + quick actions button
+
+These header actions already exist in the other experiences:
+- iPhone
+- Android
+- iPad
+
+But they are not showing on web, and they need to appear there too.
+
+GOAL
+Make the web app show the same top-right header actions (notification bell + quick actions + button) in the proper header area, consistent with the rest of EcoLogic.
+
+WHAT TO CHECK
+
+1) SHARED HEADER LOGIC
+- Audit how the notification bell and + quick action button are rendered on iPhone / Android / iPad
+- Determine whether web is using a different layout shell, page container, or header component
+- Find where web diverges from tablet/mobile layouts
+
+2) WEB LAYOUT / APP SHELL
+- Inspect the web app shell / page wrapper / content header logic
+- Confirm whether the header action slot exists on web but is hidden
+- Confirm whether the actions are conditionally excluded on desktop/web by screen-size checks or platform checks
+- Check whether the sidebar layout accidentally removed the top-right action area
+
+3) PAGES AFFECTED
+- At minimum ensure the header actions appear on web pages where they should already exist in-app
+- Start with the screen shown in the screenshot
+- Then verify consistency across other main web pages so web is not missing the actions in random places
+
+4) UX REQUIREMENTS
+- Put the notification bell and + quick actions button in the normal top-right header location
+- Match existing EcoLogic styling
+- Do not create a second weird header
+- Do not break spacing or overlap the sidebar/content
+- Preserve current web layout aesthetic
+
+5) FUNCTIONAL REQUIREMENTS
+- Notification bell should behave exactly like existing implementation
+- + button should open the same quick actions flow/menu used elsewhere
+- Do not create placeholder buttons
+- Reuse the real existing components/handlers
+
+LIKELY ROOT CAUSES TO CHECK
+- desktop/web layout omits the header actions component
+- conditional rendering excludes them for web
+- page header component used on web does not accept/render action slot
+- responsive breakpoint logic incorrectly hides them on larger screens
+
+DEBUGGING
+Add targeted logs only if needed for:
+- current platform/layout branch
+- whether header actions component is being mounted
+- whether breakpoint/platform check is hiding it
+
+DELIVERABLES
+1) Fix web so the notification bell and + quick actions button appear in the proper header area
+2) Reuse the existing real action components/behavior
+3) Keep styling aligned with the rest of EcoLogic
+4) List exact files changed
+5) Explain exact root cause
+6) Provide a short manual test plan for:
+   - web employee pages
+   - web owner/admin pages
+   - notification bell opens
+   - + quick actions opens
+
+IMPORTANT
+- Tight fix only
+- Do not redesign the whole web header
+- Do not touch mobile/tablet behavior unless shared code requires it
+- Preserve all existing notification and quick action functionality
