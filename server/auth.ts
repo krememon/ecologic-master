@@ -189,12 +189,15 @@ async function sendVerificationEmail(email: string, token: string) {
 async function sendPasswordResetEmail(email: string, token: string) {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
-    console.warn("[password-reset] RESEND_API_KEY not configured, skipping email");
-    return;
+    console.warn("[password-reset] RESEND_API_KEY not configured — cannot send reset email");
+    throw new Error("Email service not configured");
   }
-  
-  const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5000';
+
+  // Prefer the canonical branded domain so links always land on the real app.
+  // Never fall back to localhost in production.
+  const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+  console.log("[password-reset] Reset URL generated:", resetUrl);
   
   const { Resend } = await import("resend");
   const resend = new Resend(resendApiKey);
@@ -1830,27 +1833,34 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
   app.post("/api/forgot-password", passwordResetRateLimiter, async (req, res) => {
     try {
       const { email } = req.body;
-      const user = await storage.getUserByEmail(email);
-      
+      console.log("[forgot-password] Request received for:", email);
+
+      const user = await storage.getUserByEmail(email?.toLowerCase().trim());
+
       if (!user) {
-        // Don't reveal if email exists
+        console.log("[forgot-password] No account found for email — returning safe response");
         return res.json({ message: "If an account with that email exists, we've sent a password reset link." });
       }
-      
+
       const resetToken = generateToken();
       const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-      
-      await storage.setResetPasswordToken(email, resetToken, expires);
-      
+      console.log("[forgot-password] Token created, expires:", expires.toISOString());
+
+      await storage.setResetPasswordToken(email.toLowerCase().trim(), resetToken, expires);
+      console.log("[forgot-password] Token persisted for:", email);
+
       try {
-        await sendPasswordResetEmail(email, resetToken);
+        console.log("[forgot-password] Attempting to send reset email to:", email);
+        await sendPasswordResetEmail(email.toLowerCase().trim(), resetToken);
+        console.log("[forgot-password] Email sent successfully to:", email);
       } catch (error) {
-        console.error("Failed to send reset email:", error);
+        console.error("[forgot-password] Failed to send reset email:", error);
+        return res.status(500).json({ message: "Failed to send reset email. Please try again." });
       }
-      
+
       res.json({ message: "If an account with that email exists, we've sent a password reset link." });
     } catch (error) {
-      console.error("Password reset request error:", error);
+      console.error("[forgot-password] Unexpected error:", error);
       res.status(500).json({ message: "Password reset request failed" });
     }
   });
@@ -1859,21 +1869,24 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
   app.post("/api/reset-password", passwordResetRateLimiter, async (req, res) => {
     try {
       const { token, password } = req.body;
-      
+      console.log("[reset-password] Reset attempt received");
+
       if (!token || !password) {
         return res.status(400).json({ message: "Token and new password are required" });
       }
-      
+
       const hashedPassword = await hashPassword(password);
       const user = await storage.resetPassword(token, hashedPassword);
-      
+
       if (!user) {
+        console.warn("[reset-password] Invalid or expired token");
         return res.status(400).json({ message: "Invalid or expired reset token" });
       }
-      
+
+      console.log("[reset-password] Password reset successful for user:", user.id);
       res.json({ message: "Password reset successful" });
     } catch (error) {
-      console.error("Password reset error:", error);
+      console.error("[reset-password] Error:", error);
       res.status(500).json({ message: "Password reset failed" });
     }
   });
