@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { loadMapsOnce } from '@/lib/mapsLoader';
+import { useLoadScript } from '@react-google-maps/api';
 import { Input } from '@/components/ui/input';
 
 export type Address = {
@@ -11,6 +11,8 @@ interface Prediction {
   place_id: string;
   description: string;
 }
+
+const LIBRARIES: ('places')[] = ['places'];
 
 function parseAddressComponents(comps: any[]): Omit<Address, 'place_id' | 'formatted_address'> {
   const getLong = (t: string) => comps.find((c: any) => c.types.includes(t))?.long_name || '';
@@ -31,7 +33,6 @@ export default function LocationInput({
   placeholder?: string; disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [mapsLoaded, setMapsLoaded] = useState(false);
   const [useBackend, setUseBackend] = useState(false);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -41,64 +42,82 @@ export default function LocationInput({
   const cleanupRef = useRef<(() => void) | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSelectingRef = useRef(false);
+  const autocompleteInitRef = useRef(false);
+  // Stable ref so the autocomplete listener always calls the latest callback
+  const onAddressSelectedRef = useRef(onAddressSelected);
+  useEffect(() => { onAddressSelectedRef.current = onAddressSelected; });
+
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
+  // Use the same loader id as ScheduleMapView and LocationAutocomplete so
+  // @react-google-maps/api deduplicates the script and never injects it twice.
+  const { isLoaded, loadError } = useLoadScript({
+    id: 'google-map-script',
+    googleMapsApiKey: apiKey,
+    libraries: LIBRARIES,
+  });
 
   useEffect(() => {
-    let active = true;
-    loadMapsOnce()
-      .then(() => {
-        if (!active || !inputRef.current) return;
-        setMapsLoaded(true);
+    if (loadError) {
+      console.warn('[LocationInput] Google Maps failed to load, switching to backend:', loadError.message ?? loadError);
+      setUseBackend(true);
+      return;
+    }
 
-        const ac = new google.maps.places.Autocomplete(inputRef.current!, {
-          fields: ['address_components', 'formatted_address', 'place_id'],
-          types: ['address'],
-        });
+    if (!isLoaded || !inputRef.current || autocompleteInitRef.current) return;
+    if (!apiKey) {
+      console.warn('[LocationInput] No API key, switching to backend');
+      setUseBackend(true);
+      return;
+    }
 
-        ac.addListener('place_changed', () => {
-          const p = ac.getPlace();
-          if (!p?.address_components) return;
-          const parsed = parseAddressComponents(p.address_components);
-          onAddressSelected({
-            ...parsed,
-            place_id: p.place_id || '',
-            formatted_address: p.formatted_address || '',
-          });
-        });
+    autocompleteInitRef.current = true;
+    console.log('[LocationInput] Attaching google.maps.places.Autocomplete');
 
-        const repositionPacContainer = () => {
-          if (!inputRef.current) return;
-          const pacEl = document.querySelector('.pac-container') as HTMLElement | null;
-          if (!pacEl) return;
-          const rect = inputRef.current.getBoundingClientRect();
-          pacEl.style.position = 'fixed';
-          pacEl.style.top = `${rect.bottom + 2}px`;
-          pacEl.style.left = `${rect.left}px`;
-          pacEl.style.width = `${rect.width}px`;
-          pacEl.style.zIndex = '99999';
-        };
+    const ac = new google.maps.places.Autocomplete(inputRef.current!, {
+      fields: ['address_components', 'formatted_address', 'place_id'],
+      types: ['address'],
+    });
 
-        const observer = new MutationObserver(() => repositionPacContainer());
-        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
-        inputRef.current!.addEventListener('focus', repositionPacContainer);
-        inputRef.current!.addEventListener('input', repositionPacContainer);
-
-        const inputEl = inputRef.current!;
-        cleanupRef.current = () => {
-          observer.disconnect();
-          inputEl.removeEventListener('focus', repositionPacContainer);
-          inputEl.removeEventListener('input', repositionPacContainer);
-        };
-      })
-      .catch((err: any) => {
-        if (!active) return;
-        setUseBackend(true);
+    ac.addListener('place_changed', () => {
+      const p = ac.getPlace();
+      if (!p?.address_components) return;
+      const parsed = parseAddressComponents(p.address_components);
+      onAddressSelectedRef.current({
+        ...parsed,
+        place_id: p.place_id || '',
+        formatted_address: p.formatted_address || '',
       });
+    });
+
+    const repositionPacContainer = () => {
+      if (!inputRef.current) return;
+      const pacEl = document.querySelector('.pac-container') as HTMLElement | null;
+      if (!pacEl) return;
+      const rect = inputRef.current.getBoundingClientRect();
+      pacEl.style.position = 'fixed';
+      pacEl.style.top = `${rect.bottom + 2}px`;
+      pacEl.style.left = `${rect.left}px`;
+      pacEl.style.width = `${rect.width}px`;
+      pacEl.style.zIndex = '99999';
+    };
+
+    const observer = new MutationObserver(() => repositionPacContainer());
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+    inputRef.current!.addEventListener('focus', repositionPacContainer);
+    inputRef.current!.addEventListener('input', repositionPacContainer);
+
+    const inputEl = inputRef.current!;
+    cleanupRef.current = () => {
+      observer.disconnect();
+      inputEl.removeEventListener('focus', repositionPacContainer);
+      inputEl.removeEventListener('input', repositionPacContainer);
+    };
 
     return () => {
-      active = false;
       cleanupRef.current?.();
     };
-  }, []);
+  }, [isLoaded, loadError, apiKey]);
 
   const fetchPredictions = useCallback(async (query: string) => {
     if (query.length < 3) {

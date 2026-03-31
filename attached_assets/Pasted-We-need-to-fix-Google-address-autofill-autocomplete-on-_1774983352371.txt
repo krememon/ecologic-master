@@ -1,0 +1,97 @@
+We need to fix Google address autofill / autocomplete on EcoLogic web.
+
+PROBLEM
+On web, when entering a job address, the Google address autofill is not working properly. Instead of usable autocomplete, Google shows:
+"This page can't load Google Maps correctly."
+
+So the web address autocomplete/location picker flow is still broken even if the Schedule map issue was partly fixed.
+
+GOAL
+Make Google address autofill work reliably on web for job/location inputs.
+
+WHAT TO FIX
+
+1) GOOGLE AUTOCOMPLETE MUST WORK
+- When the user types a street address in the job location/address field on web, Google autocomplete suggestions should appear properly
+- User should be able to click a suggestion
+- The selected result should populate the address correctly
+- Preserve any existing behavior for city/state/zip/lat/lng parsing if already implemented
+
+2) FIX THE UNDERLYING GOOGLE ERROR
+- Eliminate the "This page can't load Google Maps correctly" error in the address input flow
+- The location modal/input should not show Google errors to the user
+
+3) AUDIT FULL WEB ADDRESS FLOW
+Check the exact web flow for:
+- location modal / job location modal
+- address input component
+- LocationAutocomplete component
+- LocationInput component
+- shared maps loader logic
+- any modal-specific script loading or duplicate loader behavior
+- any API key restriction issues specific to Places/Autocomplete
+
+THINGS TO CHECK
+
+A. GOOGLE APIS / LIBRARIES
+- Confirm the correct Google APIs are enabled for this feature
+- At minimum verify Maps JavaScript API
+- Verify Places library is actually being loaded for autocomplete
+- If geocoding/details parsing is used, verify those dependent APIs too
+
+B. SINGLE SCRIPT LOAD
+- Confirm the app is not injecting Google Maps multiple times anywhere in the address flow
+- Confirm the modal does not trigger a second loader with different config/id
+- Ensure all web Google Maps consumers share one consistent loader strategy
+
+C. API KEY / RESTRICTIONS
+- Verify the same client key is valid for Places autocomplete on web
+- Check whether the current domain/referrer restrictions allow:
+  - app.ecologicc.com
+  - current Replit/dev web origin if needed for testing
+- If the API key works for map view but not autocomplete, identify whether Places is missing, restricted, or loaded incorrectly
+
+D. FRONTEND COMPONENT BEHAVIOR
+- Confirm autocomplete only initializes after the Maps JS API and Places library are fully available
+- Confirm the input is bound to the correct Autocomplete / Places object
+- Confirm no runtime errors are silently caught and hidden
+- Confirm the modal and focus behavior do not break suggestion rendering
+
+E. FALLBACK / ERROR HANDLING
+- If Google fails to load, do not show this broken Google popup inside the UI
+- Use a clean controlled fallback only if necessary
+- But the real goal is to make Google autocomplete fully work, not just hide the error
+
+DEBUGGING
+Add targeted logs only for:
+- whether API key exists on client
+- whether Maps JS API loaded
+- whether Places library loaded
+- whether autocomplete initialized
+- exact Google load/init error
+- current host/origin
+- whether duplicate loader/script injection happened
+
+DELIVERABLES
+1) Fix Google address autofill on web
+2) Remove the Google error popup from the job location flow
+3) Explain exact root cause
+4) List exact files changed
+5) State whether the cause was:
+   - duplicate script loading
+   - missing Places library
+   - API restriction/referrer restriction
+   - wrong loader timing
+   - wrong env var/key
+   - or a combination
+6) Give a short manual test plan for:
+   - web create/edit job location
+   - typing address suggestions
+   - selecting a suggestion
+   - confirming parsed address fills correctly
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the job location modal
+- Do not break existing map/address behavior on mobile/tablet
+- Reuse existing Google/location components where possible
