@@ -213,6 +213,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     },
     onSuccess: (invoice) => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/ledger'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Invoice Created",
@@ -306,7 +307,8 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       subtotalCents,
       taxCents,
       totalCents,
-      status: "draft",
+      status: "pending",
+      balanceDueCents: totalCents,
       issueDate: today.toISOString().split('T')[0],
       dueDate: dueDate.toISOString().split('T')[0],
       scheduledAt: scheduledAtISO,

@@ -15077,7 +15077,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount, 
         subtotalCents, 
         taxCents, 
-        totalCents, 
+        totalCents,
+        balanceDueCents,
         status, 
         issueDate, 
         dueDate, 
@@ -15095,16 +15096,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invoice number is required" });
       }
 
+      const resolvedTotalCents = totalCents || 0;
+
       // Create invoice
       const invoice = await storage.createInvoice({
         companyId: company.id,
         customerId,
         invoiceNumber,
-        amount: amount || "0",
+        amount: amount || (resolvedTotalCents / 100).toFixed(2),
         subtotalCents: subtotalCents || 0,
         taxCents: taxCents || 0,
-        totalCents: totalCents || 0,
-        status: status || 'draft',
+        totalCents: resolvedTotalCents,
+        balanceDueCents: balanceDueCents ?? resolvedTotalCents,
+        status: status || 'pending',
         issueDate: issueDate || new Date().toISOString().split('T')[0],
         dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,

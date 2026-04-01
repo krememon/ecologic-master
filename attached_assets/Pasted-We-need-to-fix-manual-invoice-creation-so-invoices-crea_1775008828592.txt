@@ -1,0 +1,103 @@
+We need to fix manual invoice creation so invoices created from “Add Invoice” properly appear in the Payments tab as owed/unpaid items.
+
+PROBLEM
+If I manually create an invoice using Add Invoice, it does NOT appear in the Payments tab as an owed invoice.
+
+GOAL
+Any invoice created manually from Add Invoice must immediately appear in Payments with the correct owed/unpaid amount.
+
+EXPECTED BEHAVIOR
+When a user creates an invoice from Add Invoice:
+- the invoice appears in Invoicing
+- the same invoice also appears in Payments
+- the amount owed is correct
+- unpaid/partially paid status is reflected correctly
+- after refresh, it still appears correctly
+
+WHAT TO AUDIT
+
+1) ADD INVOICE FLOW
+Inspect the full Add Invoice pipeline end-to-end:
+- frontend Add Invoice action/modal/sheet
+- backend create-invoice route
+- invoice record creation
+- any related payment/ledger initialization
+- post-create query invalidation/refetch
+
+2) PAYMENTS TAB SOURCE OF TRUTH
+Find exactly what Payments reads from:
+- invoices table
+- payments table
+- job summaries
+- ledger/snapshot tables
+- derived balance query
+Then verify a manually created invoice is included by that data source.
+
+3) INVOICE ELIGIBILITY FOR PAYMENTS
+Check whether manually created invoices are missing one or more fields that Payments requires, such as:
+- invoice status
+- total amount
+- balance due
+- job id / client id link
+- company id
+- source/type flag
+- created status like sent/open/unpaid
+If Payments filters on any required field, ensure Add Invoice sets it correctly.
+
+4) OWED/BALANCE CALCULATION
+Confirm the invoice carries the correct financial fields into Payments:
+- subtotal
+- tax
+- discount
+- total
+- amount paid
+- balance due
+Do not allow a newly created invoice to be omitted because balance defaults to null/zero incorrectly.
+
+5) QUERY / CACHE / REFRESH
+After creating an invoice:
+- Invoicing should refresh
+- Payments should refresh
+- no stale cache should hide the new invoice
+If needed, invalidate/refetch the exact Payments query in addition to Invoicing.
+
+6) UI FILTERS
+Inspect Payments filters/sections:
+- unpaid
+- owed
+- partially paid
+Make sure manual invoices land in the correct Payments bucket and are not excluded by type/status/source filters.
+
+LIKELY ROOT CAUSES TO CHECK
+- Add Invoice creates invoice but not any payment-side tracking row/snapshot
+- Payments tab only includes invoices created through another path
+- new invoice status is not one Payments recognizes as owed
+- balance due is not initialized correctly
+- Payments query cache is not invalidated after invoice creation
+- missing job/client/company linkage on manual invoices
+
+DEBUGGING
+Add targeted logs only for:
+- create-invoice payload
+- created invoice record
+- initialized balance/amount owed fields
+- Payments query response for that invoice
+- cache invalidation/refetch after invoice creation
+
+DELIVERABLES
+1) Fix manual Add Invoice so new invoices appear in Payments
+2) Ensure owed/unpaid amount is correct
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - create invoice from Add Invoice
+   - confirm it appears in Invoicing
+   - confirm it appears in Payments as owed
+   - refresh and confirm it still appears
+   - record a payment and confirm owed amount updates correctly
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign Payments or Invoicing
+- Do not break existing invoice/payment flows
+- Preserve current financial logic for regular invoices
