@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, UserMinus, X } from "lucide-react";
+import { Mail, Phone, MapPin, MoreVertical, Edit, UserMinus, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useCan } from "@/hooks/useCan";
@@ -61,17 +61,15 @@ interface EmployeeCardProps {
     profileImageUrl?: string | null;
   };
   onRoleChange: (userId: string, newRole: UserRole) => void;
-  onStatusToggle: (userId: string, newStatus: 'active' | 'inactive') => void;
   onRemove: (userId: string) => void;
   isUpdating: boolean;
   isRemoving: boolean;
 }
 
-export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, onRemove, isUpdating, isRemoving }: EmployeeCardProps) {
+export default function EmployeeCard({ employee, onRoleChange, onRemove, isUpdating, isRemoving }: EmployeeCardProps) {
   const { can } = useCan();
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>(employee.role);
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
 
   const fullName = `${employee.firstName} ${employee.lastName}`.trim();
@@ -111,12 +109,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
   const handleRoleChangeSubmit = () => {
     onRoleChange(employee.id, selectedRole);
     setIsRoleDialogOpen(false);
-  };
-
-  const handleStatusToggle = () => {
-    const newStatus = employee.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    onStatusToggle(employee.id, newStatus);
-    setIsStatusDialogOpen(false);
   };
 
   const canModify = can('users.manage') && employee.role !== 'OWNER';
@@ -173,42 +165,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                       <Edit className="h-4 w-4 mr-2" />
                       Change Role
                     </DropdownMenuItem>
-                  )}
-
-                  {canModify && (
-                    <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid={`menu-toggle-status-${employee.id}`}>
-                          {employee.status === 'ACTIVE' ? (
-                            <>
-                              <UserX className="h-4 w-4 mr-2" />
-                              Deactivate
-                            </>
-                          ) : (
-                            <>
-                              <UserCheck className="h-4 w-4 mr-2" />
-                              Activate
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            {employee.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} Employee
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to {employee.status === 'ACTIVE' ? 'deactivate' : 'activate'} {fullName}?
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleStatusToggle} disabled={isUpdating}>
-                            {isUpdating ? 'Updating...' : 'Confirm'}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
                   )}
 
                   {canModify && (
