@@ -26,7 +26,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
+      <div className="h-screen bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
         {/* Desktop Sidebar */}
         <div className="hidden sm:block">
           <Sidebar 

@@ -656,7 +656,6 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           variant="ghost"
           size="icon"
           onClick={() => setLocation("/messages")}
-          className="md:hidden"
           data-testid="button-back"
         >
           <ChevronLeft className="h-5 w-5" />

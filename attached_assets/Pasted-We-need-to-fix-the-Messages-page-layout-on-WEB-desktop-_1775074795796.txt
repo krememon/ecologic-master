@@ -1,0 +1,86 @@
+We need to fix the Messages page layout on WEB / desktop.
+
+PROBLEMS
+
+1) MESSAGE INPUT BAR IS TOO FAR DOWN
+On web/desktop, the message composer/input bar is pushed way too far down at the bottom.
+The layout feels stretched and wrong.
+
+2) NO BACK BUTTON IN THE HEADER
+On the conversation view header, there is no back button.
+We need a back button in the header on web too.
+
+GOAL
+Make the Messages conversation view feel properly formatted on web/desktop:
+- cleaner vertical layout
+- message input bar positioned correctly
+- header includes a back button
+
+WEB/DESKTOP ONLY
+This is specifically for web/desktop formatting.
+Do not break iPhone, Android, or iPad behavior unless shared code absolutely requires a guarded fix.
+
+WHAT TO FIX
+
+1) MESSAGE COMPOSER POSITIONING
+- Audit the Messages conversation layout on desktop/web
+- Fix the composer/input bar so it sits in the correct position
+- It should feel anchored naturally to the chat area, not excessively dropped down
+- Preserve proper spacing with the sidebar and page shell
+- Ensure the chat viewport and input area use a sane height calculation on desktop
+
+2) HEADER BACK BUTTON
+- Add a back button to the conversation header on web
+- Match EcoLogic styling
+- Reuse the same back-button pattern used elsewhere if available
+- It should navigate back to the messages thread list/inbox view appropriately
+
+3) DESKTOP LAYOUT AUDIT
+Inspect:
+- Messages page container
+- conversation view wrapper
+- header height
+- scroll area height
+- composer/footer positioning
+- any flexbox/min-height/h-screen issues
+- any shell padding or safe-area logic incorrectly applied to desktop
+
+LIKELY ROOT CAUSES TO CHECK
+- desktop conversation container using wrong height calc
+- composer pinned relative to full viewport instead of message pane
+- mobile safe-area / bottom inset logic leaking into web
+- missing flex column layout on desktop conversation pane
+- conversation header not rendering the web back action
+- desktop detail view assumes permanent split pane and omitted the back control
+
+REQUIREMENTS
+- Keep the conversation page clean
+- Do not redesign the whole messaging system
+- Do not break send-message functionality
+- Do not break thread list or message scrolling
+- Back button should work correctly on web
+
+DEBUGGING
+Add targeted logs only if needed for:
+- detected platform/layout branch
+- computed layout container heights
+- whether header/back button branch is rendering on web
+
+DELIVERABLES
+1) Fix the desktop/web message composer positioning
+2) Add the back button to the conversation header on web
+3) Preserve existing messaging behavior
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - open Messages on web
+   - open a conversation
+   - confirm header shows back button
+   - confirm composer sits correctly
+   - send a message successfully
+   - navigate back successfully
+
+IMPORTANT
+- Tight targeted fix only
+- Web/desktop only unless shared code requires guarded branching
+- Do not break mobile/tablet messaging layouts
