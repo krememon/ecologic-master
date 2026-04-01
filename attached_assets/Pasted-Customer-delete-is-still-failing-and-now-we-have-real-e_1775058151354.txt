@@ -1,0 +1,107 @@
+Customer delete is still failing, and now we have real evidence:
+
+DELETE /api/clients/26 → 500 Internal Server Error
+
+So this is definitively a backend failure, not just a frontend toast/query issue.
+
+GOAL
+Find the exact backend error on DELETE /api/clients/:id and fix customer deletion so it succeeds safely.
+
+CURRENT FACTS
+- Frontend is hitting the correct route
+- Route is returning 500
+- Customer is not being deleted
+- We must preserve invoices/payments/financial history
+- Only the customer should be removed from active Clients UI
+
+DO THIS EXACTLY
+
+1) LOG THE REAL BACKEND ERROR
+Inspect the server logs for DELETE /api/clients/:id and capture the exact thrown error.
+I need the real failing message/stack, not guesses.
+
+Add targeted backend logs around:
+- incoming client id
+- company id / auth user id
+- whether client exists
+- counts of linked jobs / estimates / invoices / payments if checked
+- exact DB operation attempted
+- exact thrown error object/message
+
+2) AUDIT THE DELETE ROUTE END-TO-END
+Inspect the exact backend handler for:
+DELETE /api/clients/:id
+
+Confirm:
+- route is actually reached
+- auth/company scoping is correct
+- it is deleting the correct table row
+- it is not failing on linked records / FK constraints
+- it is not trying to hard-delete a client row that financial records still depend on
+
+3) IMPLEMENT SAFE DELETE BEHAVIOR
+We need deletion to WORK without breaking financial history.
+
+If hard-delete is causing FK failures, do NOT keep trying to hard-delete blindly.
+Implement the correct safe strategy so the user-facing result is:
+- customer disappears from Clients
+- client details no longer accessible from active client list
+- invoices/payments/history remain intact and do not break
+
+Most likely the right fix is one of:
+A) soft delete / archived / hidden client flag
+B) safe detach from active client listing while preserving historical references
+C) hard delete only if no dependent records, otherwise soft delete
+
+Pick the safest one that matches current schema and preserves finance/history.
+
+4) CLIENTS UI MUST HONOR THE SAFE DELETE
+If using soft delete/archive:
+- Clients list must exclude deleted clients
+- client search/details must exclude deleted clients from active views
+- no regression to existing client page behavior
+
+5) DO NOT BREAK FINANCIAL DATA
+After delete:
+- invoices still load
+- payments still load
+- balances/history still load
+- no null reference crashes in invoicing/payments/job history
+
+6) CACHE / REFRESH
+After successful delete:
+- invalidate/refetch clients queries
+- remove the customer from the active UI immediately
+- no stale deleted customer lingering
+
+LIKELY ROOT CAUSES TO CHECK
+- foreign key constraint on jobs/invoices/payments
+- route still doing hard delete despite linked records
+- missing soft-delete column handling
+- delete route touching related tables incorrectly
+- company-scoped delete query failing and throwing
+
+DELIVERABLES
+1) Exact backend error causing the 500
+2) Exact root cause
+3) Exact fix applied
+4) Exact files changed
+5) Whether final implementation is:
+   - hard delete
+   - soft delete
+   - safe detach/archive
+6) Confirmation that:
+   - customer disappears from Clients
+   - invoices/payments remain intact
+   - no 500 on delete anymore
+7) Short manual test plan:
+   - delete customer with related records
+   - confirm customer removed from active Clients
+   - confirm Invoicing still works
+   - confirm Payments still works
+
+IMPORTANT
+- Do not guess
+- Start with server logs for the real 500 error
+- Tight targeted fix only
+- Preserve financial history
