@@ -1,0 +1,84 @@
+We need to change the Edit Customer UI so it matches the Add Client modal aesthetic exactly.
+
+PROBLEM
+The new Edit Customer action currently opens in the wrong style/layout.
+It looks like a large slide-up / full-width sheet style.
+
+That is NOT what we want.
+
+GOAL
+Make Edit Customer look and feel like the existing Add Client modal.
+
+DESIGN DIRECTION
+Use the Add Client modal as the direct visual/template reference.
+
+I want Edit Customer to match that same aesthetic:
+- centered modal
+- same width/size style
+- same modal framing
+- same header treatment
+- same spacing rhythm
+- same field styling
+- same button row layout
+- same overall visual feel
+
+IMPORTANT
+Do NOT make Edit Customer a slide-up sheet.
+Do NOT make it a giant full-width editor.
+I want it to look essentially like the Add Client modal, just in edit mode.
+
+WHAT TO CHANGE
+
+1) MODAL STYLE
+- Convert Edit Customer from the current large sheet/full-width style to the same centered modal style as Add Client
+- Same modal proportions/look as closely as possible
+- Same background overlay behavior
+- Same close button treatment
+
+2) FORM LAYOUT
+Use the Add Client modal layout as the base inspiration.
+Keep the edit form clean and compact like Add Client.
+
+If existing edit fields differ from add-client fields, keep the necessary edit fields, but style/layout them to match the Add Client modal aesthetic.
+
+3) BUTTON ROW
+- Match the Add Client modal footer/button layout style
+- Keep:
+  - Cancel
+  - Save Changes
+- Make the footer/buttons feel visually consistent with Add Client
+
+4) PREFILLING
+- Since this is edit mode, all fields should still preload existing customer values correctly
+- Do not break save functionality
+- This is a UI/layout restyle, not a logic regression
+
+5) LABELING
+- Title should remain edit-specific, like:
+  - Edit Customer
+- But visually it should feel like the Add Client modal
+
+WHAT TO AUDIT
+- existing Add Client modal component/pattern
+- current Edit Customer modal/sheet component
+- whether Edit Customer can reuse the same modal container/layout component as Add Client
+- existing client/customer form fields and validation
+
+DELIVERABLES
+1) Restyle Edit Customer to match the Add Client modal aesthetic
+2) Remove the current slide-up/full-width feel
+3) Preserve edit functionality and prefilled values
+4) List exact files changed
+5) Give a short manual test plan:
+   - open client details
+   - open 3-dot menu
+   - click Edit Customer
+   - confirm modal matches Add Client aesthetic
+   - confirm existing values are prefilled
+   - save changes successfully
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign Add Client
+- Do not break customer edit functionality
+- Match the Add Client modal look as closely as possible

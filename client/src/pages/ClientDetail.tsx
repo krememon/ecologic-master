@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { Customer, Job, Estimate } from "@shared/schema";
 
 interface ClientDetailProps {
@@ -736,91 +736,122 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Customer sheet */}
-      <Sheet open={showEditSheet} onOpenChange={setShowEditSheet}>
-        <SheetContent side="bottom" className="h-[85vh] overflow-y-auto rounded-t-2xl">
-          <SheetHeader className="pb-4">
-            <SheetTitle>Edit Customer</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-first-name" className="text-sm font-medium">First Name</Label>
-                <Input
-                  id="edit-first-name"
-                  value={editFirstName}
-                  onChange={(e) => setEditFirstName(e.target.value)}
-                  placeholder="First name"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-last-name" className="text-sm font-medium">Last Name</Label>
-                <Input
-                  id="edit-last-name"
-                  value={editLastName}
-                  onChange={(e) => setEditLastName(e.target.value)}
-                  placeholder="Last name"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-company" className="text-sm font-medium">Company Name</Label>
-              <Input
-                id="edit-company"
-                value={editCompanyName}
-                onChange={(e) => setEditCompanyName(e.target.value)}
-                placeholder="Company name"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-email" className="text-sm font-medium">Email</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-                placeholder="Email address"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-phone" className="text-sm font-medium">Phone</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                placeholder="Phone number"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-address" className="text-sm font-medium">Address</Label>
-              <Input
-                id="edit-address"
-                value={editAddress}
-                onChange={(e) => setEditAddress(e.target.value)}
-                placeholder="Address"
-              />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                className="flex-1"
+      {/* Edit Customer dialog — matches Add Client modal aesthetic */}
+      <Dialog open={showEditSheet} onOpenChange={setShowEditSheet}>
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex flex-col h-full max-h-[85vh]">
+            {/* Fixed header */}
+            <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
+              <button
+                type="button"
                 onClick={() => setShowEditSheet(false)}
-                disabled={updateCustomerMutation.isPending}
+                className="absolute right-4 top-1/2 -translate-y-1/2"
               >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleSaveEdit}
-                disabled={updateCustomerMutation.isPending}
-              >
-                {updateCustomerMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </button>
+              <div className="text-center">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Edit Customer</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Update customer information</p>
+              </div>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
+              <div className="space-y-3 md:space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                  <div>
+                    <Label htmlFor="edit-first-name" className="text-xs font-medium mb-1 block">First Name</Label>
+                    <Input
+                      id="edit-first-name"
+                      value={editFirstName}
+                      onChange={(e) => setEditFirstName(e.target.value)}
+                      placeholder="First name"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-last-name" className="text-xs font-medium mb-1 block">Last Name</Label>
+                    <Input
+                      id="edit-last-name"
+                      value={editLastName}
+                      onChange={(e) => setEditLastName(e.target.value)}
+                      placeholder="Last name"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="edit-company" className="text-xs font-medium mb-1 block">Company Name</Label>
+                  <Input
+                    id="edit-company"
+                    value={editCompanyName}
+                    onChange={(e) => setEditCompanyName(e.target.value)}
+                    placeholder="Company name"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                  <div>
+                    <Label htmlFor="edit-email" className="text-xs font-medium mb-1 block">Email</Label>
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="Email address"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-phone" className="text-xs font-medium mb-1 block">Phone</Label>
+                    <Input
+                      id="edit-phone"
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="Phone number"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="edit-address" className="text-xs font-medium mb-1 block">Address</Label>
+                  <Input
+                    id="edit-address"
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    placeholder="Address"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Fixed footer */}
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditSheet(false)}
+                  disabled={updateCustomerMutation.isPending}
+                  className="flex-1 h-11"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={updateCustomerMutation.isPending}
+                  className="flex-1 h-11"
+                >
+                  {updateCustomerMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
