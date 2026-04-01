@@ -1,0 +1,97 @@
+The latest logs prove the current test account is NOT in a removed/no-company state.
+
+PROVEN RUNTIME FACT
+The client payload shows:
+
+[auth/user][client] payload received — userId=43456086 hasCompany=true companyId=415 role=OWNER onboardingChoice=null onboardingCompleted=true
+
+That means this account is still being resolved as:
+- hasCompany=true
+- companyId=415
+- role=OWNER
+
+So of course it is NOT routing to the Join/Create company choice screen.
+This is not a no-company removed-employee payload.
+
+GOAL
+Find why this supposedly removed account is still resolving as an OWNER with hasCompany=true, and fix the actual membership/company resolution so truly removed users land on /onboarding/choice.
+
+DO THIS EXACTLY
+
+1) AUDIT THIS SPECIFIC USER IN THE DATABASE
+For staging@ecologicc.com / userId=43456086, inspect the real DB state:
+- users table row
+- company_members rows
+- companies ownership linkage
+- any owner/company table relationship
+- any active membership rows
+- any companyId cached/stored on users row
+- any role source that could still resolve OWNER
+
+I need the exact records that are causing:
+- hasCompany=true
+- companyId=415
+- role=OWNER
+
+2) IDENTIFY THE REAL SOURCE OF hasCompany / role
+Trace exactly how /api/auth/user computes:
+- hasCompany
+- companyId
+- role
+
+Determine whether it comes from:
+- company_members
+- owned company relationship
+- users.companyId
+- another join/query/source
+
+I want the exact branch/query producing OWNER + companyId=415 for this user.
+
+3) FIX THE REMOVE-FROM-COMPANY LOGIC FOR THIS CASE
+If the user is still an OWNER, one of these is true:
+- this was never actually an employee account
+- the wrong account was tested
+- remove-from-company logic does not handle this account type
+- company ownership link still exists
+- auth bootstrap prefers owned-company linkage over membership deletion
+
+Fix the actual data path so that a truly removed employee account resolves to:
+- hasCompany=false
+- companyId=null
+- role=null or no active company role
+- onboardingChoice=null (or acceptable no-company value)
+
+4) DO NOT GUESS — PROVE IT
+Deliver the exact DB/runtime reason this account still resolves as OWNER.
+Examples:
+- “The tested account is actually the company owner, not an employee.”
+- “company_members row was deleted, but owned company row still ties them to company 415.”
+- “auth/user uses companies.ownerId, so membership removal alone is insufficient.”
+Whatever it is, prove it.
+
+5) VERIFY WITH A TRUE REMOVED EMPLOYEE
+Use an account that is actually a non-owner employee:
+- add employee to company
+- remove employee from company
+- sign in as that exact removed employee
+- confirm /api/auth/user returns hasCompany=false
+- confirm route goes to /onboarding/choice
+
+6) KEEP OWNER FLOW SAFE
+Do NOT break legitimate owner login routing.
+Owners should still land in dashboard normally.
+
+DELIVER BACK
+1) Exact reason staging@ecologicc.com still resolves as OWNER
+2) Exact DB records/source causing hasCompany=true
+3) Exact fix applied
+4) Exact files changed
+5) Exact verified removed employee account tested
+6) Final /api/auth/user payload for that removed employee
+7) Final route after login for that removed employee
+
+IMPORTANT
+- The current logs prove this test account is not in removed-employee state
+- Stop focusing on onboardingChoice alone
+- Trace the real source of role/company resolution
+- Tight targeted fix only
