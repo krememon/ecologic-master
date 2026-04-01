@@ -571,9 +571,9 @@ export default function Home() {
     })
     .slice(0, 5);
 
-  // Estimate helpers for technicians
+  // Estimate scheduling helpers
   const getEstimateDate = (est: Estimate): Date | null => {
-    if (est.scheduledDate) return new Date(est.scheduledDate as unknown as string);
+    if (est.scheduledDate) return parseDateOnly(est.scheduledDate as unknown as string);
     return null;
   };
 
@@ -582,7 +582,7 @@ export default function Home() {
         const ids: string[] = Array.isArray(est.assignedEmployeeIds) ? (est.assignedEmployeeIds as string[]) : [];
         return ids.includes(userId || '') && est.status !== 'archived';
       })
-    : [];
+    : estimates.filter(est => est.status !== 'archived');
 
   const todayEstimates = myEstimates.filter(est => {
     const date = getEstimateDate(est);
@@ -923,6 +923,7 @@ export default function Home() {
                   <JobCard
                     key={`est-${est.id}`}
                     title={`${est.estimateNumber ? est.estimateNumber + ': ' : ''}${est.title}`}
+                    subtitle="Estimate"
                     status={est.status as any}
                     onClick={() => navigate(`/estimates/${est.id}`)}
                   />
@@ -1093,7 +1094,7 @@ export default function Home() {
                     <JobCard
                       key={`est-${est.id}`}
                       title={`${est.estimateNumber ? est.estimateNumber + ': ' : ''}${est.title}`}
-                      subtitle={dateLabel}
+                      subtitle={dateLabel ? `Estimate · ${dateLabel}` : 'Estimate'}
                       status={est.status as any}
                       onClick={() => navigate(`/estimates/${est.id}`)}
                     />

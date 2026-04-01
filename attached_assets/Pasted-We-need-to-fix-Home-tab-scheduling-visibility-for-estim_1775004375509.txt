@@ -1,0 +1,105 @@
+We need to fix Home tab scheduling visibility for estimates.
+
+PROBLEM
+Estimates are not showing up on the Home tab under:
+- Today
+- Upcoming
+
+Example:
+- I have an estimate created for today
+- It is not appearing under Today or Upcoming on Home
+
+This also needs to work for employees:
+- If an estimate is assigned to an employee, it should appear on that employee’s Home tab as well
+
+GOAL
+Make estimates appear correctly on Home under Today and Upcoming for both:
+1) owner/admin/company side
+2) employee side when assigned
+
+EXPECTED BEHAVIOR
+
+OWNER / OFFICE SIDE
+- If an estimate is scheduled for today, it should appear under Today on Home
+- If an estimate is upcoming, it should appear under Upcoming on Home
+
+EMPLOYEE SIDE
+- If an estimate is assigned to that employee and scheduled for today, it should appear under Today on Home
+- If assigned and upcoming, it should appear under Upcoming on Home
+
+WHAT TO AUDIT
+
+1) HOME DATA SOURCE
+- Inspect the Home tab query/data assembly for Today and Upcoming
+- Confirm whether it currently only includes jobs and excludes estimates
+- Find the exact logic building those sections
+
+2) ESTIMATE INCLUSION LOGIC
+- Add estimates into the same Home timeline/feed logic where appropriate
+- Respect current scheduling/date logic for:
+  - today
+  - upcoming
+- Ensure date comparisons are consistent with the rest of EcoLogic
+
+3) ROLE / ASSIGNMENT FILTERING
+- For owner/admin/office users:
+  - estimates should appear according to the same company visibility rules used for Home scheduling cards
+- For employees/technicians:
+  - only estimates assigned to that employee should appear
+  - do not show unrelated estimates
+
+4) CARD DISPLAY
+- Use the existing Home card style/pattern
+- Do not redesign the Home tab
+- Make estimate entries feel native to the existing Today/Upcoming sections
+- If there is already a label/badge/type indicator pattern, use it
+- If not, keep it subtle but clear enough that we can tell it is an estimate and not a job
+
+5) QUERY / CACHE / REFRESH
+- Ensure creating or editing an estimate causes the Home tab data to reflect it
+- Confirm no stale cache prevents newly created estimates from appearing
+- Confirm assigned employee view refreshes correctly too
+
+6) BACKEND / API
+- Inspect whether the backend endpoint feeding Home excludes estimates entirely
+- If so, update it to include scheduled estimates
+- Make sure returned data supports both owner/admin and employee filtering
+
+7) DATE / STATUS RULES
+- Confirm whether drafts, unscheduled estimates, archived items, or deleted items should be excluded
+- Only include estimates that should legitimately appear in Today/Upcoming
+- Match existing business logic as closely as possible
+
+LIKELY ROOT CAUSES TO CHECK
+- Home endpoint/query only fetches jobs
+- estimates are stored separately and never merged into Home feed
+- employee Home filtering only checks assigned jobs, not assigned estimates
+- date bucketing logic skips estimate schedule dates
+- Home cards use a type filter excluding estimates
+
+DEBUGGING
+Add targeted logs only for:
+- Home query response counts by type (jobs vs estimates)
+- Today bucket contents
+- Upcoming bucket contents
+- employee-assigned estimate filtering
+- cache invalidation/refetch after estimate create/update
+
+DELIVERABLES
+1) Fix Home so estimates appear under Today and Upcoming
+2) Ensure owner/admin view works
+3) Ensure employee-assigned estimates also appear for that employee
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan for:
+   - create estimate for today
+   - create estimate for upcoming day
+   - confirm owner Home shows both correctly
+   - assign estimate to employee
+   - confirm employee Home shows assigned estimate correctly
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the Home tab
+- Do not break existing job visibility on Home
+- Preserve RBAC and assigned-only employee visibility
