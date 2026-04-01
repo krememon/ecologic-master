@@ -1,0 +1,78 @@
+The previous fix was NOT sufficient because it only fixes newly created notifications.
+
+CURRENT FACT
+It is still routing to Jobs / Estimates after clicking the message notification.
+
+The analysis already proves why:
+- old dm_message notifications in the database still have linkUrl like /messages/123
+- the real route is /messages/c/:conversationId
+- so existing notifications still miss the route and fall through to the app catch-all
+
+GOAL
+Make message notification clicks work reliably RIGHT NOW, including existing/stored notifications that still have the old /messages/:id format.
+
+DO THIS EXACTLY
+
+1) FIX NOTIFICATION CLICK HANDLING DEFENSIVELY
+Do not rely only on stored linkUrl being perfect.
+In the notification click handler, add a normalization step for message notifications:
+
+If:
+- notification.type indicates a direct message / dm_message
+and
+- linkUrl matches /messages/:id
+and does NOT already match /messages/c/:id
+
+Then rewrite it to:
+- /messages/c/:id
+
+This ensures old stored notifications work too.
+
+2) KEEP THE NEW NOTIFICATION CREATION FIX
+Preserve the previous fix where newly created dm_message notifications store:
+- /messages/c/${conversationId}
+
+3) OPTIONAL BACKFILL / DATA MIGRATION
+If safe and easy, also backfill existing dm_message notifications in the DB:
+- old: /messages/123
+- new: /messages/c/123
+But even if you do this, still keep the defensive click-handler normalization so the app is resilient.
+
+4) VERIFY NOTIFICATION TYPE DETECTION
+Confirm the click handler can positively identify message notifications using the actual type field used in the DB/payload:
+- dm_message or whatever the real value is
+Do not accidentally rewrite non-message routes.
+
+5) DO NOT BREAK OTHER NOTIFICATIONS
+Jobs, estimates, invoices, payments, etc. must continue routing exactly as before.
+
+6) TEST WITH EXISTING BAD NOTIFICATIONS
+I want you to explicitly test a notification that was created BEFORE the earlier fix and still has old linkUrl format.
+Clicking that old notification should now open the DM thread correctly.
+
+DEBUGGING
+Add targeted logs only for:
+- clicked notification id
+- notification type
+- original linkUrl
+- normalized/final destination
+- whether normalization branch fired
+
+DELIVERABLES
+1) Fix notification click routing for both:
+   - newly created message notifications
+   - existing old stored message notifications
+2) Preserve other notification routing
+3) List exact files changed
+4) Explain exact root cause
+5) State whether you also backfilled old DB notification URLs
+6) Give a short manual test plan:
+   - click old existing message notification
+   - click new message notification
+   - confirm both open /messages/c/:conversationId
+   - confirm jobs/estimates notifications still route correctly
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign notifications
+- Do not break other routes

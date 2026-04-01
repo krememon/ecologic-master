@@ -260,8 +260,19 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       markReadMutation.mutate(notification.id);
     }
     if (notification.linkUrl) {
+      let destination = notification.linkUrl;
+      if (
+        notification.type === 'dm_message' &&
+        /^\/messages\/\d+$/.test(destination)
+      ) {
+        const conversationId = destination.replace('/messages/', '');
+        destination = `/messages/c/${conversationId}`;
+        console.log(`[notify-click] id=${notification.id} type=dm_message normalized: ${notification.linkUrl} → ${destination}`);
+      } else {
+        console.log(`[notify-click] id=${notification.id} type=${notification.type} destination=${destination}`);
+      }
       setNotificationsOpen(false);
-      setLocation(notification.linkUrl);
+      setLocation(destination);
     }
   };
 
