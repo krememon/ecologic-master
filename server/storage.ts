@@ -2954,7 +2954,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Safety: Cannot deactivate the last Owner
-    if (membership.role === "OWNER" && status === "INACTIVE") {
+    if (membership.role === "OWNER" && status.toUpperCase() === "INACTIVE") {
       const [{ count: activeOwnerCount }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(companyMembers)
@@ -2963,7 +2963,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(companyMembers.companyId, companyId),
             eq(companyMembers.role, "OWNER"),
-            eq(users.status, "ACTIVE")
+            sql`UPPER(${users.status}) = 'ACTIVE'`
           )
         );
 
@@ -2972,15 +2972,21 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Normalize status to uppercase for consistency
+    const normalizedStatus = status.toUpperCase() as 'ACTIVE' | 'INACTIVE';
+
     // If deactivating, increment tokenVersion and delete all sessions
-    const updateData: any = { status, updatedAt: new Date() };
-    if (status === "INACTIVE") {
+    const updateData: any = { status: normalizedStatus, updatedAt: new Date() };
+    if (normalizedStatus === "INACTIVE") {
       // Get current user to increment tokenVersion
       const [currentUser] = await db.select().from(users).where(eq(users.id, userId));
       updateData.tokenVersion = (currentUser?.tokenVersion || 0) + 1;
-      
-      // Delete all sessions for this user
-      await db.delete(sessions).where(sql`sess->>'userId' = ${userId}`);
+
+      // Delete all sessions for this user — covers both Replit OAuth (sess->userId)
+      // and email/password (sess->passport->user->claims->sub) session formats
+      await db.delete(sessions).where(
+        sql`sess->>'userId' = ${userId} OR sess->'passport'->'user'->'claims'->>'sub' = ${userId}`
+      );
     }
 
     // Update the status (and tokenVersion if deactivating)
@@ -3446,15 +3452,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async softDeleteCustomer(id: number, companyId: number): Promise<boolean> {
-    console.log(`[deleteCustomer] soft-delete attempt customerId=${id} companyId=${companyId}`);
     const result = await db
       .update(customers)
       .set({ deletedAt: new Date() })
       .where(and(eq(customers.id, id), eq(customers.companyId, companyId), isNull(customers.deletedAt)))
       .returning();
-    const success = result.length > 0;
-    console.log(`[deleteCustomer] soft-delete result=${success ? 'deleted' : 'not found or already deleted'}`);
-    return success;
+    return result.length > 0;
   }
 
   async createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer> {

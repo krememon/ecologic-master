@@ -114,7 +114,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
   };
 
   const handleStatusToggle = () => {
-    const newStatus = employee.status === 'ACTIVE' ? 'inactive' : 'active';
+    const newStatus = employee.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     onStatusToggle(employee.id, newStatus);
     setIsStatusDialogOpen(false);
   };

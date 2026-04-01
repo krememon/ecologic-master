@@ -1,0 +1,93 @@
+We need to fix employee reactivation so reactivated employees can actually log back in again.
+
+PROBLEM
+When I deactivate an employee, the deactivation works properly.
+But when I reactivate that same employee:
+- the app says the employee was activated/reactivated
+- however, that employee still cannot log in
+
+So the UI/status says reactivated, but auth/login behavior is still treating them as inactive/blocked.
+
+GOAL
+If an employee is reactivated, they must be able to log in again immediately as a normal active employee.
+
+WHAT TO AUDIT
+
+1) DEACTIVATE / REACTIVATE SOURCE OF TRUTH
+Inspect the full deactivate/reactivate flow end-to-end:
+- frontend toggle/button action
+- backend activate/deactivate route
+- database fields updated on deactivate
+- database fields updated on reactivate
+- any company_members / users / auth flags involved
+
+2) LOGIN BLOCKING LOGIC
+Find exactly what login/auth checks use to block inactive employees.
+Examples to inspect:
+- user.isActive
+- company_members.active
+- deactivatedAt
+- archived/disabled flags
+- membership status
+- auth middleware / login route checks
+- onboarding/access resolver checks
+
+Then verify reactivation updates ALL fields required by login.
+Most likely deactivation flips more than one field, but reactivation is only flipping one of them back.
+
+3) EMPLOYEE MEMBERSHIP VS USER ACCOUNT
+Check whether deactivation/reactivation affects:
+- the employee’s user account row
+- the company_members row
+- any seat/membership/access flag
+- any role visibility/access flag
+
+Very possible bug:
+- UI reactivates the membership
+- but auth still reads a disabled user account flag
+or the reverse
+
+4) CACHE / UI FALSE SUCCESS
+Confirm the frontend is not showing “employee activated” just because one mutation succeeded while the real blocking flag stayed unchanged.
+The success message must reflect true restored access.
+
+5) SESSION / AUTH RULES
+After reactivation:
+- employee should be able to log in with same credentials
+- protected routes should allow access again
+- no hidden “inactive employee” block should remain in auth/user bootstrap logic
+
+6) DEBUGGING
+Add targeted logs for:
+- deactivate payload/target employee
+- fields changed on deactivate
+- fields changed on reactivate
+- login attempt result for reactivated employee
+- exact auth denial reason if login is still blocked
+- any active/inactive flags read during login
+
+LIKELY ROOT CAUSES TO CHECK
+- reactivation updates only UI-facing status, not auth-facing status
+- user account remains disabled while membership becomes active
+- membership remains inactive while user row becomes active
+- deactivatedAt not cleared
+- login route checks a different flag than the reactivation route updates
+- employee access cache/session bootstrap still marks account inactive
+
+DELIVERABLES
+1) Fix employee reactivation so reactivated employees can log in again
+2) Ensure deactivation still works correctly
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - deactivate employee
+   - confirm employee cannot log in
+   - reactivate employee
+   - confirm employee can log in again
+   - confirm employee access/pages work normally after login
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign employee management
+- Do not break deactivation behavior
+- Preserve RBAC and existing employee access rules

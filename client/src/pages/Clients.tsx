@@ -132,14 +132,6 @@ export default function Clients() {
   // Unified data source - customers only (clients migrated to customers table)
   const { customers, isLoading: customersLoading, error: customersError } = useCompanyCustomers();
   
-  // Debug logging
-  console.log("[ClientsPage] customers fetch result:", { 
-    customersLoading, 
-    customersError: customersError?.message,
-    customersLength: customers.length,
-    customers 
-  });
-
   // Function to toggle job history expansion
   const toggleClientJobs = (clientId: number) => {
     const newExpanded = new Set(expandedClientJobs);

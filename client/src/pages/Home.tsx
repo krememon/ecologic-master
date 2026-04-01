@@ -588,16 +588,6 @@ export default function Home() {
       })
     : estimates.filter(est => est.status !== 'archived');
 
-  // Diagnostic logs — confirm what Home receives at runtime
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Home] estimates received:', estimates.length, '| role:', role, '| myEstimates:', myEstimates.length);
-    myEstimates.forEach(est => {
-      const raw = (est as any).requestedStartAt ?? est.scheduledDate;
-      const parsed = getEstimateDate(est);
-      console.log(`[Home] est#${est.id} status=${est.status} requestedStartAt=${(est as any).requestedStartAt ?? 'null'} scheduledDate=${est.scheduledDate ?? 'null'} → parsed=${parsed} isToday=${parsed ? isToday(parsed) : false} isFuture=${parsed ? parsed > today : false}`);
-    });
-  }
-
   const todayEstimates = myEstimates.filter(est => {
     const date = getEstimateDate(est);
     return date && isToday(date) && est.status !== 'approved';
@@ -615,10 +605,6 @@ export default function Home() {
       return da.getTime() - db.getTime();
     })
     .slice(0, 5);
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Home] todayEstimates:', todayEstimates.length, '| upcomingEstimates:', upcomingEstimates.length);
-  }
 
   const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || estimatesLoading || (isAdmin && invoicesLoading);
 

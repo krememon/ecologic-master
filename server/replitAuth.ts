@@ -522,7 +522,7 @@ export async function setupAuth(app: Express) {
         console.log("User for session:", { id: user.id, email: user.email });
         
         // Check if user is deactivated
-        if (user.status === 'INACTIVE') {
+        if (user.status?.toUpperCase() === 'INACTIVE') {
           console.log("Google OAuth: User is deactivated");
           return done(null, null, {
             error: 'account_inactive',
@@ -805,7 +805,7 @@ export async function setupAuth(app: Express) {
           return res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple did not provide an email address. Please try again or sign in with email/password."));
         }
 
-        if (user.status === 'INACTIVE') {
+        if (user.status?.toUpperCase() === 'INACTIVE') {
           console.log("[AppleAuth] User is deactivated:", user.id);
           return res.redirect("/?error=account_inactive&message=" + encodeURIComponent("Your account is deactivated. Please contact your company Owner or Supervisor."));
         }
@@ -887,7 +887,7 @@ export async function setupAuth(app: Express) {
       }
 
       // Check if user is deactivated
-      if (user.status === 'INACTIVE') {
+      if (user.status?.toUpperCase() === 'INACTIVE') {
         return res.status(401).json({ 
           code: 'ACCOUNT_INACTIVE',
           message: "Your account is deactivated. Please contact your company Owner or Supervisor."
@@ -1230,7 +1230,7 @@ export async function setupAuth(app: Express) {
       }
 
       // Check if user is deactivated
-      if (user.status === 'INACTIVE') {
+      if (user.status?.toUpperCase() === 'INACTIVE') {
         return res.status(401).json({ 
           code: 'ACCOUNT_INACTIVE',
           message: "Your account is deactivated. Please contact your company Owner or Supervisor."
@@ -1370,7 +1370,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   }
 
   // Check if user is deactivated
-  if (dbUser.status === 'INACTIVE') {
+  if (dbUser.status?.toUpperCase() === 'INACTIVE') {
     console.log("User is deactivated");
     return res.status(401).json({ 
       code: 'ACCOUNT_INACTIVE',
