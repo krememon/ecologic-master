@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X, Bell, ArrowRightLeft, Building2, DollarSign, ChevronRight } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X, Bell, ArrowRightLeft, Building2, DollarSign, ChevronRight, MoreVertical, Trash2, Pencil } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { Customer, Job, Estimate } from "@shared/schema";
 
 interface ClientDetailProps {
@@ -113,6 +117,14 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
   const [activeTab, setActiveTab] = useState<'jobs' | 'subcontracted' | 'estimates' | 'notes'>('jobs');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editCompanyName, setEditCompanyName] = useState('');
 
   const canEditCustomers = ['OWNER', 'SUPERVISOR'].includes(role || '');
 
@@ -164,6 +176,58 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
       toast({ title: "Failed to update preferences", variant: "destructive" });
     },
   });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest('DELETE', `/api/clients/${customerId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      toast({ title: "Customer deleted" });
+      navigate('/clients');
+    },
+    onError: () => {
+      toast({ title: "Failed to delete customer", variant: "destructive" });
+    },
+  });
+
+  const updateCustomerMutation = useMutation({
+    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; companyName?: string }) => {
+      const res = await apiRequest('PATCH', `/api/customers/${customerId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({ title: "Customer updated" });
+      setShowEditSheet(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update customer", variant: "destructive" });
+    },
+  });
+
+  const handleOpenEditSheet = () => {
+    setEditFirstName(customer?.firstName || '');
+    setEditLastName(customer?.lastName || '');
+    setEditEmail(customer?.email || '');
+    setEditPhone(customer?.phone || '');
+    setEditAddress(customer?.address || '');
+    setEditCompanyName(customer?.companyName || '');
+    setShowEditSheet(true);
+  };
+
+  const handleSaveEdit = () => {
+    updateCustomerMutation.mutate({
+      firstName: editFirstName.trim(),
+      lastName: editLastName.trim(),
+      email: editEmail.trim() || undefined,
+      phone: editPhone.trim() || undefined,
+      address: editAddress.trim() || undefined,
+      companyName: editCompanyName.trim() || undefined,
+    });
+  };
 
   const handleEditNotes = () => {
     setEditedNotes(customer?.notes || '');
@@ -244,6 +308,28 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
             <p className="text-slate-600 dark:text-slate-400">{customer.companyName}</p>
           )}
         </div>
+        {canEditCustomers && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleOpenEditSheet} className="gap-2">
+                <Pencil className="h-4 w-4" />
+                Edit Customer
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setShowDeleteConfirm(true)}
+                className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Customer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Client Info Card */}
@@ -319,24 +405,9 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
                 disabled={updateOptInMutation.isPending || !customer.email}
               />
             </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="smsOptIn" className="text-sm font-medium">Text Message Campaigns</Label>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Allow sending promotional texts to this client
-                </p>
-              </div>
-              <Switch
-                id="smsOptIn"
-                checked={customer.smsOptIn ?? true}
-                onCheckedChange={(checked) => updateOptInMutation.mutate({ smsOptIn: checked })}
-                disabled={updateOptInMutation.isPending || !customer.phone}
-              />
-            </div>
-            {(customer.emailUnsubscribedAt || customer.smsUnsubscribedAt) && (
+            {customer.emailUnsubscribedAt && (
               <p className="text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-slate-200 dark:border-slate-700">
-                {customer.emailUnsubscribedAt && 'Email unsubscribed. '}
-                {customer.smsUnsubscribedAt && 'SMS unsubscribed via STOP keyword.'}
+                Email unsubscribed.
               </p>
             )}
           </CardContent>
@@ -643,6 +714,113 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
           </CardContent>
         </Card>
       )}
+      {/* Delete confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {formatCustomerName()} and cannot be undone. Associated jobs, estimates, and invoices will remain but will no longer be linked to this customer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCustomerMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteCustomerMutation.mutate()}
+              disabled={deleteCustomerMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteCustomerMutation.isPending ? "Deleting..." : "Delete Customer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Customer sheet */}
+      <Sheet open={showEditSheet} onOpenChange={setShowEditSheet}>
+        <SheetContent side="bottom" className="h-[85vh] overflow-y-auto rounded-t-2xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle>Edit Customer</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-first-name" className="text-sm font-medium">First Name</Label>
+                <Input
+                  id="edit-first-name"
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  placeholder="First name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-last-name" className="text-sm font-medium">Last Name</Label>
+                <Input
+                  id="edit-last-name"
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-company" className="text-sm font-medium">Company Name</Label>
+              <Input
+                id="edit-company"
+                value={editCompanyName}
+                onChange={(e) => setEditCompanyName(e.target.value)}
+                placeholder="Company name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-email" className="text-sm font-medium">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="Email address"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-phone" className="text-sm font-medium">Phone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                placeholder="Phone number"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-address" className="text-sm font-medium">Address</Label>
+              <Input
+                id="edit-address"
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder="Address"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowEditSheet(false)}
+                disabled={updateCustomerMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSaveEdit}
+                disabled={updateCustomerMutation.isPending}
+              >
+                {updateCustomerMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

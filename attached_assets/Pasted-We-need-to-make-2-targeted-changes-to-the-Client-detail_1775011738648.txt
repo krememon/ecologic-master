@@ -1,0 +1,83 @@
+We need to make 2 targeted changes to the Client details screen on EcoLogic.
+
+CHANGES NEEDED
+
+1) REMOVE TEXT MESSAGE CAMPAIGNS
+On the client details page, inside Communication Preferences:
+- remove the "Text Message Campaigns" row entirely
+- remove its toggle entirely
+- keep "Email Campaigns"
+- do not leave empty spacing or placeholder UI
+
+2) ADD 3-DOT MENU FOR CLIENT ACTIONS
+Add a 3-dot actions button on the client details screen like the pattern shown in the screenshots.
+
+The 3-dot menu should include:
+- Edit Customer
+- Delete Customer
+
+GOAL
+Make the client details page cleaner and give users a simple actions menu for managing the customer.
+
+UI REQUIREMENTS
+
+CLIENT DETAILS PAGE
+- Add the 3-dot button in the proper top-right area of the client details screen/header
+- Match existing EcoLogic styling
+- Do not create a weird oversized button
+- Reuse existing menu/dropdown styling pattern if one already exists elsewhere in the app
+
+MENU ITEMS
+- Edit Customer
+- Delete Customer
+
+LABELING
+- Use “Customer” in the menu labels exactly as:
+  - Edit Customer
+  - Delete Customer
+
+FUNCTIONAL REQUIREMENTS
+
+EDIT CUSTOMER
+- Hook this into the real existing edit-client/customer flow
+- Reuse the current edit client modal/sheet/page if one already exists
+- Do not create a fake placeholder action
+
+DELETE CUSTOMER
+- Hook this into the real delete client/customer flow
+- Include confirmation before deletion
+- Make sure deletion behavior is safe and matches current app patterns
+- Do not accidentally break client/job/invoice relationships; preserve current delete rules/guards
+
+REMOVE TEXT MESSAGE CAMPAIGNS
+- Remove that row from the UI
+- If there is backend/client preference data for it, do not break anything unnecessarily
+- This request is primarily to remove it from the client card UI on this screen
+
+WHAT TO AUDIT
+- client details page component
+- communication preferences card
+- client actions currently available elsewhere
+- existing edit client flow
+- existing delete client flow
+- any dropdown/menu component already used in Jobs or other detail pages
+
+DELIVERABLES
+1) Remove Text Message Campaigns from Communication Preferences on the client details page
+2) Add 3-dot menu with:
+   - Edit Customer
+   - Delete Customer
+3) Reuse real existing edit/delete functionality
+4) List exact files changed
+5) Give a short manual test plan:
+   - open client details
+   - confirm only Email Campaigns remains
+   - open 3-dot menu
+   - edit customer works
+   - delete customer confirmation works
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the whole client page
+- Keep styling consistent with EcoLogic
+- Do not break any existing client functionality
