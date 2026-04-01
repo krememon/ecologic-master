@@ -12,7 +12,7 @@ function BrandingHeader() {
       <img
         src={ecologicWordmark}
         alt="EcoLogic"
-        className="h-8 mx-auto mb-1"
+        className="w-full max-w-[260px] h-auto mx-auto mb-2"
       />
       <p className="text-slate-500 text-sm">Professional contractor management</p>
     </div>
