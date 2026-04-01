@@ -1,0 +1,88 @@
+We need to fix the post-login flow for users who were removed from a company.
+
+PROBLEM
+If an owner removes an employee from the company, that removed employee can still sign in later — but the app must then send them to the proper no-company onboarding choice flow.
+
+RIGHT NOW
+After being removed, the employee is not being routed correctly.
+
+GOAL
+When a removed employee signs in again, they should be treated like a user with no company and be brought to the:
+- Join a company
+or
+- Create a company
+choice page
+
+EXPECTED BEHAVIOR
+1) Owner removes employee from company
+2) Employee is no longer a member of that company
+3) Later, employee signs in
+4) App detects they no longer belong to any company
+5) App routes them to the single onboarding choice screen:
+   - Create a company
+   - Join a company
+
+IMPORTANT
+This should match the normal “no company” routing logic already used elsewhere.
+Do not create a weird special-case screen.
+
+WHAT TO AUDIT
+
+1) REMOVE FROM COMPANY FLOW
+- Inspect the backend remove-from-company action
+- Confirm it actually removes/ends the membership fully
+- Confirm no stale membership/company link remains on the user
+
+2) POST-LOGIN ROUTING
+- Audit the auth bootstrap / protected route / onboarding router logic
+- Confirm what happens when:
+  - user exists
+  - user is authenticated
+  - but has no active company membership
+- Make sure removed employees fall into that exact path
+
+3) COMPANY MEMBERSHIP SOURCE OF TRUTH
+- Confirm login/app bootstrap checks the real active membership state
+- Do not rely on stale cached user/company data
+- If membership was removed, hasCompany should become false
+
+4) ONBOARDING ROUTE
+- Send removed users to the same single choice screen already used for no-company users
+- Do not show duplicate onboarding screens
+- Do not send them into the old company shell
+
+5) CACHE / SESSION / REFRESH
+- If a removed employee signs in again, auth user bootstrap must reflect their removed state immediately
+- No stale company session data should keep them attached to the old company
+
+LIKELY ROOT CAUSES TO CHECK
+- membership removal succeeds but auth bootstrap still thinks user has a company
+- hasCompany is computed from stale user/company field
+- onboarding route only checks old companyId and not active membership
+- removed membership still leaves behind a misleading company reference
+- login bootstrap cache not refreshed correctly
+
+DEBUGGING
+Add targeted logs only for:
+- remove-from-company result
+- post-login resolved membership/company state
+- hasCompany value
+- chosen onboarding/protected route after login
+
+DELIVERABLES
+1) Fix removed-employee login routing
+2) Ensure removed employees go to the Join/Create company choice screen on next login
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - remove employee from company
+   - sign out
+   - sign in as removed employee
+   - confirm user lands on Join/Create company screen
+   - confirm user is not dropped into old company
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign onboarding
+- Do not break normal employee or owner login flows
+- Reuse the existing no-company routing logic

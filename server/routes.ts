@@ -752,6 +752,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (company) {
         console.log("[auth] companyId detected:", company.id);
+      } else {
+        console.log(`[auth] no-company user — hasCompany=false onboardingChoice=${user.onboardingChoice ?? 'null'} userId=${userId}`);
       }
 
       const responseData = {
@@ -4100,11 +4102,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(companyMembers.companyId, req.companyId)
           ));
         
-        // Increment tokenVersion to invalidate all sessions
+        // Increment tokenVersion to invalidate all sessions, and reset
+        // onboardingChoice so the removed user is routed to the
+        // Join / Create company choice screen on their next login.
         await tx
           .update(users)
           .set({ 
             tokenVersion: sql`${users.tokenVersion} + 1`,
+            onboardingChoice: null,
             updatedAt: new Date()
           })
           .where(eq(users.id, userId));
@@ -4115,6 +4120,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(sql`(sess->>'userId')::text = ${userId}`);
       });
       
+      console.log(`[remove-member] userId=${userId} removed from companyId=${req.companyId} — membership deleted, onboardingChoice reset, sessions cleared`);
+
       // Broadcast session revocation to all user's devices
       broadcastToUser(userId, {
         type: 'session_revoked',
