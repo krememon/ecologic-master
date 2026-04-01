@@ -2,10 +2,26 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
-import ecologicDroplet from "@/assets/branding/ecologic-droplet.png";
 import ecologicWordmark from "@/assets/branding/ecologic-wordmark.png";
+import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 
 type State = "loading" | "confirm" | "success" | "resubscribed" | "cancelled" | "error";
+
+function BrandingHeader() {
+  return (
+    <div className="text-center mb-6">
+      <div className="w-20 h-20 mx-auto mb-3 rounded-2xl overflow-hidden shadow-lg">
+        <img src={logoImage} alt="EcoLogic Logo" className="w-full h-full object-cover" />
+      </div>
+      <img
+        src={ecologicWordmark}
+        alt="EcoLogic"
+        className="h-7 mx-auto mb-1"
+      />
+      <p className="text-slate-500 text-sm">Professional contractor management</p>
+    </div>
+  );
+}
 
 export default function PublicUnsubscribe() {
   const [state, setState] = useState<State>("loading");
@@ -14,7 +30,6 @@ export default function PublicUnsubscribe() {
   
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
-  // Support /unsubscribe, /unsubscribe/email, /unsubscribe/sms
   const path = window.location.pathname;
   const channel = path.includes("/sms") ? "sms" : "email";
 
@@ -110,16 +125,7 @@ export default function PublicUnsubscribe() {
         <CardContent className="p-6 sm:p-8">
           {state === "loading" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-6"
-              />
+              <BrandingHeader />
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-teal-600 mb-3" />
               <p className="text-slate-600">Validating link...</p>
             </div>
@@ -127,16 +133,7 @@ export default function PublicUnsubscribe() {
 
           {state === "confirm" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
-              />
+              <BrandingHeader />
               <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Unsubscribe</h2>
               <p className="text-slate-600 mb-4">
                 Are you sure you want to unsubscribe from EcoLogic marketing {channel === "sms" ? "text messages" : "emails"}?
@@ -170,16 +167,7 @@ export default function PublicUnsubscribe() {
 
           {state === "success" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
-              />
+              <BrandingHeader />
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Unsubscribed</h2>
               <p className="text-slate-600 mb-4">
@@ -205,16 +193,7 @@ export default function PublicUnsubscribe() {
 
           {state === "resubscribed" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
-              />
+              <BrandingHeader />
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Resubscribed</h2>
               <p className="text-slate-600">
@@ -225,16 +204,7 @@ export default function PublicUnsubscribe() {
 
           {state === "cancelled" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
-              />
+              <BrandingHeader />
               <ArrowLeft className="w-12 h-12 text-slate-400 mx-auto mb-3" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2.5">You're Still Subscribed</h2>
               <p className="text-slate-600">
@@ -245,16 +215,7 @@ export default function PublicUnsubscribe() {
 
           {state === "error" && (
             <div className="text-center">
-              <img 
-                src={ecologicDroplet} 
-                alt="EcoLogic Logo" 
-                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
-              />
-              <img 
-                src={ecologicWordmark} 
-                alt="EcoLogic" 
-                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
-              />
+              <BrandingHeader />
               <XCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Error</h2>
               <p className="text-slate-600">{errorMessage}</p>

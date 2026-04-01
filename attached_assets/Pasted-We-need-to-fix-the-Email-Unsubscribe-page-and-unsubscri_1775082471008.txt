@@ -1,0 +1,80 @@
+We need to fix the Email Unsubscribe page and unsubscribe link generation.
+
+PROBLEMS
+
+1) WRONG BRANDING ON UNSUBSCRIBE PAGE
+The unsubscribe page currently shows the old water droplet/logo treatment.
+I do NOT want that.
+
+I want it to match the EcoLogic sign-in branding:
+- EcoLogic wordmark/logo
+- small subtitle underneath:
+  Professional contractor management
+- NO water droplet at all
+
+2) WRONG DOMAIN IN UNSUBSCRIBE LINK
+The unsubscribe email link is currently using the old Replit URL, like:
+https://eco-logic-pjpell077.replit.app/unsubscribe/email?token=...
+
+I want unsubscribe links to use:
+https://app.ecologicc.com/...
+
+GOAL
+Make the unsubscribe page look branded like the EcoLogic sign-in page and ensure unsubscribe links use app.ecologicc.com on web.
+
+WHAT TO CHANGE
+
+1) UNSUBSCRIBE PAGE UI
+Update the unsubscribe page so the top branding matches the sign-in page aesthetic:
+- use the EcoLogic wordmark/logo only
+- include the small subtitle:
+  Professional contractor management
+- remove the water droplet icon entirely
+- keep the page clean and centered
+- preserve the unsubscribe confirmation card/buttons underneath unless small polish is needed
+
+IMPORTANT
+Do not redesign the whole page.
+Just make the branding/header match the sign-in look.
+
+2) UNSUBSCRIBE LINK DOMAIN
+Audit how unsubscribe URLs are generated in campaign emails.
+Fix the base URL logic so unsubscribe links use:
+- APP_PUBLIC_BASE_URL if available
+- and specifically resolve to app.ecologicc.com in production/web
+
+Do NOT keep generating unsubscribe links on the old Replit domain.
+
+3) BASE URL / ENV LOGIC
+Inspect the exact unsubscribe link builder and any shared email/public-link helper.
+Make sure unsubscribe links follow the same correct public base URL rules used elsewhere for public web links.
+
+4) PRESERVE FUNCTIONALITY
+Do not break the actual unsubscribe behavior.
+The page still needs to:
+- accept the token
+- unsubscribe the customer correctly
+- show the correct confirm/cancel flow
+- keep working after branding/domain changes
+
+5) CHECK FOR OTHER OLD DOMAIN USAGE
+If the unsubscribe flow has any other redirects, confirmations, or follow-up screens still pointing at the old Replit URL, update them too.
+
+DELIVERABLES
+1) Update unsubscribe page branding to match the EcoLogic sign-in style
+2) Remove the water droplet completely
+3) Make unsubscribe links generate with app.ecologicc.com instead of the old Replit URL
+4) List exact files changed
+5) Explain exact root cause of why old domain was being used
+6) Give a short manual test plan:
+   - send campaign email
+   - inspect unsubscribe link
+   - confirm it uses app.ecologicc.com
+   - open unsubscribe page
+   - confirm branding matches sign-in style
+   - confirm unsubscribe still works
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign unrelated email flows
+- Preserve unsubscribe functionality
