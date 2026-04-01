@@ -16069,7 +16069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               body: `${senderName}: ${messagePreview}`,
               entityType: 'conversation',
               entityId: conversationId,
-              linkUrl: `/messages/${conversationId}`,
+              linkUrl: `/messages/c/${conversationId}`,
               meta: {
                 conversationId,
                 senderId: userId,
@@ -20427,7 +20427,7 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
                     body: `${senderName}: ${messagePreview}`,
                     entityType: 'conversation',
                     entityId: conversationId,
-                    linkUrl: `/messages/${conversationId}`,
+                    linkUrl: `/messages/c/${conversationId}`,
                     meta: { conversationId, senderId: ws.userId, messageId: newMessage.id },
                     dedupMinutes: 1,
                   });

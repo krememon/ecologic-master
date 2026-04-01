@@ -1,0 +1,96 @@
+We need to fix message notification deep-link routing.
+
+PROBLEM
+When a user gets a notification for a new direct message from an employee and clicks that notification, the app routes to Jobs / Estimates instead of opening the actual direct message thread.
+
+GOAL
+If the notification is for a direct message, clicking it should take the user straight into the correct DM conversation thread.
+
+EXPECTED BEHAVIOR
+For a new message notification:
+1) user clicks the notification in the notification bar
+2) app reads the notification type/payload correctly
+3) app routes to the correct Messages conversation
+4) user lands inside the DM thread with that employee/user
+5) it should NOT route to Jobs / Estimates
+
+WHAT TO AUDIT
+
+1) NOTIFICATION PAYLOAD
+Inspect the notification object/data created for new messages:
+- notification type
+- entity type
+- thread/conversation id
+- sender id
+- recipient id
+- deep link / target route
+- any fallback route fields
+
+2) CLICK HANDLER / ROUTING
+Audit the notification click handler end-to-end:
+- where notification click is handled
+- how route destination is chosen
+- whether message notifications are being misclassified as job/estimate notifications
+- whether a generic fallback route is incorrectly firing
+
+3) MESSAGE NOTIFICATION TYPE MAPPING
+Confirm the app has a correct dedicated mapping for message notifications, for example:
+- message
+- direct_message
+- dm
+- conversation_message
+Whatever the real type is, make sure that type routes to:
+- /messages
+- and ideally the specific conversation route like /messages/c/:id
+
+4) THREAD TARGETING
+If the notification payload contains a conversation/thread id:
+- route directly to that conversation
+If it only contains sender/user info:
+- resolve/open the correct DM thread from that info
+
+5) DO NOT BREAK OTHER NOTIFICATIONS
+Keep existing behavior correct for:
+- jobs
+- estimates
+- invoices
+- payments
+- any other notification types
+Only fix the incorrect message-notification routing.
+
+6) WEB + EXISTING PLATFORM SAFETY
+This should work correctly wherever notification clicking is supported, but do not break existing notification behavior on other platforms.
+If shared code is used, make the fix carefully.
+
+LIKELY ROOT CAUSES TO CHECK
+- message notifications using wrong notification type
+- click handler fallthrough sends unknown types to Jobs/Estimates
+- conversation id missing from payload so fallback route wins
+- notification routing map has no DM case
+- message notification is being generated with job/estimate metadata accidentally
+
+DEBUGGING
+Add targeted logs only for:
+- notification payload for new message
+- detected notification type on click
+- chosen route destination
+- conversation/thread id if present
+- fallback branch usage
+
+DELIVERABLES
+1) Fix notification click routing for direct messages
+2) Ensure clicking a message notification opens the correct DM thread
+3) Preserve other notification routing behavior
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - send employee → owner direct message
+   - confirm owner receives notification
+   - click notification
+   - confirm app opens correct Messages conversation
+   - confirm jobs/estimates are not opened instead
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign the notification system
+- Do not break other notification types
