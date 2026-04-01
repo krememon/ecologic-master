@@ -14,7 +14,6 @@ import {
   File,
   Upload,
   Download,
-  PenTool,
   Trash2,
   ChevronRight,
   Home,
@@ -34,7 +33,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type DocumentVisibility } from "@shared/schema";
 
@@ -405,8 +403,6 @@ export default function Documents() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
-  const [signatureDoc, setSignatureDoc] = useState<DocumentItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
   const [viewerDoc, setViewerDoc] = useState<DocumentItem | null>(null);
 
@@ -688,7 +684,6 @@ export default function Documents() {
                       doc={doc}
                       onView={() => handleView(doc)}
                       onDownload={() => handleDownload(doc)}
-                      onSign={() => { setSignatureDoc(doc); setSignatureModalOpen(true); }}
                       onDelete={() => setDeleteConfirm({ type: "document", id: doc.id, name: doc.name })}
                     />
                   ))}
@@ -827,22 +822,6 @@ export default function Documents() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Signature Modal ──────────────────────────────────────────── */}
-      <Dialog open={signatureModalOpen} onOpenChange={setSignatureModalOpen}>
-        <DialogContent className="max-w-lg rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Send for Signature</DialogTitle>
-          </DialogHeader>
-          {signatureDoc && (
-            <ApprovalWorkflow
-              documentId={signatureDoc.id}
-              documentName={signatureDoc.name}
-              onClose={() => setSignatureModalOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* ── In-app File Viewer ─────────────────────────────────────────── */}
       <FileViewer doc={viewerDoc} onClose={() => setViewerDoc(null)} />
     </div>
@@ -911,13 +890,11 @@ function FileRow({
   doc,
   onView,
   onDownload,
-  onSign,
   onDelete,
 }: {
   doc: DocumentItem;
   onView: () => void;
   onDownload: () => void;
-  onSign: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -955,10 +932,6 @@ function FileRow({
           <DropdownMenuItem onClick={e => { e.stopPropagation(); onDownload(); }}>
             <Download className="w-4 h-4 mr-2" />
             Download
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={e => { e.stopPropagation(); onSign(); }}>
-            <PenTool className="w-4 h-4 mr-2" />
-            Send for Signature
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={e => { e.stopPropagation(); onDelete(); }}>
