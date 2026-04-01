@@ -96,6 +96,16 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
 
   const user: AuthUser = await res.json();
 
+  console.log(
+    `[auth/user][client] payload received —` +
+    ` userId=${user.id}` +
+    ` hasCompany=${!!user.company}` +
+    ` companyId=${user.company?.id ?? "null"}` +
+    ` role=${user.role ?? "null"}` +
+    ` onboardingChoice=${(user as any).onboardingChoice ?? "null"}` +
+    ` onboardingCompleted=${user.company?.onboardingCompleted ?? "null"}`
+  );
+
   if (user.company) {
     localStorage.removeItem("onboardingChoice");
     localStorage.removeItem("onboardingIndustry");

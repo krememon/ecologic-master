@@ -1,0 +1,113 @@
+The previous fix was NOT enough. Resetting onboardingChoice alone did not solve the runtime routing problem.
+
+CURRENT FACT
+I just signed back in with staging@ecologicc.com after removal and it did not go to the choice screen.
+It just refreshed.
+
+So one of these is still true at runtime:
+- auth bootstrap still thinks the user has a company
+- the no-company route decision is not actually being applied
+- the app is routing to /join-company or another silent branch without rendering the choice screen
+- stale auth/session/query state is overriding the expected no-company flow
+- protected shell is still mounting before the no-company redirect resolves
+
+GOAL
+Make removed employees reliably land on the single Join/Create company choice screen on next login.
+
+DO THIS EXACTLY
+
+1) TRACE THE REAL POST-LOGIN RUNTIME PATH
+Add targeted logs for the removed employee login flow from backend to frontend:
+
+BACKEND
+- /api/auth/user response for the removed user:
+  - userId
+  - role
+  - companyId
+  - hasCompany
+  - onboardingChoice
+  - onboardingCompleted
+  - any active membership count
+
+FRONTEND
+At login/bootstrap/routing time log:
+- auth user payload actually received by the client
+- getNextOnboardingRoute inputs:
+  - platform
+  - hasCompany
+  - companyId
+  - onboardingChoice
+  - onboardingCompleted
+  - role
+  - subActive if relevant
+- exact return value from getNextOnboardingRoute
+- whether protected app shell still mounts anyway
+- current pathname before and after login
+- whether any redirect is firing after the route decision
+
+I want the actual runtime chain, not theory.
+
+2) VERIFY /API/AUTH/USER IS ACTUALLY RETURNING NO-COMPANY
+Do not assume the DELETE route reset was enough.
+Confirm the removed user’s /api/auth/user payload really shows:
+- hasCompany=false
+- companyId=null
+- onboardingChoice=null
+- no active membership
+If any of those are still wrong, fix that at the source.
+
+3) AUDIT THE FRONTEND NO-COMPANY ROUTING BRANCH
+Inspect the exact logic after sign-in:
+- where getNextOnboardingRoute is called
+- where the returned route is actually navigated to
+- whether /join-company is still being preferred somewhere else
+- whether the shell/protected routes are swallowing the redirect
+- whether a pathname refresh is happening instead of navigate(choice-screen)
+
+4) FIX THE EXPECTED DESTINATION
+For a removed employee with no company:
+- do NOT silently refresh
+- do NOT drop into old shell
+- do NOT force /join-company directly unless product explicitly wants that
+- send them to the single choice screen:
+  - Create a company
+  - Join a company
+
+Use the same entry choice screen the rest of the no-company flow uses.
+
+5) CHECK STALE CLIENT STATE / CACHE
+Likely issue:
+- previous company auth state is cached in React Query or app state
+- on new login it reuses stale hasCompany/company info
+Audit and fix:
+- auth query invalidation on login/logout
+- user bootstrap refresh after login
+- any persisted state/localStorage causing stale company routing
+
+6) CHECK ROUTE GUARDS / SHELL GATES
+Inspect whether:
+- shell gate still renders when hasCompany=false
+- onboarding route is computed correctly but ignored
+- a protected-route wrapper redirects back to current path
+- there is a race between auth loading and onboarding redirect
+
+7) PROVE THE FIX
+After fix, verify with staging@ecologicc.com:
+- sign in
+- app routes directly to the single Create/Join company choice screen
+- no refresh loop
+- no silent stay on previous path
+- no access to old company shell
+
+DELIVER BACK
+1) Exact runtime root cause
+2) Whether the backend auth payload was wrong, frontend routing was wrong, or both
+3) Exact files changed
+4) Exact fix applied
+5) The exact post-login route the removed employee now lands on
+6) Short manual test plan
+
+IMPORTANT
+- Do not just tweak onboardingChoice again
+- Trace the actual runtime path from /api/auth/user → getNextOnboardingRoute → navigate/render
+- Tight targeted fix only

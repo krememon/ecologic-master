@@ -183,14 +183,19 @@ function getNextOnboardingRoute(params: {
   const { user, onboardingChoice, onboardingIndustry, subActive } = params;
   
   const isAndroidNative = isNativePlatform() && getPlatform() === "android";
+  const platform = isAndroidNative ? "android" : isNativePlatform() ? "ios" : "web";
+  const hasCompany = !!user?.company;
+
   console.log(
     `[ECOLOGIC-SUB] [routing] getNextOnboardingRoute —` +
-    ` platform=${isAndroidNative ? "android" : isNativePlatform() ? "ios" : "web"}` +
-    ` hasCompany=${!!user?.company}` +
+    ` platform=${platform}` +
+    ` hasCompany=${hasCompany}` +
     ` companyId=${user?.company?.id ?? "none"}` +
     ` onboardingCompleted=${user?.company?.onboardingCompleted ?? false}` +
+    ` onboardingChoice=${onboardingChoice ?? "null"}` +
     ` subActive=${subActive}` +
-    ` role=${user?.role ?? "none"}`
+    ` role=${user?.role ?? "none"}` +
+    ` userId=${user?.id ?? "none"}`
   );
 
   if (user?.company) {
@@ -201,42 +206,51 @@ function getNextOnboardingRoute(params: {
     // They are never routed to the paywall or the subscription purchase flow —
     // that is the company owner's responsibility.
     if (!isOwner) {
-      if (onboardingCompleted) {
-        return null;
-      }
+      console.log(`[app-router] hasCompany=true role=${user.role} → null (access granted)`);
       return null;
     }
 
     // Owner: enforce subscription gate
     if (onboardingCompleted && subActive) {
+      console.log(`[app-router] hasCompany=true OWNER onboardingCompleted=true subActive=true → null (dashboard)`);
       return null;
     }
 
     if (onboardingCompleted && !subActive) {
+      console.log(`[app-router] hasCompany=true OWNER onboardingCompleted=true subActive=false → /paywall`);
       return "/paywall";
     }
 
     if (!subActive) {
+      console.log(`[app-router] hasCompany=true OWNER onboardingCompleted=false subActive=false → /onboarding/subscription`);
       return "/onboarding/subscription";
     }
 
+    console.log(`[app-router] hasCompany=true OWNER onboardingCompleted=false subActive=true → null (finish onboarding)`);
     return null;
   }
-  
-  if (!onboardingChoice) {
-    console.log("[app-router] no onboardingChoice — routing to choice screen (userId=" + user?.id + ")");
+
+  // No company. Determine the correct onboarding route.
+  //
+  // KEY RULE: 'employee' onboardingChoice must NEVER bypass the choice screen.
+  // Previously this routed directly to /join-company, which broke removed
+  // employees — their stale onboardingChoice='employee' sent them to join-company
+  // instead of letting them decide whether to create or join a company.
+  //
+  // OnboardingChoice navigates to /join-company directly when the user clicks
+  // "Join a company", so we do not need to do it here.
+  if (!onboardingChoice || onboardingChoice === "employee") {
+    console.log(`[app-router] hasCompany=false onboardingChoice=${onboardingChoice ?? "null"} → /onboarding/choice`);
     return "/onboarding/choice";
   }
 
-  if (onboardingChoice === "employee") {
-    console.log("[app-router] onboardingChoice=employee, no company yet — routing to join-company");
-    return "/join-company";
-  }
-  
+  // Owner mid-onboarding: they chose 'owner' but haven't finished company setup.
   if (!onboardingIndustry) {
+    console.log(`[app-router] hasCompany=false onboardingChoice=owner noIndustry → /onboarding/industry`);
     return "/onboarding/industry";
   }
-  
+
+  console.log(`[app-router] hasCompany=false onboardingChoice=owner hasIndustry → /onboarding/company`);
   return "/onboarding/company";
 }
 

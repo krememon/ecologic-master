@@ -4114,10 +4114,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .where(eq(users.id, userId));
         
-        // Delete all sessions for this user
+        // Delete all sessions for this user.
+        // Two session formats exist:
+        //   Replit OAuth:      sess->>'userId'
+        //   Email/password:    sess->'passport'->'user'->'claims'->>'sub'
         await tx
           .delete(sessions)
-          .where(sql`(sess->>'userId')::text = ${userId}`);
+          .where(sql`
+            (sess->>'userId')::text = ${userId}
+            OR (sess->'passport'->'user'->'claims'->>'sub')::text = ${userId}
+          `);
       });
       
       console.log(`[remove-member] userId=${userId} removed from companyId=${req.companyId} — membership deleted, onboardingChoice reset, sessions cleared`);
