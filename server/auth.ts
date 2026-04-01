@@ -293,6 +293,23 @@ export async function sendSignatureRequestEmail(
   }
 }
 
+/** Wraps a raw DB user in a sessionUser object with claims so that the
+ * isAuthenticated middleware can read token_version for session revocation.
+ * Every req.login() call in this file must go through this helper. */
+function makeSessionUser(user: any) {
+  return {
+    ...user,
+    claims: {
+      sub: user.id,
+      email: user.email,
+      first_name: user.firstName,
+      last_name: user.lastName,
+      token_version: user.tokenVersion ?? 0,
+      profile_image_url: user.profileImageUrl,
+    },
+  };
+}
+
 export function setupAuth(app: Express) {
   // Local Strategy (Email/Password)
   passport.use(
@@ -652,7 +669,7 @@ export function setupAuth(app: Express) {
       await storage.deletePendingSignup(normalizedEmail);
 
       // Log the user in
-      req.login(user, (err) => {
+      req.login(makeSessionUser(user), (err) => {
         if (err) {
           console.error("Login after signup error:", err);
           return res.status(500).json({ message: "Account created but login failed. Please log in manually." });
@@ -972,7 +989,7 @@ export function setupAuth(app: Express) {
       console.log("[auth] verify-code: calling req.login for user:", user.id);
       
       // Log in the user using passport
-      req.login(user, (loginErr) => {
+      req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
           console.error("[auth] verify-code: req.login error:", loginErr);
           return res.status(500).json({ message: "Unable to complete sign in." });
@@ -1104,7 +1121,7 @@ export function setupAuth(app: Express) {
         return res.status(401).json({ message: info?.message || "Login failed" });
       }
       
-      req.login(user, (err) => {
+      req.login(makeSessionUser(user), (err) => {
         if (err) return next(err);
 
         const isMobile = req.headers['x-client-type'] === 'mobile';
@@ -1485,27 +1502,27 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
           // postMessages the webAuthCode to the opener using "*" (cross-origin delivery).
           // The opener exchanges the code for a Bearer token.
           const code = storeAuthCode(user.id);
-          return req.login(user, (loginErr) => {
+          return req.login(makeSessionUser(user), (loginErr) => {
             if (loginErr) {
               console.error("[google-auth] Popup/cross-domain: login error:", loginErr);
               return res.send(buildPopupResponseHtml(false, "login_failed"));
             }
             req.session.save(() => {
-              console.log(`[google-auth] Popup/cross-domain: sending webAuthCode via postMessage to opener`);
+              console.log(`[google-auth] Popup/cross-domain: sending webAuthCode via postMessage to opener (userId=${user.id})`);
               return res.send(buildPopupResponseHtml(true, undefined, code));
             });
           });
         }
 
         // Same-domain popup: postMessage flow works because opener and popup share the origin.
-        return req.login(user, (loginErr) => {
+        return req.login(makeSessionUser(user), (loginErr) => {
           if (loginErr) {
             console.error("[google-auth] Popup: login error:", loginErr);
             return res.send(buildPopupResponseHtml(false, "login_failed"));
           }
           req.session.save((saveErr) => {
             if (saveErr) console.error("[google-auth] Popup: session save warning:", saveErr);
-            console.log(`[google-auth] Popup: login success, posting message to opener, user=${user?.email || user?.id}`);
+            console.log(`[google-auth] Popup: login success, posting message to opener, userId=${user?.id} email=${user?.email} tokenVersion=${user?.tokenVersion}`);
             return res.send(buildPopupResponseHtml(true));
           });
         });
@@ -1519,7 +1536,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         console.log("[google-auth] preview returnTo flow: redirecting to", returnTo, "with webAuthCode");
         // We still need to create a session on the production domain so the exchange-code
         // endpoint has a valid session to log the user into (req.login creates it).
-        return req.login(user, (loginErr) => {
+        return req.login(makeSessionUser(user), (loginErr) => {
           if (loginErr) {
             console.error("[google-auth] Login error (returnTo):", loginErr);
             return res.redirect(`${returnTo}/?error=login_failed`);
@@ -1541,12 +1558,12 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         });
       }
       
-      req.login(user, (loginErr) => {
+      req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
           console.error("[google-auth] Login error:", loginErr);
           return res.redirect("/auth?error=login_failed");
         }
-        console.log(`[auth/google/callback][debug] login success, user=${user?.email || user?.id}, redirecting to /`);
+        console.log(`[auth/google/callback][debug] login success, userId=${user?.id} email=${user?.email} tokenVersion=${user?.tokenVersion}, redirecting to /`);
         req.session.save((saveErr) => {
           if (saveErr) console.error("[google-auth] Session save warning:", saveErr);
           return res.redirect("/");
@@ -1559,7 +1576,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
   // Handle preflight for cross-origin exchange-code requests (preview → production)
   app.options("/api/auth/exchange-code", (req, res) => {
     const origin = req.headers.origin || "";
-    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev")) {
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -1571,7 +1588,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
   app.post("/api/auth/exchange-code", async (req, res) => {
     // Allow cross-origin requests from Replit preview domains
     const origin = req.headers.origin || "";
-    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev")) {
+    if (origin.endsWith(".replit.dev") || origin.endsWith(".picard.replit.dev") || origin.endsWith(".replit.app")) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
     }
@@ -1589,12 +1606,12 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
       }
       console.log(`[google-auth] exchange-code: consumed, userId=${userId}`);
 
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(String(userId));
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      req.login(user, (loginErr) => {
+      req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
           console.error("[exchange-code] Login error:", loginErr);
           return res.status(500).json({ message: "Login failed" });
@@ -1605,7 +1622,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         // the native app immediately uses Bearer sid for /api/auth/user.
         req.session.save((saveErr) => {
           if (saveErr) console.error("[exchange-code] Session save warning:", saveErr);
-          console.log(`[exchange-code] Session saved (sid=${sid.substring(0, 8)}…), user=${user.email || user.id}`);
+          console.log(`[exchange-code] Session saved (sid=${sid.substring(0, 8)}…), userId=${user.id} email=${user.email} tokenVersion=${user.tokenVersion}`);
           return res.json({
             user: {
               id: user.id,
@@ -1681,7 +1698,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         console.log(`[google-register] Linked existing user id=${user.id} email=${user.email}`);
       }
 
-      return req.login(user, (loginErr) => {
+      return req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
           console.error("[google-register] Login error:", loginErr);
           return res.status(500).json({ message: "Login failed" });
@@ -1689,7 +1706,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         const sid = req.sessionID;
         req.session.save((saveErr) => {
           if (saveErr) console.error("[google-register] Session save warning:", saveErr);
-          console.log(`[google-register] Session saved (sid=${sid.substring(0, 8)}…) user=${user!.email}`);
+          console.log(`[google-register] Session saved (sid=${sid.substring(0, 8)}…) userId=${user!.id} email=${user!.email} tokenVersion=${user!.tokenVersion}`);
           return res.json({
             user: { id: user!.id, email: user!.email, firstName: user!.firstName, lastName: user!.lastName },
             sessionId: sid,
@@ -1755,7 +1772,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         console.log(`[adopt-session] User not found in DB: userId=${userId}`);
         return res.status(404).json({ message: "User not found" });
       }
-      req.login(user, (loginErr) => {
+      req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
           console.error("[adopt-session] Login error:", loginErr);
           return res.status(500).json({ message: "Login failed" });
@@ -2067,7 +2084,7 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
       delete (req.session as any).twoFactorPendingUserId;
       
       await new Promise<void>((resolve, reject) => {
-        req.login(user, (err) => {
+        req.login(makeSessionUser(user), (err) => {
           if (err) reject(err);
           else resolve();
         });

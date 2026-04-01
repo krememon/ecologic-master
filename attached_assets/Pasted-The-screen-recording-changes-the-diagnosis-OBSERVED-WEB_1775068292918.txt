@@ -1,0 +1,99 @@
+The screen recording changes the diagnosis.
+
+OBSERVED WEB BEHAVIOR FROM THE RECORDING
+1) User is on /login
+2) Clicks Continue with Google
+3) Google account chooser opens
+4) User selects staging@ecologicc.com
+5) App returns to the login screen instead of entering the app and routing to the no-company choice screen
+
+So this is NOT just a simple "wrong onboarding route after login" issue.
+The Google OAuth web login flow for this removed/no-company user is not completing correctly, or the session/bootstrap is bouncing back to /login before the no-company route can run.
+
+GOAL
+Fix the removed-employee Google web sign-in flow so that after Google auth succeeds, the user enters the app as an authenticated no-company user and is routed to the single Create/Join company choice screen.
+
+DO THIS EXACTLY
+
+1) TRACE THE FULL GOOGLE OAUTH WEB CALLBACK FLOW
+Audit the complete web Google login path:
+- login page Google button click
+- backend Google auth start route
+- Google callback route
+- session creation / passport login
+- redirect after callback
+- client auth bootstrap after redirect
+
+I need the exact path being taken after selecting staging@ecologicc.com.
+
+2) LOG THE GOOGLE CALLBACK RESULT
+Add targeted backend logs for the Google callback only:
+- email from Google profile
+- resolved user id
+- whether user row was found/created
+- whether req.login / passport session creation succeeded
+- session saved yes/no
+- callback redirect target
+- any branch that redirects back to /login
+- any auth failure / denied / missing session condition
+
+3) LOG WHAT /API/AUTH/USER RETURNS IMMEDIATELY AFTER CALLBACK
+After the Google callback redirect, confirm whether the browser is actually authenticated.
+I need to know if:
+- /api/auth/user returns 401
+- or returns the removed employee with hasCompany=false
+- or something else
+
+Add targeted client + server logs for:
+- first /api/auth/user call after Google redirect
+- status code
+- payload if 200
+- exact pathname when that call happens
+
+4) AUDIT WEB COOKIE / SESSION PERSISTENCE
+This feels very likely to be a session persistence problem on the web OAuth flow.
+Check:
+- is the Google callback on the same domain as login/app
+- is the session cookie being set on the correct domain
+- is cookie sameSite/secure config preventing the session from sticking
+- does callback redirect to a different origin/domain than the session was created on
+- is the session destroyed/overwritten because the user had been removed earlier
+- is tokenVersion/session invalidation logic blocking this user after callback
+
+5) CHECK REMOVED-EMPLOYEE SPECIAL CASES
+Because this user was removed from a company, verify nothing in auth is incorrectly treating them as blocked after Google login, such as:
+- removed membership causing auth denial instead of no-company access
+- stale session clearing logic
+- tokenVersion mismatch after removal
+- user status flags
+- onboarding guard sending unauthenticated users back to /login before auth finishes
+
+6) VERIFY THE EXPECTED FINAL FLOW
+For staging@ecologicc.com after successful Google sign-in:
+- user should be authenticated
+- /api/auth/user should return hasCompany=false, companyId=null
+- app should route to /onboarding/choice
+- NOT back to /login
+- NOT silently refresh
+- NOT old company shell
+
+7) IMPORTANT: DO NOT FOCUS ONLY ON ONBOARDING ROUTING
+The recording suggests the failure may happen BEFORE the onboarding route can even run.
+So prove whether the user is:
+A) successfully authenticated but misrouted
+or
+B) not staying authenticated after Google callback
+
+DELIVER BACK IN THIS FORMAT
+1) Exact Google callback path taken
+2) Does Google login actually create a valid web session for staging@ecologicc.com? yes/no
+3) First /api/auth/user result immediately after callback
+4) Exact root cause
+5) Exact files changed
+6) Exact final route after successful Google login for removed employee
+7) Short manual test plan
+
+IMPORTANT
+- Use the recording behavior as the source of truth
+- Trace from Google account selection → callback → session creation → /api/auth/user → route
+- Tight targeted fix only

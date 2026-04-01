@@ -1378,16 +1378,25 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     });
   }
 
-  // Check tokenVersion (for session invalidation)
-  const sessionTokenVersion = user.claims?.token_version || 0;
-  const dbTokenVersion = dbUser.tokenVersion || 0;
-  
-  if (sessionTokenVersion !== dbTokenVersion) {
-    console.log("Token version mismatch - session revoked");
-    return res.status(401).json({ 
-      code: 'SESSION_REVOKED',
-      message: 'Your session has ended. Please sign in again.'
-    });
+  // Check tokenVersion (for session invalidation).
+  // Only perform the check when the session explicitly carries a token_version in its
+  // claims object.  Sessions created via the auth.ts Google-OAuth or email/password
+  // paths store the raw DB user (no claims key), so token_version is undefined there.
+  // In that case we skip the check: the session was just created by a fresh login and
+  // the primary invalidation mechanism (deleting session rows on removal) already handles
+  // stale-session revocation.  Comparing undefined-derived 0 to a positive tokenVersion
+  // would falsely revoke every valid Google-OAuth session for users whose tokenVersion
+  // was ever incremented.
+  const sessionTokenVersion = user.claims?.token_version;
+  if (sessionTokenVersion !== undefined) {
+    const dbTokenVersion = dbUser.tokenVersion || 0;
+    if (sessionTokenVersion !== dbTokenVersion) {
+      console.log(`[auth] Token version mismatch — session revoked (session=${sessionTokenVersion} db=${dbTokenVersion} userId=${userId})`);
+      return res.status(401).json({ 
+        code: 'SESSION_REVOKED',
+        message: 'Your session has ended. Please sign in again.'
+      });
+    }
   }
 
   if (!user.expires_at || user.provider === 'email') {

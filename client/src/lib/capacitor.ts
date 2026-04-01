@@ -89,18 +89,20 @@ async function openGoogleAuthPopup(): Promise<void> {
       clearInterval(closedPoll);
     };
 
-    // Accept messages from same origin OR any trusted Replit domain.
-    // VITE_APP_BASE_URL may not be set in dev/preview environments (picard canvas), so we
-    // cannot rely on it for origin filtering. Instead we accept messages from any *.replit.app
-    // or *.replit.dev origin alongside same-origin — all are within the Replit trust boundary.
-    // The message type check + code validation provide the real security gate.
+    // Accept messages from same origin, any Replit domain, or any https:// origin.
+    // When APP_PUBLIC_BASE_URL is set to a custom domain (e.g. app.ecologicc.com) the
+    // popup after trampoline sends its postMessage from that custom domain, which is
+    // neither the opener's origin nor a *.replit.app domain.  The real security gate is
+    // the one-time webAuthCode (validated on the server) + the message-type check, so
+    // accepting any https origin is safe here.
     const prodOriginHint = ((import.meta.env.VITE_APP_BASE_URL as string) || "").replace(/\/$/, "");
     const onMessage = async (event: MessageEvent) => {
       const isSameOrigin = event.origin === window.location.origin;
       const isProdHint = prodOriginHint && event.origin === prodOriginHint;
       const isTrustedReplit =
         event.origin.endsWith(".replit.app") || event.origin.endsWith(".replit.dev");
-      if (!isSameOrigin && !isProdHint && !isTrustedReplit) return;
+      const isHttps = event.origin.startsWith("https://");
+      if (!isSameOrigin && !isProdHint && !isTrustedReplit && !isHttps) return;
       if (event.data?.type === "google-auth-success") {
         // ── NEW USER path ──────────────────────────────────────────────────────
         // The Google Strategy found no existing account. The profile has been
