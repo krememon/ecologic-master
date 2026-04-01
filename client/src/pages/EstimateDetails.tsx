@@ -188,6 +188,8 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/ledger'] });
       setIsSignatureModalOpen(false);
       
       // If a job was created, open the scheduling modal

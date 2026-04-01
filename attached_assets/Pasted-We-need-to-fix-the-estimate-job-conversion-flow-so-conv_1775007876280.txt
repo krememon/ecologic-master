@@ -1,0 +1,120 @@
+We need to fix the estimate → job conversion flow so converted jobs properly appear in Invoicing and Payments with the correct amounts owed/paid.
+
+PROBLEM
+After converting an estimate into a job, the app does NOT properly update:
+- Invoicing tab
+- Payments tab
+- amount still owed / balance tracking
+
+So the converted job exists, but the financial side is not being created/linked/refreshed correctly.
+
+GOAL
+Any estimate converted into a job must immediately behave like a normal financial job across:
+1) Invoicing
+2) Payments
+3) balance / owed calculations
+4) any related invoice/payment records or summaries
+
+EXPECTED BEHAVIOR
+When an estimate is converted to a job:
+- the new job should appear in Invoicing
+- the new job should appear in Payments where appropriate
+- the correct total/balance/amount owed should carry over from the estimate/job total
+- any invoice/payment state should be initialized correctly
+- the converted job should not be missing from financial tabs
+
+WHAT TO AUDIT
+
+1) CONVERSION PIPELINE
+Inspect the full estimate → job conversion flow end-to-end:
+- frontend convert action
+- backend conversion route
+- job creation from estimate
+- invoice/payment initialization
+- any post-conversion financial sync logic
+
+2) FINANCIAL RECORD CREATION
+Confirm whether converting an estimate is supposed to:
+- create a job only
+- create a draft/open invoice automatically
+- create payment tracking rows/ledger rows automatically
+- initialize invoice status / balance fields for the new job
+Whatever the intended EcoLogic behavior is, make sure converted jobs are included the same as normal financially trackable jobs.
+
+3) SOURCE OF TRUTH
+Find what Invoicing and Payments tabs actually read from:
+- jobs table
+- invoices table
+- payments table
+- derived summaries
+- invoice/payment snapshot tables
+Then verify the conversion flow writes or links all required records/fields.
+
+4) CARRY OVER OF AMOUNTS
+Confirm the converted job carries over the correct financial values from the estimate:
+- total
+- subtotal
+- discount
+- tax
+- final amount
+- balance due
+Do not let the job exist with missing or zero financial values unless truly intended.
+
+5) QUERY / CACHE / REFRESH
+After conversion:
+- Invoicing should refresh correctly
+- Payments should refresh correctly
+- no stale query cache should hide the converted job
+If needed, invalidate/refetch the correct financial queries after conversion.
+
+6) BACKEND LINKING
+Check whether converted jobs are missing:
+- invoice creation
+- invoice-job link
+- payment ledger initialization
+- customer/job financial metadata
+- status flags that make items eligible for invoice/payment tabs
+
+7) UI FILTERS
+Inspect whether Invoicing/Payments filters are excluding converted jobs because of:
+- missing status
+- missing invoice number
+- missing total
+- missing createdBy path
+- wrong type/source flag
+
+LIKELY ROOT CAUSES TO CHECK
+- conversion creates job but not invoice/payment records
+- converted job total not copied over
+- invoicing/payments tabs only include jobs created through normal job flow
+- cache not invalidated after conversion
+- converted jobs missing a required “financially active” flag/status
+- invoice summary/balance computation ignores converted jobs
+
+DEBUGGING
+Add targeted logs only for:
+- estimate payload before conversion
+- created job payload after conversion
+- financial fields copied to job
+- any invoice/payment record creation after conversion
+- invoicing/payments query response for the converted job
+- cache invalidation/refetch after conversion
+
+DELIVERABLES
+1) Fix estimate → job conversion so converted jobs appear correctly in Invoicing and Payments
+2) Ensure amount owed / balance is correct after conversion
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - create estimate
+   - convert estimate to job
+   - verify job appears in Invoicing
+   - verify job appears in Payments
+   - verify correct amount owed/balance is shown
+   - verify behavior after refresh
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign invoicing/payments
+- Do not break normal job creation flow
+- Preserve existing financial logic for regular jobs

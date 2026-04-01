@@ -10757,6 +10757,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`[Estimates] approved estimateId=${estimateId} userId=${userId} totalCents=${estimate.totalCents} createdJobId=${result.jobId}`);
 
+      // Auto-create a pending invoice for the converted job so it appears immediately
+      // in Invoicing and Payments without any manual invoice creation step.
+      try {
+        const existingInvoice = await storage.getInvoiceByJobId(result.jobId, companyId);
+        if (!existingInvoice) {
+          let invoiceNumber: string;
+          try {
+            const counter = await storage.getNextAtomicCounter(companyId, 'invoice');
+            invoiceNumber = `INV-${counter.toString().padStart(5, '0')}`;
+          } catch {
+            invoiceNumber = `INV-${Date.now()}`;
+          }
+
+          const today = new Date();
+          const dueDate = new Date(today);
+          dueDate.setDate(dueDate.getDate() + 30);
+
+          const totalCents = estimate.totalCents || 0;
+          const subtotalCents = (estimate as any).subtotalCents || totalCents;
+          const estTaxCents = (estimate as any).taxCents || 0;
+          const totalAmount = (totalCents / 100).toFixed(2);
+
+          const estimateItems: any[] = (estimate as any).items || [];
+          const invoiceLineItems = estimateItems.map((item: any) => ({
+            name: item.name,
+            description: item.description || undefined,
+            quantity: parseFloat(String(item.quantity)) || 1,
+            unitPrice: (item.unitPriceCents || 0) / 100,
+            unit: item.unit || 'each',
+            taxId: item.taxId || undefined,
+            taxRatePercentSnapshot: item.taxRatePercentSnapshot ? parseFloat(item.taxRatePercentSnapshot) : undefined,
+            taxNameSnapshot: item.taxNameSnapshot || undefined,
+          }));
+
+          const newInvoice = await storage.createInvoice({
+            companyId,
+            jobId: result.jobId,
+            estimateId,
+            clientId: (estimate as any).clientId || null,
+            customerId: estimate.customerId || null,
+            invoiceNumber,
+            amount: totalAmount,
+            subtotalCents,
+            taxCents: estTaxCents,
+            totalCents,
+            balanceDueCents: totalCents,
+            status: 'pending',
+            issueDate: today.toISOString().split('T')[0],
+            dueDate: dueDate.toISOString().split('T')[0],
+            notes: `Invoice for approved estimate ${estimate.estimateNumber || `#${estimateId}`}`,
+            lineItems: invoiceLineItems,
+            createdByUserId: userId,
+          });
+
+          console.log(`[EstimateConvert] Auto-created invoice invoiceId=${newInvoice.id} for jobId=${result.jobId} totalCents=${totalCents}`);
+        }
+      } catch (invoiceErr) {
+        // Non-fatal — log but don't fail the conversion
+        console.error(`[EstimateConvert] Failed to auto-create invoice for jobId=${result.jobId}:`, invoiceErr);
+      }
+
       const totalDollars = ((estimate.totalCents || 0) / 100).toFixed(2);
       await notifyManagers(companyId, {
         type: 'estimate_approved',
