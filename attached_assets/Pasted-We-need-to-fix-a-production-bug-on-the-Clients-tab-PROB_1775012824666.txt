@@ -1,0 +1,99 @@
+We need to fix a production bug on the Clients tab.
+
+PROBLEM
+Opening the Clients tab crashes the page with:
+
+ReferenceError: Sheet is not defined
+
+Console shows:
+- ReferenceError: Sheet is not defined
+- ErrorBoundary catches it
+- crash occurs when opening Clients tab
+
+This started after the recent client edit modal changes, so the most likely cause is that the Clients page or one of its child components is referencing Sheet without importing it, or still using old Sheet-based code after the refactor.
+
+GOAL
+Fix the Clients tab crash immediately so the page opens normally again.
+
+VERY IMPORTANT
+This is a production bug.
+After the production fix is confirmed, apply the same fix to EcoLogic Staging right after so staging stays aligned with production.
+
+WHAT TO CHECK
+
+1) FIND THE EXACT COMPONENT
+Use the component stack and recent client-page changes to identify the exact component throwing:
+- likely Client details page
+- client actions menu
+- Edit Customer modal component
+- any newly added dialog/sheet wrapper for client edit/delete actions
+
+2) ROOT CAUSE
+Most likely one of these:
+- Sheet is referenced but not imported
+- old Sheet JSX remains after converting to Dialog/modal style
+- a helper component still returns <Sheet ...> but imports were removed
+- conditional branch on Clients tab still renders a Sheet component path
+- renamed modal component but stale reference remains
+
+3) FIX REQUIREMENT
+- Remove the runtime ReferenceError
+- Make Clients tab open normally
+- Preserve the new 3-dot menu
+- Preserve Edit Customer functionality
+- Preserve Delete Customer functionality
+- Preserve the new Add-Client-style edit modal aesthetic
+- Do not revert unrelated client page work unless absolutely necessary
+
+4) IMPORT / COMPONENT AUDIT
+Inspect all files touched by the recent client work, especially:
+- Clients page
+- Client details page
+- Edit Customer modal/dialog component
+- 3-dot actions menu component
+- any shared modal wrapper used there
+
+Search specifically for:
+- Sheet
+- SheetContent
+- SheetHeader
+- SheetTitle
+- SheetDescription
+- SheetTrigger
+and confirm every usage either:
+- has the correct import
+or
+- is fully removed/replaced by Dialog-based modal code
+
+5) PRODUCTION SAFETY
+- Keep the fix tight
+- No redesign
+- No extra UI changes
+- No breaking client edit/delete flows
+
+6) AFTER FIX
+Confirm:
+- Clients tab opens without crashing
+- client details page loads
+- 3-dot menu opens
+- Edit Customer opens in the correct Add Client modal style
+- Delete Customer option still works
+
+DELIVERABLES
+1) Exact root cause
+2) Exact files changed
+3) Exact fix applied
+4) Confirmation production is fixed
+5) Then apply same fix to staging
+6) Short manual test plan:
+   - open Clients tab
+   - open client details
+   - open 3-dot menu
+   - open Edit Customer
+   - close/save successfully
+   - confirm no crash
+
+IMPORTANT
+- Fix production first
+- Then immediately mirror same fix to staging
+- Tight targeted fix only

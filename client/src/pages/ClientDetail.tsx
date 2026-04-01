@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { Customer, Job, Estimate } from "@shared/schema";
 
 interface ClientDetailProps {
@@ -739,6 +739,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
       {/* Edit Customer dialog — matches Add Client modal aesthetic */}
       <Dialog open={showEditSheet} onOpenChange={setShowEditSheet}>
         <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <DialogTitle className="sr-only">Edit Customer</DialogTitle>
           <div className="flex flex-col h-full max-h-[85vh]">
             {/* Fixed header */}
             <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
