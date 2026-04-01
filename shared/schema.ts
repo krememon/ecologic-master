@@ -234,6 +234,7 @@ export const customers = pgTable("customers", {
   smsOptIn: boolean("sms_opt_in").default(true),
   emailUnsubscribedAt: timestamp("email_unsubscribed_at"),
   smsUnsubscribedAt: timestamp("sms_unsubscribed_at"),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

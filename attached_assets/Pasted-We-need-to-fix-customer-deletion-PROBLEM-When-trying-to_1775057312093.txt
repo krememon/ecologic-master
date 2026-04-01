@@ -1,0 +1,117 @@
+We need to fix customer deletion.
+
+PROBLEM
+When trying to delete a customer, the app shows:
+- "Failed to delete customer"
+
+So the delete action exists, but the delete flow is currently failing.
+
+GOAL
+Make customer deletion work successfully.
+
+VERY IMPORTANT BUSINESS RULE
+When a customer is deleted:
+- do NOT break or alter payment records
+- do NOT break or alter invoice records
+- do NOT mess up any financial history
+- only the customer should be deleted from the customer-facing/client entity layer
+
+In other words:
+- preserve invoice/payment/accounting history
+- remove the customer record cleanly/safely
+
+WHAT TO AUDIT
+
+1) DELETE CUSTOMER FLOW
+Inspect the full delete flow end-to-end:
+- 3-dot menu action
+- delete confirmation
+- frontend API call
+- backend delete route
+- database delete logic
+- post-delete UI refresh
+
+2) EXACT FAILURE REASON
+Find the real root cause of why deletion is failing right now.
+Likely causes:
+- foreign key constraint from jobs/invoices/payments
+- backend route blocking delete if related records exist
+- missing soft-delete behavior
+- frontend calling wrong route or wrong id
+- delete query failing due to linked estimates/jobs
+
+Do not guess — identify the exact failing error.
+
+3) FINANCIAL HISTORY PRESERVATION
+We need safe deletion behavior.
+
+If invoices/payments/history exist, do NOT destroy or corrupt them.
+Preserve:
+- invoices
+- payments
+- payment history
+- owed/paid history
+- accounting relationships needed for records
+
+If true hard-delete of the client row would break financial history, implement the correct safe behavior, such as:
+- soft delete / archive customer from active client list
+- anonymize/minimize only if needed
+- detach only the customer-facing active record while keeping historical references intact
+
+But the user-facing result must be:
+- the customer is effectively deleted/removed from Clients
+- financial history remains intact and not broken
+
+4) JOB / ESTIMATE / RELATIONSHIP HANDLING
+Audit what happens to:
+- jobs tied to that customer
+- estimates tied to that customer
+- invoices tied to that customer
+- payments tied to that customer
+
+Need a safe rule that preserves history and does not cause crashes.
+Do not let deleting a customer orphan the app into broken states.
+
+5) UI / UX RESULT
+After successful delete:
+- customer disappears from Clients list / client details flow
+- no red error toast
+- app refreshes correctly
+- no broken references on Payments/Invoicing pages
+
+6) QUERY / CACHE
+After deletion:
+- invalidate/refetch Clients queries
+- ensure deleted customer no longer appears
+- ensure financial tabs still load normally
+
+DEBUGGING
+Add targeted logs only for:
+- delete customer request id
+- backend delete attempt
+- exact DB/constraint error if it fails
+- chosen safe-delete behavior
+- post-delete query refresh
+
+DELIVERABLES
+1) Fix customer deletion so it succeeds
+2) Preserve invoice/payment/financial history
+3) Ensure customer is removed from Clients UI
+4) List exact files changed
+5) Explain exact root cause
+6) Explain whether the final implementation is:
+   - true hard delete
+   - soft delete/archive
+   - or safe detach strategy
+7) Give a short manual test plan:
+   - create/open customer
+   - delete customer
+   - confirm customer disappears from Clients
+   - confirm invoices/payments still load correctly
+   - confirm no financial data was broken
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign Clients
+- Do not break Payments or Invoicing
+- Preserve historical financial integrity

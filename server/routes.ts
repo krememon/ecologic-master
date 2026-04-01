@@ -5540,26 +5540,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/clients/:id', async (req: any, res) => {
+  app.delete('/api/clients/:id', isAuthenticated, async (req: any, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const user = req.user;
-      const company = await storage.getUserCompany(user.claims.sub);
-      
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
-      
-      const clientId = parseInt(req.params.id);
-      await storage.deleteClient(clientId);
-      
-      res.status(200).json({ message: "Client deleted successfully" });
+
+      const userRecord = await storage.getUserById(userId);
+      if (!userRecord || !['OWNER', 'SUPERVISOR'].includes(userRecord.role ?? '')) {
+        return res.status(403).json({ message: "You do not have permission to delete customers" });
+      }
+
+      const customerId = parseInt(req.params.id);
+      if (isNaN(customerId)) {
+        return res.status(400).json({ message: "Invalid customer ID" });
+      }
+
+      console.log(`[deleteCustomer] request customerId=${customerId} by userId=${userId} companyId=${company.id}`);
+
+      const deleted = await storage.softDeleteCustomer(customerId, company.id);
+
+      if (!deleted) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+
+      res.status(200).json({ message: "Customer deleted successfully" });
     } catch (error) {
-      console.error("Error deleting client:", error);
-      res.status(500).json({ message: "Failed to delete client" });
+      console.error("[deleteCustomer] error:", error);
+      res.status(500).json({ message: "Failed to delete customer" });
     }
   });
 

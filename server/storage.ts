@@ -380,6 +380,7 @@ export interface IStorage {
   deleteCustomer(id: number): Promise<void>;
   deleteCustomerSecure(id: number, companyId: number): Promise<boolean>;
   deleteCustomersBulk(ids: number[]): Promise<number>;
+  softDeleteCustomer(id: number, companyId: number): Promise<boolean>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
   
   // Campaign operations
@@ -3424,7 +3425,7 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(customers)
-      .where(eq(customers.companyId, companyId))
+      .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)))
       .orderBy(customers.firstName, customers.lastName);
   }
 
@@ -3432,7 +3433,7 @@ export class DatabaseStorage implements IStorage {
     const [customer] = await db
       .select()
       .from(customers)
-      .where(eq(customers.id, id));
+      .where(and(eq(customers.id, id), isNull(customers.deletedAt)));
     return customer || undefined;
   }
 
@@ -3440,8 +3441,20 @@ export class DatabaseStorage implements IStorage {
     const [customer] = await db
       .select()
       .from(customers)
-      .where(and(eq(customers.id, id), eq(customers.companyId, companyId)));
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId), isNull(customers.deletedAt)));
     return customer || undefined;
+  }
+
+  async softDeleteCustomer(id: number, companyId: number): Promise<boolean> {
+    console.log(`[deleteCustomer] soft-delete attempt customerId=${id} companyId=${companyId}`);
+    const result = await db
+      .update(customers)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+      .returning();
+    const success = result.length > 0;
+    console.log(`[deleteCustomer] soft-delete result=${success ? 'deleted' : 'not found or already deleted'}`);
+    return success;
   }
 
   async createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer> {
