@@ -3,20 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import ecologicWordmark from "@/assets/branding/ecologic-wordmark.png";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 
 type State = "loading" | "confirm" | "success" | "resubscribed" | "cancelled" | "error";
 
 function BrandingHeader() {
   return (
     <div className="text-center mb-6">
-      <div className="w-20 h-20 mx-auto mb-3 rounded-2xl overflow-hidden shadow-lg">
-        <img src={logoImage} alt="EcoLogic Logo" className="w-full h-full object-cover" />
-      </div>
       <img
         src={ecologicWordmark}
         alt="EcoLogic"
-        className="h-7 mx-auto mb-1"
+        className="h-8 mx-auto mb-1"
       />
       <p className="text-slate-500 text-sm">Professional contractor management</p>
     </div>

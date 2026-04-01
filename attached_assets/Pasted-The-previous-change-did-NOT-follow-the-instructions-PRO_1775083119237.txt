@@ -1,0 +1,89 @@
+The previous change did NOT follow the instructions.
+
+PROBLEM
+I explicitly said:
+- NO water droplet at all
+- I want the unsubscribe page branding to look exactly like the EcoLogic sign-in branding shown in the reference image
+- EcoLogic wordmark/logo only
+- subtitle underneath:
+  Professional contractor management
+
+But the unsubscribe page still has the droplet/logo treatment.
+That is wrong.
+
+GOAL
+Make the unsubscribe page header match the sign-in branding shown in the reference image EXACTLY in spirit:
+- EcoLogic wordmark/logo only
+- subtitle underneath:
+  Professional contractor management
+- NO droplet icon
+- NO round logo image
+- NO extra icon above the wordmark
+
+IMPORTANT
+The second screenshot is the source of truth.
+Use that branding style.
+Do not improvise.
+
+WHAT TO CHANGE
+
+1) REMOVE ALL ICON/DROPLET/ROUND-LOGO TREATMENT
+On the unsubscribe page:
+- remove the water droplet icon entirely
+- remove the round logo image entirely
+- remove any image/icon above the EcoLogic wordmark
+- the top branding should be just:
+  - EcoLogic wordmark/logo
+  - subtitle underneath
+
+2) MATCH THE SIGN-IN HEADER STYLE
+Use the sign-in page branding/header styling as the direct reference:
+- same EcoLogic wordmark presentation
+- same subtitle text:
+  Professional contractor management
+- same clean centered layout feel
+
+If a shared sign-in branding/header component already exists, reuse it directly instead of recreating a fake version.
+
+3) APPLY THIS TO ALL UNSUBSCRIBE PAGE STATES
+Make sure every unsubscribe page state uses the corrected branding:
+- confirm state
+- success state
+- keep subscribed state
+- resubscribed state
+- error state
+- loading state if applicable
+
+None of those states should show a droplet or round logo.
+
+4) KEEP THE DOMAIN FIX
+Preserve the unsubscribe URL base fix so links use:
+- APP_PUBLIC_BASE_URL first
+- app.ecologicc.com in production
+Do not revert that part.
+
+5) DO NOT FREESTYLE
+Do not say “matches sign-in” unless it actually matches the sign-in branding structure.
+The current result clearly does not.
+
+DELIVERABLES
+1) Remove all droplet/round logo branding from PublicUnsubscribe
+2) Make the header match the sign-in branding style with:
+   - EcoLogic wordmark/logo only
+   - Professional contractor management subtitle
+3) Preserve the app.ecologicc.com unsubscribe URL fix
+4) List exact files changed
+5) Give a short manual test plan:
+   - open unsubscribe page
+   - confirm no droplet icon
+   - confirm no round logo
+   - confirm EcoLogic wordmark + subtitle only
+   - confirm unsubscribe still works
+   - confirm link still uses app.ecologicc.com
+
+IMPORTANT
+- Tight targeted fix only
+- The second screenshot is the exact visual direction
+- No droplet
+- No round icon
+- Wordmark + subtitle only
