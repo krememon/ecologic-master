@@ -20691,9 +20691,15 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
         return res.json({ ready: true, status: 'active' });
       }
 
-      const baseUrl = process.env.APP_BASE_URL || `https://${req.get('host')}`;
       const isNative = req.body.native === true;
       const returnPath = req.body.returnPath || '/settings/stripe-connect';
+
+      // For web, use the browser's actual origin so the return URL stays on
+      // the same domain as the session cookie (avoids cross-domain sign-out).
+      // For native, fall back to APP_BASE_URL since native uses a different return endpoint.
+      const requestOrigin = !isNative ? (req.get('origin') || null) : null;
+      const baseUrl = requestOrigin || process.env.APP_BASE_URL || `https://${req.get('host')}`;
+      console.log(`[StripeConnect] ensure-ready: baseUrl=${baseUrl} (origin=${req.get('origin')} native=${isNative})`);
 
       let returnUrl: string;
       let refreshUrl: string;

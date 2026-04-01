@@ -113,21 +113,30 @@ export function useStripeConnectGate() {
     }
   }, []);
 
+  // Track whether we've already consumed the stripe_connect_return param so
+  // we don't re-fire when other dependencies change.
+  const stripeReturnHandled = useRef(false);
+
   useEffect(() => {
+    // Wait for user to be loaded before acting — isOwner is false until then.
+    if (!user || stripeReturnHandled.current) return;
+
     const params = new URLSearchParams(window.location.search);
     const returnStatus = params.get("stripe_connect_return");
     if (returnStatus) {
+      stripeReturnHandled.current = true;
       params.delete("stripe_connect_return");
       const newUrl = params.toString()
         ? `${window.location.pathname}?${params.toString()}`
         : window.location.pathname;
       window.history.replaceState({}, "", newUrl);
 
+      console.log(`[stripe-connect] return detected: status=${returnStatus} isOwner=${isOwner}`);
       if (isOwner) {
         syncStripeStatus();
       }
     }
-  }, []);
+  }, [user, isOwner, syncStripeStatus]);
 
   useEffect(() => {
     let appStateCleanup: (() => void) | undefined;

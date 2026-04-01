@@ -1,0 +1,109 @@
+We need to fix the Stripe Connect return flow on WEB only.
+
+PROBLEM
+After a user successfully connects Stripe to their account for card payments, the return flow sends them to the sign-in page at:
+
+https://eco-logic-pjpell077.replit.app/settings/stripe-connect?stripe_connect_return=complete
+
+That is wrong.
+
+GOAL
+On WEB, after Stripe Connect onboarding/account linking completes successfully, the user should be returned back into their already signed-in EcoLogic account and ideally back to where they left off — not kicked to sign in.
+
+IMPORTANT PLATFORM RULE
+This fix is WEB ONLY.
+Do NOT break or change the current iPhone or Android behavior.
+Mobile native flows are already fine and must remain untouched.
+
+EXPECTED WEB BEHAVIOR
+If a logged-in user starts Stripe Connect onboarding from inside EcoLogic web:
+1) they go through Stripe onboarding
+2) Stripe redirects back to EcoLogic web
+3) EcoLogic recognizes the user is already authenticated
+4) the user lands back in-app, still signed in
+5) preferably the user returns to the same place they initiated the flow from, or at minimum to the correct authenticated settings/billing/account area
+6) no redirect to sign-in
+
+WHAT TO AUDIT
+
+1) STRIPE CONNECT RETURN URL GENERATION
+Inspect exactly how the Stripe Connect refresh_url and return_url are being built for web.
+- confirm whether they are using APP_PUBLIC_BASE_URL vs APP_BASE_URL vs replit URL
+- confirm whether the wrong domain is being used for web return
+- confirm whether the callback URL should be app.ecologicc.com instead of the replit URL
+- confirm native/mobile-specific return logic is not bleeding into web
+
+2) AUTH / SESSION ON RETURN
+Audit what happens when the browser lands on:
+- /settings/stripe-connect?stripe_connect_return=complete
+Check:
+- is the route treated as public instead of authenticated
+- is session/cookie auth being lost because of domain mismatch
+- is auth state not restored yet when the route guard runs
+- is the user actually still authenticated but being redirected too early
+- is there a bearer/localStorage/native-only auth assumption that does not apply to web
+
+3) DOMAIN / COOKIE MISMATCH
+This feels highly likely:
+- user starts on one domain
+- Stripe returns to another domain
+- web session cookie is not valid on that other domain
+- app therefore shows sign in
+Audit exactly whether the user starts on app.ecologicc.com but returns to eco-logic-pjpell077.replit.app.
+If yes, that is probably the root cause.
+
+4) ROUTE GUARD / LOADING TIMING
+Check whether the Stripe Connect return page is:
+- redirecting to sign in before auth rehydration finishes
+- missing an auth-loading gate
+- not waiting for /api/auth/user or equivalent
+- mishandling stripe_connect_return=complete and routing too early
+
+5) RETURN-TO-WHERE-THEY-LEFT-OFF
+Implement sane web behavior:
+- preserve origin page when launching Stripe Connect if possible
+- on successful return, send user back to that originating in-app route
+- if not feasible, send them to a safe authenticated destination such as Settings / Billing / Stripe Connect area
+But absolutely do not send them to sign in unless they are truly signed out.
+
+6) DO NOT BREAK MOBILE
+Protect iPhone/Android behavior:
+- do not alter existing native deep link / app scheme / universal link flow unless required by shared code
+- if shared code must change, branch carefully by platform/web vs native
+- preserve current mobile return behavior exactly
+
+LIKELY ROOT CAUSES TO CHECK
+- wrong return_url domain
+- session cookie lost due to cross-domain return
+- auth route guard firing before auth state is loaded
+- web is using fallback URL logic meant for development/replit instead of public web domain
+- Stripe Connect callback route is not preserving/using post-return destination
+
+DEBUGGING
+Add targeted logs only for:
+- generated refresh_url and return_url
+- current origin when launching Stripe Connect
+- current origin when handling Stripe return
+- auth state on callback page
+- whether redirect to sign-in is caused by no session vs premature guard
+- final post-return navigation destination
+
+DELIVERABLES
+1) Fix Stripe Connect web return so user stays in their account after successful connect
+2) Ensure return uses the correct web domain and preserves session
+3) Preferably return user to where they left off, or otherwise to the correct authenticated settings area
+4) Do not break iPhone or Android flows
+5) List exact files changed
+6) Explain exact root cause
+7) Give a short manual test plan for:
+   - start Stripe Connect on web while logged in
+   - complete onboarding
+   - confirm return to EcoLogic web still authenticated
+   - confirm no sign-in screen
+   - confirm mobile iPhone/Android still behave exactly as before
+
+IMPORTANT
+- Tight targeted fix only
+- Web only unless shared code absolutely requires guarded branching
+- Do not break existing Stripe Connect onboarding
+- Preserve mobile behavior
