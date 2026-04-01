@@ -5549,7 +5549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
 
-      const userRecord = await storage.getUserById(userId);
+      const userRecord = await storage.getUser(userId);
       if (!userRecord || !['OWNER', 'SUPERVISOR'].includes(userRecord.role ?? '')) {
         return res.status(403).json({ message: "You do not have permission to delete customers" });
       }
