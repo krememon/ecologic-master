@@ -1,0 +1,98 @@
+The previous fix was NOT sufficient. Estimates still do not appear on Home under Today/Upcoming, so we need to debug the real data path instead of assuming Home.tsx alone was the issue.
+
+CURRENT FACT
+You changed Home.tsx logic, but estimates still do not show.
+That means one of these is still true:
+- Home is not actually receiving the estimate data we think it is
+- the estimate date field used by Home is not the real scheduled field
+- the estimates query is stale / empty / filtered out
+- the owner/employee branch is still wrong at runtime
+- the cards are rendering conditionally in a way that still excludes estimates
+
+GOAL
+Find the actual runtime reason estimates are missing from Home and fully fix it.
+
+DEBUG THIS EXACTLY
+
+1) LOG THE REAL HOME INPUT DATA
+In Home.tsx, add targeted logs for the exact runtime values:
+- current user role
+- estimates query count
+- each estimate id + status + scheduled date field(s) + assignedEmployeeIds
+- myEstimates count after filtering
+- todayEstimates count
+- upcomingEstimates count
+
+I need to know whether Home is:
+A) getting zero estimates
+B) getting estimates with no usable scheduled date
+C) getting them but filtering them out incorrectly
+D) getting them and bucketing them incorrectly
+
+2) VERIFY THE ACTUAL ESTIMATE DATE FIELD
+Do not assume the right field is being used.
+Inspect the real estimate objects returned to Home and identify the exact date field used for scheduling, for example:
+- scheduledDate
+- serviceDate
+- startDate
+- appointmentDate
+- createdAt masquerading as display date
+- some nested field
+
+Print the exact keys if needed.
+It is very possible Home.tsx is reading the wrong estimate date property.
+
+3) VERIFY THE HOME DATA SOURCE / QUERY
+Audit how Home gets estimates:
+- Which query/endpoint is used?
+- Does it actually return company estimates for owner/admin?
+- Does it return assigned estimates for employee?
+- Is the endpoint itself filtered incorrectly?
+- Is the endpoint excluding estimates with certain statuses?
+
+Do not stop at frontend assumptions.
+Trace the actual backend/API response.
+
+4) VERIFY RENDER CONDITIONS
+Inspect the actual Today and Upcoming section render conditions:
+- Are they only rendering one combined card list based on jobs?
+- Are estimate arrays merged into the final displayed list?
+- Are estimates computed but never passed into the displayed section?
+- Is a display cap/sort function accidentally excluding them?
+
+5) VERIFY EMPLOYEE ASSIGNMENT LOGIC
+For technician/employee:
+- Confirm estimate assignment field actually contains that employee user id
+- Confirm Home compares against the correct id type
+- Confirm assigned estimates are included in Today/Upcoming if scheduled
+
+6) VERIFY CACHE / INVALIDATION
+After creating or editing an estimate:
+- confirm the relevant estimates query refetches
+- confirm Home rerenders with fresh data
+- if needed, invalidate the exact Home query as well, not just /api/estimates
+
+7) ADD TEMPORARY DIAGNOSTICS
+Add very clear logs for:
+- raw estimates returned to Home
+- chosen estimate date field
+- bucket decisions for each estimate:
+  - estimate 123 => today
+  - estimate 456 => upcoming
+  - estimate 789 => excluded because no date/status/etc
+
+DELIVERABLES
+1) The actual proven root cause from runtime logs
+2) The exact field/property Home must use for estimate schedule date
+3) The exact fix applied
+4) Exact files changed
+5) Confirmation that estimates now appear on:
+   - owner/admin Home Today
+   - owner/admin Home Upcoming
+   - assigned employee Home Today/Upcoming
+6) Short manual test plan
+
+IMPORTANT
+- Do not just tweak Home.tsx blindly again
+- Prove the missing link with logs/runtime evidence
+- Follow the data from backend → query → Home bucketing → render

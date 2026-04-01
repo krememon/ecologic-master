@@ -3074,6 +3074,7 @@ export class DatabaseStorage implements IStorage {
       console.log(`[Estimates] first estimate schedule:`, {
         id: results[0].id,
         status: results[0].status,
+        requestedStartAt: results[0].requestedStartAt,
         scheduledDate: results[0].scheduledDate,
         scheduledTime: results[0].scheduledTime,
       });

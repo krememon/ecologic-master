@@ -42,7 +42,7 @@ import {
   MapPinOff
 } from "lucide-react";
 import { format, isToday, isTomorrow, startOfDay, subDays, isAfter, parseISO } from "date-fns";
-import { parseDateOnly } from "@/lib/dateUtils";
+import { parseDateOnly, parseAnyDate } from "@/lib/dateUtils";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
 
 interface JobWithClient extends Job {
@@ -573,8 +573,12 @@ export default function Home() {
 
   // Estimate scheduling helpers
   const getEstimateDate = (est: Estimate): Date | null => {
-    if (est.scheduledDate) return parseDateOnly(est.scheduledDate as unknown as string);
-    return null;
+    // requestedStartAt is the primary schedule field (set during create via NewEstimateSheet/JobEstimatesTab)
+    // scheduledDate is set by the separate schedule-edit endpoint in EstimateDetails
+    // Must check both — they are populated by different code paths
+    const raw = (est as any).requestedStartAt ?? est.scheduledDate;
+    if (!raw) return null;
+    return parseAnyDate(raw as unknown as string);
   };
 
   const myEstimates = isTechnician
@@ -583,6 +587,16 @@ export default function Home() {
         return ids.includes(userId || '') && est.status !== 'archived';
       })
     : estimates.filter(est => est.status !== 'archived');
+
+  // Diagnostic logs — confirm what Home receives at runtime
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Home] estimates received:', estimates.length, '| role:', role, '| myEstimates:', myEstimates.length);
+    myEstimates.forEach(est => {
+      const raw = (est as any).requestedStartAt ?? est.scheduledDate;
+      const parsed = getEstimateDate(est);
+      console.log(`[Home] est#${est.id} status=${est.status} requestedStartAt=${(est as any).requestedStartAt ?? 'null'} scheduledDate=${est.scheduledDate ?? 'null'} → parsed=${parsed} isToday=${parsed ? isToday(parsed) : false} isFuture=${parsed ? parsed > today : false}`);
+    });
+  }
 
   const todayEstimates = myEstimates.filter(est => {
     const date = getEstimateDate(est);
@@ -601,6 +615,10 @@ export default function Home() {
       return da.getTime() - db.getTime();
     })
     .slice(0, 5);
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Home] todayEstimates:', todayEstimates.length, '| upcomingEstimates:', upcomingEstimates.length);
+  }
 
   const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || estimatesLoading || (isAdmin && invoicesLoading);
 
