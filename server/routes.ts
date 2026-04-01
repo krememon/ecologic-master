@@ -5541,16 +5541,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete('/api/clients/:id', isAuthenticated, async (req: any, res) => {
+    console.log('[deleteCustomer] ENTERED id=' + req.params.id + ' user=' + JSON.stringify(req.user?.id || req.user?.claims?.sub || 'unknown'));
     try {
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
+
+      console.log('[deleteCustomer] userId=' + userId + ' companyId=' + company?.id);
 
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
 
-      const membership = await storage.getUserRole(userId, company.id);
-      if (!membership || !['OWNER', 'SUPERVISOR'].includes(membership.role)) {
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+
+      console.log('[deleteCustomer] member=' + JSON.stringify(member) + ' userRole=' + userRole);
+
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to delete customers" });
       }
 
@@ -5559,14 +5566,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid customer ID" });
       }
 
-      console.log(`[deleteCustomer] request customerId=${customerId} by userId=${userId} companyId=${company.id}`);
-
       const deleted = await storage.softDeleteCustomer(customerId, company.id);
 
       if (!deleted) {
         return res.status(404).json({ message: "Customer not found" });
       }
 
+      console.log('[deleteCustomer] SUCCESS customerId=' + customerId);
       res.status(200).json({ message: "Customer deleted successfully" });
     } catch (error) {
       console.error("[deleteCustomer] error:", error);

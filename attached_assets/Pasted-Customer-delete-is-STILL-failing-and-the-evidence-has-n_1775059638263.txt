@@ -1,0 +1,96 @@
+Customer delete is STILL failing, and the evidence has not changed:
+
+DELETE /api/clients/19 → 403
+"You do not have permission..."
+
+So the route is still hitting the same authorization denial branch.
+
+GOAL
+Stop guessing and fix the exact 403 branch that is denying customer deletion.
+
+CURRENT FACTS
+- Route is correct: DELETE /api/clients/:id
+- Request reaches backend
+- Backend returns 403, not 500
+- This means the permission logic is still wrong at runtime
+- The authorized company user should be allowed to delete the customer
+- We must preserve invoices/payments/history
+
+DO THIS EXACTLY
+
+1) FIND THE EXACT 403 LINE
+In the DELETE /api/clients/:id handler, identify the exact line/branch that returns:
+- status 403
+- "You do not have permission..."
+
+I want the literal condition that is evaluating false/true and causing the deny.
+
+2) LOG THE VALUES USED IN THAT CONDITION
+Right before the 403 return, log the exact values being compared:
+- req.user.id
+- req.user.role
+- resolved company id from session/auth
+- target client id
+- target client.companyId
+- any owner/admin/member check values
+- any creatorId/userId/companyOwnerId fields involved
+- exact boolean result of each permission sub-check
+
+Example idea:
+- canDeleteByRole = ?
+- sameCompany = ?
+- isOwner = ?
+- isAdmin = ?
+- isSupervisor = ?
+- finalAllowed = ?
+
+Do not just log generic text. Log the actual compared values.
+
+3) FIX THE AUTHORIZATION CONDITION
+Once you see the actual mismatch, fix the route so the correct company-authorized user can delete.
+
+Most likely one of these is still wrong:
+- checking wrong role name/value
+- checking only owner user id instead of company membership
+- checking client.userId instead of client.companyId
+- comparing string vs number mismatch
+- using stale company resolution logic
+- using wrong source for req.user/company on this route
+
+4) USE EXISTING RBAC PATTERN
+Do not invent a one-off rule.
+Match the same permission pattern already used elsewhere for company-managed entities like:
+- editing clients
+- creating clients
+- editing jobs
+- deleting similar company-owned records
+
+Whatever permission logic already works elsewhere for owner/admin-level company actions, reuse that same pattern here.
+
+5) KEEP SAFE DELETE BEHAVIOR
+After auth is fixed, preserve the delete behavior already intended:
+- customer removed from active Clients UI
+- invoices/payments/history not broken
+- no regression in financial pages
+
+6) PROVE THE FIX
+After changing the auth branch, confirm:
+- DELETE /api/clients/:id returns 200/204 instead of 403
+- no failed toast
+- customer disappears from Clients
+- Invoicing still works
+- Payments still works
+
+DELIVER BACK
+1) Exact 403 condition that was wrong
+2) Exact values that proved it
+3) Exact fix applied
+4) Exact files changed
+5) Final DELETE response status after fix
+6) Confirmation that client deletion now works
+
+IMPORTANT
+- Do not keep making blind changes
+- Start from the literal 403 return branch
+- Log the actual values in that branch
+- Tight targeted fix only
