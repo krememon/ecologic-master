@@ -1,0 +1,93 @@
+We now have the real current failure.
+
+CURRENT FACT
+Customer delete is no longer failing with a 500.
+It is now failing with:
+
+DELETE /api/clients/19 → 403
+{"message":"You do not have permission t..."}
+
+So the issue is now clearly backend authorization/permission logic, not a DB crash.
+
+GOAL
+Fix the authorization path so the correct authorized company user can successfully delete a customer, while still preserving financial history and without opening unsafe access.
+
+WHAT THIS MEANS
+The frontend is hitting the correct route.
+The backend route is reached.
+The backend is intentionally denying the request.
+We need to identify exactly why the current logged-in user is being blocked.
+
+DO THIS EXACTLY
+
+1) AUDIT THE DELETE /api/clients/:id AUTH LOGIC
+Inspect the backend handler and identify every permission check involved, including:
+- authenticated user id
+- company id
+- user role
+- ownership check
+- client.companyId check
+- any "owner only" or admin-only logic
+- any mismatch between company owner id vs company membership user id
+- any stale logic copied from older client routes
+
+2) LOG THE REAL AUTH VALUES
+Add targeted logs for the delete route only:
+- request user id
+- request user role
+- request company id
+- target client id
+- target client company id
+- whether client exists
+- exact permission branch that returns 403
+- exact reason string used for denial
+
+I need to know specifically why the current owner/admin user is being rejected.
+
+3) FIX THE PERMISSION LOGIC
+The correct authorized user for that company should be able to delete the customer.
+
+Likely issues to check:
+- route only allows creator/owner id match instead of company membership
+- route compares against wrong table/field
+- route requires owner but current user is being read as another role incorrectly
+- route is checking client.userId instead of client.companyId
+- route is using old auth assumptions from before RBAC/company membership logic
+
+4) PRESERVE SAFETY
+Do NOT make the route wide open.
+Keep proper scoping:
+- user must belong to that company
+- only roles that should be allowed may delete
+- preserve current RBAC intentions
+
+5) PRESERVE FINANCIAL HISTORY
+After authorization is fixed, customer deletion still must:
+- remove customer from active Clients UI
+- not break invoices
+- not break payments
+- not break financial history
+
+6) VERIFY END-TO-END
+After fix:
+- delete from the 3-dot menu succeeds
+- no 403
+- no failed toast
+- customer disappears from Clients
+- Invoicing still works
+- Payments still works
+
+DELIVERABLES
+1) Exact permission check that caused the 403
+2) Exact root cause
+3) Exact fix applied
+4) Exact files changed
+5) Confirmation delete now works for the proper authorized company user
+6) Confirmation invoices/payments remain intact
+7) Short manual test plan
+
+IMPORTANT
+- Start from the exact 403 permission branch
+- Do not guess
+- Tight targeted fix only
+- Preserve RBAC and financial integrity
