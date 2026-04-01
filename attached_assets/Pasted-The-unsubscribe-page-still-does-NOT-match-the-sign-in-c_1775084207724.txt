@@ -1,0 +1,76 @@
+The unsubscribe page still does NOT match the sign-in / create-account branding block.
+
+PROBLEM
+I compared them side by side and it is still clearly off.
+
+The unsubscribe page header does NOT match the sign-in/create-account header in:
+- wordmark size
+- spacing
+- overall branding block proportion
+- vertical layout relationship between logo and subtitle
+
+GOAL
+Make the unsubscribe page branding block visually match the sign-in/create-account branding block much more closely.
+
+SOURCE OF TRUTH
+Use the create-account/sign-in screen header as the exact reference.
+The second screenshot is the target look.
+
+WHAT TO FIX
+
+1) MATCH THE BRANDING BLOCK ITSELF
+On the unsubscribe page, the branding block should visually mirror the auth page header:
+- same EcoLogic wordmark scale or extremely close
+- same subtitle scale
+- same spacing between wordmark and subtitle
+- same centered layout feel
+- same top breathing room
+
+Right now the unsubscribe version is still noticeably smaller/tighter/different.
+
+2) DO NOT JUST “MAKE IT BIGGER”
+Actually match the auth header structure.
+I want this done by either:
+- reusing the exact same shared auth branding/header component
+OR
+- copying the exact same sizing classes / spacing values from the auth page header
+
+Do not eyeball it loosely.
+
+3) KEEP CURRENT RULES
+Keep:
+- wordmark only
+- subtitle only
+- no droplet
+- no round icon
+- no extra image above it
+
+4) APPLY CONSISTENTLY
+Use the corrected branding block across all unsubscribe states:
+- confirm
+- unsubscribed
+- resubscribed
+- keep subscribed
+- error/loading if applicable
+
+5) DO NOT REDESIGN THE CARD
+The unsubscribe confirmation card can stay.
+This fix is about the top branding block matching auth screens much more accurately.
+
+DELIVERABLES
+1) Make unsubscribe header match the auth branding block much more closely
+2) Reuse exact auth header component or exact same classes/values
+3) List exact files changed
+4) Confirm whether you reused a shared auth branding component or copied exact classes
+5) Short manual test plan:
+   - open sign-in/create-account page
+   - open unsubscribe page
+   - compare wordmark size, subtitle size, spacing
+   - confirm they now closely match
+   - confirm no droplet/icon appears
+   - confirm unsubscribe still works
+
+IMPORTANT
+- Do not just “increase size a bit”
+- Match the actual auth header structure
+- The second screenshot is the source of truth
