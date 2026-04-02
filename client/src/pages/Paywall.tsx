@@ -228,21 +228,23 @@ export default function Paywall() {
         throw new Error(err.message || "Purchase cancelled or failed");
       }
 
-      // Derive expectedPlanKey from the ACTUAL chosen entitlement's productId.
-      // If the chosen entitlement differs from the clicked product (e.g. scale
-      // returned instead of team), we tell the backend to validate for scale —
-      // never force team when the live Apple entitlement is scale.
-      const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
+      // Always send the CLICKED plan key as expectedPlanKey so the server's
+      // deferred-downgrade guard can fire correctly.
+      // Apple may return a higher-tier JWS when the user has an existing active
+      // subscription in the group (e.g. active Scale when user clicks Pro). The
+      // server compares expectedPlanKey (clicked) vs txInfo.planKey (JWS) and
+      // writes the clicked plan when expTier < jwsTier (deferred downgrade path).
+      const actualPlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
       if (result.actualProductId !== appleProductId) {
         console.log(
           `[paywall/apple] entitlement mismatch — clicked=${appleProductId} (plan=${selectedPlanKey})` +
-          ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
-          ` — validating as ${effectivePlanKey}`
+          ` Apple returned=${result.actualProductId} (plan=${actualPlanKey})` +
+          ` — sending expectedPlanKey=${selectedPlanKey} so server honours clicked plan`
         );
       }
 
       console.log("[paywall/apple] firing validation …");
-      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "paywall/apple", effectivePlanKey);
+      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "paywall/apple", selectedPlanKey);
       // Navigation happens inside finishNativePurchase after billing state is confirmed fresh.
       console.log("[paywall/apple] ── purchase COMPLETE ──");
     } catch (err: any) {

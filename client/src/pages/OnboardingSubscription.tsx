@@ -188,18 +188,20 @@ export default function OnboardingSubscription() {
         throw new Error(err.message || "Purchase cancelled or failed");
       }
 
-      // Always derive expectedPlanKey from the actual entitlement — never
-      // force the clicked planKey when Apple returned a different product.
-      const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
+      // Always send the CLICKED plan key as expectedPlanKey so the server's
+      // deferred-downgrade guard can fire correctly.
+      // Apple may return a higher-tier JWS (e.g. active Scale when user clicks Pro).
+      // The server writes the clicked plan when expectedPlanKey tier < JWS tier.
+      const actualPlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
       if (result.actualProductId !== appleProductId) {
         console.log(
           `[onboarding-sub] entitlement mismatch — clicked=${appleProductId} (plan=${selectedPlanKey})` +
-          ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
-          ` — validating as ${effectivePlanKey}`
+          ` Apple returned=${result.actualProductId} (plan=${actualPlanKey})` +
+          ` — sending expectedPlanKey=${selectedPlanKey} so server honours clicked plan`
         );
       }
 
-      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "onboarding-sub/apple", effectivePlanKey);
+      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "onboarding-sub/apple", selectedPlanKey);
     } catch (err: any) {
       console.error("[onboarding-sub] Apple purchase error:", err.message);
       setIsLoading(false);

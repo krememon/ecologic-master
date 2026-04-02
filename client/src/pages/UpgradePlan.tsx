@@ -133,18 +133,18 @@ export default function UpgradePlan() {
     try {
       if (nativeIos) {
         const result: ApplePurchaseResult = await purchaseAppleSubscription(plan.appleProductId);
-        // Derive expectedPlanKey from the actual chosen entitlement, not the
-        // clicked plan. Apple may return a different group member as the active
-        // subscription (e.g. scale when team is clicked).
-        const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? planKey;
+        // Always send the CLICKED plan key as expectedPlanKey so the server's
+        // deferred-downgrade guard can fire correctly.
+        // Apple may return a higher-tier JWS (e.g. active Scale when user clicks Pro).
+        const actualPlanKey = appleProductIdToPlanKey[result.actualProductId] ?? planKey;
         if (result.actualProductId !== plan.appleProductId) {
           console.log(
             `[upgrade-plan] entitlement mismatch — clicked=${plan.appleProductId} (plan=${planKey})` +
-            ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
-            ` — validating as ${effectivePlanKey}`
+            ` Apple returned=${result.actualProductId} (plan=${actualPlanKey})` +
+            ` — sending expectedPlanKey=${planKey} so server honours clicked plan`
           );
         }
-        await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, effectivePlanKey);
+        await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, planKey);
 
       } else if (nativeAndroid) {
         const result = await purchaseGooglePlaySubscription(plan.googlePlayProductId);
