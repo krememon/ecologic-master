@@ -1,0 +1,125 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+The previous fix was NOT the real fix. The logs prove the current failure is still happening BEFORE successful auth completion.
+
+PROVEN RUNTIME EVIDENCE
+The native app is repeatedly receiving:
+
+ecologic://auth/callback?error=unknown
+
+Key logs:
+- [deep-link] getLaunchUrl= ecologic://auth/callback?error=unknown
+- [google-auth] Deep link received — closing browser
+- [google-auth] Deep link error param: unknown
+- pathname: /login
+- [onboarding/choice] loaded appears during app boot, but the auth callback is still erroring and the app remains on login
+
+So the bug is NOT simply “wrong onboarding destination after success.”
+The iOS Google flow is still ending in an auth callback error:
+- error=unknown
+
+GOAL
+For a brand new iOS Google user:
+1) Continue with Google succeeds
+2) native callback returns success, not error=unknown
+3) user becomes authenticated
+4) /api/auth/user returns no-company / not-onboarded state
+5) app routes to /onboarding/choice (“How will you use EcoLogic?”)
+
+THIS IS THE REAL PROBLEM TO DEBUG
+The current issue is in the iOS Google callback / bridge / deep-link success path.
+
+DO THIS EXACTLY
+
+1) TRACE THE FULL IOS GOOGLE CALLBACK CHAIN
+Audit the exact chain for native iOS:
+- Continue with Google click
+- browser open
+- Google OAuth authorize
+- backend callback
+- bridge page redirect
+- deep link emitted back to native app
+- native app receives launch URL
+- code exchange / session attach
+- auth bootstrap after callback
+
+I need the exact branch that is still producing:
+ecologic://auth/callback?error=unknown
+
+2) FIND WHERE error=unknown IS BEING GENERATED
+Search the codebase for all places that can emit:
+- error=unknown
+- pendingCode
+- code
+- deep-link bridge page params
+- ecologic://auth/callback
+
+Identify the exact code path that is generating the unknown error for iOS native Google auth.
+
+3) LOG THE BACKEND CALLBACK DECISION
+Add targeted logs in the backend Google OAuth callback for iOS native only:
+- isNative request true/false
+- existing user vs newly created user
+- whether code was generated successfully
+- whether redirect target was built with ?code=...
+- whether redirect target was built with ?error=...
+- exact final redirect URL sent back to the bridge/native flow
+
+I want the literal final redirect string for this failing brand new user case.
+
+4) LOG THE BRIDGE PAGE PARAM HANDLING
+Audit the bridge page / callback page JS that converts backend query params into the ecologic:// deep link.
+Log:
+- full query params seen by the bridge page
+- whether code exists
+- whether pendingCode exists
+- whether error exists
+- exact deep link string produced
+
+Very likely one of these is still true:
+- backend is still sending the wrong param
+- bridge page is still not recognizing the param
+- bridge page falls through to unknown
+- native app is reading a stale launch URL with error=unknown from a previous attempt
+
+5) CHECK STALE LAUNCH URL / REPEATED CALLBACK HANDLING
+The logs show repeated:
+- getLaunchUrl= ecologic://auth/callback?error=unknown
+- Browser close → No active window to close
+This suggests the app may be repeatedly reprocessing an old failed launch URL.
+
+Audit:
+- does getLaunchUrl get cleared after handling
+- are app listeners duplicating
+- is a stale error deep link being replayed on every app boot
+- is the native callback handler failing to consume/reset processed callback URLs
+
+6) VERIFY SUCCESS PATH FOR BRAND NEW USER
+For a truly brand new iOS Google user, after the fix:
+- deep link should be ecologic://auth/callback?code=...
+NOT error=unknown
+- code exchange should succeed
+- /api/auth/user should return:
+  - hasCompany=false
+  - companyId=null
+  - onboardingChoice=null
+  - onboardingCompleted=false
+- router should send user to /onboarding/choice
+
+7) DO NOT CHANGE WEB / ANDROID
+This is iOS only.
+Guard any shared-code changes carefully.
+
+DELIVER BACK IN THIS FORMAT
+1) Exact line/path generating error=unknown
+2) Exact root cause
+3) Exact files changed
+4) Exact final native deep link after fix
+5) Exact /api/auth/user payload after successful brand new iOS Google login
+6) Confirmation that user now lands on /onboarding/choice
+7) Confirmation web and Android were untouched
+
+IMPORTANT
+- Stop treating this as a post-login routing bug
+- The logs prove the callback is still failing with error=unknown
+- Fix the success callback chain first, then onboarding will work naturally

@@ -232,9 +232,18 @@ const AUTH_CODE_CONSUMED_KEY = "nativeAuthCodeConsumed";
 const _inFlightCodes = new Set<string>(); // per-code in-flight dedup
 let _authHandled = false;                 // session-level flag (belt + suspenders)
 
+// Tracks the last launch URL that was processed via getLaunchUrl() so we
+// never replay it after a WebView reload within the same native session.
+// Cleared when a fresh OAuth attempt starts so a new deep-link response
+// (success or error) from the upcoming attempt is always processed.
+export const PROCESSED_LAUNCH_URL_KEY = "processedLaunchUrl";
+
 export function resetAuthHandled(): void {
   _authHandled = false;
   // _inFlightCodes intentionally NOT cleared — a code in flight must stay locked
+  // Clear the stale launch-URL guard so the next deep link from this fresh
+  // OAuth attempt won't be silently skipped.
+  try { localStorage.removeItem(PROCESSED_LAUNCH_URL_KEY); } catch {}
 }
 
 export async function exchangeNativeAuthCode(

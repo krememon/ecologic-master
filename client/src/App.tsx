@@ -98,6 +98,7 @@ import {
   closeSystemBrowser,
   stopPolling,
   exchangeNativeAuthCode,
+  PROCESSED_LAUNCH_URL_KEY,
 } from "@/lib/capacitor";
 
 let _nativeLaunchUrlChecked = false;
@@ -922,38 +923,62 @@ function useCapacitorDeepLinks() {
 
         const { App: CapApp } = await import("@capacitor/app");
 
-        // Cold start: app was launched directly from the deep link URL
+        // Cold start: app was launched directly from the deep link URL.
+        // IMPORTANT: on iOS, getLaunchUrl() permanently returns the URL that
+        // last launched the app even across WebView reloads within the same
+        // native process.  Without a guard, an error deep link (e.g.
+        // ecologic://auth/callback?error=unknown) would be reprocessed on
+        // every React remount caused by window.location.href navigation,
+        // creating an infinite /login redirect loop.
         const launchUrl = await CapApp.getLaunchUrl();
         if (launchUrl?.url) {
-          console.log("[deep-link] getLaunchUrl=", launchUrl.url);
-          const coldUrl   = launchUrl.url;
-          const coldPath  = resolveDeepLinkPath(coldUrl);
+          const coldUrl = launchUrl.url;
 
-          // Auth callback (cold start) — handle it, then fall through to the
-          // appUrlOpen listener setup. We must NOT return early here: doing so
-          // would skip registering the listener, breaking all subsequent deep
-          // links (job offers, QuickBooks OAuth, etc.) for this session.
-          const coldIsAuthCallback = coldUrl.includes("/auth/callback");
-          await handleAuthCallbackUrl(coldUrl, closeSystemBrowser);
+          // ── Stale launch-URL guard ─────────────────────────────────────────
+          // Check whether we already processed this exact URL in a previous
+          // mount within this native app session.  localStorage persists across
+          // WebView reloads but is cleared when the native process is killed,
+          // so a genuine new cold-start always gets a fresh chance.
+          const prevProcessed = localStorage.getItem(PROCESSED_LAUNCH_URL_KEY);
+          if (prevProcessed === coldUrl) {
+            console.log(
+              "[deep-link] getLaunchUrl already processed this session — skipping stale URL:",
+              coldUrl.substring(0, 60),
+            );
+            // Fall through so the appUrlOpen listener is still registered.
+          } else {
+            // Mark this URL as processed BEFORE any async work so that a
+            // rapid WebView reload cannot sneak in a second execution.
+            try { localStorage.setItem(PROCESSED_LAUNCH_URL_KEY, coldUrl); } catch {}
+            console.log("[deep-link] getLaunchUrl=", coldUrl);
+            const coldPath = resolveDeepLinkPath(coldUrl);
 
-          // Only try non-auth deep-link handling when the cold-start URL is not
-          // an auth callback (auth callbacks have no navigable "target").
-          if (!coldIsAuthCallback) {
-            if (coldPath.includes("stripe_connect_return=")) {
-              console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
-              window.location.href = coldPath;
-              return;
-            }
+            // Auth callback (cold start) — handle it, then fall through to the
+            // appUrlOpen listener setup. We must NOT return early here: doing
+            // so would skip registering the listener, breaking all subsequent
+            // deep links (job offers, QuickBooks OAuth, etc.) for this session.
+            const coldIsAuthCallback = coldUrl.includes("/auth/callback");
+            await handleAuthCallbackUrl(coldUrl, closeSystemBrowser);
 
-            const coldTarget = extractDeepLinkTarget(coldPath);
-            if (coldTarget) {
-              const alreadyPending = sessionStorage.getItem("pendingDeepLink");
-              if (!alreadyPending) {
-                const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
-                console.log("[deep-link] getLaunchUrl token=", tokenSnippet + "..., target=", coldTarget);
-                saveDeepLink(coldTarget, true);
-              } else {
-                console.log("[deep-link] getLaunchUrl: pendingDeepLink already set, skipping");
+            // Only try non-auth deep-link handling when the cold-start URL is
+            // not an auth callback (auth callbacks have no navigable "target").
+            if (!coldIsAuthCallback) {
+              if (coldPath.includes("stripe_connect_return=")) {
+                console.log("[deep-link] Cold start Stripe Connect return, navigating to:", coldPath);
+                window.location.href = coldPath;
+                return;
+              }
+
+              const coldTarget = extractDeepLinkTarget(coldPath);
+              if (coldTarget) {
+                const alreadyPending = sessionStorage.getItem("pendingDeepLink");
+                if (!alreadyPending) {
+                  const tokenSnippet = coldPath.match(/([a-f0-9]{16,})/)?.[1]?.slice(0, 12);
+                  console.log("[deep-link] getLaunchUrl token=", tokenSnippet + "..., target=", coldTarget);
+                  saveDeepLink(coldTarget, true);
+                } else {
+                  console.log("[deep-link] getLaunchUrl: pendingDeepLink already set, skipping");
+                }
               }
             }
           }
