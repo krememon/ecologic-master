@@ -115,6 +115,13 @@ export default function Billing() {
       toast({ title: "Permission denied", description: "Only the company owner can manage billing.", variant: "destructive" });
       return;
     }
+    const isSameActivePlan = planKey === currentPlanKey && hasActiveSub;
+    console.log(`[billing] handleSubscribe planKey=${planKey} currentPlanKey=${currentPlanKey} hasActiveSub=${hasActiveSub} isSameActivePlan=${isSameActivePlan} status=${billing?.subscriptionStatus}`);
+    if (isSameActivePlan) {
+      console.log("[billing] BLOCKED: same-plan-active guard — not starting checkout");
+      return;
+    }
+    console.log(`[billing] PROCEEDING: launching checkout/switch for planKey=${planKey}`);
     setSelectedPlanKey(planKey);
     checkoutMutation.mutate(planKey);
   };
@@ -285,7 +292,7 @@ export default function Billing() {
                     <Button
                       size="sm"
                       variant={isCurrent ? "outline" : "default"}
-                      disabled={checkoutMutation.isPending || isLoadingOther}
+                      disabled={isCurrent || checkoutMutation.isPending || isLoadingOther}
                       onClick={() => handleSubscribe(key)}
                       className="ml-4 shrink-0"
                     >

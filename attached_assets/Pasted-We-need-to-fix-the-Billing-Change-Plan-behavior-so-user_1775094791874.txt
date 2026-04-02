@@ -1,0 +1,105 @@
+We need to fix the Billing → Change Plan behavior so users cannot start checkout for the same plan they already have.
+
+PROBLEM
+If the user is already on the Team plan ($79.99/mo) and clicks the current plan card/button, it still takes them into Stripe checkout for that same Team plan again.
+
+That makes no sense.
+
+GOAL
+If a user already has an active paid plan, they should NOT be able to purchase that exact same plan again while it is still active.
+
+EXPECTED BEHAVIOR
+
+1) ACTIVE CURRENT PLAN
+If the user is actively subscribed to Team:
+- Team should show as Current
+- clicking the current plan should do nothing OR be disabled OR not open checkout
+- it should definitely NOT launch Stripe checkout for the same plan
+
+2) PLAN CHANGE
+If the user clicks a DIFFERENT plan:
+- Starter / Pro / Scale
+- then it can route to the proper billing portal / plan change flow
+
+3) EXPIRED / INACTIVE CASE
+If the user’s subscription is inactive, expired, canceled, unpaid, or no longer valid:
+- then they CAN purchase that plan again
+- that is the only time re-buying the same plan should be allowed
+
+WHAT TO AUDIT
+
+1) CURRENT PLAN DETECTION
+Inspect how Billing determines:
+- current active plan
+- effective subscription state
+- whether subscription is active vs expired/inactive
+- whether the current plan card is clickable
+
+2) CLICK HANDLER
+Audit the click/CTA behavior on the plan cards:
+- what happens when clicking the current plan
+- why the current plan is still routing to Stripe checkout
+- whether the “Current” UI is cosmetic only and not actually enforced
+
+3) EFFECTIVE ACCESS / BILLING STATE
+Make sure the logic uses the real effective billing state:
+- active paid plan
+- current period end
+- canceled but still active until end date
+- expired / inactive
+- free access / bypass if relevant
+The same-plan purchase should only be blocked when the current plan is actually still active.
+
+4) STRIPE FLOW TYPE
+Figure out whether plan switching is supposed to go to:
+- Stripe billing portal
+- checkout session
+- some custom upgrade route
+If user already has the current plan, route should not start a new purchase flow for that same product.
+
+5) UI / UX
+The current plan card/button should behave clearly:
+- disabled
+or
+- non-clickable
+or
+- no-op with correct styling
+But not contradictory behavior like “Current” while still launching checkout.
+
+6) DO NOT BREAK REAL PLAN SWITCHING
+Keep working behavior for:
+- upgrading to another plan
+- downgrading to another plan if supported
+- re-subscribing after plan expiration/inactive status
+
+LIKELY ROOT CAUSES TO CHECK
+- current plan badge is visual only
+- click handler ignores current plan status
+- plan comparison uses wrong plan key/id
+- active subscription status is not checked before opening checkout
+- team card still wired to generic purchase route regardless of current state
+
+DEBUGGING
+Add targeted logs only for:
+- effective billing state
+- current active plan key
+- clicked plan key
+- whether same-plan active block fired
+- which route/session is launched after click
+
+DELIVERABLES
+1) Fix billing so users cannot repurchase the same active current plan
+2) Allow repurchase only when that plan is no longer active
+3) Preserve switching to different plans
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - active Team user clicks Team → no checkout opens
+   - active Team user clicks Pro → proper plan change flow opens
+   - inactive/expired Team user clicks Team → checkout is allowed
+   - confirm no duplicate same-plan subscription purchase path remains
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign billing UI
+- Do not break Stripe billing portal / checkout for actual plan changes
