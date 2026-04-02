@@ -1,0 +1,133 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+The previous fix still did NOT solve the real problem.
+
+CURRENT PROVEN RUNTIME FACT
+After the iOS Google flow for a brand new user, the app is still ending up unauthenticated.
+
+Key logs now show:
+- [auth] user not authenticated (401)
+- [auth/user][client] ... hasNativeSession=true attachBearer=true
+- no successful authenticated user payload after the flow
+
+So this is NOT just a routing issue.
+This is now clearly an iOS native Google auth completion / session attach failure for first-time users.
+
+GOAL
+For a brand new iOS Google user with no EcoLogic account:
+1) Continue with Google succeeds
+2) user account is created if needed
+3) native callback returns success
+4) session/native auth is actually attached successfully
+5) /api/auth/user returns 200, not 401
+6) app then routes to /onboarding/choice ("How will you use EcoLogic?")
+
+IMPORTANT
+The real blocker is the 401 unauthenticated state after the Google flow.
+Fix auth completion first. Onboarding will follow naturally.
+
+DO THIS EXACTLY
+
+1) TRACE THE FULL IOS NEW-USER GOOGLE SUCCESS PATH
+Audit the full chain for first-time iOS Google login:
+- Google OAuth callback on backend
+- new user creation
+- session code generation
+- bridge redirect / deep link
+- native code exchange endpoint
+- storage of native session token / session id
+- first /api/auth/user request after exchange
+
+I need the exact point where auth is failing and /api/auth/user ends up 401.
+
+2) LOG THE CODE EXCHANGE END-TO-END
+Add targeted logs for the native auth code exchange flow only:
+- was a code generated on the backend for this new user? yes/no
+- exact backend endpoint hit by the native app to exchange the code
+- did the exchange succeed or fail
+- what auth artifact is returned to the app
+- is nativeSessionId / bearer token actually being saved
+- what does the first authenticated request send
+- why does the server return 401
+
+3) VERIFY FIRST /API/AUTH/USER REQUEST
+Immediately after the supposed successful Google flow, log:
+- request headers received by /api/auth/user
+- whether Authorization bearer token is present
+- whether cookie/session is present
+- what auth strategy branch is being used
+- exact reason for the 401
+
+I want the literal reason for the 401, not guesses.
+
+4) AUDIT FIRST-TIME USER VS EXISTING USER DIFFERENCE
+This issue appears to be specific to brand new Google users.
+Compare the native iOS flow for:
+A) existing Google user that logs in successfully
+B) brand new Google user that fails
+
+Find the exact branch difference:
+- different callback path
+- different exchange payload
+- different session creation
+- missing bearer/native session for new users
+- token/session not persisted after new-user creation
+
+5) CHECK NATIVE SESSION PERSISTENCE
+The logs show:
+- hasNativeSession=true
+- but /api/auth/user is still 401
+
+That means one of these is happening:
+- stale/invalid native session value is being reused
+- bearer token is attached but invalid
+- exchange returns something malformed
+- server does not accept the token issued for brand new users
+- token/session is created but revoked/cleared immediately
+- first-time created users are missing data needed by auth middleware
+
+Audit this precisely.
+
+6) CHECK SERVER AUTH MIDDLEWARE FOR NEW GOOGLE USERS
+Inspect the middleware path that handles native authenticated requests.
+Confirm a freshly created Google user can pass the same auth validation as an existing user.
+Check for:
+- token version mismatch
+- missing claims
+- missing session record
+- user id format mismatch (e.g. google_<...> vs email_<...>)
+- token bound to wrong user/session
+- session/code exchange using pre-create vs post-create user state incorrectly
+
+7) VERIFY THE SUCCESS STATE AFTER FIX
+After the fix, for a brand new iOS Google user:
+- native deep link should be success, not error
+- code exchange should succeed
+- /api/auth/user should return 200
+- payload should show:
+  - hasCompany=false
+  - companyId=null
+  - role=null
+  - onboardingChoice=null
+  - onboardingCompleted=false
+- router should send user to /onboarding/choice
+
+8) DO NOT MASK THE PROBLEM WITH UI FALLBACKS
+Do not just force navigation to onboarding if /api/auth/user is still 401.
+The user must actually be authenticated successfully.
+
+DELIVER BACK IN THIS FORMAT
+1) Exact line/branch causing the 401 after first-time iOS Google auth
+2) Exact root cause
+3) Exact files changed
+4) Exact result of the native code exchange after fix
+5) Exact first /api/auth/user response after fix
+6) Confirmation user now lands on /onboarding/choice
+7) Confirmation web and Android were untouched
+
+IMPORTANT
+- This is now an auth completion bug, not just onboarding routing
+- Start from the first /api/auth/user 401
+- Trace backward through the native code exchange and session attach
+- IOS ONLY
+- Tight targeted fix only

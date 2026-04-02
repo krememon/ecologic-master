@@ -1354,6 +1354,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
         host: req.headers.host,
       });
     }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(401).json({ ok: false, code: "UNAUTHENTICATED", message: "Unauthorized" });
   }
 
@@ -1366,12 +1367,14 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   
   if (!dbUser) {
     console.log("User not found in database");
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   // Check if user is deactivated
   if (dbUser.status?.toUpperCase() === 'INACTIVE') {
     console.log("User is deactivated");
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     return res.status(401).json({ 
       code: 'ACCOUNT_INACTIVE',
       message: 'Your account has been deactivated. Contact your administrator.'
@@ -1392,6 +1395,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     const dbTokenVersion = dbUser.tokenVersion || 0;
     if (sessionTokenVersion !== dbTokenVersion) {
       console.log(`[auth] Token version mismatch — session revoked (session=${sessionTokenVersion} db=${dbTokenVersion} userId=${userId})`);
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       return res.status(401).json({ 
         code: 'SESSION_REVOKED',
         message: 'Your session has ended. Please sign in again.'
@@ -1412,6 +1416,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
     console.log("Token expired and no refresh token available");
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
@@ -1423,6 +1428,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return next();
   } catch (error) {
     console.log("Token refresh failed:", error);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.status(401).json({ message: "Unauthorized" });
     return;
   }

@@ -56,7 +56,12 @@ async function fetchAuthUser(): Promise<AuthUser | null> {
         if (sid) headers["Authorization"] = `Bearer ${sid}`;
       } catch {}
     }
-    return fetch("/api/auth/user", { credentials: "include", cache: "no-store", headers });
+    // Append a timestamp to the URL to defeat WKWebView's aggressive HTTP disk
+    // cache, which can serve a stale 401 response even after a new session is
+    // established.  TanStack Query keys this query by "/api/auth/user" (not the
+    // timestamped URL), so the client-side cache is not affected.
+    const url = `/api/auth/user?_t=${Date.now()}`;
+    return fetch(url, { credentials: "include", cache: "no-store", headers });
   };
 
   let res = await doFetch(useBearer);

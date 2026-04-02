@@ -726,6 +726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.status === 'DELETED') {
         console.log(`[auth] Rejected deleted user userId=${userId}`);
         req.logout(() => req.session?.destroy(() => {}));
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res.status(401).json({ ok: false, code: 'UNAUTHENTICATED', message: 'Account deleted' });
       }
 
@@ -779,6 +780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("[auth] redirecting to dashboard");
       }
 
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.json(responseData);
     } catch (error) {
       console.error("Error fetching user:", error);

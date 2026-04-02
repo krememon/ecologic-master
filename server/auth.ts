@@ -45,7 +45,7 @@ declare global {
   }
 }
 
-const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
+const authCodeStore = new Map<string, { userId: string | number; expiresAt: number }>();
 const nonceCodeStore = new Map<string, { code: string; expiresAt: number }>();
 
 // Temporary store for new Google users who haven't completed registration yet.
@@ -83,19 +83,19 @@ function generateAuthCode(): string {
   return randomBytes(32).toString("hex");
 }
 
-function storeAuthCode(userId: number): string {
+function storeAuthCode(userId: string | number): string {
   const code = generateAuthCode();
   authCodeStore.set(code, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
   return code;
 }
 
-function storeAuthCodeForNonce(nonce: string, userId: number): string {
+function storeAuthCodeForNonce(nonce: string, userId: string | number): string {
   const code = storeAuthCode(userId);
   nonceCodeStore.set(nonce, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
   return code;
 }
 
-function consumeAuthCode(code: string): number | null {
+function consumeAuthCode(code: string): string | number | null {
   const entry = authCodeStore.get(code);
   if (!entry) return null;
   authCodeStore.delete(code);
@@ -1452,8 +1452,8 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
               }
               consumePendingGoogleProfile(pc);
               const iosNewCode = nonce
-                ? storeAuthCodeForNonce(nonce, newUser.id as any)
-                : storeAuthCode(newUser.id as any);
+                ? storeAuthCodeForNonce(nonce, newUser.id)
+                : storeAuthCode(newUser.id);
               console.log(`[google-auth] iOS new user: code stored${nonce ? " (nonce=" + nonce.substring(0, 8) + "…)" : ""}, redirecting to bridge`);
               return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(iosNewCode)}`);
             } catch (createErr: any) {
