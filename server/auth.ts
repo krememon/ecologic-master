@@ -1424,11 +1424,42 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
           const profileImageUrl = pProfile?.profileImageUrl || "";
           console.log(`[google-auth] New user pending registration — pendingCode=${pc.substring(0, 8)}… email=${email}`);
 
-          // iOS native: pass pendingCode to the bridge page so the native layer can open signup
+          // iOS native: create the account immediately so the normal poll+exchange
+          // flow can complete. The new user has no company and no onboardingChoice,
+          // so getNextOnboardingRoute will send them to /onboarding/choice naturally.
           if (isIos) {
-            return res.redirect(
-              `/api/auth/google-complete?pendingCode=${encodeURIComponent(pc)}&email=${encodeURIComponent(email)}&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`
-            );
+            console.log(`[google-auth] iOS new user: creating account immediately for email=${email}`);
+            try {
+              let newUser = pProfile?.googleId ? await storage.getUserByGoogleId(pProfile.googleId) : null;
+              if (!newUser && email) newUser = await storage.getUserByEmail(email);
+              if (!newUser) {
+                newUser = await storage.createUser({
+                  email,
+                  firstName,
+                  lastName,
+                  profileImageUrl: pProfile?.profileImageUrl || "",
+                  googleId: pProfile?.googleId || "",
+                  googleLinked: true,
+                  emailVerified: true,
+                });
+                console.log(`[google-auth] iOS new user: created userId=${newUser.id} email=${newUser.email}`);
+              } else {
+                if (!newUser.googleId && pProfile?.googleId) {
+                  await storage.updateUser(newUser.id, { googleId: pProfile.googleId, googleLinked: true });
+                  newUser = (await storage.getUser(newUser.id)) ?? newUser;
+                }
+                console.log(`[google-auth] iOS new user: linked existing userId=${newUser.id} email=${newUser.email}`);
+              }
+              consumePendingGoogleProfile(pc);
+              const iosNewCode = nonce
+                ? storeAuthCodeForNonce(nonce, newUser.id as any)
+                : storeAuthCode(newUser.id as any);
+              console.log(`[google-auth] iOS new user: code stored${nonce ? " (nonce=" + nonce.substring(0, 8) + "…)" : ""}, redirecting to bridge`);
+              return res.redirect(`/api/auth/google-complete?code=${encodeURIComponent(iosNewCode)}`);
+            } catch (createErr: any) {
+              console.error(`[google-auth] iOS new user: failed to create account:`, createErr);
+              return res.redirect(`/api/auth/google-complete?error=account_creation_failed`);
+            }
           }
 
           // Popup flows (cross-domain or same-domain): postMessage to opener with profile data

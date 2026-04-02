@@ -1,0 +1,118 @@
+We are now fixing IOS ONLY. Do not touch web behavior.
+
+PROBLEM
+On iOS, if a brand new user taps Continue with Google without ever creating an account first, it should bring them to the "How will you use EcoLogic?" screen.
+
+Right now that is not happening correctly.
+
+IMPORTANT
+This should already exist conceptually, so treat this as a bug in the current iOS Google auth/onboarding flow — not a brand new feature.
+
+OBSERVED LOGS
+The logs show the new Google user is being treated as fully completed owner onboarding immediately:
+
+userId=email_1775096516640_73245867
+hasCompany=true
+companyId=552
+role=OWNER
+onboardingChoice=owner
+onboardingCompleted=true
+
+Then routing does:
+→ null (dashboard)
+
+That means somewhere during the iOS Google signup/login flow, a brand new user is being incorrectly resolved as:
+- hasCompany=true
+- role=OWNER
+- onboardingChoice=owner
+- onboardingCompleted=true
+
+GOAL
+For a brand new iOS Google user with no prior EcoLogic account:
+1) Continue with Google succeeds
+2) user becomes authenticated
+3) user is treated as a no-company / not-yet-onboarded user
+4) app routes to the single "How will you use EcoLogic?" choice screen
+5) user should NOT be auto-marked as owner/company-complete and dropped into dashboard
+
+IOS ONLY
+Do NOT break or modify web.
+Do NOT break Android.
+Do NOT break existing iOS login for users who already completed onboarding.
+This fix is specifically for brand new iOS Google users.
+
+WHAT TO AUDIT
+
+1) IOS GOOGLE AUTH FLOW
+Inspect the full iOS Continue with Google flow:
+- native Google auth start
+- callback / token exchange
+- backend login/signup path
+- user creation path for first-time Google users
+- session/bootstrap on iOS after auth
+
+2) BRAND NEW USER CREATION
+Find where a first-time Google user is created.
+Check whether the code is incorrectly defaulting new Google users to:
+- role=OWNER
+- onboardingChoice=owner
+- onboardingCompleted=true
+- hasCompany=true / company creation side effects
+
+A brand new Google user should NOT get those values before making a choice.
+
+3) COMPANY / OWNER AUTO-CREATION BUG
+The logs strongly suggest a company is being auto-created or the user is being auto-attached as OWNER during first Google auth.
+Audit:
+- any create-user hook
+- any auto-create-company logic
+- any onboarding bootstrap that defaults Google users into owner mode
+- any iOS-only fallback branch doing this
+
+4) ROUTING INPUTS
+Inspect what getNextOnboardingRoute is receiving on iOS for a first-time Google user.
+Fix the source data so the router receives the correct state:
+- hasCompany=false
+- companyId=null
+- onboardingChoice=null
+- onboardingCompleted=false
+- no owner role yet
+
+Then it should naturally route to the choice screen.
+
+5) DO NOT BREAK EXISTING USERS
+Existing onboarded iOS users who already have a company should still land in dashboard normally.
+Only brand new Google users should go to the choice screen.
+
+6) DEBUGGING
+Add targeted logs only for:
+- first-time Google auth user creation path
+- whether user already existed vs was newly created
+- values written to user row on creation
+- whether any company/company_member row is created during first auth
+- final /api/auth/user payload for the brand new iOS Google user
+- final route decision
+
+LIKELY ROOT CAUSES TO CHECK
+- new Google users default to owner/onboarding complete
+- company auto-created during first Google signup
+- reused signup path sets onboardingChoice=owner too early
+- iOS auth exchange is calling the wrong “complete signup” path
+- auth bootstrap incorrectly infers company/owner state for fresh Google users
+
+DELIVERABLES
+1) Fix iOS so brand new Google users land on "How will you use EcoLogic?"
+2) Ensure they are not auto-marked as owner/company-complete before making a choice
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - fresh iOS Google user, no prior account
+   - tap Continue with Google
+   - confirm authenticated
+   - confirm routed to How will you use EcoLogic?
+   - confirm existing onboarded iOS user still lands in dashboard normally
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- This is a bug fix, not a redesign
