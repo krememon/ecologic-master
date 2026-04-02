@@ -1,0 +1,111 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+The latest logs finally show the real issue very clearly.
+
+PROVEN RUNTIME FACTS
+The subscription gate IS actually turning active:
+
+- [ECOLOGIC-SUB] [gate] payload — platform=native active=true status=apple plan=scale ...
+- [ECOLOGIC-SUB] [gate] ACCESS GRANTED ...
+- [app-router] ... subActive=true → null (dashboard)
+- [ECOLOGIC-SUB] rendering protected app shell
+
+BUT your paywall restore/purchase completion code is still throwing its own false failure:
+
+- [paywall/apple-restore] gate check after refetch — active=null status=(none) plan=(none)
+- [paywall/apple-restore] Gate still BLOCKED after refetch (status=unknown) — aborting navigation
+- [paywall] Apple restore error: Subscription validation succeeded but billing access is still blocked ...
+
+So the global app state says ACTIVE and routes to dashboard, while the local post-purchase / post-restore code is reading NULL/empty and incorrectly treating it as blocked.
+
+THIS IS THE ROOT CAUSE
+The local gate-check logic after refetch is reading the wrong source, wrong query key, wrong return value shape, or checking too early / incorrectly. It is producing a false negative even though the actual subscription gate already resolved active=true.
+
+GOAL
+Make the post-purchase / restore completion logic use the real gate source of truth correctly so it does not throw a false blocked error after a successful Apple validation.
+
+DO THIS EXACTLY
+
+1) AUDIT THE LOCAL POST-PURCHASE / POST-RESTORE GATE CHECK
+Inspect the exact code in:
+- Paywall.tsx
+- OnboardingSubscription.tsx
+- UpgradePlan.tsx
+where you do the “gate check after refetch”.
+
+Find exactly how it is computing:
+- active
+- status
+- plan
+
+The logs prove that this local check is reading null/none while the real global gate query has already resolved active=true.
+
+2) IDENTIFY THE WRONG DATA SOURCE
+Check whether the local code is using any of these incorrectly:
+- return value of queryClient.refetchQueries() (which is not the actual data payload)
+- queryClient.getQueryData() on the wrong query key
+- stale closure state
+- wrong shape assumption (e.g. expecting {active,status,plan} but query returns nested object)
+- the auth query instead of the sub-gate query
+- the sub-gate hook state before React rerender updates it
+
+I want the exact bug:
+- wrong key
+- wrong read path
+- wrong timing
+- wrong return shape
+- or combination
+
+3) FIX THE LOCAL SUCCESS CRITERION
+After successful Apple validation and refetch:
+- do NOT invent a second contradictory “blocked” state if the real gate query already resolved active=true
+- use the actual gate/source-of-truth response payload directly
+OR
+- simply wait for the real gate query result and trust it
+
+The local handler must not abort navigation when:
+- the gate payload shows active=true
+- router already sees subActive=true
+
+4) UNIFY PURCHASE AND RESTORE PATHS
+Apply the fix to both:
+- Apple purchase
+- Apple restore
+
+Because the logs show the same fragile local check pattern in restore, and purchase likely uses the same helper.
+
+5) KEEP THE REAL ACTIVE STATE LOGGED
+Add targeted logs for:
+- exact query key being read
+- exact object returned from getQueryData or equivalent
+- exact field path used for active/status/plan
+- why the old code produced active=null
+- the final corrected read showing active=true
+
+6) DO NOT THROW FALSE ERRORS
+Once the real gate is active:
+- do not show “billing access is still blocked”
+- do not abort navigation
+- do not keep the user stuck in paywall/restore failure messaging
+
+7) EXPECTED FINAL BEHAVIOR
+After successful Apple validation / restore on iOS:
+- gate payload resolves active=true
+- local completion logic also recognizes active=true
+- no false blocked error is thrown
+- app lands on dashboard/home cleanly
+
+DELIVER BACK IN THIS FORMAT
+1) Exact local gate-check bug
+2) Exact files changed
+3) Exact wrong query key/read path or timing issue
+4) Exact corrected source-of-truth used after validation
+5) Confirmation false blocked error is gone
+6) Confirmation user lands on dashboard/home after purchase and restore
+7) Confirmation web and Android were untouched
+
+IMPORTANT
+- IOS ONLY
+- The global gate is already proving active=true
+- Fix the LOCAL post-purchase/restore false negative check
+- Tight targeted fix only

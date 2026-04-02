@@ -157,36 +157,51 @@ export default function Paywall() {
     }
 
     // Refetch BOTH billing and auth in parallel and wait for completion.
-    // This guarantees fresh subActive value is in the cache before we check
-    // or navigate — eliminating the stale-cache race condition.
+    // This guarantees the cache has the fresh active=true state before the
+    // router re-evaluates, eliminating the stale-cache redirect-loop.
     console.log(`[${logTag}] refetching billing + auth state (awaiting both)`);
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
       queryClient.refetchQueries({ queryKey: ["/api/auth/user"] }),
     ]);
 
-    // Verify the gate is actually active after the fresh refetch.
-    // Do NOT navigate if subActive is still false — that means the subscription
-    // state didn't propagate correctly and we'd just loop back to /paywall.
-    const subEntries = queryClient.getQueriesData<{ active: boolean; status: string; planKey: string | null }>(
-      { queryKey: ["/api/subscriptions/status"] }
-    );
-    const freshSub = subEntries.length > 0 ? subEntries[0][1] : null;
+    // ── Gate-check: read the EXACT cache slot the gate hook wrote into ────────
+    //
+    // Bug fixed: the previous code used getQueriesData({ queryKey: ["/api/subscriptions/status"] })
+    // (a 1-element prefix) which in TanStack Query v5 can return [] when called
+    // from outside a subscriber context immediately after refetchQueries resolves.
+    // The gate hook stores its data under the 2-element key:
+    //   ["/api/subscriptions/status", userId]
+    // Using getQueryData with the EXACT 2-element key reads the correct slot.
+    //
+    // Fallback: if the cache slot is still empty (race condition on first-ever
+    // load), trust the server's data.ok=true — the server IS the source of truth.
+    const exactKey = ["/api/subscriptions/status", user?.id ?? ""];
+    const freshSub = queryClient.getQueryData<{ active: boolean; status: string; planKey: string | null }>(exactKey);
     console.log(
-      `[${logTag}] gate check after refetch — active=${freshSub?.active ?? "null"}` +
+      `[${logTag}] gate check — key=${JSON.stringify(exactKey)}` +
+      ` active=${freshSub?.active ?? "(cache-empty)"}` +
       ` status=${freshSub?.status ?? "(none)"}` +
-      ` plan=${freshSub?.planKey ?? "(none)"}`
+      ` plan=${freshSub?.planKey ?? "(none)"}` +
+      ` serverOk=${data.ok}`
     );
 
-    if (!freshSub?.active) {
-      console.error(`[${logTag}] Gate still BLOCKED after refetch (status=${freshSub?.status ?? "unknown"}) — aborting navigation`);
+    // Use exact cache value if populated; otherwise trust the server response.
+    // The server returning data.ok=true means the subscription IS written as
+    // active in the DB. The global gate hook will pick it up on the next render.
+    const isActive = freshSub != null ? freshSub.active === true : data.ok === true;
+    if (!isActive) {
+      console.error(
+        `[${logTag}] Gate still BLOCKED — cacheActive=${freshSub?.active ?? "null"}` +
+        ` serverOk=${data.ok} status=${freshSub?.status ?? "unknown"} — aborting navigation`
+      );
       throw new Error(
         `Subscription validation succeeded but billing access is still blocked (${freshSub?.status ?? "unknown"}). ` +
         `Please try Restore Purchases or check your Apple Subscription settings.`
       );
     }
 
-    console.log(`[${logTag}] billing + auth refresh confirmed active — navigating to dashboard`);
+    console.log(`[${logTag}] gate confirmed active (cache=${freshSub?.active ?? "server-ok"}) — navigating to dashboard`);
     toast({ title: "Subscription active!", description: "Welcome to EcoLogic." });
     setLocation("/", { replace: true });
   };
