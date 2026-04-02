@@ -102,21 +102,43 @@ export default function Landing() {
         window.location.href = "/join-company";
       }
     } catch (error: any) {
-      // Parse error message to show appropriate feedback
-      const errorMessage = error?.message || "";
-      
-      if (errorMessage.includes("401") || errorMessage.includes("Invalid") || errorMessage.includes("password")) {
-        setErrors({ 
-          general: "Invalid email or password. Please check your credentials and try again." 
-        });
-      } else if (errorMessage.includes("ACCOUNT_INACTIVE") || errorMessage.includes("deactivated")) {
+      // apiRequest throws Error("STATUS: {json body}").
+      // Parse the JSON payload to get the structured `code` + `message` from the server.
+      const rawMessage = error?.message || "";
+      let errorCode: string | null = null;
+      let serverMessage: string | null = null;
+      try {
+        const jsonPart = rawMessage.replace(/^\d+:\s*/, ""); // strip leading "401: "
+        const parsed = JSON.parse(jsonPart);
+        errorCode = parsed.code ?? null;
+        serverMessage = parsed.message ?? null;
+      } catch { /* rawMessage was not JSON — fall through to string checks */ }
+
+      if (errorCode === "PROVIDER_GOOGLE") {
+        // Account exists but was created with Google — guide user to the right button
         setErrors({
-          general: "Your account is deactivated. Please contact your company Owner or Supervisor."
+          general: serverMessage || "This account was created with Google. Please continue with Google.",
+        });
+      } else if (errorCode === "PROVIDER_APPLE") {
+        // Account exists but was created with Apple Sign-In
+        setErrors({
+          general: serverMessage || "This account was created with Apple. Please continue with Apple.",
+        });
+      } else if (serverMessage?.includes("No account found") || rawMessage.includes("No account found")) {
+        // True missing-account case
+        setErrors({ general: "No account found with this email." });
+      } else if (rawMessage.includes("ACCOUNT_INACTIVE") || rawMessage.includes("deactivated")) {
+        setErrors({
+          general: "Your account is deactivated. Please contact your company Owner or Supervisor.",
+        });
+      } else if (rawMessage.includes("verify your email")) {
+        setErrors({ general: "Please verify your email before logging in." });
+      } else if (rawMessage.includes("401") || rawMessage.includes("Invalid") || rawMessage.includes("password")) {
+        setErrors({
+          general: "Invalid email or password. Please check your credentials and try again.",
         });
       } else {
-        setErrors({ 
-          general: "Login failed. Please try again." 
-        });
+        setErrors({ general: "Login failed. Please try again." });
       }
     } finally {
       setIsLoading(false);

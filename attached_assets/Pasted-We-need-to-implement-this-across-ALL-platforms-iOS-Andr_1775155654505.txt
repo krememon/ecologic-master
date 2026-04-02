@@ -1,0 +1,125 @@
+We need to implement this across ALL platforms:
+- iOS
+- Android
+- Web
+
+PROBLEM
+If a user originally registered their EcoLogic account with:
+- Google
+or
+- Apple
+
+and then later tries to use that same email in the normal email/password sign-in flow, the app currently says:
+
+"No account found with this email."
+
+That is misleading and wrong.
+
+GOAL
+If an account exists for that email but it was created with Google or Apple, the normal email/password sign-in flow should tell the user to use the correct provider instead.
+
+EXPECTED BEHAVIOR
+
+1) GOOGLE-CREATED ACCOUNT
+If the user entered an email that belongs to an account created with Google:
+- do NOT say “No account found”
+- instead show a clear message like:
+  "This account was created with Google. Please continue with Google."
+
+2) APPLE-CREATED ACCOUNT
+If the user entered an email that belongs to an account created with Apple:
+- do NOT say “No account found”
+- instead show a clear message like:
+  "This account was created with Apple. Please continue with Apple."
+
+3) TRUE NO-ACCOUNT CASE
+If there is actually no account for that email at all:
+- keep the normal “No account found with this email” behavior
+
+4) NORMAL EMAIL/PASSWORD ACCOUNT
+If the account was actually created with email/password:
+- keep the normal sign-in behavior unchanged
+
+IMPORTANT
+This must work consistently across:
+- Web
+- iOS
+- Android
+
+This is not just a UI tweak.
+The backend/auth flow needs to correctly distinguish:
+- no account exists
+- account exists but uses Google
+- account exists but uses Apple
+- account exists and supports password sign-in
+
+WHAT TO AUDIT
+
+1) AUTH SOURCE OF TRUTH
+Inspect how EcoLogic currently stores account auth method/provider:
+- email/password
+- Google
+- Apple
+- mixed/linked account if applicable
+
+Find the true source of truth for login provider on the user/account record.
+
+2) NORMAL EMAIL SIGN-IN ENDPOINT
+Audit the normal email/password sign-in backend flow.
+Right now it is likely treating Google/Apple-created users as if they do not exist for password auth.
+Instead, the response should distinguish provider mismatch vs true missing account.
+
+3) FRONTEND ERROR HANDLING
+Update the sign-in UI so provider mismatch errors are shown cleanly and clearly.
+Do not just dump raw JSON.
+The user should see human wording.
+
+4) KEEP SECURITY REASONABLE
+This is a product choice request, so it is okay to surface provider-specific guidance here.
+But keep the response structured and intentional.
+
+5) OPTIONAL ACCOUNT LINKING CHECK
+If the system supports users who originally used Google/Apple and later added a password, make sure the logic respects that.
+Meaning:
+- if password auth is actually valid, allow normal sign-in
+- only show provider guidance when password sign-in truly is not available for that account
+
+6) MESSAGE COPY
+Use clean copy such as:
+- Google: "This account was created with Google. Please continue with Google."
+- Apple: "This account was created with Apple. Please continue with Apple."
+- No account: "No account found with this email."
+
+7) DO NOT BREAK EXISTING SIGN-IN FLOWS
+Preserve:
+- normal email/password login
+- Continue with Google
+- Continue with Apple
+- forgot password flow
+- existing onboarded users
+
+DEBUGGING
+Add targeted logs only for:
+- sign-in email lookup result
+- detected provider/auth method
+- whether password auth is allowed for that account
+- returned error type to client
+
+DELIVERABLES
+1) Implement provider-aware error handling for normal email/password sign-in
+2) Make it work across iOS, Android, and Web
+3) Preserve true no-account behavior
+4) Preserve normal email/password login for password accounts
+5) List exact files changed
+6) Explain exact root cause
+7) Give a short manual test plan:
+   - Google-created account enters email in normal sign-in
+   - Apple-created account enters email in normal sign-in
+   - true nonexistent email enters normal sign-in
+   - email/password account signs in normally
+
+IMPORTANT
+- ALL PLATFORMS
+- Tight targeted fix only
+- Do not redesign auth
+- Do not break Google/Apple sign-in

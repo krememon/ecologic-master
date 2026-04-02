@@ -1212,7 +1212,42 @@ export async function setupAuth(app: Express) {
       const normalizedEmail = normalizeEmail(email);
 
       const user = await storage.getUserByEmail(normalizedEmail);
-      if (!user || !user.password) {
+
+      // ── Provider-aware login gate ───────────────────────────────────────────
+      // If the account exists but was created via Google or Apple (no password
+      // set), surface a clear "use the right provider" message instead of the
+      // generic "Invalid email or password" which misleads the user into
+      // thinking no account exists at all.
+      if (!user) {
+        console.log(`[login/email] no account found — email=${normalizedEmail}`);
+        return res.status(401).json({ message: "No account found with this email." });
+      }
+
+      if (!user.password) {
+        // Determine which provider owns this account
+        const hasGoogle = !!user.googleId;
+        const hasApple  = !!user.appleSub;
+
+        console.log(
+          `[login/email] account exists but has no password — email=${normalizedEmail}` +
+          ` googleId=${hasGoogle} appleSub=${hasApple}`
+        );
+
+        if (hasGoogle) {
+          return res.status(401).json({
+            code: "PROVIDER_GOOGLE",
+            message: "This account was created with Google. Please continue with Google.",
+          });
+        }
+
+        if (hasApple) {
+          return res.status(401).json({
+            code: "PROVIDER_APPLE",
+            message: "This account was created with Apple. Please continue with Apple.",
+          });
+        }
+
+        // Account exists, no password, no known provider — generic fallback
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
