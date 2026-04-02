@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import { appleProductIdToPlanKey } from "@shared/subscriptionPlans";
 import {
   isNativeIos,
   isNativeAndroid,
@@ -17,6 +18,7 @@ import {
   restoreApplePurchases,
   restoreGooglePlayPurchases,
   type IapProduct,
+  type ApplePurchaseResult,
 } from "@/lib/nativeIap";
 
 const PLAN_ORDER: PlanKey[] = ["starter", "team", "pro", "scale"];
@@ -174,14 +176,30 @@ export default function OnboardingSubscription() {
     console.log("[onboarding-sub] Apple purchase started — productId:", appleProductId);
 
     try {
-      let jws: string;
+      let result: ApplePurchaseResult;
       try {
-        jws = await purchaseAppleSubscription(appleProductId);
+        result = await purchaseAppleSubscription(appleProductId);
+        console.log(
+          `[onboarding-sub] Apple JWS obtained — actualProductId=${result.actualProductId}` +
+          ` (clicked=${appleProductId}) length=${result.jwsTransaction.length}`
+        );
       } catch (err: any) {
         console.error("[onboarding-sub] Apple purchase failed:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
-      await finishNativePurchase("apple", { jwsTransaction: jws }, "onboarding-sub/apple", selectedPlanKey);
+
+      // Always derive expectedPlanKey from the actual entitlement — never
+      // force the clicked planKey when Apple returned a different product.
+      const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
+      if (result.actualProductId !== appleProductId) {
+        console.log(
+          `[onboarding-sub] entitlement mismatch — clicked=${appleProductId} (plan=${selectedPlanKey})` +
+          ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
+          ` — validating as ${effectivePlanKey}`
+        );
+      }
+
+      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "onboarding-sub/apple", effectivePlanKey);
     } catch (err: any) {
       console.error("[onboarding-sub] Apple purchase error:", err.message);
       setIsLoading(false);

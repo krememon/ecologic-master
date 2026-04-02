@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import { appleProductIdToPlanKey } from "@shared/subscriptionPlans";
 import {
   isNativeIos,
   isNativeAndroid,
@@ -21,6 +22,7 @@ import {
   purchaseAppleSubscription,
   purchaseGooglePlaySubscription,
   type IapProduct,
+  type ApplePurchaseResult,
 } from "@/lib/nativeIap";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -130,8 +132,19 @@ export default function UpgradePlan() {
 
     try {
       if (nativeIos) {
-        const jws = await purchaseAppleSubscription(plan.appleProductId);
-        await finishNativePurchase("apple", { jwsTransaction: jws }, planKey);
+        const result: ApplePurchaseResult = await purchaseAppleSubscription(plan.appleProductId);
+        // Derive expectedPlanKey from the actual chosen entitlement, not the
+        // clicked plan. Apple may return a different group member as the active
+        // subscription (e.g. scale when team is clicked).
+        const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? planKey;
+        if (result.actualProductId !== plan.appleProductId) {
+          console.log(
+            `[upgrade-plan] entitlement mismatch — clicked=${plan.appleProductId} (plan=${planKey})` +
+            ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
+            ` — validating as ${effectivePlanKey}`
+          );
+        }
+        await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, effectivePlanKey);
 
       } else if (nativeAndroid) {
         const result = await purchaseGooglePlaySubscription(plan.googlePlayProductId);

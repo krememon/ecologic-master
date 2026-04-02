@@ -40,6 +40,20 @@ export function isNativeAndroid(): boolean {
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
+/**
+ * Result of a successful Apple purchase or restore.
+ *
+ * `actualProductId` is the productIdentifier of the CHOSEN live entitlement —
+ * which may differ from the productId the user clicked (Apple subscription
+ * group mechanics). Callers MUST derive expectedPlanKey from actualProductId,
+ * NOT from the clicked button, so the backend validates the real entitlement.
+ */
+export interface ApplePurchaseResult {
+  jwsTransaction: string;
+  /** The Apple productIdentifier of the chosen entitlement (may ≠ clicked product). */
+  actualProductId: string;
+}
+
 /** A store product (App Store or Google Play) mapped to an EcoLogic plan. */
 export interface IapProduct {
   identifier: string;      // Store product ID, e.g. "ecologic_team_monthly"
@@ -110,22 +124,36 @@ export async function loadAppleProducts(): Promise<IapProduct[]> {
 /**
  * Trigger the native Apple purchase sheet for the given product ID.
  *
- * Resolves with the StoreKit 2 JWS transaction string on success.
- * Throws if the purchase is cancelled, fails, or JWS is missing.
+ * Returns `{ jwsTransaction, actualProductId }` where `actualProductId` is
+ * the productIdentifier of the CHOSEN live entitlement — which may differ from
+ * `productId` (the clicked button) when the user is in an Apple subscription
+ * group and a different plan is currently active.
  *
- * ── Upgrade safety ─────────────────────────────────────────────────────────
- * When upgrading within the same Apple subscription group (e.g. starter →
- * team), the `transaction.jwsRepresentation` returned directly by
- * `purchaseProduct` may contain the OLD subscription's JWS — because Apple
- * processes the group upgrade server-side and the callback can reflect the
- * original entitlement.
+ * Callers MUST use `actualProductId` to derive `expectedPlanKey` for the
+ * backend — never send the clicked planKey when the actual entitlement is a
+ * different product. The backend derives plan from the JWS productId; forcing a
+ * different `expectedPlanKey` activates the deferred-downgrade path which may
+ * write the wrong expiry to the DB.
  *
- * Fix: after purchase, call getPurchases() and look for the current
- * entitlement with productIdentifier === targetProductId. Use THAT JWS so
- * the backend validates the new plan, not the old one. The direct
- * transaction JWS is kept as a fallback.
+ * ── Entitlement selection (ranked) ───────────────────────────────────────────
+ * When `purchaseProduct()` returns a different productId (group-level
+ * deferred change), we call `getPurchases()` and rank all known EcoLogic
+ * entitlements:
+ *
+ *   Rank A — non-expired + exact clicked product
+ *   Rank B — non-expired + any group member + latest expiration date
+ *   Rank C — directJws from purchaseProduct() (Apple's most-recent transaction)
+ *
+ * An expired exact-match entitlement is NEVER chosen over a live different
+ * entitlement. The backend's `expiresDate` guard is a second safety net but
+ * client-side selection is the first line of defense.
+ *
+ * Expiration detection uses `(tx as any).expirationDate` (StoreKit 2 field
+ * exposed by @capgo/native-purchases). If the field is absent or zero, the
+ * entitlement is treated as "unknown / possibly active" and sorted to the
+ * front only if no other candidate has a known future expiry.
  */
-export async function purchaseAppleSubscription(productId: string): Promise<string> {
+export async function purchaseAppleSubscription(productId: string): Promise<ApplePurchaseResult> {
   console.log("[native-iap] Apple purchase started — productId:", productId);
 
   const { NativePurchases, PURCHASE_TYPE } = await import("@capgo/native-purchases");
@@ -138,81 +166,126 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
   const txProductId = (transaction as any).productIdentifier ?? "";
   const directJws = transaction.jwsRepresentation ?? null;
 
-  // ── Fast path: transaction is already for the purchased product ───────────
+  console.log(`[native-iap] Apple purchaseProduct() returned productId=${txProductId} clickedProductId=${productId} hasDirectJws=${!!directJws}`);
+
+  // ── Fast path: transaction is already for the clicked product ─────────────
   if (txProductId === productId && directJws) {
-    return directJws;
+    console.log(`[native-iap] Apple: fast path — exact product returned by StoreKit, using directJws`);
+    return { jwsTransaction: directJws, actualProductId: txProductId };
   }
 
-  // Product mismatch — Apple may be treating this as a deferred change.
-  // (App Store Connect group levels must be Scale=1 > Pro=2 > Team=3 > Starter=4
-  // for upgrades to take effect immediately.)
-  console.warn(`[native-iap] Apple: transaction productIdentifier=${txProductId} does not match purchased=${productId} — searching entitlements.`);
-
-  // ── Entitlement lookup with retry ─────────────────────────────────────────
-  // For subscription group upgrades Apple propagates the entitlement change
-  // server-side, which can take 1–5 seconds. Retry getPurchases() up to 3
-  // times (with 1.5 s delay) to give Apple time to surface the new product.
+  // ── Product mismatch — Apple is signalling a different group entitlement ──
+  // This happens when:
+  //   - The user has a higher-tier subscription (e.g. scale) and tries to buy
+  //     a lower tier (e.g. team) — Apple defers the switch and returns the
+  //     current active subscription (scale) as the live transaction.
+  //   - The user tries to buy the same plan they already have (NOP).
   //
-  // Search strategy (two passes per attempt):
-  //   Pass 1 — exact match: productIdentifier === purchased productId
-  //   Pass 2 — group match: productIdentifier is any known EcoLogic product ID
+  // Strategy: call getPurchases() to enumerate all current entitlements.
+  // Pick the one that is:
+  //   A) non-expired + exact clicked product
+  //   B) non-expired + any known EcoLogic product + latest expiry
+  //   C) directJws from purchaseProduct() (Apple's explicit answer)
   //
-  // Pass 2 handles the case where Apple returns a different group member as
-  // the active entitlement (e.g. ecologic_scale returned after purchasing
-  // ecologic_team). The server's expiry guard will then decide whether the
-  // returned JWS is still valid — no silent failures here.
-  const MAX_ATTEMPTS = 3;
-  const RETRY_DELAY_MS = 1500;
+  // NEVER pick an expired exact match over a live different entitlement.
+  console.warn(
+    `[native-iap] Apple: purchaseProduct returned ${txProductId} ≠ clicked ${productId}` +
+    ` — ranking entitlements from getPurchases()`
+  );
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+  interface RankedEntitlement {
+    pid: string;
+    jws: string;
+    expiresAtMs: number;   // 0 = unknown
+    isExact: boolean;
+    isExpired: boolean;
+  }
 
-    try {
-      const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
-      console.log(`[native-iap] Apple getPurchases attempt ${attempt + 1} — ${purchases.length} entitlement(s) found`);
-      purchases.forEach((tx: any, i: number) => {
-        console.log(`[native-iap]   [${i}] productIdentifier=${tx.productIdentifier ?? "(none)"} hasJws=${!!tx.jwsRepresentation}`);
-      });
+  const now = Date.now();
+  let rankedEntitlements: RankedEntitlement[] = [];
 
-      // Pass 1: exact product match
-      for (const tx of purchases) {
-        const pid = (tx as any).productIdentifier ?? "";
-        if (pid === productId && tx.jwsRepresentation) {
-          console.log(`[native-iap] Apple: exact entitlement found — productId=${pid}`);
-          return tx.jwsRepresentation;
-        }
+  try {
+    const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
+    console.log(`[native-iap] Apple getPurchases() returned ${purchases.length} entitlement(s):`);
+
+    for (let i = 0; i < purchases.length; i++) {
+      const tx = purchases[i] as any;
+      const pid: string = tx.productIdentifier ?? "";
+      const jws: string | null = tx.jwsRepresentation ?? null;
+
+      // Normalise the expirationDate — StoreKit 2 can return a Date object,
+      // a numeric ms timestamp, or an ISO-8601 string. Treat absent as 0 (unknown).
+      let expiresAtMs = 0;
+      const rawExpiry = tx.expirationDate ?? tx.expiresDate ?? tx.expiration_date ?? null;
+      if (rawExpiry) {
+        const parsed = typeof rawExpiry === "number" ? rawExpiry : new Date(rawExpiry).getTime();
+        if (!isNaN(parsed)) expiresAtMs = parsed;
       }
 
-      // Pass 2: any known EcoLogic subscription group member
-      // Apple sometimes returns a different group member as the active
-      // entitlement (e.g. existing scale entitlement when purchasing team).
-      // Send that JWS to the server — the expiry guard there will reject it
-      // if it has already expired, giving the user a clear error.
-      for (const tx of purchases) {
-        const pid = (tx as any).productIdentifier ?? "";
-        if (ALL_APPLE_PRODUCT_IDS.includes(pid) && tx.jwsRepresentation) {
-          console.log(`[native-iap] Apple: group-member entitlement found — productId=${pid} (purchased=${productId})`);
-          return tx.jwsRepresentation;
-        }
-      }
-    } catch (err: any) {
-      console.warn("[native-iap] Apple getPurchases failed:", err.message);
-      break;
+      const isExpired = expiresAtMs > 0 && expiresAtMs < now;
+      const isKnown = ALL_APPLE_PRODUCT_IDS.includes(pid);
+      const isExact = pid === productId;
+
+      console.log(
+        `[native-iap]   [${i}] productId=${pid} hasJws=${!!jws}` +
+        ` expiresAt=${expiresAtMs > 0 ? new Date(expiresAtMs).toISOString() : "(unknown)"}` +
+        ` expired=${isExpired} exact=${isExact} known=${isKnown}`
+      );
+
+      if (!jws || !isKnown) continue;
+      rankedEntitlements.push({ pid, jws, expiresAtMs, isExact, isExpired });
     }
+  } catch (err: any) {
+    console.warn("[native-iap] Apple getPurchases() failed:", err.message);
+    rankedEntitlements = [];
   }
 
-  // ── Last resort: direct transaction JWS ──────────────────────────────────
-  // Neither the fast path nor getPurchases() found a clean JWS for the target
-  // product. Use whatever the purchase callback gave us. The backend will
-  // verify it and log what productId it actually contains.
-  if (!directJws) {
-    throw new Error(
-      "[native-iap] Purchase completed but no JWS available (directJws missing and entitlement not found). " +
-      "Ensure you are running iOS 15+ (StoreKit 2 requirement)."
+  // ── Rank A: non-expired + exact clicked product ───────────────────────────
+  const exactActive = rankedEntitlements.find(e => e.isExact && !e.isExpired);
+  if (exactActive) {
+    console.log(
+      `[native-iap] Apple: chosen entitlement=${exactActive.pid}` +
+      ` expiresAt=${exactActive.expiresAtMs > 0 ? new Date(exactActive.expiresAtMs).toISOString() : "(unknown)"}` +
+      ` reason=exact-clicked-product-active`
     );
+    return { jwsTransaction: exactActive.jws, actualProductId: exactActive.pid };
   }
 
-  return directJws;
+  // ── Rank B: non-expired + any group member, pick latest expiry ────────────
+  const activeEntitlements = rankedEntitlements
+    .filter(e => !e.isExpired)
+    .sort((a, b) => b.expiresAtMs - a.expiresAtMs);   // latest expiry first
+
+  if (activeEntitlements.length > 0) {
+    const best = activeEntitlements[0];
+    const skippedExact = rankedEntitlements.some(e => e.isExact && e.isExpired);
+    console.log(
+      `[native-iap] Apple: chosen entitlement=${best.pid}` +
+      ` expiresAt=${best.expiresAtMs > 0 ? new Date(best.expiresAtMs).toISOString() : "(unknown)"}` +
+      ` reason=group-active-latest-expiry` +
+      (skippedExact ? ` (exact clicked ${productId} was expired — skipped)` : "")
+    );
+    return { jwsTransaction: best.jws, actualProductId: best.pid };
+  }
+
+  // ── Rank C: directJws — Apple's explicit answer from purchaseProduct() ────
+  // All getPurchases() entitlements are expired (or getPurchases failed).
+  // directJws is what Apple returned when we called purchaseProduct() —
+  // it represents the most recently processed StoreKit transaction.
+  // Let the server's expiry guard make the final call.
+  if (directJws && txProductId) {
+    console.log(
+      `[native-iap] Apple: chosen entitlement=${txProductId}` +
+      ` reason=directJws-all-getpurchases-entitlements-expired-or-unavailable`
+    );
+    return { jwsTransaction: directJws, actualProductId: txProductId };
+  }
+
+  throw new Error(
+    "[native-iap] Purchase completed but no valid JWS could be found. " +
+    "All known entitlements are expired and no direct transaction JWS is available. " +
+    "Please restore your subscription from App Store Settings."
+  );
 }
 
 // ─── APPLE — Restore ──────────────────────────────────────────────────────────

@@ -1,0 +1,118 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+We now have the real proven cause from the latest logs. This is NOT a router bug.
+
+PROVEN RUNTIME FACTS
+The logs show:
+1) The user clicks Team:
+   - selected productId: ecologic_team
+   - selected planKey: team
+
+2) StoreKit purchase result is actually returning Scale as the transaction:
+   - purchaseProduct result payload productId: ecologic_scale
+   - getPurchases shows active entitlements:
+     - ecologic_scale
+     - ecologic_pro
+     - ecologic_team
+
+3) Your client then finds the exact team entitlement and sends that JWS for validation
+
+4) Backend validation rejects it with:
+   - 422
+   - appleExpired=true
+   - expiresDate=2026-03-27T18:02:23.773Z
+   - planKey=team
+
+5) Subscription gate remains blocked afterward:
+   - active=false
+   - status=blocked
+   - plan=none
+   - currentPeriodEnd=2026-03-27T18:02:23.773Z
+
+So the real issue is:
+The app is trying to validate an EXPIRED team entitlement instead of using the ACTUAL currently active Apple entitlement/transaction being returned by StoreKit. This is why the backend correctly denies access and the app stays on paywall. :contentReference[oaicite:0]{index=0}
+
+GOAL
+On iOS, after purchase/restore, EcoLogic must use the REAL currently active Apple entitlement/transaction and validate that one. If the active entitlement is valid, subActive must become true and the user must go to dashboard/home.
+
+DO THIS EXACTLY
+
+1) FIX ENTITLEMENT SELECTION LOGIC
+Audit the native Apple purchase helper and stop prioritizing “exact clicked product” if that entitlement is expired.
+
+Current broken behavior:
+- clicked Team
+- StoreKit returns Scale transaction
+- getPurchases lists multiple entitlements
+- code forces exact Team match
+- backend rejects Team because that entitlement is expired
+
+Required behavior:
+- choose the REAL active entitlement to validate
+- prioritize an entitlement that is:
+  - isActive/subscribed
+  - not expired
+  - has the latest valid expiration
+- if exact clicked plan exists but is expired, do NOT validate that stale entitlement
+- instead validate the actually active Apple entitlement returned by StoreKit
+
+2) ADD EXPLICIT ENTITLEMENT RANKING / PICK RULES
+When multiple Apple entitlements are present, choose in this order:
+A) active + not expired + exact clicked product
+B) otherwise active + not expired + latest expiration date
+C) otherwise fail clearly
+
+Do NOT pick an expired exact match over an active different entitlement.
+
+3) LOG THE ENTITLEMENT CHOICE
+Add targeted logs:
+- all returned entitlements with:
+  - productIdentifier
+  - isActive
+  - expirationDate
+  - hasJws
+- the final chosen entitlement
+- why it was chosen
+- whether the exact clicked product was skipped because expired/inactive
+
+I want a clear line like:
+[paywall/apple] chosen entitlement=ecologic_scale reason=exact-clicked team expired, scale is active with later expiration
+
+4) FIX VALIDATION INPUT
+Pass the chosen active entitlement’s JWS into validation.
+Do NOT force expectedPlan/team if the chosen active entitlement is scale.
+Expected plan should match the actual entitlement being validated, or the backend should derive it from the JWS productId.
+
+5) BACKEND VALIDATION CHECK
+Audit POST /api/subscriptions/validate for Apple:
+- if it currently compares against expectedPlan from the client too rigidly, make sure it can validate the real entitlement being passed
+- the source of truth should be the Apple transaction/JWS productId + expiry, not stale clicked-button state
+
+6) GATE SHOULD THEN NATURALLY TURN ACTIVE
+After validating the real active entitlement:
+- billing state should write active subscription correctly
+- gate payload should become active=true
+- plan should match the actual active plan
+- router should stop sending user to /paywall
+- app should land on dashboard/home
+
+7) IMPORTANT CONTEXT
+This is likely happening because the StoreKit/Xcode test environment currently has multiple active/old entitlements in the same subscription group. The app must be robust to that and pick the correct live entitlement, not blindly the clicked one.
+
+DELIVER BACK IN THIS FORMAT
+1) Exact root cause
+2) Exact entitlement selection bug
+3) Exact files changed
+4) Which entitlement is now chosen in this test case
+5) Exact validation result after fix
+6) Exact gate payload after fix
+7) Exact final route after purchase
+8) Confirmation iOS user now lands on dashboard/home
+9) Confirmation web and Android were untouched
+
+IMPORTANT
+- IOS ONLY
+- This is not a router bug
+- Fix the Apple entitlement selection / validation input
+- Do not validate an expired exact-match entitlement if a different active entitlement exists
+- Tight targeted fix only

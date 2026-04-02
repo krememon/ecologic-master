@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle, Zap } from "lucide-react";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import { appleProductIdToPlanKey } from "@shared/subscriptionPlans";
 import { PlanSelectorChips } from "@/components/PlanSelectorChips";
 import {
   isNativeIos,
@@ -18,6 +19,7 @@ import {
   restoreApplePurchases,
   restoreGooglePlayPurchases,
   type IapProduct,
+  type ApplePurchaseResult,
 } from "@/lib/nativeIap";
 
 const PLAN_ORDER: PlanKey[] = ["starter", "team", "pro", "scale"];
@@ -198,17 +200,34 @@ export default function Paywall() {
     console.log("[paywall/apple] selected planKey:", selectedPlanKey);
 
     try {
-      let jws: string;
+      let result: ApplePurchaseResult;
       try {
         console.log("[paywall/apple] calling purchaseAppleSubscription …");
-        jws = await purchaseAppleSubscription(appleProductId);
-        console.log("[paywall/apple] JWS obtained — present=true length:", jws.length);
+        result = await purchaseAppleSubscription(appleProductId);
+        console.log(
+          `[paywall/apple] JWS obtained — actualProductId=${result.actualProductId}` +
+          ` (clicked=${appleProductId}) length=${result.jwsTransaction.length}`
+        );
       } catch (err: any) {
         console.error("[paywall/apple] native purchase FAILED:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
+
+      // Derive expectedPlanKey from the ACTUAL chosen entitlement's productId.
+      // If the chosen entitlement differs from the clicked product (e.g. scale
+      // returned instead of team), we tell the backend to validate for scale —
+      // never force team when the live Apple entitlement is scale.
+      const effectivePlanKey = appleProductIdToPlanKey[result.actualProductId] ?? selectedPlanKey;
+      if (result.actualProductId !== appleProductId) {
+        console.log(
+          `[paywall/apple] entitlement mismatch — clicked=${appleProductId} (plan=${selectedPlanKey})` +
+          ` chosen=${result.actualProductId} (plan=${effectivePlanKey})` +
+          ` — validating as ${effectivePlanKey}`
+        );
+      }
+
       console.log("[paywall/apple] firing validation …");
-      await finishNativePurchase("apple", { jwsTransaction: jws }, "paywall/apple", selectedPlanKey);
+      await finishNativePurchase("apple", { jwsTransaction: result.jwsTransaction }, "paywall/apple", effectivePlanKey);
       // Navigation happens inside finishNativePurchase after billing state is confirmed fresh.
       console.log("[paywall/apple] ── purchase COMPLETE ──");
     } catch (err: any) {
