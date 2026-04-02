@@ -97,14 +97,13 @@ export default function PublicUnsubscribe() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
       <div className="w-full max-w-sm mx-auto">
 
-        {/* Branding — outside the card, matching the auth page layout */}
-        <div className="text-center mb-8">
+        {/* Branding — outside the card */}
+        <div className="text-center mb-4">
           <img
             src={ecologicWordmark}
             alt="EcoLogic"
-            className="w-full max-w-[280px] h-auto mx-auto mb-1"
+            className="w-full max-w-[280px] h-auto mx-auto"
           />
-          <p className="text-slate-500 text-sm">Professional contractor management</p>
         </div>
 
         {/* Action card */}
