@@ -162,7 +162,6 @@ export default function TermsOfService() {
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">EcoLogic LLC</p>
             <p>support@ecologicc.com</p>
-            <p>631-379-5827</p>
           </div>
         </div>
       </div>
