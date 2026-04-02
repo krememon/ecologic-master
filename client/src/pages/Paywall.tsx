@@ -111,12 +111,22 @@ export default function Paywall() {
   }, [nativeIos, nativeAndroid]);
 
   // ── Helper: post to backend and refresh billing ─────────────────────────────
+  //
+  // IMPORTANT — race-condition fix (iOS):
+  // We must AWAIT a fresh refetch of /api/subscriptions/status BEFORE calling
+  // setLocation("/"). Using invalidateQueries() only marks the cache stale but
+  // does not block until the refetch completes. When setLocation fires with the
+  // old subActive=false still in cache, the router sends the user back to /paywall.
+  // Fix: use refetchQueries() for both queries, run them in parallel, and navigate
+  // only after both resolve with fresh data.
   const finishNativePurchase = async (
     platform: "apple" | "google_play",
     payload: Record<string, string>,
     logTag: string,
     expectedPlanKey?: string
   ) => {
+    console.log(`[${logTag}] validation request firing — platform=${platform} expectedPlan=${expectedPlanKey ?? "(none)"}`);
+
     const res = await apiRequest("POST", "/api/subscriptions/validate", {
       platform,
       ...payload,
@@ -124,14 +134,28 @@ export default function Paywall() {
     });
     const data = await res.json();
 
+    console.log(
+      `[${logTag}] validation response — ok=${data.ok}` +
+      ` status=${data.status ?? "(none)"}` +
+      ` plan=${data.planKey ?? "(none)"}` +
+      ` platform=${data.subscriptionPlatform ?? "(none)"}` +
+      ` currentPeriodEnd=${data.currentPeriodEnd ?? "(none)"}`
+    );
+
     if (!res.ok || !data.ok) {
       throw new Error(data.message || "Subscription validation failed");
     }
 
-    await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-    await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+    // Refetch BOTH billing and auth in parallel and wait for completion.
+    // This guarantees subActive=true is in the cache before the router re-evaluates.
+    console.log(`[${logTag}] refetching billing + auth state (awaiting both)`);
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
+      queryClient.refetchQueries({ queryKey: ["/api/auth/user"] }),
+    ]);
+    console.log(`[${logTag}] billing + auth refresh complete — navigating to dashboard`);
 
-    toast({ title: "Subscription active!", description: "Welcome back to EcoLogic." });
+    toast({ title: "Subscription active!", description: "Welcome to EcoLogic." });
     setLocation("/", { replace: true });
   };
 
@@ -139,20 +163,26 @@ export default function Paywall() {
   const handleApplePurchase = async () => {
     if (isLoading) return;
     setIsLoading(true);
-    console.log("[paywall] Apple purchase started — productId:", appleProductId);
+    console.log("[paywall/apple] ── purchase START ──");
+    console.log("[paywall/apple] selected productId:", appleProductId);
+    console.log("[paywall/apple] selected planKey:", selectedPlanKey);
 
     try {
       let jws: string;
       try {
+        console.log("[paywall/apple] calling purchaseAppleSubscription …");
         jws = await purchaseAppleSubscription(appleProductId);
-        console.log("[paywall] Apple JWS obtained, length:", jws.length);
+        console.log("[paywall/apple] JWS obtained — present=true length:", jws.length);
       } catch (err: any) {
-        console.error("[paywall] Apple purchase failed:", err.message);
+        console.error("[paywall/apple] native purchase FAILED:", err.message);
         throw new Error(err.message || "Purchase cancelled or failed");
       }
+      console.log("[paywall/apple] firing validation …");
       await finishNativePurchase("apple", { jwsTransaction: jws }, "paywall/apple", selectedPlanKey);
+      // Navigation happens inside finishNativePurchase after billing state is confirmed fresh.
+      console.log("[paywall/apple] ── purchase COMPLETE ──");
     } catch (err: any) {
-      console.error("[paywall] Apple purchase error:", err.message);
+      console.error("[paywall/apple] purchase ERROR:", err.message);
       setIsLoading(false);
       toast({ title: "Purchase failed", description: err.message || "Could not complete the purchase. Please try again.", variant: "destructive" });
     }

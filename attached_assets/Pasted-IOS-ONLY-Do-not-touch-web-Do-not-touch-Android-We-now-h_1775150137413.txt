@@ -1,0 +1,123 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+We now have real logs for the post-purchase failure, and this is NOT a payment-processing failure. Purchase setup loads fine, but the app stays/reroutes to the paywall instead of entering the dashboard.
+
+PROVEN LOG EVIDENCE
+Right after purchase flow / paywall state, the app is still resolving:
+
+hasCompany=true
+companyId=553
+role=OWNER
+onboardingChoice=owner
+onboardingCompleted=true
+subActive=false
+
+And routing does:
+→ /paywall
+
+So the problem is:
+after successful iOS purchase, the app is NOT updating subscription-active state quickly/correctly enough for routing, so the router keeps treating the user as unsubscribed and sends them back to /paywall. :contentReference[oaicite:0]{index=0}
+
+GOAL
+After a successful iOS subscription purchase:
+1) purchase completes
+2) receipt / transaction is validated successfully
+3) EcoLogic subscription state updates to active
+4) app refreshes auth/billing/subscription state
+5) router sends user to dashboard/home instead of back to /paywall
+
+IMPORTANT
+Do NOT paper over this by blindly forcing navigation to dashboard without confirming subscription state is actually activated.
+Fix the state update / validation / post-purchase refresh path correctly.
+
+DO THIS EXACTLY
+
+1) TRACE THE IOS PURCHASE SUCCESS PATH END-TO-END
+Audit the full path after tapping purchase on iOS:
+- native purchase success callback
+- transaction/JWS payload received
+- client validation call to backend
+- backend subscription validation handler
+- database/company subscription update
+- client cache invalidation/refetch
+- routing reevaluation after purchase
+
+I need the exact point where subActive fails to flip to true.
+
+2) LOG THE PURCHASE SUCCESS CALLBACK
+Add targeted logs around the actual purchase completion flow:
+- selected product id
+- native purchase success payload received yes/no
+- JWS / transaction payload present yes/no
+- validation request fired yes/no
+- validation response success/failure
+- returned subscription status / plan / period end
+- whether post-purchase navigate/refresh runs
+
+3) VERIFY BACKEND VALIDATION ACTUALLY UPDATES BILLING STATE
+Inspect the backend Apple validation route.
+Confirm after successful validation it updates the real source of truth used by billing resolver, including whatever fields are required for:
+- subscriptionStatus
+- subscriptionPlan
+- platform=apple
+- currentPeriodEnd / expiresAt
+- transaction/subscription ids if used
+- company/user linkage
+
+Then confirm billing resolver would truly return subActive=true for that user/company immediately after validation.
+
+4) VERIFY CLIENT REFRESH AFTER PURCHASE
+This is very likely part of the bug.
+After successful purchase/validation:
+- invalidate/refetch auth user
+- invalidate/refetch billing/subscription queries
+- invalidate/refetch any shell gate/paywall queries
+- force routing reevaluation only after fresh billing state is loaded
+
+Right now it looks like the app is still using stale subActive=false and remains on /paywall.
+
+5) CHECK FOR RACE CONDITION
+Possible bug:
+- purchase succeeds
+- validation succeeds
+- but router checks old subActive=false before refetch completes
+- app stays on paywall
+Audit and fix this sequence carefully.
+
+6) VERIFY IOS PAYWALL SUCCESS HANDLER
+Inspect the iOS paywall component logic specifically:
+- what happens on successful purchase
+- whether it only shows toast/logs but never refreshes billing state
+- whether it navigates too early
+- whether it depends on app resume instead of immediate refetch
+- whether Google-created users hit a different post-purchase path
+
+7) EXPECTED FINAL BEHAVIOR
+After a successful iOS subscription purchase:
+- subActive should become true
+- paywall should no longer be the chosen route
+- app should enter protected shell
+- user should land on dashboard/home
+
+8) DEBUGGING OUTPUT I WANT
+Please provide logs proving:
+- purchase success callback fired
+- backend validation returned success
+- billing state after validation is active
+- routing re-ran with subActive=true
+- final route is dashboard/home
+
+DELIVER BACK IN THIS FORMAT
+1) Exact root cause
+2) Exact point where subActive stayed false
+3) Exact files changed
+4) Exact validation result after purchase
+5) Exact updated billing/auth payload after fix
+6) Exact final route after purchase
+7) Confirmation existing iOS users can still purchase normally
+8) Confirmation web and Android were untouched
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- Fix post-purchase state update, not just superficial navigation
