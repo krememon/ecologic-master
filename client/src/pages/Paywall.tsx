@@ -143,18 +143,48 @@ export default function Paywall() {
     );
 
     if (!res.ok || !data.ok) {
+      // Surface Apple-specific expired-subscription error with a clear action message
+      if (data.appleExpired) {
+        console.error(
+          `[${logTag}] Apple JWS EXPIRED on server — expiresDate=${data.expiresDate ?? "(none)"}` +
+          ` planKey=${data.planKey ?? "(none)"}`
+        );
+        throw new Error(data.message || "Apple subscription expired. Please resubscribe in App Store Settings, then tap Restore Purchases.");
+      }
       throw new Error(data.message || "Subscription validation failed");
     }
 
     // Refetch BOTH billing and auth in parallel and wait for completion.
-    // This guarantees subActive=true is in the cache before the router re-evaluates.
+    // This guarantees fresh subActive value is in the cache before we check
+    // or navigate — eliminating the stale-cache race condition.
     console.log(`[${logTag}] refetching billing + auth state (awaiting both)`);
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ["/api/subscriptions/status"] }),
       queryClient.refetchQueries({ queryKey: ["/api/auth/user"] }),
     ]);
-    console.log(`[${logTag}] billing + auth refresh complete — navigating to dashboard`);
 
+    // Verify the gate is actually active after the fresh refetch.
+    // Do NOT navigate if subActive is still false — that means the subscription
+    // state didn't propagate correctly and we'd just loop back to /paywall.
+    const subEntries = queryClient.getQueriesData<{ active: boolean; status: string; planKey: string | null }>(
+      { queryKey: ["/api/subscriptions/status"] }
+    );
+    const freshSub = subEntries.length > 0 ? subEntries[0][1] : null;
+    console.log(
+      `[${logTag}] gate check after refetch — active=${freshSub?.active ?? "null"}` +
+      ` status=${freshSub?.status ?? "(none)"}` +
+      ` plan=${freshSub?.planKey ?? "(none)"}`
+    );
+
+    if (!freshSub?.active) {
+      console.error(`[${logTag}] Gate still BLOCKED after refetch (status=${freshSub?.status ?? "unknown"}) — aborting navigation`);
+      throw new Error(
+        `Subscription validation succeeded but billing access is still blocked (${freshSub?.status ?? "unknown"}). ` +
+        `Please try Restore Purchases or check your Apple Subscription settings.`
+      );
+    }
+
+    console.log(`[${logTag}] billing + auth refresh confirmed active — navigating to dashboard`);
     toast({ title: "Subscription active!", description: "Welcome to EcoLogic." });
     setLocation("/", { replace: true });
   };

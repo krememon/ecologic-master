@@ -74,6 +74,17 @@ export function useSubscriptionGate({
         throw new Error(`${res.status}: ${res.statusText}`);
       }
       const json = await res.json() as SubscriptionStatus;
+      // Full payload log — shows every field the billing resolver returned
+      console.log(
+        `[ECOLOGIC-SUB] [gate] payload — platform=${platform}` +
+        ` active=${json.active}` +
+        ` status=${json.status}` +
+        ` plan=${json.planKey ?? "none"}` +
+        ` currentPeriodEnd=${json.currentPeriodEnd ?? "null"}` +
+        ` reason=${json.reason ?? "(none)"}` +
+        ` bypass=${json.bypass ?? false}` +
+        ` elapsed=${elapsed}ms`
+      );
       if (json.active) {
         console.log(`[ECOLOGIC-SUB] [gate] ACCESS GRANTED — platform=${platform} status=${json.status} plan=${json.planKey ?? "none"} bypass=${json.bypass ?? false} elapsed=${elapsed}ms`);
       } else {

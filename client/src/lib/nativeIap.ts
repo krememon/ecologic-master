@@ -152,6 +152,15 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
   // For subscription group upgrades Apple propagates the entitlement change
   // server-side, which can take 1–5 seconds. Retry getPurchases() up to 3
   // times (with 1.5 s delay) to give Apple time to surface the new product.
+  //
+  // Search strategy (two passes per attempt):
+  //   Pass 1 — exact match: productIdentifier === purchased productId
+  //   Pass 2 — group match: productIdentifier is any known EcoLogic product ID
+  //
+  // Pass 2 handles the case where Apple returns a different group member as
+  // the active entitlement (e.g. ecologic_scale returned after purchasing
+  // ecologic_team). The server's expiry guard will then decide whether the
+  // returned JWS is still valid — no silent failures here.
   const MAX_ATTEMPTS = 3;
   const RETRY_DELAY_MS = 1500;
 
@@ -160,10 +169,29 @@ export async function purchaseAppleSubscription(productId: string): Promise<stri
 
     try {
       const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
+      console.log(`[native-iap] Apple getPurchases attempt ${attempt + 1} — ${purchases.length} entitlement(s) found`);
+      purchases.forEach((tx: any, i: number) => {
+        console.log(`[native-iap]   [${i}] productIdentifier=${tx.productIdentifier ?? "(none)"} hasJws=${!!tx.jwsRepresentation}`);
+      });
 
+      // Pass 1: exact product match
       for (const tx of purchases) {
         const pid = (tx as any).productIdentifier ?? "";
         if (pid === productId && tx.jwsRepresentation) {
+          console.log(`[native-iap] Apple: exact entitlement found — productId=${pid}`);
+          return tx.jwsRepresentation;
+        }
+      }
+
+      // Pass 2: any known EcoLogic subscription group member
+      // Apple sometimes returns a different group member as the active
+      // entitlement (e.g. existing scale entitlement when purchasing team).
+      // Send that JWS to the server — the expiry guard there will reject it
+      // if it has already expired, giving the user a clear error.
+      for (const tx of purchases) {
+        const pid = (tx as any).productIdentifier ?? "";
+        if (ALL_APPLE_PRODUCT_IDS.includes(pid) && tx.jwsRepresentation) {
+          console.log(`[native-iap] Apple: group-member entitlement found — productId=${pid} (purchased=${productId})`);
           return tx.jwsRepresentation;
         }
       }

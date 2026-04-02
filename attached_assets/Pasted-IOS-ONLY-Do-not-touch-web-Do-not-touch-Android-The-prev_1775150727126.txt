@@ -1,0 +1,126 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+The previous fix was NOT the real fix. The new logs prove the app is validating the Apple purchase successfully, but the subscription gate still resolves to blocked afterward.
+
+PROVEN RUNTIME EVIDENCE
+The logs show all of this in one flow:
+
+1) Purchase succeeds
+- [paywall/apple] validation response — ok=true status=active plan=team platform=apple currentPeriodEnd=...
+2) But the gate still resolves blocked immediately after
+- [ECOLOGIC-SUB] [gate] ACCESS DENIED — platform=native status=blocked ...
+- [ECOLOGIC-SUB] [gate] resolved — platform=native active=false source=blocked plan=none stillLoading=false
+3) Router therefore keeps sending the user to /paywall
+- [app-router] ... subActive=false → /paywall
+
+There is also a very important mismatch:
+- selected productId: ecologic_team
+- but native purchase result payload says productId: ecologic_scale
+- warning: Apple transaction productIdentifier=ecologic_scale does not match purchased=ecologic_team — searching entitlements
+
+So this is NOT just a stale-query issue anymore. The flow is validating one plan expectation while StoreKit is returning a different active entitlement, and the subscription gate/source-of-truth is still ending up blocked. :contentReference[oaicite:0]{index=0}
+
+GOAL
+After successful iOS purchase, the real active Apple entitlement must be recognized by the billing gate immediately, and the app must route to dashboard/home instead of back to /paywall.
+
+DO THIS EXACTLY
+
+1) TRACE THE REAL BILLING GATE SOURCE OF TRUTH
+Audit exactly what the subscription gate uses on iOS native to decide:
+- active / blocked
+- source
+- plan
+- currentPeriodEnd
+
+I need the exact fetch/endpoint/resolver path that produced:
+active=false source=blocked plan=none
+EVEN AFTER Apple validation returned:
+ok=true status=active plan=team
+
+2) LOG THE GATE FETCH RESPONSE PAYLOAD
+Add targeted logs for the exact gate fetch after purchase:
+- raw response body
+- active
+- status
+- source
+- plan
+- currentPeriodEnd
+- companyId
+- platform
+- any apple-specific fields
+I want the literal payload that is causing the gate to say blocked.
+
+3) RECONCILE VALIDATION RESULT VS GATE RESULT
+We now have two conflicting truths:
+A) paywall validation says success/active
+B) gate says blocked
+Find why those disagree.
+
+Possible causes to inspect:
+- paywall validation writes company subscription state to one place, but gate reads another
+- gate is still reading stale company/user linkage
+- apple validation path writes active plan, but gate resolver rejects it because of missing field(s)
+- companyId/userId mismatch on the validation write
+- trial/currentPeriodEnd format mismatch causing resolver to treat it as expired
+- native gate endpoint reading old cached state or wrong company record
+
+4) FIX THE PRODUCT / ENTITLEMENT MISMATCH HANDLING
+The logs show:
+- user selected ecologic_team
+- StoreKit purchase result resolved with ecologic_scale entitlement/product
+That is a major clue.
+
+Audit the native Apple purchase helper:
+- how product is selected
+- how returned transaction/entitlement is interpreted
+- how getPurchases fallback chooses the “active” subscription
+- whether it is picking the wrong entitlement from the subscription group
+- whether sandbox/Xcode StoreKit is returning the highest-ranked or existing active entitlement
+- whether expectedPlan should come from the actual returned entitlement rather than the clicked product id
+
+Make the validation path use the REAL active purchased entitlement from Apple, not just the clicked button assumption, if that is what the platform is returning.
+
+5) VERIFY BACKEND APPLE VALIDATION WRITE
+Inspect POST /api/subscriptions/validate for Apple and log:
+- company being updated
+- user being updated if relevant
+- plan written
+- status written
+- platform written
+- currentPeriodEnd written
+- final DB row after write
+
+Then compare that with what the billing gate reads.
+
+6) VERIFY ROUTING ONLY AFTER GATE IS ACTUALLY ACTIVE
+Do not navigate to dashboard just because validation returned ok=true.
+Only navigate after the gate/source-of-truth used by the router actually resolves:
+- active=true
+- source=apple (or equivalent)
+- plan=<real active plan>
+
+7) TEST WITH THE REAL ACTIVE ENTITLEMENT
+After the fix, prove this exact sequence:
+- purchase success
+- returned Apple entitlement identified correctly
+- backend validation writes correct active plan/state
+- gate fetch returns active=true
+- router sees subActive=true
+- app lands on dashboard/home
+
+DELIVER BACK IN THIS FORMAT
+1) Exact root cause
+2) Why validation returned active while the gate still returned blocked
+3) Whether the clicked product vs returned entitlement mismatch was part of the bug
+4) Exact files changed
+5) Exact gate payload after fix
+6) Exact final route after purchase
+7) Confirmation iOS user now lands on dashboard/home
+8) Confirmation web and Android were untouched
+
+IMPORTANT
+- IOS ONLY
+- This is NOT just a refetch timing issue anymore
+- Start from the contradiction: validation says active, gate says blocked
+- Also investigate the ecologic_team vs ecologic_scale mismatch
+- Tight targeted fix only

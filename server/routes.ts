@@ -4927,6 +4927,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const expectedPlanKey = typeof req.body.expectedPlanKey === 'string' ? req.body.expectedPlanKey : null;
 
+        // ── Expiry guard — reject JWS whose expiresDate is already in the past ──
+        // The JWS signature is cryptographically valid, but the subscription
+        // period the transaction describes has already ended. Writing this to
+        // the DB would set currentPeriodEnd to a past date, which the billing
+        // resolver correctly treats as subscription_expired → blocked.
+        // Returning ok:true despite an expired expiresDate creates the
+        // contradiction where validation says "active" but the gate says
+        // "blocked".  Reject here instead with a clear error so the client
+        // can surface a meaningful message to the user.
+        const expiresMs = txInfo.expiresDate ? new Date(txInfo.expiresDate).getTime() : 0;
+        const nowMs = Date.now();
+        if (expiresMs && expiresMs < nowMs) {
+          console.warn(
+            `[iap-validate] Apple JWS EXPIRED — expiresDate=${txInfo.expiresDate.toISOString()}` +
+            ` now=${new Date(nowMs).toISOString()}` +
+            ` planKey=${txInfo.planKey} company=${company.id}` +
+            ` — rejecting without DB write`
+          );
+          return res.status(422).json({
+            ok: false,
+            appleExpired: true,
+            expiresDate: txInfo.expiresDate.toISOString(),
+            planKey: txInfo.planKey,
+            message:
+              'The Apple subscription in this transaction has already expired. ' +
+              'Please open App Store → Tap your account → Subscriptions → EcoLogic → Resubscribe, ' +
+              'then tap Restore Purchases inside the app.',
+          });
+        }
+        console.log(
+          `[iap-validate] Apple JWS expiry OK — expiresDate=${txInfo.expiresDate.toISOString()}` +
+          ` (${Math.round((expiresMs - nowMs) / 86400000)}d from now)` +
+          ` planKey=${txInfo.planKey} company=${company.id}`
+        );
+
         // ── Deferred-downgrade detection ─────────────────────────────────────
         // Apple processes subscription group DOWNGRADES at the end of the
         // current billing period. When a user "purchases" a lower-tier plan
