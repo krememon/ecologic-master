@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, Send, Mail, Cloud, Check } from "lucide-react";
 import { format } from "date-fns";
 import { fmtDate, fmtDateTime } from "@/lib/dateUtils";
 
@@ -118,9 +118,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
 
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendMode, setSendMode] = useState<'email' | 'text'>('email');
   const [emailValue, setEmailValue] = useState('');
-  const [phoneValue, setPhoneValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isSyncingQbo, setIsSyncingQbo] = useState(false);
   const [qboSyncResult, setQboSyncResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -152,48 +150,21 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     },
   });
 
-  const formatPhoneNumber = (value: string): string => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-  };
-
   const openSendDialog = () => {
     const customerEmail = invoice?.customer?.email || invoice?.client?.email || '';
-    const customerPhone = invoice?.customer?.phone || '';
-    
     setEmailValue(customerEmail);
-    setPhoneValue(formatPhoneNumber(customerPhone));
-    
-    if (customerEmail) {
-      setSendMode('email');
-    } else if (customerPhone) {
-      setSendMode('text');
-    } else {
-      setSendMode('email');
-    }
-    
     setIsSendDialogOpen(true);
   };
 
   const handleSendInvoice = async () => {
-    const value = sendMode === 'email' ? emailValue.trim() : phoneValue.replace(/\D/g, '');
+    const value = emailValue.trim();
     if (!value) return;
     
-    console.log("[SendInvoice] sending", { invoiceId, mode: sendMode, to: value });
+    console.log("[SendInvoice] sending email", { invoiceId, to: value });
     
     setIsSending(true);
     try {
-      const endpoint = sendMode === 'email' 
-        ? `/api/invoices/${invoiceId}/send/email`
-        : `/api/invoices/${invoiceId}/send/text`;
-      
-      const payload = sendMode === 'email' 
-        ? { email: value }
-        : { phone: value };
-      
-      const res = await apiRequest('POST', endpoint, payload);
+      const res = await apiRequest('POST', `/api/invoices/${invoiceId}/send/email`, { email: value });
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -211,7 +182,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       setIsSendDialogOpen(false);
       setEmailValue('');
-      setPhoneValue('');
     } catch (error: any) {
       console.error("[SendInvoice] error", error);
       toast({ title: error.message || "Failed to send invoice", variant: "destructive" });
@@ -258,9 +228,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     }
   };
 
-  const hasContactInfo = !!(invoice?.customer?.email || invoice?.client?.email || invoice?.customer?.phone);
+  const hasContactInfo = !!(invoice?.customer?.email || invoice?.client?.email);
   const canSendEmail = !!(emailValue.trim() && emailValue.includes('@'));
-  const canSendText = !!(phoneValue.replace(/\D/g, '').length >= 10);
 
   if (isLoading || authLoading) {
     return (
@@ -713,7 +682,6 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         if (!open) {
           setIsSendDialogOpen(false);
           setEmailValue('');
-          setPhoneValue('');
         }
       }}>
         <DialogContent>
@@ -727,67 +695,22 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
               {invoice.dueDate && ` Due: ${fmtDate(invoice.dueDate)}`}
             </DialogDescription>
           </DialogHeader>
-          
-          {/* Email / Text Toggle */}
-          <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-100 dark:bg-slate-800">
-            <button
-              type="button"
-              onClick={() => setSendMode('email')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                sendMode === 'email'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              <Mail className="h-4 w-4" />
-              Email
-            </button>
-            <button
-              type="button"
-              onClick={() => setSendMode('text')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                sendMode === 'text'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              <MessageSquare className="h-4 w-4" />
-              Text
-            </button>
-          </div>
 
           <div className="py-2">
             {!hasContactInfo && (
               <p className="text-sm text-orange-600 dark:text-orange-400 mb-3">
-                No contact info on file. Please enter contact details below.
+                No email on file. Please enter an email address below.
               </p>
             )}
-            
-            {sendMode === 'email' ? (
-              <>
-                <Label htmlFor="emailInput">Email Address</Label>
-                <Input
-                  id="emailInput"
-                  type="email"
-                  placeholder="customer@example.com"
-                  value={emailValue}
-                  onChange={(e) => setEmailValue(e.target.value)}
-                  className="mt-2"
-                />
-              </>
-            ) : (
-              <>
-                <Label htmlFor="phoneInput">Phone Number</Label>
-                <Input
-                  id="phoneInput"
-                  type="tel"
-                  placeholder="555-123-4567"
-                  value={phoneValue}
-                  onChange={(e) => setPhoneValue(formatPhoneNumber(e.target.value))}
-                  className="mt-2"
-                />
-              </>
-            )}
+            <Label htmlFor="emailInput">Email Address</Label>
+            <Input
+              id="emailInput"
+              type="email"
+              placeholder="customer@example.com"
+              value={emailValue}
+              onChange={(e) => setEmailValue(e.target.value)}
+              className="mt-2"
+            />
           </div>
           
           <DialogFooter>
@@ -796,14 +719,13 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
               onClick={() => {
                 setIsSendDialogOpen(false);
                 setEmailValue('');
-                setPhoneValue('');
               }}
             >
               Cancel
             </Button>
             <Button 
               onClick={handleSendInvoice}
-              disabled={isSending || (sendMode === 'email' ? !canSendEmail : !canSendText)}
+              disabled={isSending || !canSendEmail}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isSending ? (
