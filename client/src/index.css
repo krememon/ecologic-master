@@ -36,7 +36,8 @@ html .width-before-scroll-bar {
   display: none;              /* Chrome/Safari */
 }
 
-/* Lock page scroll when chat screen is active */
+/* Lock page scroll when chat screen is active — must apply to html AND body on iOS */
+html.chat-screen-active,
 body.chat-screen-active {
   overflow: hidden !important;
   height: 100% !important;

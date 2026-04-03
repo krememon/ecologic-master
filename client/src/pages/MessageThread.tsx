@@ -636,20 +636,19 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // Lock body scroll on mount, unlock on unmount (prevents page scroll with many messages)
+  // Lock page scroll on mount — html + body must both be locked for iOS WebView
   useEffect(() => {
+    document.documentElement.classList.add('chat-screen-active');
     document.body.classList.add('chat-screen-active');
     return () => {
+      document.documentElement.classList.remove('chat-screen-active');
       document.body.classList.remove('chat-screen-active');
     };
   }, []);
 
   // Show header and composer immediately, even while loading
   return (
-    <div 
-      className="flex flex-col bg-background overflow-hidden h-full"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-    >
+    <div className="flex flex-col bg-background overflow-hidden h-full">
       {/* Header - fixed height, with iOS safe area top padding */}
       <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card dmThreadHeader">
         <Button
@@ -696,6 +695,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         style={{
           scrollBehavior: 'auto',
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -766,8 +766,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer - pinned at bottom */}
-      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card">
+      {/* Composer - pinned at bottom; safe-area padding extends bg to screen edge on iOS */}
+      <div
+        className="flex-shrink-0 px-3 pt-2 border-t border-border bg-card"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}
+      >
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}

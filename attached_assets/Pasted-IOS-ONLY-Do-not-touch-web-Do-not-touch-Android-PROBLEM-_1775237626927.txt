@@ -1,0 +1,112 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+PROBLEM
+On iPhone, the Messages conversation screen is formatted badly.
+It is acting like a scrollable page instead of a properly fitted chat screen.
+
+From the screenshot:
+- the conversation area is way too tall / awkward
+- the page can scroll vertically when it should not
+- the message composer feels detached at the bottom
+- overall it does NOT behave like a properly fitted messaging screen
+
+GOAL
+Make the iPhone Messages conversation screen fit properly like iMessage:
+- fixed conversation layout
+- header at top
+- messages area fills the available space
+- composer anchored correctly at bottom
+- no weird full-page vertical scrolling
+
+DESIRED IOS BEHAVIOR
+When opening a conversation on iPhone:
+1) the header stays at the top
+2) the messages area uses the remaining available space
+3) only the messages list itself scrolls when needed
+4) the overall page/screen should not have weird extra vertical scroll
+5) the message input bar should stay properly anchored at the bottom
+6) the layout should feel like iMessage / normal mobile chat UI
+
+WHAT TO AUDIT
+
+1) IOS CONVERSATION LAYOUT CONTAINER
+Inspect the iPhone Messages conversation screen structure:
+- page wrapper
+- header container
+- messages list container
+- composer/footer container
+- any height calculations
+- any h-screen / min-h-screen / calc() usage
+- any parent scroll container
+
+2) REMOVE FULL-PAGE VERTICAL SCROLL
+The likely bug is that the whole screen/page is scrollable instead of just the message list.
+Find the container causing that and fix it.
+On iPhone:
+- outer page should be fixed-height
+- inner messages list should be the only scroll region
+
+3) HEADER / MESSAGES / COMPOSER STACK
+Make the conversation screen a proper vertical app layout:
+- fixed header
+- flexible middle messages area
+- fixed bottom composer
+- no extra giant empty space
+- no body/page scroll fighting with chat scroll
+
+4) SAFE AREA / KEYBOARD / NATIVE VIEWPORT
+Audit iPhone-specific issues around:
+- safe-area insets
+- keyboard resize behavior
+- bottom inset handling
+- viewport height on native iOS
+- any mobile Safari / Capacitor full-height quirks
+Very likely one of these is making the layout taller than it should be.
+
+5) KEEP MESSAGE FUNCTIONALITY
+Do not break:
+- sending messages
+- receiving/rendering messages
+- tapping back
+- scrolling through chat history
+- thread loading
+
+6) DO NOT REDESIGN
+I do not want a redesign.
+I want the iPhone conversation screen to be properly fitted and naturally formatted like a normal chat screen.
+
+LIKELY ROOT CAUSES TO CHECK
+- entire page wrapped in a scroll container
+- messages area missing flex: 1 / min-h-0
+- composer positioned outside the chat flex layout
+- viewport height issue on iOS native
+- safe-area padding causing extra phantom height
+- parent container using h-auto / min-height incorrectly
+- chat list not isolated as the only scrollable region
+
+DEBUGGING
+Add targeted logs only if needed for:
+- iOS layout branch
+- computed heights for header / messages / composer
+- which container currently owns scroll
+- viewport + safe-area values on iPhone
+
+DELIVERABLES
+1) Fix iPhone Messages conversation formatting
+2) Make only the messages list scroll, not the whole page
+3) Keep composer properly anchored at the bottom
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - open Messages on iPhone
+   - open a DM conversation
+   - confirm no weird full-page vertical scrolling
+   - confirm messages area fits screen properly
+   - confirm composer stays anchored at bottom
+   - confirm sending a message still works
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- No redesign
+- Make it behave like a proper mobile chat screen
