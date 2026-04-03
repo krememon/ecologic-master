@@ -1,0 +1,86 @@
+We need to fix this Android build/package error.
+
+ERROR
+Gradle build is failing on:
+
+:app:packageDebug
+
+Exact failure:
+Zip file .../app-debug.apk already contains entry 'assets/capacitor.config.json', cannot overwrite
+
+GOAL
+Fix the Android packaging/build setup so debug APK builds successfully again.
+
+WHAT THIS STRONGLY SUGGESTS
+The APK packaging step is trying to include capacitor.config.json twice.
+So somewhere in the Android build/app assets pipeline, Capacitor config is being copied/packaged more than once.
+
+DO THIS EXACTLY
+
+1) FIND WHERE capacitor.config.json IS BEING ADDED TWICE
+Audit the Android project for any path that could duplicate:
+assets/capacitor.config.json
+
+Check specifically:
+- android/app/src/main/assets
+- any generated Capacitor asset copy step
+- gradle copy tasks
+- custom packaging scripts
+- capacitor sync output
+- duplicate files inside build/intermediates
+- any manual copied capacitor.config.json that should not be there
+
+2) SEARCH THE PROJECT FOR capacitor.config.json REFERENCES
+Search for:
+- capacitor.config.json
+- copy tasks referencing assets
+- packagingOptions / sourceSets / assets.srcDirs
+- any custom scripts that copy web assets or Capacitor assets into android/app/src/main/assets
+
+3) DETERMINE THE EXACT DUPLICATE SOURCE
+I want the precise reason:
+- manually committed duplicate asset file
+- generated file + manually copied file
+- duplicate assets dir configuration
+- Gradle task packaging same file twice
+- stale build artifact causing duplicate zip entry
+
+4) FIX IT SAFELY
+Apply the correct fix, likely one of:
+- remove the manually duplicated capacitor.config.json from android assets if Capacitor already generates it
+- fix duplicate assets.srcDirs/sourceSets config
+- fix custom copy task so it excludes capacitor.config.json
+- clean stale build outputs if the duplicate is from old generated artifacts
+But do NOT use a sloppy workaround that could break Capacitor runtime config unless truly necessary.
+
+5) CLEAN / REBUILD
+After the fix:
+- clean Android build outputs
+- rebuild debug APK
+- confirm :app:packageDebug passes
+
+6) IF A CLEAN BUILD IS REQUIRED
+If the real issue is stale duplicated artifacts in build output, use the appropriate cleanup and confirm the permanent fix.
+Do not leave this as “just clean every time” unless that is truly unavoidable.
+If cleaning alone fixes it, still identify why the duplicate was there.
+
+DEBUGGING
+Add targeted findings for:
+- exact two locations/sources of capacitor.config.json
+- exact gradle/sourceSets/copy path causing duplication
+- exact fix applied
+
+DELIVERABLES
+1) Exact root cause
+2) Exact files/config changed
+3) Exact cleanup steps run
+4) Confirmation that debug APK now builds successfully
+5) Short manual test plan:
+   - sync/copy assets
+   - build debug APK
+   - confirm no duplicate capacitor.config.json packaging error
+
+IMPORTANT
+- Tight targeted fix only
+- Do not redesign Android build setup
+- Fix the duplicate capacitor.config.json packaging issue directly

@@ -22,6 +22,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    // Capacitor 8 Android generates capacitor.config.json at build time in addition
+    // to the copy placed by `cap sync`, causing a duplicate ZIP entry at :app:packageDebug.
+    // pickFirsts resolves the conflict safely — both copies have identical content.
+    packagingOptions {
+        pickFirsts += ['assets/capacitor.config.json']
+    }
 }
 
 repositories {
