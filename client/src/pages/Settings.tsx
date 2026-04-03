@@ -9,11 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { User, Moon, Sun, Bell, Shield, Camera, BellRing, Send, Scale, Info, Headphones, ChevronRight } from "lucide-react";
+import { User, Moon, Sun, Bell, Shield, Camera, BellRing, Scale, Info, Headphones, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
-import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
-import { manualRegister } from "@/utils/pushDebug";
+import { isNativePlatform, registerPushNotifications, openAppSettings } from "@/lib/capacitor";
 import { ToastAction } from "@/components/ui/toast";
 
 import { useCan } from "@/hooks/useCan";
@@ -24,26 +23,6 @@ import ChangePasswordModal from "@/components/ChangePasswordModal";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 import Disable2FAModal from "@/components/Disable2FAModal";
 import ImageCropModal from "@/components/ImageCropModal";
-
-function PushTokenStatus() {
-  const { data, isLoading } = useQuery<{ userId: number; count: number; tokens: any[] }>({
-    queryKey: ['/api/push/tokens/me'],
-    refetchInterval: 30000,
-  });
-  if (isLoading) return <p className="col-span-2 text-xs text-slate-400">Loading token status...</p>;
-  if (!data) return <p className="col-span-2 text-xs text-red-400">Could not fetch token status</p>;
-  return (
-    <div className="col-span-2 p-2 rounded bg-slate-100 dark:bg-slate-800 text-xs space-y-1">
-      <p className="font-medium">Push Tokens: {data.count}</p>
-      {data.tokens.map((t: any) => (
-        <p key={t.id} className="text-slate-500">
-          {t.platform} · {t.tokenSuffix} · {t.isActive ? '✓ active' : '✗ inactive'}
-        </p>
-      ))}
-      {data.count === 0 && <p className="text-amber-500">No tokens registered. Tap "Enable Notifications" first.</p>}
-    </div>
-  );
-}
 
 export default function Settings() {
   const { toast } = useToast();
@@ -71,8 +50,6 @@ export default function Settings() {
   const [pushEnabled, setPushEnabled] = useState(() => {
     return isNativePlatform() && !!localStorage.getItem("pushToken");
   });
-  const [testingLocal, setTestingLocal] = useState(false);
-  const [testingRemote, setTestingRemote] = useState(false);
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
@@ -423,129 +400,47 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             {isNativePlatform() ? (
-              <>
-                <div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                    Enable push notifications to receive alerts for job assignments, messages, and other important updates.
-                  </p>
-                  <Button
-                    className="w-full"
-                    disabled={pushEnabling || pushEnabled}
-                    onClick={async () => {
-                      setPushEnabling(true);
-                      try {
-                        const result = await registerPushNotifications();
-                        if (result.success) {
-                          setPushEnabled(true);
-                          toast({ title: "Notifications Enabled", description: "You will now receive push notifications." });
-                        } else if (result.error === "unimplemented") {
-                          toast({ title: "Plugin Not Installed", description: "Notifications plugin not available. Rebuild the app after running: npx cap sync ios", variant: "destructive" });
-                        } else if (result.error === "denied") {
-                          toast({
-                            title: "Permission Denied",
-                            description: "Please enable notifications in your device Settings.",
-                            variant: "destructive",
-                            action: (
-                              <ToastAction altText="Open Settings" onClick={() => openAppSettings()}>
-                                Open Settings
-                              </ToastAction>
-                            ),
-                          });
-                        } else {
-                          toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
-                        }
-                      } catch {
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                  Enable push notifications to receive alerts for job assignments, messages, and other important updates.
+                </p>
+                <Button
+                  className="w-full"
+                  disabled={pushEnabling || pushEnabled}
+                  onClick={async () => {
+                    setPushEnabling(true);
+                    try {
+                      const result = await registerPushNotifications();
+                      if (result.success) {
+                        setPushEnabled(true);
+                        toast({ title: "Notifications Enabled", description: "You will now receive push notifications." });
+                      } else if (result.error === "unimplemented") {
+                        toast({ title: "Plugin Not Installed", description: "Notifications plugin not available. Rebuild the app after running: npx cap sync ios", variant: "destructive" });
+                      } else if (result.error === "denied") {
+                        toast({
+                          title: "Permission Denied",
+                          description: "Please enable notifications in your device Settings.",
+                          variant: "destructive",
+                          action: (
+                            <ToastAction altText="Open Settings" onClick={() => openAppSettings()}>
+                              Open Settings
+                            </ToastAction>
+                          ),
+                        });
+                      } else {
                         toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
-                      } finally {
-                        setPushEnabling(false);
                       }
-                    }}
-                  >
-                    <BellRing className="h-4 w-4 mr-2" />
-                    {pushEnabled ? "Notifications Enabled" : pushEnabling ? "Enabling..." : "Enable Notifications"}
-                  </Button>
-                </div>
-
-                <div className="grid gap-2 grid-cols-2">
-                  <Button
-                    variant="outline"
-                    disabled={testingLocal}
-                    onClick={async () => {
-                      setTestingLocal(true);
-                      try {
-                        const result = await scheduleLocalTestNotification();
-                        if (result.success) {
-                          toast({ title: "Test Sent", description: "A test notification will appear in ~2 seconds." });
-                        } else if (result.error === "unimplemented") {
-                          toast({ title: "Plugin Not Installed", description: "Local notifications plugin not available. Rebuild after: npx cap sync ios", variant: "destructive" });
-                        } else if (result.error === "denied") {
-                          toast({
-                            title: "Permission Denied",
-                            description: "Enable notifications in device Settings first.",
-                            variant: "destructive",
-                            action: (
-                              <ToastAction altText="Open Settings" onClick={() => openAppSettings()}>
-                                Open Settings
-                              </ToastAction>
-                            ),
-                          });
-                        } else {
-                          toast({ title: "Failed", description: "Could not send test notification.", variant: "destructive" });
-                        }
-                      } catch {
-                        toast({ title: "Error", description: "Test notification failed.", variant: "destructive" });
-                      } finally {
-                        setTestingLocal(false);
-                      }
-                    }}
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    {testingLocal ? "Sending..." : "Test Local"}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      await manualRegister();
-                      toast({ title: "Register Called", description: "Check Xcode console for token output." });
-                    }}
-                  >
-                    Get Token
-                  </Button>
-
-                  {import.meta.env.DEV && (
-                    <>
-                      <PushTokenStatus />
-                      <Button
-                        variant="default"
-                        className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={testingRemote}
-                        onClick={async () => {
-                          setTestingRemote(true);
-                          try {
-                            const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
-                            const json = await res.json().catch(() => ({}));
-                            console.log("[push-test]", res.status, json);
-                            if (json.ok) {
-                              toast({ title: "Remote Push Sent", description: `Sent: ${json.sent}, Failed: ${json.failed}. Tokens: ${json.tokensCount}` });
-                            } else {
-                              toast({ title: "Push Failed", description: json.message || "Server could not send push.", variant: "destructive" });
-                            }
-                          } catch (err) {
-                            toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
-                          } finally {
-                            setTestingRemote(false);
-                          }
-                        }}
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        {testingRemote ? "Sending..." : "Send Test Remote Push"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </>
+                    } catch {
+                      toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
+                    } finally {
+                      setPushEnabling(false);
+                    }
+                  }}
+                >
+                  <BellRing className="h-4 w-4 mr-2" />
+                  {pushEnabled ? "Notifications Enabled" : pushEnabling ? "Enabling..." : "Enable Notifications"}
+                </Button>
+              </div>
             ) : (
               <div className="flex items-center justify-between">
                 <div>
