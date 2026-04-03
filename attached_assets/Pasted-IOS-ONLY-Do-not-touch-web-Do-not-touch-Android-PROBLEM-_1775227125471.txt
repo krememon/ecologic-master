@@ -1,0 +1,97 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+PROBLEM
+On iPhone, the Google address autofill dropdown is formatted badly.
+It is getting cut off / cramped and does not fit the modal well.
+
+From the screenshot:
+- the Google suggestions dropdown is too tight in the current space
+- it feels partially cut off
+- the layout would work better if the address suggestions appeared BELOW the input in a cleaner way with enough room
+
+GOAL
+Fix the iOS address autocomplete UI so Google suggestions display cleanly and are easy to tap.
+
+DESIRED RESULT
+When the user types an address on iPhone:
+1) the Google suggestions should appear clearly
+2) they should not be cut off or cramped
+3) they should fit naturally in the form/modal
+4) they should be easy to tap/select
+5) after selecting one, the address should still populate correctly
+
+PREFERRED DIRECTION
+If needed, make the suggestions render below the address field in a way that fits the iPhone modal/layout better.
+The key is: no half-cut-off dropdown.
+
+WHAT TO AUDIT
+
+1) IOS ADDRESS INPUT LAYOUT
+Inspect the iPhone/native layout for the customer/address modal or form:
+- address input container
+- autocomplete dropdown container
+- z-index / overflow
+- modal height / keyboard overlap
+- safe-area / bottom sheet sizing
+- whether parent containers are clipping the dropdown
+
+2) GOOGLE AUTOCOMPLETE CONTAINER
+Check whether the Google suggestions list is being:
+- clipped by overflow hidden
+- constrained by parent height
+- rendered inside too small a container
+- overlapped by keyboard / bottom sheet layout
+- positioned badly on iOS compared with web
+
+3) IOS-SPECIFIC POSITIONING
+If necessary:
+- render the suggestions in a better positioned container below the input
+- allow enough space in the sheet/modal for the dropdown
+- ensure keyboard + modal + suggestions all coexist properly on iPhone
+
+4) DO NOT BREAK FUNCTIONALITY
+Keep all current behavior working:
+- typing address
+- selecting suggestion
+- filling address fields correctly
+- Google autocomplete still active
+- no regressions on web or Android
+
+5) DO NOT BREAK MODAL UX
+The fix should still feel native to EcoLogic.
+Do not redesign the whole add/edit customer flow.
+Just fix the autocomplete dropdown presentation.
+
+LIKELY ROOT CAUSES TO CHECK
+- parent container clipping suggestions
+- overflow hidden on modal content
+- dropdown positioned absolutely inside a constrained container
+- keyboard reducing visible area without layout compensation
+- iOS safe-area / bottom-sheet height issue
+- z-index problem causing the dropdown to look cut off
+
+DEBUGGING
+Add targeted logs only if needed for:
+- platform branch
+- modal/content heights
+- autocomplete dropdown mount position
+- whether parent container has overflow clipping
+
+DELIVERABLES
+1) Fix iPhone Google address autofill formatting
+2) Make suggestions display cleanly and fully
+3) Keep address selection working
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - open customer form on iPhone
+   - type address
+   - confirm suggestions are fully visible
+   - tap a suggestion
+   - confirm address fills correctly
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- Do not change web
+- Do not change Android

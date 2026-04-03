@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLoadScript } from '@react-google-maps/api';
 import { Input } from '@/components/ui/input';
+import { isNativeIos } from '@/lib/nativeIap';
 
 export type Address = {
   street: string; city: string; state: string; postalCode: string;
@@ -26,6 +27,11 @@ function parseAddressComponents(comps: any[]): Omit<Address, 'place_id' | 'forma
   return { street, city, state, postalCode, country };
 }
 
+// iOS-only: get the visual viewport top offset (non-zero when keyboard is open)
+function getVisualViewportOffsetTop(): number {
+  return (window as any).visualViewport?.offsetTop ?? 0;
+}
+
 export default function LocationInput({
   value, onChange, onAddressSelected, placeholder = 'Enter address', disabled = false,
 }: {
@@ -44,6 +50,11 @@ export default function LocationInput({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSelectingRef = useRef(false);
   const autocompleteInitRef = useRef(false);
+
+  // iOS: track input bounding rect for fixed-position dropdown
+  const [iosDropdownPos, setIosDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const nativeIos = isNativeIos();
+
   // Stable refs so autocomplete listeners always call the latest callbacks
   const onAddressSelectedRef = useRef(onAddressSelected);
   useEffect(() => { onAddressSelectedRef.current = onAddressSelected; });
@@ -60,6 +71,32 @@ export default function LocationInput({
     libraries: LIBRARIES,
   });
 
+  // iOS: compute fixed-position coordinates for the fallback dropdown.
+  // Called whenever the dropdown is about to show or the viewport shifts.
+  const updateIosDropdownPos = useCallback(() => {
+    if (!nativeIos || !inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    // On iOS, visualViewport.offsetTop is non-zero when the keyboard is open.
+    // Fixed-position elements are anchored to the visual viewport, so offsetTop
+    // does NOT need to be added — getBoundingClientRect() already returns
+    // coordinates relative to the visual viewport in Capacitor WebView.
+    setIosDropdownPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+  }, [nativeIos]);
+
+  // iOS: reposition whenever the visual viewport resizes (keyboard open/close)
+  useEffect(() => {
+    if (!nativeIos) return;
+    const vv = (window as any).visualViewport;
+    if (!vv) return;
+    const handler = () => updateIosDropdownPos();
+    vv.addEventListener('resize', handler);
+    vv.addEventListener('scroll', handler);
+    return () => {
+      vv.removeEventListener('resize', handler);
+      vv.removeEventListener('scroll', handler);
+    };
+  }, [nativeIos, updateIosDropdownPos]);
+
   useEffect(() => {
     // ── Diagnostic snapshot (runs every time isLoaded/loadError changes) ──
     const mapsScriptTags = Array.from(document.querySelectorAll('script[src*="maps.googleapis.com"]')).map((s) => (s as HTMLScriptElement).src.replace(/key=[^&]+/, 'key=REDACTED'));
@@ -73,6 +110,7 @@ export default function LocationInput({
       '| window.google.maps:', !!(window as any).google?.maps,
       '| window.google.maps.places:', !!(window as any).google?.maps?.places,
       '| maps script tags:', mapsScriptTags.length, mapsScriptTags,
+      '| nativeIos:', nativeIos,
     );
 
     if (loadError) {
@@ -123,11 +161,34 @@ export default function LocationInput({
       const pacEl = document.querySelector('.pac-container') as HTMLElement | null;
       if (!pacEl) return;
       const rect = inputRef.current.getBoundingClientRect();
+
+      // On iOS, fixed elements are placed relative to the visual viewport.
+      // getBoundingClientRect() already accounts for this in Capacitor WebView,
+      // so no extra offset is needed — just use rect.bottom directly.
+      const topOffset = nativeIos
+        ? rect.bottom + 2
+        : rect.bottom + 2;
+
       pacEl.style.position = 'fixed';
-      pacEl.style.top = `${rect.bottom + 2}px`;
+      pacEl.style.top = `${topOffset}px`;
       pacEl.style.left = `${rect.left}px`;
       pacEl.style.width = `${rect.width}px`;
       pacEl.style.zIndex = '99999';
+
+      if (nativeIos) {
+        // Ensure the pac-container is tall enough to show all suggestions
+        // and scrollable internally if it overflows on small screens.
+        pacEl.style.maxHeight = '220px';
+        pacEl.style.overflowY = 'auto';
+        pacEl.style.webkitOverflowScrolling = 'touch';
+        pacEl.style.boxShadow = '0 4px 20px rgba(0,0,0,0.18)';
+        pacEl.style.borderRadius = '10px';
+        // Ensure each pac-item has adequate tap target height
+        const style = document.getElementById('pac-ios-style') || document.createElement('style');
+        style.id = 'pac-ios-style';
+        style.textContent = `.pac-item { min-height: 44px; line-height: 44px; padding: 0 12px; font-size: 14px; } .pac-item-query { font-size: 14px; }`;
+        if (!document.getElementById('pac-ios-style')) document.head.appendChild(style);
+      }
     };
 
     const observer = new MutationObserver(() => repositionPacContainer());
@@ -135,17 +196,33 @@ export default function LocationInput({
     inputRef.current!.addEventListener('focus', repositionPacContainer);
     inputRef.current!.addEventListener('input', repositionPacContainer);
 
+    // iOS: also reposition when the visual viewport resizes (keyboard open/close)
+    let vvCleanup: (() => void) | null = null;
+    if (nativeIos) {
+      const vv = (window as any).visualViewport;
+      if (vv) {
+        const onVVChange = () => repositionPacContainer();
+        vv.addEventListener('resize', onVVChange);
+        vv.addEventListener('scroll', onVVChange);
+        vvCleanup = () => {
+          vv.removeEventListener('resize', onVVChange);
+          vv.removeEventListener('scroll', onVVChange);
+        };
+      }
+    }
+
     const inputEl = inputRef.current!;
     cleanupRef.current = () => {
       observer.disconnect();
       inputEl.removeEventListener('focus', repositionPacContainer);
       inputEl.removeEventListener('input', repositionPacContainer);
+      vvCleanup?.();
     };
 
     return () => {
       cleanupRef.current?.();
     };
-  }, [isLoaded, loadError, apiKey]);
+  }, [isLoaded, loadError, apiKey, nativeIos]);
 
   const fetchPredictions = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -183,6 +260,7 @@ export default function LocationInput({
     onChange(prediction.description);
     setPredictions([]);
     setShowDropdown(false);
+    setIosDropdownPos(null);
 
     try {
       const resp = await fetch(`/api/google/places/details?placeId=${encodeURIComponent(prediction.place_id)}`);
@@ -238,40 +316,97 @@ export default function LocationInput({
     setTimeout(() => {
       if (!isSelectingRef.current) {
         setShowDropdown(false);
+        setIosDropdownPos(null);
       }
     }, 250);
   }, []);
 
+  const handleFocus = useCallback(() => {
+    if (useBackend && predictions.length > 0) {
+      setShowDropdown(true);
+      if (nativeIos) updateIosDropdownPos();
+    }
+  }, [useBackend, predictions.length, nativeIos, updateIosDropdownPos]);
+
+  const handleInput = useCallback(() => {
+    if (nativeIos && showDropdown) updateIosDropdownPos();
+  }, [nativeIos, showDropdown, updateIosDropdownPos]);
+
   const showErrorBanner = useBackend && hasQueried && backendError;
 
+  // ── Backend fallback dropdown ─────────────────────────────────────────────
+  // On iOS: use position:fixed with coordinates from getBoundingClientRect()
+  // to escape the overflow:hidden clipping from parent ScrollArea / Dialog.
+  // On web/Android: keep position:absolute (unchanged behavior).
   const dropdown = useBackend && showDropdown && predictions.length > 0
-    ? (
-        <ul
-          role="listbox"
-          className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-[9999]"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          {predictions.map((p, idx) => (
-            <li
-              key={p.place_id + idx}
-              role="option"
-              className="px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 active:bg-blue-100 dark:active:bg-slate-600 text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 last:border-b-0 select-none"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                selectPrediction(p);
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                selectPrediction(p);
-              }}
-            >
-              {p.description}
-            </li>
-          ))}
-        </ul>
-      )
+    ? nativeIos
+      ? (
+          // iOS: fixed-position dropdown rendered at exact input coordinates.
+          // Escapes overflow:hidden from ScrollArea so it's never clipped.
+          <ul
+            role="listbox"
+            style={{
+              position: 'fixed',
+              top: iosDropdownPos?.top ?? 0,
+              left: iosDropdownPos?.left ?? 0,
+              width: iosDropdownPos?.width ?? '100%',
+              zIndex: 99999,
+              maxHeight: '220px',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+            }}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl"
+          >
+            {predictions.map((p, idx) => (
+              <li
+                key={p.place_id + idx}
+                role="option"
+                className="px-3 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 active:bg-blue-100 dark:active:bg-slate-600 text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 last:border-b-0 select-none"
+                style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectPrediction(p);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectPrediction(p);
+                }}
+              >
+                {p.description}
+              </li>
+            ))}
+          </ul>
+        )
+      : (
+          // Web / Android: position:absolute (original behavior, unchanged)
+          <ul
+            role="listbox"
+            className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-[9999]"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {predictions.map((p, idx) => (
+              <li
+                key={p.place_id + idx}
+                role="option"
+                className="px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 active:bg-blue-100 dark:active:bg-slate-600 text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 last:border-b-0 select-none"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectPrediction(p);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectPrediction(p);
+                }}
+              >
+                {p.description}
+              </li>
+            ))}
+          </ul>
+        )
     : null;
 
   return (
@@ -280,10 +415,9 @@ export default function LocationInput({
         ref={inputRef}
         value={value}
         onChange={e => handleChange(e.target.value)}
-        onFocus={() => {
-          if (useBackend && predictions.length > 0) setShowDropdown(true);
-        }}
+        onFocus={handleFocus}
         onBlur={handleBlur}
+        onInput={handleInput}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
