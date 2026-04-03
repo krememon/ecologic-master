@@ -636,19 +636,17 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // Lock page scroll on mount — html + body must both be locked for iOS WebView
+  // Lock body scroll on mount (prevents page-level scroll on web/Android)
   useEffect(() => {
-    document.documentElement.classList.add('chat-screen-active');
     document.body.classList.add('chat-screen-active');
     return () => {
-      document.documentElement.classList.remove('chat-screen-active');
       document.body.classList.remove('chat-screen-active');
     };
   }, []);
 
   // Show header and composer immediately, even while loading
   return (
-    <div className="flex flex-col bg-background overflow-hidden h-full">
+    <div className="flex flex-col bg-background overflow-hidden h-full dmConversationRoot">
       {/* Header - fixed height, with iOS safe area top padding */}
       <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card dmThreadHeader">
         <Button

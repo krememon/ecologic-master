@@ -1,0 +1,116 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+The previous Messages fix made it worse.
+
+CURRENT PROBLEM
+On iPhone Messages:
+- the conversation screen is now stuck
+- it cannot move properly
+- the layout is still completely wrong
+- there is still a giant blank empty area
+- things are not fitting in frame correctly
+
+What I actually need:
+- everything should fit naturally in frame
+- there should NOT be extra blank space
+- it should feel like a normal iPhone chat screen
+- not stuck, not over-constrained, not scroll-broken
+
+GOAL
+Fix the iPhone Messages conversation layout so it is properly sized in frame with:
+1) header visible at top
+2) conversation area taking the correct middle space
+3) composer/input bar visible at bottom
+4) no giant dead empty space
+5) no broken/stuck scroll behavior
+
+IMPORTANT
+Do NOT overcorrect again.
+Do NOT lock the screen in a way that breaks movement.
+Do NOT redesign the messaging UI.
+This is a layout/frame fix only.
+
+WHAT TO AUDIT
+
+1) FIND THE EXACT CONTAINER CAUSING THE BAD HEIGHT
+Inspect the iPhone conversation screen hierarchy:
+- page wrapper
+- top header
+- conversation/messages container
+- empty-state container
+- composer/footer container
+- outer page shell
+- safe-area wrapper
+
+One or more of these now has the wrong height/flex rules.
+
+2) FIX THE MIDDLE AREA SO IT FITS NATURALLY
+The messages/empty-state area should fill the available middle space ONLY.
+It should not create a giant oversized blank area.
+It should not push the composer weirdly.
+It should not make the whole page feel frozen.
+
+3) EMPTY STATE NEEDS TO BE POSITIONED NATURALLY
+Right now the “Start a conversation…” empty state is sitting inside a huge dead region.
+Make the empty conversation state fit naturally in the available middle area.
+No giant stretched blank canvas.
+
+4) SCROLL OWNERSHIP
+We do NOT want:
+- whole screen weirdly frozen
+- or giant page scroll
+We DO want:
+- normal chat behavior
+- if there are many messages, the message list scrolls
+- if empty, the screen still fits correctly without huge dead space
+
+5) IOS SAFE AREA / VIEWPORT
+Check for bad iPhone-specific sizing from:
+- 100vh / dvh / svh usage
+- safe-area top/bottom padding
+- header height subtraction
+- keyboard/composer reserved space
+- parent min-height / h-full / flex-1 / min-h-0 misuse
+
+6) RESTORE NORMAL MOBILE CHAT FRAMING
+The correct result should feel like a native iPhone chat screen:
+- no extra blank space
+- no clipping
+- no stuck layout
+- everything in frame
+
+LIKELY ROOT CAUSES TO CHECK
+- wrong fixed height on conversation body
+- flex-1 without min-h-0 in wrong place
+- outer container height too tall
+- inner container height double-counting safe area/header/footer
+- empty-state wrapper using full screen height instead of remaining pane height
+- composer/footer reserved twice
+- overflow hidden / overflow auto on wrong parent
+
+DEBUGGING
+Add targeted logs only if needed for:
+- computed heights of outer screen, header, body, composer
+- which container owns scroll
+- iOS-only layout branch values
+
+DELIVERABLES
+1) Fix iPhone Messages so everything fits naturally in frame
+2) Remove the giant extra blank space
+3) Restore normal usable chat layout
+4) List exact files changed
+5) Explain exact root cause
+6) Give a short manual test plan:
+   - open Messages on iPhone
+   - open DM conversation
+   - confirm header/body/composer all fit in frame
+   - confirm no giant blank empty area
+   - confirm screen is not stuck
+   - confirm messages can scroll normally when present
+   - confirm sending a message still works
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- No redesign
+- Just make the conversation screen fit correctly in frame

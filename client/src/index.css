@@ -36,15 +36,24 @@ html .width-before-scroll-bar {
   display: none;              /* Chrome/Safari */
 }
 
-/* Lock page scroll when chat screen is active — must apply to html AND body on iOS */
-html.chat-screen-active,
+/* Lock page scroll when chat screen is active */
 body.chat-screen-active {
   overflow: hidden !important;
-  height: 100% !important;
 }
 body.chat-screen-active #root {
   overflow: hidden !important;
   height: 100% !important;
+}
+
+/* iOS native: pull the conversation screen out of the normal document flow
+   and anchor it to the viewport edges. This is the only reliable way to prevent
+   background page-scroll on WKWebView while keeping inner scroll working. */
+html.native-ios .dmConversationRoot {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
 }
 
 /* Prevent zoom and double-tap zoom */
