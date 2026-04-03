@@ -1,0 +1,84 @@
+The previous fix did NOT actually solve the Android packaging error.
+
+CURRENT FACT
+After:
+- upgrading @capacitor/cli to v8
+- running npx cap sync android
+
+the exact same build error still happens:
+
+:app:packageDebug
+Zip file ... already contains entry 'assets/capacitor.config.json', cannot overwrite
+
+So the earlier "pickFirst" fix is either:
+- in the wrong place
+- using the wrong Gradle DSL
+- not applying to APK asset packaging
+- or not addressing the real duplicate source
+
+GOAL
+Find the real duplicate source for capacitor.config.json and apply a fix that ACTUALLY makes packageDebug pass.
+
+DO THIS EXACTLY
+
+1) FIND BOTH PHYSICAL SOURCES OF capacitor.config.json
+On the local project, identify every copy/source contributing this file.
+
+Check all of these:
+- android/app/src/main/assets/capacitor.config.json
+- android/app/build/generated/**
+- android/app/build/intermediates/**
+- any Capacitor-generated assets dir
+- any sourceSets.assets.srcDirs additions
+- any copy task writing capacitor.config.json
+
+Run a full project search and tell me the exact 2 sources that are both ending up in the APK.
+
+2) VERIFY WHETHER THE CURRENT GRADLE FIX IS EVEN BEING APPLIED
+Inspect android/app/build.gradle and confirm:
+- the exact block currently added
+- whether it is inside android { ... }
+- whether the DSL is valid for AGP 8.9.1
+- whether it affects assets packaging at all
+
+I strongly suspect the current pickFirst config is not targeting this type of duplicate correctly.
+
+3) GET THE REAL PACKAGING INPUT PATHS
+Use Gradle/info-level diagnostics if needed to determine which asset inputs are being merged into the APK for packageDebug.
+I want the exact two input paths that both contribute:
+assets/capacitor.config.json
+
+4) FIX THE REAL CAUSE
+Apply the correct fix, likely one of these:
+- exclude one duplicated asset source
+- remove a manual capacitor.config.json from src/main/assets if Capacitor/Gradle is already contributing it elsewhere
+- fix assets.srcDirs/sourceSets duplication
+- fix a copy task that writes the file twice
+- or apply the correct AGP 8 packaging DSL if that truly works for assets
+
+But do NOT just keep adding blind packaging workarounds.
+I want the actual duplicate source removed or correctly resolved.
+
+5) CLEAN + REBUILD
+After the fix:
+- ./gradlew clean
+- ./gradlew assembleDebug
+
+Then report:
+- whether :app:packageDebug passed
+- exact apk output path
+- whether the duplicate error is fully gone
+
+DELIVER BACK
+1) Exact two sources of capacitor.config.json that caused duplication
+2) Why the prior Gradle fix did not work
+3) Exact files/config changed
+4) Exact final fix applied
+5) Result of clean assembleDebug
+6) Whether app-debug.apk now builds successfully
+
+IMPORTANT
+- Do not guess
+- Identify the exact duplicate sources first
+- Fix the real duplication, not just symptoms
+- Actually verify with clean assembleDebug
