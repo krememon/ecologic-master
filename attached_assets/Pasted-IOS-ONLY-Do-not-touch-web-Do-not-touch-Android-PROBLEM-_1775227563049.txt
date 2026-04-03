@@ -1,0 +1,86 @@
+IOS ONLY. Do not touch web. Do not touch Android.
+
+PROBLEM
+On iPhone, the job cards are getting cut off / clipped in the Jobs & Estimates screen.
+The card content is not fitting the way it originally should.
+
+GOAL
+Restore the iOS job cards so they display fully and cleanly like they originally did.
+
+IMPORTANT
+I do NOT want a redesign.
+I want the iPhone job cards to go back to the correct/original formatting so nothing is cut off.
+
+WHAT TO FIX
+
+1) JOB CARD HEIGHT / CONTENT CLIPPING
+Audit the iPhone Jobs screen card layout and fix whatever is causing the job cards to be cut off:
+- card container height
+- min-height
+- overflow clipping
+- flex/shrink issues
+- row wrapping
+- address/date row layout
+- padding/bottom spacing
+
+2) RESTORE ORIGINAL IOS FORMATTING
+The cards should go back to the intended mobile layout:
+- title fully visible
+- subtitle/service line visible
+- address line visible
+- date visible
+- bottom content not clipped
+- card height should naturally grow as needed
+
+3) IOS-SPECIFIC ONLY
+This is an iPhone/iOS issue.
+Do not change web.
+Do not change Android.
+If shared code must be touched, guard the fix carefully so only iOS/mobile layout is affected.
+
+4) CHECK RESPONSIVE ROWS
+The likely problem is one or more rows are not wrapping or the card container is too short.
+Audit especially:
+- address + date row
+- created date/footer row
+- any line-clamp or fixed-height class
+- any recent card compacting change
+- parent list/item containers enforcing wrong height
+
+5) DO NOT BREAK TAP/OPEN BEHAVIOR
+Keep normal job card behavior working:
+- tapping card opens correctly
+- status/date/address still show correctly
+- Jobs / Estimates segmented view still works
+
+LIKELY ROOT CAUSES TO CHECK
+- fixed card height too small for iPhone
+- overflow hidden clipping the bottom
+- flex row not wrapping on narrow width
+- address/date row forcing horizontal layout instead of stacking/wrapping
+- recent style change made cards compact on iOS only
+- safe-area / viewport calculation affecting list item size
+
+DEBUGGING
+Add targeted logs only if needed for:
+- iOS/mobile layout branch
+- card height source/classes
+- whether clipping comes from parent container or card itself
+
+DELIVERABLES
+1) Fix iPhone Jobs screen so job cards are no longer cut off
+2) Restore the original intended mobile card formatting
+3) List exact files changed
+4) Explain exact root cause
+5) Give a short manual test plan:
+   - open Jobs on iPhone
+   - confirm full card content is visible
+   - confirm address/date rows fit properly
+   - confirm tapping a card still works
+   - confirm Estimates tab still looks correct
+
+IMPORTANT
+- IOS ONLY
+- Tight targeted fix only
+- No redesign
+- Restore the original intended formatting

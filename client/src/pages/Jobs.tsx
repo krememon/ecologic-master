@@ -65,6 +65,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function Jobs() {
   const isAndroid = isNativePlatform() && getPlatform() === 'android';
+  const isIos = isNativePlatform() && getPlatform() === 'ios';
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { role } = useCan();
@@ -1994,7 +1995,7 @@ export default function Jobs() {
                   </span>
                 );
               })()}
-              <CardHeader className={isAndroid ? "pb-2" : "pb-3"}>
+              <CardHeader className={(isAndroid || isIos) ? "pb-2" : "pb-3"}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 pr-20 min-w-0">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -2010,9 +2011,9 @@ export default function Jobs() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className={isAndroid ? "pt-0 space-y-2" : "pt-0 space-y-3"}>
+              <CardContent className={(isAndroid || isIos) ? "pt-0 space-y-2" : "pt-0 space-y-3"}>
                 {(job.location || job.startDate) && (
-                  <div className={isAndroid ? "flex flex-col gap-1.5 text-sm text-slate-500 dark:text-slate-400" : "flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400"}>
+                  <div className={(isAndroid || isIos) ? "flex flex-col gap-1.5 text-sm text-slate-500 dark:text-slate-400" : "flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400"}>
                     {job.location && (
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
