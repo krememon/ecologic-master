@@ -20594,8 +20594,12 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
-  app.get('/api/stripe-connect/native-return', (_req: any, res) => {
-    console.log('[StripeConnect] native-return page loaded');
+  app.get('/api/stripe-connect/native-return', (req: any, res) => {
+    const status = req.query.status || 'complete';
+    console.log(`[StripeConnect] native-return page loaded, status=${status}`);
+    // Redirect to the app deep link so the native SFSafariViewController closes
+    // automatically and the app's deep-link handler fires.
+    const deepLink = `ecologic://stripe-connect-return?stripe_connect_return=${status}`;
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     res.send(`<!DOCTYPE html>
@@ -20612,12 +20616,18 @@ h2{font-size:20px;font-weight:700;margin-bottom:8px}
 p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 .sub{font-size:13px;color:#94a3b8}
 </style>
+<script>
+// Immediately redirect to the app deep link.
+// On iOS this closes SFSafariViewController and returns the user to EcoLogic.
+// On Android this closes the Custom Tab.
+window.location.href = '${deepLink}';
+</script>
 </head><body>
 <div class="c">
-<div class="check">\u2705</div>
+<div class="check">&#x2705;</div>
 <h2>Stripe Setup Complete</h2>
-<p>You can close this window now.<br>Tap <strong>Done</strong> in the top-left corner to return to EcoLogic.</p>
-<p class="sub">The app will update automatically.</p>
+<p>Returning you to EcoLogic&hellip;<br>If the app does not open automatically,<br>tap <strong>Done</strong> in the top-left corner.</p>
+<p class="sub">The app will refresh your Stripe status automatically.</p>
 </div>
 </body></html>`);
   });
@@ -20733,10 +20743,14 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
 
       // For web, use the browser's actual origin so the return URL stays on
       // the same domain as the session cookie (avoids cross-domain sign-out).
-      // For native, fall back to APP_BASE_URL since native uses a different return endpoint.
+      // For native, always use the canonical production URL — never APP_BASE_URL
+      // which may still point to a stale Replit preview URL.
       const requestOrigin = !isNative ? (req.get('origin') || null) : null;
-      const baseUrl = requestOrigin || process.env.APP_BASE_URL || `https://${req.get('host')}`;
-      console.log(`[StripeConnect] ensure-ready: baseUrl=${baseUrl} (origin=${req.get('origin')} native=${isNative})`);
+      const nativeBaseUrl = process.env.ECOLOGIC_PUBLIC_URL || 'https://app.ecologicc.com';
+      const baseUrl = isNative
+        ? nativeBaseUrl
+        : (requestOrigin || process.env.APP_BASE_URL || `https://${req.get('host')}`);
+      console.log(`[StripeConnect] ensure-ready: baseUrl=${baseUrl} (origin=${req.get('origin')} native=${isNative} nativeBaseUrl=${nativeBaseUrl})`);
 
       let returnUrl: string;
       let refreshUrl: string;
@@ -20775,7 +20789,21 @@ p{font-size:15px;color:#475569;margin-bottom:24px;line-height:1.5}
       return res.json({ ready: false, status: syncedStatus || 'setup_incomplete', onboardingUrl: link.url, accountId: company.stripeConnectAccountId });
     } catch (error: any) {
       console.error('[StripeConnect] Error in ensure-ready:', error);
-      res.status(500).json({ error: 'Failed to check Stripe Connect readiness' });
+      // Provide actionable errors instead of a generic 500
+      const msg: string = error?.message || '';
+      if (msg.includes("signed up for Connect") || msg.includes("Connect platform")) {
+        return res.status(503).json({
+          error: 'Stripe Connect is not yet enabled on this account. Please visit https://dashboard.stripe.com/connect to enroll, then try again.',
+          code: 'STRIPE_CONNECT_NOT_ENABLED',
+        });
+      }
+      if (msg.includes("StripePermissionError")) {
+        return res.status(503).json({
+          error: 'Stripe Connect permission denied. Ensure the Stripe account is enrolled as a Connect platform.',
+          code: 'STRIPE_CONNECT_PERMISSION',
+        });
+      }
+      res.status(500).json({ error: 'Failed to check Stripe Connect readiness', detail: msg });
     }
   });
 

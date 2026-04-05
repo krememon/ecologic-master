@@ -1,0 +1,95 @@
+When a user taps Connect Stripe on the mobile app, they get the red error:
+“Failed to start Stripe setup”
+
+This is happening in the native app flow for Stripe onboarding. Web flow must keep working.
+
+Goal
+
+Make Stripe Connect onboarding open correctly on iPhone and Android, complete successfully, and return the user back into the app with the Stripe status refreshed.
+
+What to do
+
+Investigate and fix the full chain:
+
+1) Frontend mobile button flow
+	•	Find the exact handler for the Connect Stripe button on the Stripe Payouts / Payout Account screen.
+	•	Verify the mobile app is calling the correct backend route.
+	•	Verify auth is being sent correctly for native users.
+	•	Add targeted logs:
+	•	button tapped
+	•	request started
+	•	response received
+	•	error received
+	•	onboarding URL before browser open
+
+2) Backend Stripe onboarding start route
+
+Check the route being used to start onboarding. It is likely one of:
+	•	POST /api/stripe-connect/ensure-ready
+	•	POST /api/stripe-connect/onboarding-link
+
+Fix whatever is broken there.
+
+Verify that route:
+	•	works for native bearer-token auth
+	•	does not rely only on cookie session auth
+	•	correctly finds the user + company
+	•	creates a Stripe Connect account if missing
+	•	generates a valid Stripe onboarding link
+	•	returns the link in a clean response the app can use
+
+If it fails, return a real useful error instead of a generic failure.
+
+3) Native browser launch
+	•	Make sure the returned onboarding URL is actually opened in the native browser flow.
+	•	Only show “Failed to start Stripe setup” if the API truly fails or the URL is missing/invalid.
+	•	If the backend returns a valid URL, the app should open it.
+
+4) Return URL / deep link
+
+Verify native onboarding uses the correct native return flow:
+	•	Stripe return_url / refresh_url
+	•	/api/stripe-connect/native-return
+	•	custom scheme redirect back into app:
+	•	ecologic://stripe-connect-return
+
+Make sure:
+	•	native-return is hit properly
+	•	browser closes properly
+	•	app receives the deep link
+	•	app refreshes Stripe Connect status after returning
+
+5) Environment / domain cleanup
+	•	Verify the flow is using the correct production public base URL.
+	•	Remove any stale Replit preview URLs or wrong callback domains from native Stripe onboarding.
+	•	Make sure iOS and Android both use the right canonical domain logic.
+
+6) Keep web working
+	•	Do not break the existing web Stripe Connect onboarding flow.
+	•	Fix the existing architecture, do not replace it with a whole new one.
+
+Add only targeted temporary logs
+
+Add logs for:
+	•	frontend start
+	•	API response
+	•	Stripe account id created/found
+	•	onboarding link generated
+	•	return_url and refresh_url used
+	•	native-return endpoint hit
+	•	deep link received in app
+	•	Stripe status refresh after return
+
+Deliverables
+
+When done, give me:
+	1.	the exact root cause
+	2.	every file changed
+	3.	exact test steps for iPhone
+	4.	exact test steps for Android
+
+Important
+	•	Preserve owner-only / RBAC behavior
+	•	Do not add duplicate buttons or duplicate flows
+	•	Do not break existing Stripe payments
+	•	After the production fix is confirmed, apply the same fix to EcoLogic Staging right after so staging stays aligned with production

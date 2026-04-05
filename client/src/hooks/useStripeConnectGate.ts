@@ -263,12 +263,23 @@ export function useStripeConnectGate() {
             if (pollInFlight || resolved) return;
             pollInFlight = true;
             try {
+              // Build Bearer auth headers for native — cookies are not sent
+              // cross-domain from WKWebView / Android WebView, so we must
+              // attach the nativeSessionId as Authorization: Bearer.
+              const nativeSid = typeof localStorage !== "undefined"
+                ? localStorage.getItem("nativeSessionId") : null;
+              const pollAuthHeaders: Record<string, string> = nativeSid
+                ? { "Authorization": `Bearer ${nativeSid}`, "x-client-type": "mobile" }
+                : {};
+
               await fetch(`${baseUrl}/api/stripe-connect/sync`, {
                 method: "POST",
+                headers: pollAuthHeaders,
                 credentials: "include",
                 cache: "no-store",
               });
               const statusRes = await fetch(`${baseUrl}/api/stripe-connect/status`, {
+                headers: pollAuthHeaders,
                 credentials: "include",
                 cache: "no-store",
               });
@@ -317,9 +328,26 @@ export function useStripeConnectGate() {
 
     } catch (err: any) {
       console.error("[stripe-connect] startOnboarding error:", err);
-      const errData = err?.message ? (() => { try { return JSON.parse(err.message); } catch { return null; } })() : null;
+      // throwIfResNotOk formats the error as "STATUS: bodyText" — strip the
+      // status prefix before trying to parse the JSON body.
+      const errData = err?.message ? (() => {
+        try {
+          const bodyText = (err.message as string).replace(/^\d+:\s*/, '');
+          return JSON.parse(bodyText);
+        } catch { return null; }
+      })() : null;
+      console.log("[stripe-connect] parsed errData:", errData);
       if (errData?.ownerOnly) {
         setShowOwnerOnlyMessage(true);
+      } else if (
+        errData?.code === 'STRIPE_CONNECT_NOT_ENABLED' ||
+        errData?.code === 'STRIPE_CONNECT_PERMISSION'
+      ) {
+        toastRef.current({
+          title: "Stripe Connect not enabled",
+          description: "Your Stripe account needs to enroll in Stripe Connect. Visit dashboard.stripe.com/connect to complete setup.",
+          variant: "destructive",
+        });
       } else {
         toastRef.current({ title: "Failed to start Stripe setup", variant: "destructive" });
       }
