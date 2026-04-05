@@ -11591,9 +11591,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       companyId: req.companyId,
       body: req.body,
     });
-    console.log("[ShareEmail] ENV", {
-      hasResendKey: !!process.env.RESEND_API_KEY,
-    });
     
     try {
       const userId = getUserId(req.user);
