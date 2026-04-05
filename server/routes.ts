@@ -2243,15 +2243,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       qboPaymentData.PrivateNote = noteLines.join(' | ');
 
-      console.log('[QB-PAY] Creating QBO payment payload:', JSON.stringify({
-        CustomerRef: qboPaymentData.CustomerRef,
-        TotalAmt: qboPaymentData.TotalAmt,
-        TxnDate: qboPaymentData.TxnDate,
-        LinkedTxnId: invoiceRecord.qboInvoiceId,
-        DepositToAccountRef: depositAccountRef ? 'set' : 'omitted',
-        PaymentMethodRef: qboPaymentMethodRef?.name || 'omitted'
-      }));
-
       // QBO-side de-duplication: Check if payment with this PaymentRefNum already exists
       if (qboPaymentData.PaymentRefNum) {
         // Escape single quotes in PaymentRefNum to avoid QBO query errors
