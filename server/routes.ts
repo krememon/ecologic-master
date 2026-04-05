@@ -2385,7 +2385,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const connected = !!company.qboRealmId && !!company.qboRefreshToken;
-      console.log('[QB_STATUS] companyId=' + member.companyId + ' userId=' + userId + ' connected=' + connected);
       res.json({
         connected,
         connectedAt: company.qboConnectedAt,
