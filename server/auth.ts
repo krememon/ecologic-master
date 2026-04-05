@@ -849,16 +849,6 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Incorrect password." });
       }
 
-      // Apple reviewer bypass: skip OTP email for the designated review account
-      const appleReviewEmail = process.env.APPLE_REVIEW_EMAIL?.toLowerCase().trim();
-      if (appleReviewEmail && normalizedEmail === appleReviewEmail) {
-        await storage.updateLoginChallenge(normalizedEmail, {
-          passwordVerified: true,
-          codeAttempts: 0,
-        });
-        return res.json({ ok: true });
-      }
-
       // Generate 6-digit MFA code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
