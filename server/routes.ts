@@ -19190,9 +19190,6 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
 
   // Google Places proxy routes for debugging and secure API key usage
   const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-  const googlePlacesKeySource = process.env.GOOGLE_PLACES_API_KEY ? 'GOOGLE_PLACES_API_KEY' : (process.env.GOOGLE_MAPS_API_KEY ? 'GOOGLE_MAPS_API_KEY' : 'NONE');
-  const googlePlacesKeySuffix = googlePlacesKey ? googlePlacesKey.slice(-4) : 'N/A';
-  console.log(`[GooglePlaces] Using key source: ${googlePlacesKeySource}, keySuffix=${googlePlacesKeySuffix}`);
 
   app.get('/api/google/places/autocomplete', isAuthenticated, async (req: any, res) => {
     try {
