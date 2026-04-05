@@ -98,21 +98,6 @@ export default function LocationInput({
   }, [nativeIos, updateIosDropdownPos]);
 
   useEffect(() => {
-    // ── Diagnostic snapshot (runs every time isLoaded/loadError changes) ──
-    const mapsScriptTags = Array.from(document.querySelectorAll('script[src*="maps.googleapis.com"]')).map((s) => (s as HTMLScriptElement).src.replace(/key=[^&]+/, 'key=REDACTED'));
-    console.log(
-      '[LocationInput][diag] isLoaded:', isLoaded,
-      '| loadError:', loadError?.message ?? loadError ?? null,
-      '| apiKey present:', !!apiKey,
-      '| apiKey suffix:', apiKey.slice(-6) || '(empty)',
-      '| origin:', window.location.origin,
-      '| window.google:', !!(window as any).google,
-      '| window.google.maps:', !!(window as any).google?.maps,
-      '| window.google.maps.places:', !!(window as any).google?.maps?.places,
-      '| maps script tags:', mapsScriptTags.length, mapsScriptTags,
-      '| nativeIos:', nativeIos,
-    );
-
     if (loadError) {
       console.error('[LocationInput] Google Maps script FAILED to load — switching to backend fallback. Error:', loadError.message ?? loadError);
       setUseBackend(true);
