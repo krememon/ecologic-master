@@ -18419,7 +18419,6 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
         return res.json({ connected: false });
       }
       const account = await storage.getPlaidAccount(company.id, 'company', company.id);
-      console.log('[PLAID][status]', { userId, companyId: company.id, hasAccount: !!account, hasItemId: !!account?.plaidItemId, hasToken: !!account?.plaidAccessToken });
       if (account && account.plaidItemId && account.plaidAccessToken) {
         res.json({
           connected: true,
