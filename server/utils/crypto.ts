@@ -53,7 +53,7 @@ try {
 export function encryptToken(plaintext: string): string {
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
 
   let encrypted = cipher.update(plaintext, "utf8", "base64");
   encrypted += cipher.final("base64");
@@ -70,7 +70,7 @@ export function decryptToken(ciphertext: string): string {
   const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const encrypted = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
 
   let decrypted = decipher.update(encrypted);
