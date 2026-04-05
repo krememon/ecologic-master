@@ -645,11 +645,6 @@ function AuthenticatedRouter() {
 
   return (
     <Layout>
-      {subBypass && (
-        <div className="fixed top-2 right-2 z-50 bg-yellow-500 text-black text-xs font-semibold px-2 py-1 rounded shadow">
-          DEV: Subscription bypass
-        </div>
-      )}
       <Switch>
         <Route path="/choose-plan" component={ChoosePlan} />
         <Route path="/" component={Home} />
