@@ -1,0 +1,130 @@
+We enabled Stripe Connect, but native iOS/Android still shows “Failed to start Stripe setup.” Keep digging and fix the remaining issue.
+
+Important clue
+
+The screenshot I’m looking at is from the Stripe Sandbox dashboard, not live production. So verify whether the mobile app is currently using:
+
+test Stripe keys / sandbox
+or live Stripe keys / production
+
+Do not assume. Confirm exactly which Stripe account/environment the native app is hitting.
+
+Goal
+
+Find the remaining root cause for why native only still fails to start Stripe onboarding even after Connect is enabled.
+
+What to investigate now
+1) Confirm exact environment being used
+
+Add logs and tell me:
+
+which Stripe secret key mode is active for this request
+whether the request is hitting sandbox/test or live
+which Stripe account the server is talking to
+whether the Connect capability is enabled in that exact environment
+
+I want a log right where onboarding starts that clearly says:
+
+mode: test or live
+publishable key prefix / secret key prefix safely masked
+base URL being used
+Stripe account creation attempt result
+2) Check the actual backend error being returned right now
+
+On the route used by mobile:
+
+POST /api/stripe-connect/ensure-ready
+or whatever exact route the button calls
+
+Log the full failure path:
+
+request received
+authenticated user id
+company id
+existing stripeAccountId or not
+create account attempt
+create account link attempt
+exact Stripe error object/message/code/type/status
+exact JSON response sent back to client
+
+Do not swallow the error into a generic message.
+
+3) Verify the frontend is showing the real error
+
+Right now the UI may still be collapsing everything into “Failed to start Stripe setup.”
+
+Fix the mobile UI so if backend returns a specific message, it shows that exact message in the toast/logs.
+
+Examples:
+
+Stripe Connect not enabled for this environment
+invalid return_url
+account creation failed
+onboarding link creation failed
+unauthorized
+missing company
+owner-only restriction
+4) Verify native auth on the initial onboarding-start request
+
+The polling auth was fixed before, but now verify the initial Connect Stripe button request also includes:
+
+Authorization: Bearer <nativeSessionId>
+x-client-type: mobile
+
+Do not assume the auth fix only needed polling. Confirm the start request itself is authenticated correctly on native.
+
+5) Verify route/base URL consistency again
+
+Confirm these are all correct for native:
+
+onboarding start endpoint
+return_url
+refresh_url
+native return endpoint
+canonical domain
+
+Make sure nothing in the start flow is still using:
+
+old Replit preview URLs
+wrong APP_BASE_URL
+wrong env-specific callback URL
+6) Check whether this is owner-only logic failing
+
+Verify whether the user testing this flow is:
+
+owner
+admin
+non-owner
+
+If the route is owner-only, confirm whether native is getting blocked by RBAC and the app is masking that as a generic Stripe failure.
+
+7) Check existing connected account behavior
+
+If the company/user already has a stored Stripe account id:
+
+verify whether onboarding should resume for that account
+verify whether the stored account id belongs to the same Stripe environment currently in use
+detect mismatch like:
+stored account from test mode
+current server running live key
+or vice versa
+
+If there is an env mismatch, fix it properly and safely.
+
+Deliverables
+
+When done, give me:
+
+exact root cause
+exact backend error message
+exact frontend error message shown after fix
+every file changed
+exact iPhone test steps
+exact Android test steps
+Important
+Preserve web flow
+Preserve existing Stripe payment flow
+Preserve RBAC
+No duplicate flows
+Fix the existing native flow only
+After production fix is confirmed, apply the same fix to EcoLogic Staging right after so staging stays aligned with production

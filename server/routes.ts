@@ -20594,6 +20594,24 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   });
 
+  // Public diagnostic endpoint — no auth required, never exposes key values.
+  // Useful for confirming which Stripe mode is active in the deployed build.
+  app.get('/api/stripe-connect/diag', (_req: any, res) => {
+    const stripeKey = process.env.STRIPE_SECRET_KEY || '';
+    const stripeMode = stripeKey.startsWith('sk_live') ? 'LIVE' : stripeKey.startsWith('sk_test') ? 'TEST' : 'UNKNOWN';
+    const keyPrefix = stripeKey.substring(0, 14) + '...';
+    const ecologicPublicUrl = process.env.ECOLOGIC_PUBLIC_URL || '(not set — fallback to https://app.ecologicc.com)';
+    const appBaseUrl = process.env.APP_BASE_URL ? process.env.APP_BASE_URL.substring(0, 40) + '...' : '(not set)';
+    res.json({
+      stripeMode,
+      keyPrefix,
+      ecologicPublicUrl,
+      appBaseUrl,
+      nodeEnv: process.env.NODE_ENV || 'unknown',
+      note: 'Stripe Connect must be enabled for the LIVE environment at dashboard.stripe.com/connect. Sandbox/Test enrollment does NOT apply to sk_live keys.',
+    });
+  });
+
   app.get('/api/stripe-connect/native-return', (req: any, res) => {
     const status = req.query.status || 'complete';
     console.log(`[StripeConnect] native-return page loaded, status=${status}`);
@@ -20717,14 +20735,31 @@ window.location.href = '${deepLink}';
   });
 
   app.post('/api/stripe-connect/ensure-ready', isAuthenticated, async (req: any, res) => {
+    // ── Stripe key mode diagnostics ────────────────────────────────────────────
+    const stripeKey = process.env.STRIPE_SECRET_KEY || '';
+    const stripeMode = stripeKey.startsWith('sk_live') ? 'LIVE' : stripeKey.startsWith('sk_test') ? 'TEST' : 'UNKNOWN';
+    const stripeKeyPrefix = stripeKey.substring(0, 14) + '...';
+    const isNative = req.body.native === true;
+    const hasBearer = (req.headers['authorization'] || '').startsWith('Bearer ');
+    const hasCookie = !!req.headers.cookie;
+
+    console.log(`[StripeConnect] ensure-ready REQUEST: native=${isNative} stripeMode=${stripeMode} keyPrefix=${stripeKeyPrefix} hasBearer=${hasBearer} hasCookie=${hasCookie} userId=${getUserId(req.user)} origin=${req.get('origin')||'-'} host=${req.get('host')}`);
+
     try {
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
-      if (!company) return res.status(404).json({ error: 'Company not found' });
+      if (!company) {
+        console.error(`[StripeConnect] ensure-ready: company not found for userId=${userId}`);
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      console.log(`[StripeConnect] ensure-ready: companyId=${company.id} companyName=${company.name} existingAccountId=${company.stripeConnectAccountId || 'none'} dbStatus=${company.stripeConnectStatus || 'none'}`);
 
       const member = await storage.getCompanyMember(company.id, userId);
       const role = (member?.role || '').toUpperCase();
+      console.log(`[StripeConnect] ensure-ready: userId=${userId} role=${role}`);
       if (role !== 'OWNER' && role !== 'ADMIN') {
+        console.warn(`[StripeConnect] ensure-ready: RBAC block — role=${role} is not OWNER/ADMIN`);
         return res.status(403).json({ error: 'Only the company owner can set up Stripe Connect', ownerOnly: true });
       }
 
@@ -20734,11 +20769,10 @@ window.location.href = '${deepLink}';
         company.stripeConnectDetailsSubmitted;
 
       if (isReady) {
-        console.log(`[StripeConnect] ensure-ready: company ${company.id} is already ready`);
+        console.log(`[StripeConnect] ensure-ready: company ${company.id} is already fully ready`);
         return res.json({ ready: true, status: 'active' });
       }
 
-      const isNative = req.body.native === true;
       const returnPath = req.body.returnPath || '/settings/stripe-connect';
 
       // For web, use the browser's actual origin so the return URL stays on
@@ -20750,7 +20784,6 @@ window.location.href = '${deepLink}';
       const baseUrl = isNative
         ? nativeBaseUrl
         : (requestOrigin || process.env.APP_BASE_URL || `https://${req.get('host')}`);
-      console.log(`[StripeConnect] ensure-ready: baseUrl=${baseUrl} (origin=${req.get('origin')} native=${isNative} nativeBaseUrl=${nativeBaseUrl})`);
 
       let returnUrl: string;
       let refreshUrl: string;
@@ -20763,47 +20796,74 @@ window.location.href = '${deepLink}';
         refreshUrl = `${baseUrl}${returnPath}${returnPath.includes('?') ? '&' : '?'}stripe_connect_return=refresh`;
       }
 
+      console.log(`[StripeConnect] ensure-ready: baseUrl=${baseUrl} returnUrl=${returnUrl} refreshUrl=${refreshUrl}`);
+
       if (!company.stripeConnectAccountId) {
-        console.log(`[StripeConnect] ensure-ready: creating account for company ${company.id}`);
-        const account = await stripeConnectService.createConnectedAccount(company.id, company.name, company.email);
+        console.log(`[StripeConnect] ensure-ready: no account — creating new Express account for company ${company.id} (stripeMode=${stripeMode})`);
+        let account: any;
+        try {
+          account = await stripeConnectService.createConnectedAccount(company.id, company.name, company.email);
+          console.log(`[StripeConnect] ensure-ready: created account ${account.id} for company ${company.id}`);
+        } catch (createErr: any) {
+          const errMsg: string = createErr?.message || '';
+          const errType: string = createErr?.type || '';
+          const errCode: string = createErr?.code || '';
+          console.error(`[StripeConnect] ensure-ready: account creation FAILED — type=${errType} code=${errCode} stripeMode=${stripeMode} msg=${errMsg}`);
+          if (errMsg.includes("signed up for Connect") || errMsg.includes("Connect platform") || errType === 'StripePermissionError') {
+            return res.status(503).json({
+              error: `Stripe Connect is not enabled for the ${stripeMode} environment. Visit https://dashboard.stripe.com/connect to enroll your LIVE account. (Note: enabling Connect in the Stripe Sandbox/Test mode does NOT affect the live key.)`,
+              code: 'STRIPE_CONNECT_NOT_ENABLED',
+              stripeMode,
+            });
+          }
+          return res.status(500).json({ error: `Account creation failed: ${errMsg}`, code: errType || 'STRIPE_ERROR', stripeMode });
+        }
 
         console.log(`[StripeConnect] ensure-ready: generating onboarding link for new account ${account.id}`);
-        const link = await stripeConnectService.createOnboardingLink(account.id, returnUrl, refreshUrl);
+        let link: any;
+        try {
+          link = await stripeConnectService.createOnboardingLink(account.id, returnUrl, refreshUrl);
+          console.log(`[StripeConnect] ensure-ready: onboarding link created OK url=${link.url.substring(0, 60)}...`);
+        } catch (linkErr: any) {
+          console.error(`[StripeConnect] ensure-ready: onboarding link creation FAILED — ${linkErr?.message}`);
+          return res.status(500).json({ error: `Onboarding link creation failed: ${linkErr?.message}`, code: 'STRIPE_LINK_ERROR' });
+        }
         return res.json({ ready: false, status: 'not_connected', onboardingUrl: link.url, accountId: account.id });
       }
 
+      // Account exists — check for env mismatch: stored ID might be from wrong Stripe mode
+      const storedId: string = company.stripeConnectAccountId;
+      const storedIdMode = storedId.startsWith('acct_') ? 'unknown' : 'invalid';
+      console.log(`[StripeConnect] ensure-ready: existing account storedId=${storedId} storedIdMode=${storedIdMode} currentStripeMode=${stripeMode}`);
+
       let syncedStatus = company.stripeConnectStatus;
       try {
-        const synced = await stripeConnectService.syncAccountStatus(company.id, company.stripeConnectAccountId);
+        const synced = await stripeConnectService.syncAccountStatus(company.id, storedId);
         syncedStatus = synced.status;
         if (synced.chargesEnabled && synced.payoutsEnabled && synced.detailsSubmitted) {
           console.log(`[StripeConnect] ensure-ready: company ${company.id} became ready after sync`);
           return res.json({ ready: true, status: 'active' });
         }
+        console.log(`[StripeConnect] ensure-ready: sync done — charges=${synced.chargesEnabled} payouts=${synced.payoutsEnabled} details=${synced.detailsSubmitted}`);
       } catch (e: any) {
-        console.warn(`[StripeConnect] ensure-ready: sync failed for company ${company.id}: ${e.message}`);
+        console.warn(`[StripeConnect] ensure-ready: sync failed — type=${e?.type} msg=${e?.message}. Possible env mismatch (stored account from ${storedId} may not belong to ${stripeMode} mode).`);
       }
 
-      console.log(`[StripeConnect] ensure-ready: generating onboarding link for incomplete account ${company.stripeConnectAccountId}`);
-      const link = await stripeConnectService.createOnboardingLink(company.stripeConnectAccountId, returnUrl, refreshUrl);
-      return res.json({ ready: false, status: syncedStatus || 'setup_incomplete', onboardingUrl: link.url, accountId: company.stripeConnectAccountId });
+      console.log(`[StripeConnect] ensure-ready: generating onboarding link for incomplete account ${storedId}`);
+      let link: any;
+      try {
+        link = await stripeConnectService.createOnboardingLink(storedId, returnUrl, refreshUrl);
+        console.log(`[StripeConnect] ensure-ready: onboarding link OK url=${link.url.substring(0, 60)}...`);
+      } catch (linkErr: any) {
+        console.error(`[StripeConnect] ensure-ready: onboarding link FAILED for ${storedId} — ${linkErr?.message}`);
+        return res.status(500).json({ error: `Onboarding link creation failed: ${linkErr?.message}`, code: 'STRIPE_LINK_ERROR' });
+      }
+      return res.json({ ready: false, status: syncedStatus || 'setup_incomplete', onboardingUrl: link.url, accountId: storedId });
     } catch (error: any) {
-      console.error('[StripeConnect] Error in ensure-ready:', error);
-      // Provide actionable errors instead of a generic 500
       const msg: string = error?.message || '';
-      if (msg.includes("signed up for Connect") || msg.includes("Connect platform")) {
-        return res.status(503).json({
-          error: 'Stripe Connect is not yet enabled on this account. Please visit https://dashboard.stripe.com/connect to enroll, then try again.',
-          code: 'STRIPE_CONNECT_NOT_ENABLED',
-        });
-      }
-      if (msg.includes("StripePermissionError")) {
-        return res.status(503).json({
-          error: 'Stripe Connect permission denied. Ensure the Stripe account is enrolled as a Connect platform.',
-          code: 'STRIPE_CONNECT_PERMISSION',
-        });
-      }
-      res.status(500).json({ error: 'Failed to check Stripe Connect readiness', detail: msg });
+      const errType: string = error?.type || '';
+      console.error(`[StripeConnect] ensure-ready UNHANDLED ERROR — type=${errType} msg=${msg}`, error);
+      res.status(500).json({ error: msg || 'Failed to check Stripe Connect readiness', code: errType || 'INTERNAL_ERROR', stripeMode });
     }
   });
 
