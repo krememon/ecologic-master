@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
-const HOSTED_APP_URL = process.env.VITE_CAP_HOSTED_URL || 'https://app.ecologicc.com/wrapper';
+const HOSTED_APP_URL = process.env.VITE_CAP_HOSTED_URL || 'https://app.ecologicc.com';
 
 const config: CapacitorConfig = {
   appId: 'com.ecologic.app',
