@@ -14783,13 +14783,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoiceId = parseInt(req.params.id);
       const { email } = req.body;
       
-      console.log("[EmailSend] start", { 
-        invoiceId, 
-        to: email,
-        hasResendKey: !!process.env.RESEND_API_KEY,
-        hasAppBaseUrl: !!process.env.APP_BASE_URL
-      });
-      
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       
