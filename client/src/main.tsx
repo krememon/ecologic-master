@@ -152,31 +152,49 @@ console.log("[main.tsx] Starting app initialization, pathname:", window.location
 initPushDebug();
 
 // App version for cache-busting (update this when deploying significant changes)
-const APP_VERSION = "2026.01.14.3";
+const APP_VERSION = "2026.04.05.1";
+
+// Returns true when running inside the Capacitor native shell (iOS or Android).
+function isCapacitorNative(): boolean {
+  try {
+    const cap = (window as any).Capacitor;
+    return !!(cap?.isNativePlatform?.() || (cap?.getPlatform?.() && cap.getPlatform() !== "web"));
+  } catch {
+    return false;
+  }
+}
 
 // Version check and cache-bust mechanism
 const checkAndClearCache = async () => {
-  const storedVersion = localStorage.getItem("ecologic_app_version");
-  
-  if (storedVersion !== APP_VERSION) {
-    console.log(`[cache] Version change detected: ${storedVersion} -> ${APP_VERSION}`);
-    localStorage.setItem("ecologic_app_version", APP_VERSION);
-    
-    // Clear old caches
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map(name => caches.delete(name)));
-      console.log("[cache] Cleared browser caches");
+  try {
+    const storedVersion = localStorage.getItem("ecologic_app_version");
+
+    if (storedVersion !== APP_VERSION) {
+      console.log(`[cache] Version change detected: ${storedVersion} -> ${APP_VERSION}`);
+      localStorage.setItem("ecologic_app_version", APP_VERSION);
+
+      // Clear old caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log("[cache] Cleared browser caches");
+      }
+
+      // In Capacitor native, skip the service-worker unregister + reload entirely.
+      // The remote URL always serves the latest assets, so a reload is unnecessary.
+      // More importantly, window.location.reload() in WKWebView can return false
+      // before React mounts, leaving the screen permanently blank.
+      if (!isCapacitorNative() && storedVersion && 'serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(reg => reg.unregister()));
+        console.log("[cache] Unregistered old service workers, reloading...");
+        window.location.reload();
+        return false; // Don't render, we're reloading
+      }
     }
-    
-    // Unregister old service workers and reload only if coming from a different version
-    if (storedVersion && 'serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map(reg => reg.unregister()));
-      console.log("[cache] Unregistered old service workers, reloading...");
-      window.location.reload();
-      return false; // Don't render, we're reloading
-    }
+  } catch (e) {
+    // Never let cache-busting block the app from rendering
+    console.warn("[cache] checkAndClearCache error (ignored):", e);
   }
   return true;
 };
@@ -251,4 +269,12 @@ const initApp = async () => {
   }
 };
 
-initApp();
+initApp().catch((err) => {
+  console.error("[main.tsx] initApp fatal error:", err);
+  // Last-resort fallback: if initApp throws before React mounts, show an error
+  // instead of leaving the screen blank.
+  const rootEl = document.getElementById("root");
+  if (rootEl && !rootEl.hasChildNodes()) {
+    rootEl.innerHTML = '<div style="padding:40px;font-family:system-ui;color:#cc0000;font-size:14px;">EcoLogic failed to start. Please close and reopen the app.</div>';
+  }
+});
