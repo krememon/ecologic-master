@@ -30,7 +30,6 @@ function getEncryptionKey(): Buffer {
 
 try {
   const present = !!process.env.ENCRYPTION_KEY;
-  console.log("[crypto] ENCRYPTION_KEY present:", present);
   if (present) {
     const raw = process.env.ENCRYPTION_KEY!.trim();
     let bytes: Buffer;
