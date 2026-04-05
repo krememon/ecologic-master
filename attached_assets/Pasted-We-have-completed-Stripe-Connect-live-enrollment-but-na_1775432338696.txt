@@ -1,0 +1,163 @@
+We have completed Stripe Connect live enrollment, but native iOS/Android still shows:
+
+"Failed to start Stripe setup"
+
+The issue is no longer Stripe configuration — it is now a runtime/backend failure in the onboarding start flow.
+
+We need to identify and fix the exact failure point.
+
+Goal
+
+Make the Connect Stripe button successfully open the Stripe onboarding flow on native iOS and Android.
+
+Step 1 — Capture the exact backend error
+
+Instrument the route that starts onboarding.
+
+Most likely:
+
+POST /api/stripe-connect/ensure-ready
+
+Add structured logs at every step.
+
+Log:
+
+request received
+userId
+companyId
+role
+isOwner
+existing stripeAccountId
+stripeMode (LIVE / TEST)
+baseUrl used
+return_url
+refresh_url
+result of stripe.accounts.create
+result of stripe.accountLinks.create
+full Stripe error object
+
+Do not mask errors.
+
+Return the real error message to the frontend.
+
+Step 2 — Verify authentication for the initial request
+
+Confirm that the Connect Stripe button request includes:
+
+Authorization header:
+
+Authorization: Bearer <nativeSessionId>
+
+and:
+
+x-client-type: mobile
+
+If missing, fix it.
+
+Do not assume polling fixes applied to the initial onboarding request.
+
+Step 3 — Validate environment consistency
+
+Verify:
+
+Stripe secret key in use
+Stripe account id being created
+stored stripeAccountId on company
+environment of stored account
+
+Detect mismatch cases:
+
+Example:
+
+stored account created in test
+server now using live key
+
+If mismatch exists:
+
+Clear invalid account id safely.
+
+Step 4 — Validate URL generation
+
+Log and verify:
+
+return_url
+refresh_url
+baseUrl
+
+Ensure native uses:
+
+https://app.ecologicc.com/api/stripe-connect/native-return
+
+Never:
+
+replit preview domains
+localhost
+old base URL
+Step 5 — Validate capability request
+
+Ensure onboarding creates account with:
+
+capabilities: {
+  card_payments: { requested: true },
+  transfers: { requested: true }
+}
+Step 6 — Validate role permissions
+
+Confirm:
+
+user is Owner
+company exists
+company not paused
+Stripe not already connected
+RBAC not blocking
+
+Log:
+
+role
+company status
+subscription status
+stripeConnected flag
+Step 7 — Add temporary debug endpoint
+
+Create:
+
+GET /api/stripe-connect/debug
+
+Return:
+
+{
+  stripeMode,
+  companyId,
+  userId,
+  role,
+  stripeAccountId,
+  accountExistsInStripe,
+  connectEnabled,
+  baseUrl,
+  returnUrl
+}
+Deliverables
+
+When finished, report:
+
+exact root cause
+exact Stripe error message
+exact file changed
+exact line changed
+confirmation that onboarding opens on iPhone
+confirmation that onboarding opens on Android
+Important constraints
+
+Do not:
+
+change architecture
+add duplicate flows
+modify web behavior
+remove RBAC
+touch payment logic
+
+Only fix the onboarding start failure.
+
+After production fix is confirmed:
+
+Apply the same fix to EcoLogic Staging immediately.

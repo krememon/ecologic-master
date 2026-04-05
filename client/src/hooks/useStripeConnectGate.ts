@@ -344,12 +344,16 @@ export function useStripeConnectGate() {
         errData?.code === 'STRIPE_CONNECT_NOT_ENABLED' ||
         errData?.code === 'STRIPE_CONNECT_PERMISSION'
       ) {
-        // Surface the exact Stripe mode in the message so it's clear whether
-        // the issue is with LIVE or TEST keys.
         const modeHint = errData?.stripeMode ? ` (${errData.stripeMode} mode)` : '';
         toastRef.current({
           title: `Stripe Connect not enabled${modeHint}`,
-          description: errData?.error || "Enable Stripe Connect for the LIVE account at dashboard.stripe.com/connect. Enabling it only in Sandbox/Test mode has no effect on the live server.",
+          description: errData?.error || "Enable Stripe Connect for the LIVE account at dashboard.stripe.com/connect.",
+          variant: "destructive",
+        });
+      } else if (errData?.code === 'STRIPE_PLATFORM_PROFILE_INCOMPLETE') {
+        toastRef.current({
+          title: "Stripe platform profile incomplete",
+          description: "Complete the platform profile at dashboard.stripe.com/settings/connect/platform-profile, then try again.",
           variant: "destructive",
         });
       } else if (errData?.error) {

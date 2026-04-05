@@ -20816,6 +20816,13 @@ window.location.href = '${deepLink}';
               stripeMode,
             });
           }
+          if (errMsg.includes("managing losses") || errMsg.includes("platform-profile") || errMsg.includes("platform profile") || errMsg.includes("responsibilities")) {
+            return res.status(503).json({
+              error: `Stripe Connect platform profile is incomplete. You must complete the platform profile questionnaire at https://dashboard.stripe.com/settings/connect/platform-profile before connected accounts can be created.`,
+              code: 'STRIPE_PLATFORM_PROFILE_INCOMPLETE',
+              stripeMode,
+            });
+          }
           return res.status(500).json({ error: `Account creation failed: ${errMsg}`, code: errType || 'STRIPE_ERROR', stripeMode });
         }
 
@@ -20864,6 +20871,79 @@ window.location.href = '${deepLink}';
       const errType: string = error?.type || '';
       console.error(`[StripeConnect] ensure-ready UNHANDLED ERROR — type=${errType} msg=${msg}`, error);
       res.status(500).json({ error: msg || 'Failed to check Stripe Connect readiness', code: errType || 'INTERNAL_ERROR', stripeMode });
+    }
+  });
+
+  // GET /api/stripe-connect/debug — authenticated, returns full runtime state for this user
+  app.get('/api/stripe-connect/debug', isAuthenticated, async (req: any, res) => {
+    try {
+      const stripeKey = process.env.STRIPE_SECRET_KEY || '';
+      const stripeMode = stripeKey.startsWith('sk_live') ? 'LIVE' : stripeKey.startsWith('sk_test') ? 'TEST' : 'UNKNOWN';
+      const ecologicPublicUrl = process.env.ECOLOGIC_PUBLIC_URL || 'https://app.ecologicc.com';
+      const appBaseUrl = process.env.APP_BASE_URL || '';
+      const nativeBaseUrl = ecologicPublicUrl.replace(/\/$/, '');
+      const returnUrl = `${nativeBaseUrl}/api/stripe-connect/native-return`;
+      const refreshUrl = `${nativeBaseUrl}/api/stripe-connect/native-return?status=refresh`;
+
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      const member = company ? await storage.getCompanyMember(company.id, userId) : null;
+      const role = (member?.role || '').toUpperCase();
+      const stripeAccountId = company?.stripeConnectAccountId || null;
+
+      let accountExistsInStripe = false;
+      let stripeAccountMode: string | null = null;
+      let stripeAccountError: string | null = null;
+      if (stripeAccountId) {
+        try {
+          const { retrieveAccountStatus } = await import('./services/stripeConnect');
+          const acct = await retrieveAccountStatus(stripeAccountId);
+          accountExistsInStripe = true;
+          stripeAccountMode = stripeAccountId.startsWith('acct_') ? 'present' : 'invalid_format';
+          void acct;
+        } catch (e: any) {
+          stripeAccountError = e?.message || 'unknown';
+        }
+      }
+
+      let connectEnabled = false;
+      let connectTestError: string | null = null;
+      try {
+        const Stripe = (await import('stripe')).default;
+        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '2025-04-30.basil' as any });
+        await stripeClient.accounts.list({ limit: 1 });
+        connectEnabled = true;
+      } catch (e: any) {
+        connectTestError = e?.message || 'unknown';
+      }
+
+      res.json({
+        stripeMode,
+        userId,
+        companyId: company?.id ?? null,
+        companyName: company?.name ?? null,
+        role,
+        isOwner: role === 'OWNER',
+        stripeAccountId,
+        accountExistsInStripe,
+        stripeAccountMode,
+        stripeAccountError,
+        connectEnabled,
+        connectTestError,
+        ecologicPublicUrl,
+        appBaseUrl: appBaseUrl ? appBaseUrl.substring(0, 40) + '...' : '(not set)',
+        returnUrl,
+        refreshUrl,
+        dbStatus: company?.stripeConnectStatus ?? null,
+        chargesEnabled: company?.stripeConnectChargesEnabled ?? null,
+        payoutsEnabled: company?.stripeConnectPayoutsEnabled ?? null,
+        detailsSubmitted: company?.stripeConnectDetailsSubmitted ?? null,
+        subscriptionStatus: company?.subscriptionStatus ?? null,
+        adminPaused: company?.adminPaused ?? null,
+      });
+    } catch (err: any) {
+      console.error('[StripeConnect] debug endpoint error:', err);
+      res.status(500).json({ error: err?.message || 'debug endpoint failed' });
     }
   });
 
