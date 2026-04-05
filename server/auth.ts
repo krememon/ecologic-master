@@ -849,12 +849,20 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Incorrect password." });
       }
 
+      // Apple reviewer bypass: skip OTP email for the designated review account
+      const appleReviewEmail = process.env.APPLE_REVIEW_EMAIL?.toLowerCase().trim();
+      if (appleReviewEmail && normalizedEmail === appleReviewEmail) {
+        await storage.updateLoginChallenge(normalizedEmail, {
+          passwordVerified: true,
+          codeAttempts: 0,
+        });
+        return res.json({ ok: true });
+      }
+
       // Generate 6-digit MFA code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
       const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
-      
-      console.log("[login-code] Generated 6-digit code for email:", normalizedEmail);
 
       // Update challenge with password verified and code
       await storage.updateLoginChallenge(normalizedEmail, {
@@ -932,15 +940,20 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Please verify your password first." });
       }
 
+      // Apple reviewer bypass: accept the static review code for the designated account
+      const appleReviewEmail = process.env.APPLE_REVIEW_EMAIL?.toLowerCase().trim();
+      const appleReviewCode = process.env.APPLE_REVIEW_CODE;
+      const isAppleReviewBypass =
+        appleReviewEmail &&
+        appleReviewCode &&
+        normalizedEmail === appleReviewEmail &&
+        code === appleReviewCode;
+
       // DEV BYPASS: Accept "000000" in development with BYPASS_EMAIL_CODE=true
       const devBypassEnabled = process.env.NODE_ENV === "development" && process.env.BYPASS_EMAIL_CODE === "true";
       const isDevBypass = devBypassEnabled && code === "000000";
-      
-      if (isDevBypass) {
-        console.log("[auth] DEV BYPASS enabled for email code verification - login");
-      }
 
-      if (!isDevBypass) {
+      if (!isAppleReviewBypass && !isDevBypass) {
         if (!challenge.verificationCodeHash || !challenge.codeExpiresAt) {
           return res.status(400).json({ message: "No verification code sent. Please try again." });
         }
