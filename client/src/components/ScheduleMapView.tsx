@@ -286,15 +286,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
 
-  // Diagnostic: log key presence and origin for debugging referrer-restriction issues.
-  useEffect(() => {
-    const mapsScriptTags = Array.from(document.querySelectorAll('script[src*="maps.googleapis.com"]')).map((s) => (s as HTMLScriptElement).src.replace(/key=[^&]+/, 'key=REDACTED'));
-    console.log('[ScheduleMap][diag] apiKey present:', hasApiKey,
-      '| apiKey suffix:', apiKey.slice(-6) || '(empty)',
-      '| host:', window.location.hostname,
-      '| origin:', window.location.origin,
-      '| maps script tags:', mapsScriptTags.length, mapsScriptTags);
-  }, [hasApiKey, apiKey]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     // id MUST match the id used by LocationInput (useLoadScript).
