@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
+import logoImage from "@assets/IMG_6171_2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
 import type { UserRole } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue, validatePhone } from "@shared/phoneUtils";

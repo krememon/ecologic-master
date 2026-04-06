@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, ShieldCheck, KeyRound } from "lucide-react";
-import logoPath from "@assets/IMG_6171 2_1749763982284.jpg";
+import logoPath from "@assets/IMG_6171_2_1749763982284.jpg";
 
 export default function TwoFactor() {
   const [, setLocation] = useLocation();
