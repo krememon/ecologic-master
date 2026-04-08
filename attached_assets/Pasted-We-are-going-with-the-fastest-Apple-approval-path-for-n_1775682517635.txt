@@ -1,0 +1,50 @@
+We are going with the fastest Apple approval path for now.
+
+Goal
+Temporarily remove iOS background location support from EcoLogic so the app no longer declares persistent background location / employee tracking in the background for App Store review.
+
+Important
+This is a temporary approval-focused change. We want to remove background location from the iOS build for now, while preserving as much normal foreground / while-using location functionality as possible. Do not break the rest of the app.
+
+What to inspect
+- ios/App/App/Info.plist
+- any iOS native location/background config
+- capacitor config if relevant
+- any permission request flow for iOS
+- any frontend copy that says always-on/background tracking on iPhone/iPad
+- any code that requests "Always" location on iOS
+- any background geolocation startup logic on iOS
+
+What to change
+1. Remove any iOS background location declarations, especially:
+   - UIBackgroundModes entries for location
+   - any config that implies persistent background location on iOS
+
+2. Change iOS permission flow so it only requests appropriate foreground / while-using location access, not Always, unless absolutely required elsewhere.
+
+3. Make sure the app does not claim or attempt background employee tracking on iOS after this change.
+
+4. Preserve normal in-app location usage where possible:
+   - map usage
+   - job/location viewing
+   - foreground location checks if still supported
+
+5. Audit user-facing text on iOS that may promise background tracking and soften it if needed so Apple does not see misleading behavior.
+
+6. Add targeted logs only if needed for verification, then keep them minimal.
+
+Deliverables
+- Implement the change
+- Show every file changed
+- Tell me exactly what background location declarations were removed
+- Confirm whether any iOS permission strings were changed
+- Confirm whether any frontend copy was changed
+- Confirm whether Android background tracking remains untouched
+- Confirm whether web remains untouched
+
+Guardrails
+- Do not break Android background tracking
+- Do not break web
+- Do not touch billing/subscriptions/auth unless required
+- Keep the app as source of truth
+- Keep the change minimal and production-safe

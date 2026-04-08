@@ -38,23 +38,26 @@ post_install do |installer|
       'NSPhotoLibraryUsageDescription'    => 'EcoLogic accesses your photo library so you can attach images to job documents.',
       'NSPhotoLibraryAddUsageDescription' => 'EcoLogic may save captured photos to your library for job documentation.',
       'NSMicrophoneUsageDescription'      => 'EcoLogic uses the microphone to record audio when capturing video for job documents.',
-      'NSLocationWhenInUseUsageDescription'             => 'EcoLogic tracks your location while you are clocked into a job so your live position appears on the crew map until you clock out.',
-      'NSLocationAlwaysAndWhenInUseUsageDescription'    => 'EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.',
-      'NSLocationAlwaysUsageDescription'                => 'EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.'
+      'NSLocationWhenInUseUsageDescription' => 'EcoLogic uses your location while the app is open to show your position on the crew map when you are clocked into a job.'
     }
     privacy_entries.each do |key, value|
       # Try Add first (fails silently if key exists), then Set to ensure value is current
       system("/usr/libexec/PlistBuddy -c 'Add :#{key} string #{value}' '#{info_plist}' 2>/dev/null")
       system("/usr/libexec/PlistBuddy -c 'Set :#{key} #{value}' '#{info_plist}'")
     end
+
+    # Remove "Always" location keys — app only uses WhenInUse (foreground) location.
+    # Delete is idempotent: fails silently if the key is already absent.
+    ['NSLocationAlwaysAndWhenInUseUsageDescription', 'NSLocationAlwaysUsageDescription'].each do |key|
+      system("/usr/libexec/PlistBuddy -c 'Delete :#{key}' '#{info_plist}' 2>/dev/null")
+    end
     puts "✅  iOS privacy usage descriptions verified in Info.plist"
 
-    # Ensure UIBackgroundModes includes 'location' for background geo-tracking.
-    # The 'remote-notification' mode for push notifications must also remain.
-    modes_needed = ['remote-notification', 'location']
-    modes_needed.each do |mode|
-      system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes: string #{mode}' '#{info_plist}' 2>/dev/null")
-    end
-    puts "✅  UIBackgroundModes (location + remote-notification) verified in Info.plist"
+    # UIBackgroundModes: only remote-notification (push). Location background mode removed.
+    # Delete and recreate the array so any previously-added 'location' entry is gone.
+    system("/usr/libexec/PlistBuddy -c 'Delete :UIBackgroundModes' '#{info_plist}' 2>/dev/null")
+    system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes array' '#{info_plist}' 2>/dev/null")
+    system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes: string remote-notification' '#{info_plist}' 2>/dev/null")
+    puts "✅  UIBackgroundModes (remote-notification only) verified in Info.plist"
   end
 end

@@ -74,14 +74,9 @@
         <key>UIBackgroundModes</key>
         <array>
                 <string>remote-notification</string>
-                <string>location</string>
         </array>
         <key>NSLocationWhenInUseUsageDescription</key>
-        <string>EcoLogic tracks your location while you are clocked into a job so your live position appears on the crew map until you clock out.</string>
-        <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-        <string>EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.</string>
-        <key>NSLocationAlwaysUsageDescription</key>
-        <string>EcoLogic tracks your location in the background while you are clocked into a job so the live map stays current even when the app is minimized.</string>
+        <string>EcoLogic uses your location while the app is open to show your position on the crew map when you are clocked into a job.</string>
         <key>NSCameraUsageDescription</key>
         <string>EcoLogic uses the camera to capture photos and videos for job documents.</string>
         <key>NSPhotoLibraryUsageDescription</key>
