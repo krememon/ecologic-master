@@ -12,13 +12,20 @@ export function getResendFrom(): string {
 }
 
 export function getAppBaseUrl(): string | null {
-  const raw = process.env.APP_BASE_URL;
+  // Priority: canonical branded domain first, then legacy APP_BASE_URL
+  const raw = (
+    process.env.ECOLOGIC_PUBLIC_URL ||
+    process.env.APP_PUBLIC_BASE_URL ||
+    process.env.APP_BASE_URL ||
+    ''
+  ).trim();
+
   if (!raw) {
-    console.warn('[SignLink] APP_BASE_URL not set');
+    console.warn('[SignLink] No base URL env var set (checked ECOLOGIC_PUBLIC_URL, APP_PUBLIC_BASE_URL, APP_BASE_URL)');
     return null;
   }
 
-  let normalized = raw.trim();
+  let normalized = raw;
   if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
     normalized = 'https://' + normalized;
   }
@@ -26,10 +33,10 @@ export function getAppBaseUrl(): string | null {
   try {
     const url = new URL(normalized);
     const base = url.origin;
-    console.log('[SignLink] Using APP_BASE_URL =', base);
+    console.log('[SignLink] Using base URL =', base);
     return base;
   } catch (err) {
-    console.warn('[SignLink] Invalid APP_BASE_URL:', raw);
+    console.warn('[SignLink] Invalid base URL:', raw);
     return null;
   }
 }

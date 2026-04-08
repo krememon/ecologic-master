@@ -1,0 +1,70 @@
+We found the root cause of Apple Sign In review failure.
+
+Problem
+After Sign in with Apple, the user is getting sent to the old Replit picard dev URL instead of staying on the production domain https://app.ecologicc.com. This is likely causing the blank page Apple saw during review.
+
+Goal
+Make Apple Sign In always use the production public domain https://app.ecologicc.com for every auth callback / redirect / post-login return path in production. The old Replit picard dev URL must never be used anywhere in the Apple auth flow.
+
+What to inspect
+Check all places that may build auth URLs, callback URLs, success URLs, or absolute redirects, especially:
+- server/auth.ts
+- server/replitAuth.ts
+- server/routes.ts
+- any Apple auth / OAuth helper files
+- any env-based URL resolver
+- frontend auth redirect helpers
+- Capacitor config if relevant
+- any APP_BASE_URL / APP_PUBLIC_BASE_URL / VITE_APP_BASE_URL usage
+
+What to fix
+1. Find every place still using:
+   - a hardcoded replit.dev / picard.replit.dev URL
+   - request host derived from preview/dev host in production
+   - APP_BASE_URL when APP_PUBLIC_BASE_URL should be used
+
+2. In production, the canonical public base URL must be:
+   - https://app.ecologicc.com
+
+3. Build a single shared helper for canonical base URL resolution and use it everywhere auth-related URLs are created.
+Priority:
+- APP_PUBLIC_BASE_URL
+- fallback to APP_BASE_URL
+- fallback only for local/dev when not production
+
+4. Update Apple Sign In callback / redirect logic so after successful auth it always returns to the production app domain, never the Replit preview domain.
+
+5. Search entire codebase for:
+   - replit.dev
+   - picard
+   - APP_BASE_URL
+   - APP_PUBLIC_BASE_URL
+   - callback
+   - redirect
+   - returnTo
+   - success_url
+   - cancel_url
+   - origin
+
+6. Verify there is no auth cookie/session/domain mismatch caused by redirecting across domains.
+
+7. If Apple auth is using any server-generated absolute redirect URI, make sure it matches the production domain exactly.
+
+8. Preserve staging/dev behavior:
+   - staging should use staging env values
+   - local/dev can still use preview/local URLs
+   - production must be locked to app.ecologicc.com
+
+Deliverables
+- Implement the fix
+- Show me every file changed
+- Explain exactly what was using the old picard URL
+- Confirm the final Apple Sign In redirect/callback URL chain in production
+- Add targeted logs for Apple auth URL generation and final redirect target
+- Do not break Google auth or normal login
+- Do not touch unrelated billing/subscription code
+
+Important
+The app must be the source of truth.
+Use hidden-not-disabled principles where relevant.
+Keep solution clean and production-safe.

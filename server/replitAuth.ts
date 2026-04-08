@@ -575,10 +575,35 @@ export async function setupAuth(app: Express) {
 
   // Apple Sign-In routes
   if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
-    const appleRedirectUri = process.env.APPLE_REDIRECT_URI || 
-      (process.env.APP_BASE_URL 
-        ? `${process.env.APP_BASE_URL}/api/auth/apple/callback`
-        : `http://localhost:5000/api/auth/apple/callback`);
+    // Canonical base URL: prefer ECOLOGIC_PUBLIC_URL (always the branded production domain),
+    // then APP_PUBLIC_BASE_URL, then APP_BASE_URL as last resort.
+    // NEVER derive from the request host at startup — Apple requires a fixed, registered redirect_uri.
+    const canonicalBaseUrl = (
+      process.env.ECOLOGIC_PUBLIC_URL ||
+      process.env.APP_PUBLIC_BASE_URL ||
+      process.env.APP_BASE_URL ||
+      'https://app.ecologicc.com'
+    ).replace(/\/$/, '');
+
+    // Validate APPLE_REDIRECT_URI: reject dev/workspace URLs (picard.replit.dev, replit.dev, localhost).
+    // These are ephemeral and not registered with Apple, so using them causes auth failures.
+    const rawAppleRedirectUri = process.env.APPLE_REDIRECT_URI || '';
+    const isDevUrl = rawAppleRedirectUri && (
+      rawAppleRedirectUri.includes('picard.replit.dev') ||
+      rawAppleRedirectUri.includes('.replit.dev') ||
+      rawAppleRedirectUri.includes('repl.co') ||
+      rawAppleRedirectUri.includes('localhost')
+    );
+
+    if (isDevUrl) {
+      console.warn(`[AppleAuth] ⚠️  APPLE_REDIRECT_URI is set to a dev/workspace URL (${rawAppleRedirectUri}). Overriding with canonical URL. Please update the APPLE_REDIRECT_URI secret to https://app.ecologicc.com/api/auth/apple/callback and register it in Apple Developer Console.`);
+    }
+
+    const appleRedirectUri = (rawAppleRedirectUri && !isDevUrl)
+      ? rawAppleRedirectUri
+      : `${canonicalBaseUrl}/api/auth/apple/callback`;
+
+    console.log(`[AppleAuth] canonicalBaseUrl=${canonicalBaseUrl} appleRedirectUri=${appleRedirectUri}`);
 
     function getApplePrivateKey(): string {
       let raw = (process.env.APPLE_PRIVATE_KEY || '').trim();
@@ -670,7 +695,7 @@ export async function setupAuth(app: Express) {
 
         const url = `https://appleid.apple.com/auth/authorize?${params.toString()}`;
 
-        console.log("[AppleAuth] start state+nonce set");
+        console.log(`[AppleAuth] start: redirect_uri=${appleRedirectUri} host=${req.get('host')} origin=${req.get('origin') || '-'}`);
         res.json({ url });
       } catch (error) {
         console.error("[AppleAuth] Start error:", error);
@@ -830,16 +855,16 @@ export async function setupAuth(app: Express) {
         req.logIn(sessionUser, (loginErr) => {
           if (loginErr) {
             console.error("[AppleAuth] Login error:", loginErr);
-            return res.redirect("/?error=login_failed");
+            return res.redirect(`${canonicalBaseUrl}/?error=login_failed`);
           }
 
           req.session.save((saveErr) => {
             if (saveErr) {
               console.error("[AppleAuth] Session save error:", saveErr);
-              return res.redirect("/?error=session_failed");
+              return res.redirect(`${canonicalBaseUrl}/?error=session_failed`);
             }
-            console.log("[AppleAuth] Login successful, redirecting");
-            res.redirect("/");
+            console.log(`[AppleAuth] Login successful, redirecting to ${canonicalBaseUrl}/`);
+            res.redirect(`${canonicalBaseUrl}/`);
           });
         });
       } catch (error: any) {

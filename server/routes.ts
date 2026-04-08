@@ -14822,7 +14822,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fromEmail = getResendFrom();
       console.log('[email] FROM used:', fromEmail);
 
-      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const appBaseUrl = (
+        process.env.ECOLOGIC_PUBLIC_URL ||
+        process.env.APP_PUBLIC_BASE_URL ||
+        process.env.APP_BASE_URL ||
+        'https://app.ecologicc.com'
+      ).replace(/\/$/, '');
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
       
       console.log("[EmailSend] building email", { from: fromEmail, paymentLink });
@@ -14980,7 +14985,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Build payment link
-      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const appBaseUrl = (
+        process.env.ECOLOGIC_PUBLIC_URL ||
+        process.env.APP_PUBLIC_BASE_URL ||
+        process.env.APP_BASE_URL ||
+        'https://app.ecologicc.com'
+      ).replace(/\/$/, '');
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
       
       // Format amount
