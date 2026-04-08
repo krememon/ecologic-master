@@ -1,0 +1,60 @@
+We fixed Apple Sign In and removed iOS background location for App Store review. Now we need to fix the remaining Apple subscription rejection items.
+
+Problem
+Apple said the app’s auto-renewable subscription flow does not include all required information inside the app. Specifically, the purchase flow must clearly show:
+- subscription title
+- subscription length
+- price
+- Privacy Policy link
+- Terms of Use link
+
+Apple specifically called out missing subscription length.
+
+Goal
+Update the EcoLogic subscription / paywall / upgrade flow so the in-app purchase screen clearly and explicitly shows all required Apple subscription information for every plan.
+
+Requirements
+For every subscription option shown in the app, clearly display:
+1. Plan name / subscription title
+2. Subscription duration / length
+   - If these are monthly subscriptions, explicitly say "Monthly auto-renewing subscription"
+3. Price
+4. Functional Privacy Policy link
+5. Functional Terms of Use link
+
+Also make sure the screen makes it obvious that access to paid features requires an active subscription.
+
+What to inspect
+- all upgrade/paywall/subscription screens in the app
+- any iOS-specific paywall or subscription purchase UI
+- any shared pricing/subscription config
+- any modal/page used before starting Apple IAP purchase
+- any legal footer already present
+- any existing Privacy Policy / Terms URLs already used elsewhere
+
+What to change
+1. Add clear subscription-length text to each plan shown in-app.
+2. Make sure price is visible right next to or directly under the plan name.
+3. Add clearly tappable links for:
+   - Privacy Policy
+   - Terms of Use
+4. Add a short line clarifying that subscriptions auto-renew unless canceled.
+5. Add a short line clarifying that certain EcoLogic features require an active subscription.
+6. Keep the UI polished, simple, and professional.
+7. Preserve existing subscription logic and product IDs.
+8. Do not break Stripe/web billing flows unless the UI is shared and the changes are safe there too.
+
+Important
+- Do not change actual product pricing unless there is a bug.
+- Do not touch billing validation logic unless absolutely necessary.
+- Do not break Android or web.
+- If the paywall is shared, safe text/link additions are fine.
+- Keep all existing plans and purchase buttons working exactly as before.
+
+Deliverables
+- Implement the fix
+- Show every file changed
+- Tell me exactly where the subscription length now appears
+- Tell me exactly what Privacy Policy URL and Terms of Use URL are used
+- Confirm whether this appears in the iOS purchase flow before purchase starts
+- Confirm no billing logic / product IDs / validation endpoints were broken

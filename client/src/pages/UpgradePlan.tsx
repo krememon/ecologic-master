@@ -11,6 +11,7 @@ import {
   Loader2,
   ArrowRight,
 } from "lucide-react";
+import { SubscriptionLegalFooter } from "@/components/SubscriptionLegalFooter";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
 import { appleProductIdToPlanKey } from "@shared/subscriptionPlans";
@@ -298,6 +299,7 @@ export default function UpgradePlan() {
                         <span className="text-xs text-slate-400">/month</span>
                       )}
                     </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Monthly auto-renewing</p>
 
                     <div className="flex items-center gap-1 mt-1 text-xs text-slate-500 dark:text-slate-400">
                       <Users className="h-3 w-3" />
@@ -354,6 +356,12 @@ export default function UpgradePlan() {
             : `manage your subscription in your ${nativeIos ? "Apple" : "Google Play"} account settings.`}
         </p>
       )}
+
+      <SubscriptionLegalFooter
+        nativeIos={nativeIos}
+        nativeAndroid={nativeAndroid}
+        className="pt-4 border-t border-slate-100 dark:border-slate-700"
+      />
 
     </div>
   );

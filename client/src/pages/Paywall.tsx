@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Lock, Users, CheckCircle, Shield, LogOut, Loader2, RotateCcw, AlertCircle, Zap } from "lucide-react";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
 import type { PlanKey } from "@/config/subscriptionPlans";
+import { SubscriptionLegalFooter } from "@/components/SubscriptionLegalFooter";
 import { appleProductIdToPlanKey } from "@shared/subscriptionPlans";
 import { PlanSelectorChips } from "@/components/PlanSelectorChips";
 import {
@@ -492,6 +493,7 @@ export default function Paywall() {
                     <div>
                       <h3 className="text-xl font-bold text-slate-800 dark:text-white">{displayPlan.label}</h3>
                       <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{priceDisplay}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Monthly auto-renewing subscription</p>
                     </div>
                     {isNativeApp && (
                       <div className="text-right">
@@ -584,6 +586,12 @@ export default function Paywall() {
                 )}
               </div>
             )}
+
+            <SubscriptionLegalFooter
+              nativeIos={nativeIos}
+              nativeAndroid={nativeAndroid}
+              className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700"
+            />
           </div>
 
           {/* Log out — hidden on Android (moved above into the Restore section) */}

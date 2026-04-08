@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, CheckCircle, LogOut, RotateCcw, Shield, AlertCircle } from "lucide-react";
+import { SubscriptionLegalFooter } from "@/components/SubscriptionLegalFooter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
@@ -470,6 +471,7 @@ export default function OnboardingSubscription() {
                           : `${storePrice}/mo`
                       : `7-day free trial, then $${displayPlan.price}/mo`}
                   </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Monthly auto-renewing subscription</p>
                 </div>
                 {isNativeApp && (
                   <div className="text-right">
@@ -571,6 +573,12 @@ export default function OnboardingSubscription() {
                 </button>
               )}
             </div>
+
+            <SubscriptionLegalFooter
+              nativeIos={nativeIos}
+              nativeAndroid={nativeAndroid}
+              className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700"
+            />
           </div>
 
           {/* Log out — hidden on Android (moved above into the Restore section) */}
