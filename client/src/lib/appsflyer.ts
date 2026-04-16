@@ -106,6 +106,27 @@ export async function initAppsFlyer(): Promise<boolean> {
 
     _initDone = true;
     log(`initialised — platform=${platform} devKey=${DEV_KEY.slice(0, 4)}…`);
+
+    // ── Test-device identifier dump ───────────────────────────────────────────
+    // Logs IDFV (per-vendor, EcoLogic-scoped) and the AppsFlyer ID so they can
+    // be copy/pasted into AppsFlyer dashboard → Configuration → Test Devices.
+    // These are the two identifiers AppsFlyer accepts when IDFA is unavailable
+    // (i.e. ATT denied / IDFA returns all zeros). Wrapped in its own try/catch
+    // so any plugin error never breaks SDK init.
+    try {
+      const { Device } = await import("@capacitor/device");
+      const info = await Device.getId();
+      log(`📱 IDFV (paste into AppsFlyer Test Devices): ${(info as any).identifier ?? (info as any).uuid}`);
+    } catch (e) {
+      warn("could not read IDFV from @capacitor/device:", e);
+    }
+    try {
+      const afid = await AppsFlyer.getAppsFlyerUID();
+      log(`📱 AppsFlyer ID (also accepted by Test Devices): ${(afid as any)?.uid ?? afid}`);
+    } catch (e) {
+      warn("could not read AppsFlyer UID:", e);
+    }
+
     return true;
   } catch (err) {
     warn("initSDK failed:", err);
