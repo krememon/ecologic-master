@@ -166,12 +166,20 @@ export default function OnboardingSubscription() {
     await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
     await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
 
-    // AppsFlyer: subscription / trial conversion events
+    // AppsFlyer: subscription conversion event
+    // NOTE: we can't reliably distinguish a free-trial start from a paid purchase at
+    // this hook — the IAP response doesn't tell us whether the user is on their 7-day
+    // trial or already being billed. Fire only `subscription_started` for now.
+    //
+    // TODO (trial_started): inspect the Apple JWS / Google Play offer on the server and
+    //   return a `inTrial: true` flag in the /api/subscriptions/validate response so we
+    //   can fire AF_EVENTS.TRIAL_STARTED only when `data.inTrial === true`.
+    // TODO (subscription_purchased): fire AF_EVENTS.SUBSCRIPTION_PURCHASED on the first
+    //   successful renewal (post-trial paid charge), ideally from a server webhook →
+    //   client push path rather than this purchase-completed hook.
     import("@/lib/appsflyer").then(({ trackAppsFlyerEvent, AF_EVENTS }) => {
       const planKey = expectedPlanKey ?? selectedPlanKey;
       trackAppsFlyerEvent(AF_EVENTS.SUBSCRIPTION_STARTED, { platform, plan: planKey });
-      trackAppsFlyerEvent(AF_EVENTS.TRIAL_STARTED, { platform, plan: planKey });
-      trackAppsFlyerEvent(AF_EVENTS.SUBSCRIPTION_PURCHASED, { platform, plan: planKey });
     }).catch(() => { /* ignore */ });
 
     toast({ title: "Subscription active!", description: "Welcome to EcoLogic. You're all set." });
