@@ -42,12 +42,14 @@ let _initStarted = false;
 let _initDone = false;
 let _pluginUnavailable = false;
 
+// NOTE: logs are intentionally UNCONDITIONAL (not dev-only) while we validate
+// the AppsFlyer integration on real devices via Xcode/Logcat. Once confirmed
+// working in production builds, these can be downgraded to dev-only.
 function log(...args: unknown[]): void {
-  // Only log in dev builds to avoid production noise.
-  if (IS_DEV) console.log("[appsflyer]", ...args);
+  console.log("[appsflyer]", ...args);
 }
 function warn(...args: unknown[]): void {
-  if (IS_DEV) console.warn("[appsflyer]", ...args);
+  console.warn("[appsflyer]", ...args);
 }
 
 async function loadPlugin(): Promise<any | null> {
