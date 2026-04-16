@@ -1,25 +1,30 @@
 /**
  * AppsFlyer integration for EcoLogic native mobile wrappers.
  *
- * Design goals:
- *   1. Only initialise / track on Capacitor native (iOS + Android).
- *      Web sessions must never call into the plugin.
- *   2. Fail safely — every call is wrapped in try/catch so a missing
- *      plugin, missing config, or runtime error can NEVER crash the app.
- *   3. Single init guard so calling `initAppsFlyer()` multiple times is a no-op.
- *   4. Config driven by env vars:
- *        - VITE_APPSFLYER_DEV_KEY    (required)
- *        - VITE_APPSFLYER_IOS_APP_ID (required for iOS; Apple numeric App Store ID)
+ * Plugin: appsflyer-capacitor-plugin@6.17.91
+ *   Verified API surface (from node_modules/.../src/definitions.ts):
+ *     - initSDK(options: AFInit): Promise<AFRes>
+ *     - logEvent(data: AFEvent): Promise<AFRes>
+ *     - getAppsFlyerUID(): Promise<AFUid>           // returns { uid: string }
+ *   Native iOS class is registered as 'AppsFlyerPlugin' (see ios/Plugin/AppsFlyerPlugin.m).
  *
- * Usage:
- *   import { initAppsFlyer, trackAppsFlyerEvent, AF_EVENTS } from "@/lib/appsflyer";
- *   await initAppsFlyer();
- *   await trackAppsFlyerEvent(AF_EVENTS.SIGN_UP, { method: "email" });
+ * Design goals:
+ *   1. Native-only — never call into the plugin on web.
+ *   2. Fail-safe — every native call has its own try/catch and logs both
+ *      the call boundary and the exact error so the failing method is obvious
+ *      in Xcode / Logcat.
+ *   3. Single init guard.
+ *   4. UNIMPLEMENTED detection — surfaces a clear diagnostic when the native
+ *      pod isn't actually linked into the app.
+ *
+ * Required env vars (baked at Vite build time):
+ *   - VITE_APPSFLYER_DEV_KEY     (required)
+ *   - VITE_APPSFLYER_IOS_APP_ID  (required for iOS install attribution)
  */
 
 import { isNativePlatform, getPlatform } from "@/lib/capacitor";
 
-/** Canonical event names — keep in sync with server-side/AppsFlyer dashboards. */
+/** Canonical event names — keep in sync with AppsFlyer dashboards. */
 export const AF_EVENTS = {
   APP_OPEN: "app_open",
   SIGN_UP: "sign_up",
@@ -42,9 +47,7 @@ let _initStarted = false;
 let _initDone = false;
 let _pluginUnavailable = false;
 
-// NOTE: logs are intentionally UNCONDITIONAL (not dev-only) while we validate
-// the AppsFlyer integration on real devices via Xcode/Logcat. Once confirmed
-// working in production builds, these can be downgraded to dev-only.
+// Logs are intentionally UNCONDITIONAL while validating on real devices.
 function log(...args: unknown[]): void {
   console.log("[appsflyer]", ...args);
 }
@@ -52,15 +55,45 @@ function warn(...args: unknown[]): void {
   console.warn("[appsflyer]", ...args);
 }
 
+/**
+ * Format an error from a native call. Detects Capacitor's UNIMPLEMENTED code
+ * (raised when the native class for a registered plugin isn't actually linked
+ * into the app binary — i.e. pod install / cap sync / clean build wasn't done).
+ */
+function describeError(method: string, err: unknown): string {
+  const anyErr = err as any;
+  const code = anyErr?.code ?? anyErr?.errorCode;
+  const message = anyErr?.message ?? String(err);
+
+  if (code === "UNIMPLEMENTED") {
+    return (
+      `${method} → UNIMPLEMENTED. The native AppsFlyer iOS class is not linked ` +
+      `into this app build. Fix on Mac: ` +
+      `(1) cd ios/App && pod install (must show "Installing AppsflyerCapacitorPlugin"); ` +
+      `(2) npx cap sync ios; ` +
+      `(3) in Xcode: Product → Clean Build Folder (⇧⌘K), then Run. ` +
+      `Original error: ${message}`
+    );
+  }
+  return `${method} → ${code ? `[${code}] ` : ""}${message}`;
+}
+
 async function loadPlugin(): Promise<any | null> {
   if (_pluginUnavailable) return null;
   try {
+    log("loadPlugin → importing 'appsflyer-capacitor-plugin'");
     const mod = await import("appsflyer-capacitor-plugin");
-    // Plugin exports { AppsFlyer } — both default and named are safe-guarded.
-    return (mod as any).AppsFlyer ?? (mod as any).default ?? null;
+    const plugin = (mod as any).AppsFlyer ?? (mod as any).default ?? null;
+    if (!plugin) {
+      _pluginUnavailable = true;
+      warn("loadPlugin → module imported but no AppsFlyer export found. Keys:", Object.keys(mod as any));
+      return null;
+    }
+    log("loadPlugin → AppsFlyer export resolved");
+    return plugin;
   } catch (err) {
     _pluginUnavailable = true;
-    warn("plugin import failed — AppsFlyer disabled:", err);
+    warn("loadPlugin → import threw:", describeError("import()", err));
     return null;
   }
 }
@@ -70,66 +103,85 @@ async function loadPlugin(): Promise<any | null> {
  * Returns `true` when initialised, `false` when skipped (web / missing config / plugin error).
  */
 export async function initAppsFlyer(): Promise<boolean> {
-  try {
-    if (_initDone) return true;
-    if (_initStarted) return false;
-    _initStarted = true;
+  if (_initDone) return true;
+  if (_initStarted) {
+    log("initAppsFlyer → init already in progress, skipping duplicate call");
+    return false;
+  }
+  _initStarted = true;
 
+  try {
     if (!isNativePlatform()) {
-      log("skipping init — not a native platform");
+      log("initAppsFlyer → skipping (not a native platform)");
       return false;
     }
 
     if (!DEV_KEY) {
-      warn("VITE_APPSFLYER_DEV_KEY is not set — init skipped");
+      warn("initAppsFlyer → VITE_APPSFLYER_DEV_KEY missing, skipping");
       return false;
     }
 
-    const platform = getPlatform(); // "ios" | "android" | "web"
+    const platform = getPlatform();
+    log(`initAppsFlyer → platform=${platform} devKey=${DEV_KEY.slice(0, 4)}… iosAppId=${IOS_APP_ID || "(none)"}`);
+
     if (platform === "ios" && !IOS_APP_ID) {
-      warn("VITE_APPSFLYER_IOS_APP_ID is not set — iOS install attribution will be limited");
+      warn("initAppsFlyer → VITE_APPSFLYER_IOS_APP_ID missing — install attribution will be limited");
     }
 
     const AppsFlyer = await loadPlugin();
-    if (!AppsFlyer) return false;
+    if (!AppsFlyer) {
+      warn("initAppsFlyer → plugin unavailable, aborting");
+      return false;
+    }
 
-    await AppsFlyer.initSDK({
-      devKey: DEV_KEY,
-      appID: IOS_APP_ID,        // ignored on Android
-      isDebug: IS_DEV,
-      waitForATTUserAuthorization: 10, // iOS ATT prompt tolerance in seconds
-      minTimeBetweenSessions: 4,
-      registerOnDeepLink: false,
-      registerConversionListener: false,
-      registerOnAppOpenAttribution: false,
-    });
-
-    _initDone = true;
-    log(`initialised — platform=${platform} devKey=${DEV_KEY.slice(0, 4)}…`);
-
-    // ── Test-device identifier dump ───────────────────────────────────────────
-    // Logs IDFV (per-vendor, EcoLogic-scoped) and the AppsFlyer ID so they can
-    // be copy/pasted into AppsFlyer dashboard → Configuration → Test Devices.
-    // These are the two identifiers AppsFlyer accepts when IDFA is unavailable
-    // (i.e. ATT denied / IDFA returns all zeros). Wrapped in its own try/catch
-    // so any plugin error never breaks SDK init.
+    // ── initSDK ───────────────────────────────────────────────────────────────
     try {
+      log("initAppsFlyer → BEFORE initSDK call");
+      const initRes = await AppsFlyer.initSDK({
+        devKey: DEV_KEY,
+        appID: IOS_APP_ID,        // ignored on Android
+        isDebug: IS_DEV,
+        waitForATTUserAuthorization: 10,
+        minTimeBetweenSessions: 4,
+        registerOnDeepLink: false,
+        registerConversionListener: false,
+        registerOnAppOpenAttribution: false,
+      });
+      log("initAppsFlyer → AFTER initSDK success:", initRes);
+      _initDone = true;
+    } catch (err) {
+      warn("initAppsFlyer → initSDK FAILED:", describeError("initSDK", err));
+      // Fatal — without initSDK nothing else will work.
+      return false;
+    }
+
+    // ── IDFV via @capacitor/device (separate plugin, separate failure mode) ──
+    try {
+      log("initAppsFlyer → BEFORE Device.getId()");
       const { Device } = await import("@capacitor/device");
       const info = await Device.getId();
-      log(`📱 IDFV (paste into AppsFlyer Test Devices): ${(info as any).identifier ?? (info as any).uuid}`);
-    } catch (e) {
-      warn("could not read IDFV from @capacitor/device:", e);
-    }
-    try {
-      const afid = await AppsFlyer.getAppsFlyerUID();
-      log(`📱 AppsFlyer ID (also accepted by Test Devices): ${(afid as any)?.uid ?? afid}`);
-    } catch (e) {
-      warn("could not read AppsFlyer UID:", e);
+      const idfv = (info as any).identifier ?? (info as any).uuid ?? "(unknown)";
+      log(`initAppsFlyer → AFTER Device.getId() — 📱 IDFV: ${idfv}`);
+    } catch (err) {
+      warn("initAppsFlyer → Device.getId FAILED:", describeError("Device.getId", err));
+      // Non-fatal — continue.
     }
 
+    // ── AppsFlyer UID ─────────────────────────────────────────────────────────
+    try {
+      log("initAppsFlyer → BEFORE getAppsFlyerUID");
+      const afid = await AppsFlyer.getAppsFlyerUID();
+      const uid = (afid as any)?.uid ?? String(afid);
+      log(`initAppsFlyer → AFTER getAppsFlyerUID — 📱 AppsFlyer UID: ${uid}`);
+    } catch (err) {
+      warn("initAppsFlyer → getAppsFlyerUID FAILED:", describeError("getAppsFlyerUID", err));
+      // Non-fatal — continue.
+    }
+
+    log("initAppsFlyer → COMPLETE");
     return true;
   } catch (err) {
-    warn("initSDK failed:", err);
+    warn("initAppsFlyer → outer catch:", describeError("initAppsFlyer", err));
     return false;
   }
 }
@@ -145,19 +197,31 @@ export async function trackAppsFlyerEvent(
   try {
     if (!isNativePlatform()) return;
     if (!_initDone) {
-      // Best-effort lazy init if the caller fires an event before init completed.
+      log(`trackAppsFlyerEvent(${eventName}) → SDK not ready, attempting lazy init`);
       const ok = await initAppsFlyer();
-      if (!ok) return;
+      if (!ok) {
+        warn(`trackAppsFlyerEvent(${eventName}) → lazy init failed, dropping event`);
+        return;
+      }
     }
     const AppsFlyer = await loadPlugin();
-    if (!AppsFlyer) return;
+    if (!AppsFlyer) {
+      warn(`trackAppsFlyerEvent(${eventName}) → plugin unavailable, dropping event`);
+      return;
+    }
 
-    await AppsFlyer.logEvent({
-      eventName,
-      eventValue: eventValues as Record<string, string>,
-    });
-    log(`event logged — ${eventName}`);
+    try {
+      log(`trackAppsFlyerEvent → BEFORE logEvent ${eventName}`, eventValues);
+      const res = await AppsFlyer.logEvent({
+        eventName,
+        // AppsFlyer expects string values; coerce loosely.
+        eventValue: eventValues as Record<string, string>,
+      });
+      log(`trackAppsFlyerEvent → AFTER logEvent ${eventName} success:`, res);
+    } catch (err) {
+      warn(`trackAppsFlyerEvent → logEvent ${eventName} FAILED:`, describeError("logEvent", err));
+    }
   } catch (err) {
-    warn(`logEvent failed for ${eventName}:`, err);
+    warn(`trackAppsFlyerEvent(${eventName}) → outer catch:`, describeError("trackAppsFlyerEvent", err));
   }
 }
