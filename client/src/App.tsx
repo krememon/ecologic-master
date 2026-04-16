@@ -1042,11 +1042,25 @@ function useAppResumeRefresh() {
   }, []);
 }
 
+// ── AppsFlyer native init + app_open event ───────────────────────────────────
+// Loads lazily so the web bundle isn't affected, and fails safely on any error.
+function useAppsFlyerInit() {
+  React.useEffect(() => {
+    import("@/lib/appsflyer").then(async ({ initAppsFlyer, trackAppsFlyerEvent, AF_EVENTS }) => {
+      const ok = await initAppsFlyer();
+      if (ok) {
+        trackAppsFlyerEvent(AF_EVENTS.APP_OPEN);
+      }
+    }).catch(() => { /* never break the app */ });
+  }, []);
+}
+
 function App() {
   usePreventScrollbarShift();
   useCapacitorDeepLinks();
   useNativeSafeArea();
   useAppResumeRefresh();
+  useAppsFlyerInit();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">

@@ -204,6 +204,12 @@ export default function Auth() {
       });
 
       if (response.ok) {
+        // AppsFlyer: owner sign-up + company creation
+        import("@/lib/appsflyer").then(({ trackAppsFlyerEvent, AF_EVENTS }) => {
+          trackAppsFlyerEvent(AF_EVENTS.SIGN_UP, { method: "email", role: "owner" });
+          trackAppsFlyerEvent(AF_EVENTS.COMPANY_CREATED);
+        }).catch(() => { /* ignore */ });
+
         toast({
           title: "Company created successfully!",
           description: "Your Company Code is available under Settings → Company Info.",
@@ -271,6 +277,12 @@ export default function Auth() {
       });
 
       if (response.ok) {
+        // AppsFlyer: member sign-up + employee-joined
+        import("@/lib/appsflyer").then(({ trackAppsFlyerEvent, AF_EVENTS }) => {
+          trackAppsFlyerEvent(AF_EVENTS.SIGN_UP, { method: "email", role: formData.role || "member" });
+          trackAppsFlyerEvent(AF_EVENTS.EMPLOYEE_JOINED, { role: formData.role || "member" });
+        }).catch(() => { /* ignore */ });
+
         toast({
           title: "Joined company successfully!",
           description: "Welcome to EcoLogic. You're now logged in.",

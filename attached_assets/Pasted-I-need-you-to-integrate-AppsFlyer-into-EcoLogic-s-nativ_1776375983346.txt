@@ -1,0 +1,64 @@
+I need you to integrate AppsFlyer into EcoLogic’s native mobile app wrappers (iOS + Android) without breaking anything else.
+
+Context:
+- EcoLogic is a React web app wrapped with Capacitor for iOS and Android.
+- Production app/domain is app.ecologicc.com
+- We need AppsFlyer installed in the native mobile wrappers so we can track installs, attribution, and important in-app conversion events.
+- I already have the AppsFlyer dev key.
+- IMPORTANT: make this safe, production-ready, and minimal. Do not break existing auth, deep linking, Stripe flows, or app startup.
+
+What I need implemented:
+1. Install and configure the correct AppsFlyer SDK/plugin for a Capacitor-based app with native iOS and Android support.
+2. Add a clean integration layer so AppsFlyer only runs on native mobile environments, not regular web browser sessions.
+3. Initialize AppsFlyer as early as possible on app launch.
+4. Use environment/config values for:
+   - APPSFLYER_DEV_KEY
+   - APPSFLYER_IOS_APP_ID
+5. Make sure iOS and Android native projects are configured correctly.
+6. Add safe logging so we can verify initialization in development builds, but do not spam logs.
+7. Add helper methods for tracking key events from the app.
+
+Track these events first:
+- app_open
+- sign_up
+- trial_started
+- subscription_started
+- subscription_purchased
+- company_created
+- employee_joined
+- invoice_paid
+- demo_booked
+
+Implementation requirements:
+- Keep the code organized and easy to maintain.
+- Do not hardcode secrets directly into source if avoidable.
+- Use one central AppsFlyer service/module that the app can call.
+- Guard everything so it fails safely if AppsFlyer is unavailable.
+- Do not initialize on web.
+- Preserve all existing behavior.
+- If a plugin requires native config updates, do them.
+- If CocoaPods / Gradle sync is needed, handle it.
+- If Info.plist / AndroidManifest changes are needed, make them carefully.
+
+Deliverables:
+1. Install the AppsFlyer dependency/plugin.
+2. Wire initialization into the correct startup flow.
+3. Create a reusable service like:
+   - initAppsFlyer()
+   - trackAppsFlyerEvent(name, values)
+4. Add the first event calls in sensible places if they already clearly exist in the codebase:
+   - sign up success
+   - trial start / subscription activation
+   - invoice payment success
+5. If exact event hook points are not obvious, leave TODO comments and tell me exactly where to connect them.
+6. Give me a short summary of:
+   - files changed
+   - any env vars I need to add
+   - any iOS App ID value location I need to confirm
+   - how to test on iPhone and Android
+
+Important:
+- Before changing anything, inspect the current Capacitor/native setup so the integration matches this project exactly.
+- Do not refactor unrelated code.
+- Do not touch staging/production secrets yourself—just tell me what keys need to be added.
+- Keep changes minimal and clean.

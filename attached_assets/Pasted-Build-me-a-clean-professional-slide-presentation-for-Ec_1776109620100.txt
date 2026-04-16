@@ -1,0 +1,207 @@
+Build me a clean, professional slide presentation for EcoLogic inside this Replit project, but it must be created in a completely isolated way so there is ZERO risk to my actual app.
+
+CRITICAL SAFETY RULES:
+- DO NOT modify any existing EcoLogic app files
+- DO NOT touch App.tsx, main.tsx, package.json, vite config, backend files, routes, database files, env files, shared components, or existing pages
+- DO NOT replace or interfere with the current EcoLogic app in any way
+- DO NOT install unnecessary packages that could affect the app
+- DO NOT connect this presentation to the live production app
+- CREATE EVERYTHING in a brand new separate folder called: ecologic-sales-deck
+- The presentation must remain fully isolated from the real app
+
+WHAT I WANT:
+Create a slide-style presentation for EcoLogic that I can use in live in-person meetings with local tradesmen and trade business owners, especially plumbers, HVAC, electricians, and home service contractors.
+
+GOAL:
+The presentation should make contractors clearly understand:
+1. the problems they deal with now
+2. the hidden cost of staying disorganized
+3. how EcoLogic solves those problems
+4. why EcoLogic helps them look more professional, save time, and make more money
+5. why they should want to get started
+
+STYLE:
+- clean
+- modern
+- professional
+- simple
+- contractor-friendly
+- persuasive
+- not too techy
+- not corporate or robotic
+- easy to present in person
+
+DESIGN DIRECTION:
+- premium but simple
+- large bold slide headlines
+- minimal text per slide
+- strong hierarchy
+- use clean spacing
+- use cards/sections where needed
+- visually appealing for business owners
+- make it feel like a serious business tool presentation
+
+FONT DIRECTION:
+- Headlines: Montserrat Bold
+- Body text: Inter Regular / Medium
+
+COLOR DIRECTION:
+Use a clean professional palette that fits EcoLogic:
+- white / off-white backgrounds
+- dark text
+- subtle grays
+- eco-green accents where helpful
+- avoid overly flashy colors
+
+FORMAT:
+Create it as a slide-style web presentation inside the separate folder.
+It should feel like a real pitch deck / keynote / powerpoint presentation.
+Make each slide full-screen and polished.
+Allow easy navigation between slides with arrows or buttons.
+Keep it presentation-ready.
+
+SLIDE STRUCTURE:
+Build these slides:
+
+1. COVER SLIDE
+Headline:
+Run Your Trade Business Like a Real Company
+Subheadline:
+Jobs, crews, customers, scheduling, documents, and payments — all in one place.
+Include EcoLogic branding.
+
+2. THE PROBLEM
+Theme:
+Most trade businesses do not have a work problem. They have a systems problem.
+Show common contractor pain points:
+- missed follow-ups
+- jobs scattered everywhere
+- paperwork hard to find
+- crew coordination issues
+- delayed invoices
+- relying on texts, memory, and paper
+
+3. THE COST OF STAYING THE SAME
+Theme:
+Chaos gets more expensive as you grow.
+Show how disorganization leads to:
+- lost leads
+- slower operations
+- payment delays
+- more mistakes
+- owner stress
+- harder growth
+
+4. THE BETTER WAY
+Theme:
+A modern trade business needs one system.
+Visually show jobs, schedule, team, customers, docs, invoices, and payments all flowing into EcoLogic.
+
+5. WHAT ECOLOGIC DOES
+Theme:
+EcoLogic helps you run the whole business in one place.
+Highlight:
+- job management
+- scheduling
+- crew management
+- customer records
+- documents/photos
+- invoices/payments
+- communication
+- operations
+
+6. SHOW THE APP
+Theme:
+Built for real contractors.
+Create visually strong screenshot placeholder slides/cards for:
+- dashboard
+- jobs
+- scheduling
+- invoices/payments
+- documents
+- crew/team view
+If real screenshots are not available, use polished placeholders with labels.
+
+7. BUSINESS BENEFITS
+Theme:
+What this means for your business
+Show outcomes:
+- save time
+- stay organized
+- reduce mistakes
+- respond faster
+- look more professional
+- manage crews better
+- get paid faster
+- grow with more control
+
+8. WHY ECOLOGIC IS DIFFERENT
+Theme:
+Built for contractors, not generic software.
+Show:
+- simple to use
+- field + office friendly
+- made for real day-to-day operations
+- designed for growing trade businesses
+- local/personal support feel
+
+9. EASY ONBOARDING
+Theme:
+Getting started is simple.
+Show simple steps:
+- create company
+- add team
+- add jobs/customers
+- start using daily
+- grow with better systems
+
+10. PRICING / VALUE
+Theme:
+Simple pricing. Real value.
+Include these exact plans:
+- 1 User — $29.99/month
+- Up to 5 Users — $79/month
+- Up to 10 Users — $149/month
+- Up to 15 Users — $299.99/month
+Also include a strong line like:
+One missed job, delayed invoice, or lost lead can cost more than the monthly price.
+
+11. CLOSING / CALL TO ACTION
+Theme:
+The contractors who grow best usually have the best systems.
+Include:
+- Book a demo
+- Start a trial
+- Let us help set your company up
+- QR code placeholder
+- website/contact placeholder
+
+PSYCHOLOGY ANGLE:
+Write and design this so contractors feel:
+- understood
+- frustrated by their current chaos
+- aware they are likely losing money
+- relieved that there is a better way
+- motivated to look more professional
+- interested in growing with more control
+- urgency to modernize now
+
+IMPORTANT:
+Do this naturally.
+Do not make it cheesy.
+Do not use manipulative hype language.
+Make it feel real and believable.
+
+TECHNICAL DELIVERABLES:
+- create the full isolated presentation inside /ecologic-sales-deck
+- keep all code/files self-contained there
+- include clear file structure
+- do not touch the existing app
+- make the presentation easy to run/preview without affecting EcoLogic
+- include simple instructions on how to open the presentation
+- if needed, use placeholder images/blocks where screenshots should go
+- make it polished enough that I can immediately start customizing it
+
+FINAL REMINDER:
+Protect my app first.
+The presentation must be completely separate and must not modify anything in the actual EcoLogic product.

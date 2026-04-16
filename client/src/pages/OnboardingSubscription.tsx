@@ -166,6 +166,14 @@ export default function OnboardingSubscription() {
     await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
     await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
 
+    // AppsFlyer: subscription / trial conversion events
+    import("@/lib/appsflyer").then(({ trackAppsFlyerEvent, AF_EVENTS }) => {
+      const planKey = expectedPlanKey ?? selectedPlanKey;
+      trackAppsFlyerEvent(AF_EVENTS.SUBSCRIPTION_STARTED, { platform, plan: planKey });
+      trackAppsFlyerEvent(AF_EVENTS.TRIAL_STARTED, { platform, plan: planKey });
+      trackAppsFlyerEvent(AF_EVENTS.SUBSCRIPTION_PURCHASED, { platform, plan: planKey });
+    }).catch(() => { /* ignore */ });
+
     toast({ title: "Subscription active!", description: "Welcome to EcoLogic. You're all set." });
     setLocation("/", { replace: true });
   };

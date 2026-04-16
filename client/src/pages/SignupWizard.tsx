@@ -213,6 +213,12 @@ export default function SignupWizard() {
         // Refresh auth state so the rest of the wizard knows the user is logged in
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
         console.log("[signup/google] Registration complete, moving to role step");
+
+        // AppsFlyer: Google sign-up success
+        import("@/lib/appsflyer").then(({ trackAppsFlyerEvent, AF_EVENTS }) => {
+          trackAppsFlyerEvent(AF_EVENTS.SIGN_UP, { method: "google" });
+        }).catch(() => { /* ignore */ });
+
         setGoogleLoadingMessage(null);
         goToStep("role");
       } catch (error: any) {
