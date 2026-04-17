@@ -1,0 +1,53 @@
+We confirmed the exact native issue on Mac.
+
+Facts proven:
+- pod install shows:
+  - Installing AppsFlyerFramework (6.17.9)
+  - Installing AppsflyerCapacitorPlugin (6.17.91)
+- JS bundle is correct and running
+- capacitor.config.json includes AppsFlyerPlugin
+- runtime still throws UNIMPLEMENTED
+- built App.app Frameworks folder contains:
+  - Capacitor.framework
+  - CapacitorApp.framework
+  - CapacitorBrowser.framework
+  - CapacitorDevice.framework
+  - CapacitorGeolocation.framework
+  - CapacitorLocalNotifications.framework
+  - CapacitorPushNotifications.framework
+  - CapgoNativePurchases.framework
+  - Cordova.framework
+  - IONGeolocationLib.framework
+- built App.app Frameworks folder does NOT contain:
+  - Pods_App.framework
+  - AppsflyerCapacitorPlugin.framework
+  - AppsFlyerLib.framework
+- nm on App.app/App shows no AppsFlyer symbols
+- grep on Pods-App-frameworks.sh shows no AppsFlyer references
+
+Conclusion:
+AppsFlyer pods install successfully but are not being linked/embedded into the final iOS app target.
+
+I need you to inspect and fix the native iOS project so AppsFlyer actually ends up in the built app.
+
+Please do all of this:
+1. Inspect ios/App/App.xcodeproj/project.pbxproj and Pods integration.
+2. Inspect why Pods-App-frameworks.sh does not include AppsFlyer.
+3. Inspect whether AppsflyerCapacitorPlugin is being built as static vs dynamic and whether Capacitor expects registration from a framework that is never linked.
+4. Inspect Build Phases:
+   - Link Binary With Libraries
+   - Embed Frameworks
+   - [CP] Embed Pods Frameworks
+5. Inspect xcconfig files and CocoaPods target settings for:
+   - use_frameworks!
+   - static_framework
+   - vendored_frameworks
+   - OTHER_LDFLAGS
+   - FRAMEWORK_SEARCH_PATHS
+   - LD_RUNPATH_SEARCH_PATHS
+6. Make the minimal changes required so the final built app includes AppsFlyer native symbols and the plugin becomes callable.
+7. Return:
+   - exact root cause
+   - exact files changed
+   - exact old vs new lines/settings
+   - exact commands I should run next on Mac

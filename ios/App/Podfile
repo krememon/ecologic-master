@@ -33,6 +33,26 @@ end
 post_install do |installer|
   assertDeploymentTarget(installer)
 
+  # ---------------------------------------------------------------------------
+  # AppsflyerCapacitorPlugin ships with `static_framework = true` in its
+  # podspec. Combined with the project-wide `use_frameworks!` (dynamic), this
+  # causes CocoaPods to silently NOT link the plugin into the App binary AND
+  # NOT embed AppsFlyerLib.xcframework — every other dynamic pod gets embedded
+  # but AppsFlyer is dropped entirely, and runtime calls fail with
+  # "UNIMPLEMENTED" because the Obj-C class is missing from the Mach-O.
+  #
+  # Override the plugin's build_type so it is treated as a dynamic framework
+  # like the rest of the Capacitor plugins. AppsFlyerLib is then embedded via
+  # the normal Pods-App-frameworks.sh path.
+  # ---------------------------------------------------------------------------
+  installer.pod_targets.each do |pod|
+    if pod.name == 'AppsflyerCapacitorPlugin'
+      def pod.build_type
+        Pod::BuildType.dynamic_framework
+      end
+    end
+  end
+
   # Ensure iOS privacy usage descriptions are always present in Info.plist.
   # PlistBuddy is built into macOS — no extra gems needed.
   # "Add" fails silently if the key exists; "Set" updates it if it does.
