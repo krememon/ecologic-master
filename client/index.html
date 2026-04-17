@@ -31,8 +31,17 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
-      // Register service worker for push notifications
-      if ('serviceWorker' in navigator && 'PushManager' in window) {
+      // Service workers must NEVER run inside the Capacitor native wrapper.
+      // In iOS/Android the WKWebView/WebView serves bundled assets from a
+      // capacitor:// or http://localhost origin; a registered SW from a previous
+      // remote-URL load can intercept fetches and break the app. Only register
+      // when running as a normal web page in a browser.
+      var isNative =
+        document.location.protocol === 'capacitor:' ||
+        (window.Capacitor && window.Capacitor.isNativePlatform &&
+          window.Capacitor.isNativePlatform());
+
+      if (!isNative && 'serviceWorker' in navigator && 'PushManager' in window) {
         navigator.serviceWorker.register('/sw.js')
           .then(function(registration) {
             console.log('Service Worker registered successfully');
@@ -40,6 +49,35 @@
           .catch(function(error) {
             console.log('Service Worker registration failed:', error);
           });
+      } else if (isNative) {
+        // Native cleanup: remove any service workers + caches that may have been
+        // registered by an older build that loaded the production URL directly.
+        try {
+          if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) {
+                r.unregister().then(function(ok) {
+                  console.log('[native-cleanup] SW unregistered:', ok, r.scope);
+                });
+              });
+            }).catch(function(e) {
+              console.log('[native-cleanup] SW getRegistrations failed:', e);
+            });
+          }
+          if (window.caches && caches.keys) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(k) {
+                caches.delete(k).then(function(ok) {
+                  console.log('[native-cleanup] cache deleted:', k, ok);
+                });
+              });
+            }).catch(function(e) {
+              console.log('[native-cleanup] caches.keys failed:', e);
+            });
+          }
+        } catch (e) {
+          console.log('[native-cleanup] error:', e);
+        }
       }
     </script>
   </body>
