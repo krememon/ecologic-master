@@ -136,6 +136,7 @@ export async function initAppsFlyer(): Promise<boolean> {
 
     // ── initSDK ───────────────────────────────────────────────────────────────
     try {
+      console.log('[appsflyer] Capacitor Plugins =', Object.keys((window as any).Capacitor?.Plugins || {}));
       log("initAppsFlyer → BEFORE initSDK call");
       const initRes = await AppsFlyer.initSDK({
         devKey: DEV_KEY,
