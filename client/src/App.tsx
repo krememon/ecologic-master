@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Capacitor } from "@capacitor/core";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -1046,12 +1047,14 @@ function useAppResumeRefresh() {
 // Loads lazily so the web bundle isn't affected, and fails safely on any error.
 function useAppsFlyerInit() {
   React.useEffect(() => {
-    import("@/lib/appsflyer").then(async ({ initAppsFlyer, trackAppsFlyerEvent, AF_EVENTS }) => {
-      const ok = await initAppsFlyer();
-      if (ok) {
-        trackAppsFlyerEvent(AF_EVENTS.APP_OPEN);
-      }
-    }).catch(() => { /* never break the app */ });
+    if (Capacitor.isNativePlatform()) {
+      import("@/lib/appsflyer").then(async ({ initAppsFlyer, trackAppsFlyerEvent, AF_EVENTS }) => {
+        const ok = await initAppsFlyer();
+        if (ok) {
+          trackAppsFlyerEvent(AF_EVENTS.APP_OPEN);
+        }
+      }).catch(() => { /* never break the app */ });
+    }
   }, []);
 }
 

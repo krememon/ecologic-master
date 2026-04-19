@@ -22,6 +22,7 @@
  *   - VITE_APPSFLYER_IOS_APP_ID  (required for iOS install attribution)
  */
 
+import { Capacitor } from "@capacitor/core";
 import { isNativePlatform, getPlatform } from "@/lib/capacitor";
 
 /** Canonical event names — keep in sync with AppsFlyer dashboards. */
@@ -78,22 +79,17 @@ function describeError(method: string, err: unknown): string {
   return `${method} → ${code ? `[${code}] ` : ""}${message}`;
 }
 
-async function loadPlugin(): Promise<any | null> {
+function loadPlugin(): any | null {
   if (_pluginUnavailable) return null;
+
   try {
-    log("loadPlugin → importing 'appsflyer-capacitor-plugin'");
-    const mod = await import("appsflyer-capacitor-plugin");
-    const plugin = (mod as any).AppsFlyer ?? (mod as any).default ?? null;
-    if (!plugin) {
-      _pluginUnavailable = true;
-      warn("loadPlugin → module imported but no AppsFlyer export found. Keys:", Object.keys(mod as any));
-      return null;
-    }
-    log("loadPlugin → AppsFlyer export resolved");
+    log("loadPlugin → registering native plugin 'AppsFlyerPlugin'");
+    const plugin = Capacitor.registerPlugin("AppsFlyerPlugin");
+    log("loadPlugin → AppsFlyerPlugin resolved");
     return plugin;
   } catch (err) {
     _pluginUnavailable = true;
-    warn("loadPlugin → import threw:", describeError("import()", err));
+    warn("loadPlugin → registerPlugin threw:", describeError("registerPlugin", err));
     return null;
   }
 }
