@@ -502,6 +502,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                       await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                     } catch {}
                     try {
+                      const { resetSuperwall } = await import("@/lib/superwall");
+                      await resetSuperwall();
+                    } catch {}
+                    try {
                       const { resetPushRegistration } = await import("@/lib/capacitor");
                       resetPushRegistration();
                     } catch {}

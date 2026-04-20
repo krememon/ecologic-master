@@ -320,6 +320,16 @@ function AuthenticatedRouter() {
   const path = window.location.pathname;
   const { isAuthenticated, isLoading, user } = useAuth();
 
+  // ── Identify user to Superwall whenever auth resolves ────────────────────
+  // Native-only inside the lib; web is a no-op. Idempotent on the same userId.
+  React.useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    if (!Capacitor.isNativePlatform()) return;
+    import("@/lib/superwall").then(({ identifySuperwallUser }) => {
+      identifySuperwallUser(user.id, (user as any).email ?? null);
+    }).catch(() => { /* never break the app */ });
+  }, [isAuthenticated, user?.id]);
+
   // Safety net: never let the loading screen hang forever.
   // After 8 seconds we force the app to render regardless of loading state.
   const [authTimedOut, setAuthTimedOut] = React.useState(false);
@@ -1059,12 +1069,25 @@ function useAppsFlyerInit() {
   }, []);
 }
 
+// ── Superwall native init ────────────────────────────────────────────────────
+// Loads lazily so the web bundle isn't affected, and fails safely on any error.
+function useSuperwallInit() {
+  React.useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      import("@/lib/superwall").then(async ({ initSuperwall }) => {
+        await initSuperwall();
+      }).catch(() => { /* never break the app */ });
+    }
+  }, []);
+}
+
 function App() {
   usePreventScrollbarShift();
   useCapacitorDeepLinks();
   useNativeSafeArea();
   useAppResumeRefresh();
   useAppsFlyerInit();
+  useSuperwallInit();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
