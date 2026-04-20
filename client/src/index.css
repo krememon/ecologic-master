@@ -407,6 +407,23 @@ html.native #root {
   box-sizing: border-box;
 }
 
+/* iOS native fallback: explicit white strip pinned to the top safe-area
+   region, sitting above all app content. Backup in case the native
+   topSafeAreaBackgroundView in SafeAreaViewController.swift is ever bypassed
+   (Capacitor upgrade, plugin reorder, splash race, etc.). Pointer-events
+   none so it never blocks interaction. Only applied on native iOS. */
+html.native-ios body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #FFFFFF;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
 /* iOS native: shift drawer panel below notch/status bar */
 html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;

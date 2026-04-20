@@ -1,0 +1,93 @@
+The iOS black status bar strip is STILL not fixed after:
+- npm run build succeeded
+- npx cap sync ios succeeded
+- pod install succeeded
+- Xcode clean build + run
+
+So the previous native background fix did not solve it on real iPhone.
+
+Current visual issue:
+- The very top area behind the iPhone time / WiFi / battery is black.
+- The app header below it is white.
+- I want the entire top status area white, like a normal iOS app.
+- Status bar icons should be dark.
+
+Important context:
+- This app has a custom SafeAreaViewController.swift.
+- SafeAreaViewController pins the WebView to the safeAreaLayoutGuide top anchor, leaving a native gap above the WebView.
+- Earlier fix set backgrounds to white in SafeAreaViewController, SceneDelegate, and AppDelegate, but the black strip is still visible.
+
+We need a stronger fix.
+
+Tasks:
+
+1. Inspect SafeAreaViewController.swift carefully.
+   Find the exact view hierarchy:
+   - self.view
+   - bridge view controller view
+   - webView
+   - webView.scrollView
+   - any parent/root view
+   - any safe-area spacer/gap above the webView
+
+2. Add an explicit white native top filler view above the WebView.
+   In SafeAreaViewController.swift:
+   - Create a UIView named statusBarBackgroundView or topSafeAreaBackgroundView.
+   - Set backgroundColor = .white.
+   - Add it to self.view behind/above the webView.
+   - Constrain it:
+     - topAnchor = self.view.topAnchor
+     - leadingAnchor = self.view.leadingAnchor
+     - trailingAnchor = self.view.trailingAnchor
+     - bottomAnchor = self.view.safeAreaLayoutGuide.topAnchor
+   - Make sure it is not hidden behind another view.
+   - Make sure it persists after layout changes/rotation.
+
+3. Keep WebView pinned exactly as it is now.
+   Do not shift app layout.
+   Do not overlay content.
+   Do not change the menu/header spacing.
+
+4. Also force:
+   - self.view.backgroundColor = .white
+   - webView.backgroundColor = .white
+   - webView.scrollView.backgroundColor = .white
+   - webView.isOpaque = true or false only if needed after testing
+
+5. Confirm status bar style:
+   - dark icons on white background
+   - Keep Capacitor StatusBar style as Light if that is correct for dark icons.
+   - Do not make icons white.
+
+6. Add temporary native debug logs:
+   - Log when SafeAreaViewController loads.
+   - Log when the top filler view is added.
+   - Log the safeAreaInsets.top value after layout.
+   - This helps prove the custom controller is actually being used.
+
+7. Also add a backup CSS fallback only for native iOS:
+   - A fixed top strip:
+     position: fixed;
+     top: 0;
+     left: 0;
+     right: 0;
+     height: env(safe-area-inset-top);
+     background: #FFFFFF;
+     z-index: 2147483647;
+     pointer-events: none;
+   - Only apply it in native iOS context.
+   - This is a fallback in case the black is coming from the web layer, but the native filler view should be the main fix.
+
+8. Verify on real iPhone:
+   - No black strip behind time/WiFi/battery.
+   - Top area is white immediately after launch.
+   - Status icons are dark.
+   - Layout does not move.
+   - Splash and icon untouched.
+   - Android/web unaffected.
+
+Deliverables:
+- Show exact files changed.
+- Explain why the previous fix was not enough.
+- Confirm the explicit top native filler view was added.
+- Confirm build succeeds.
