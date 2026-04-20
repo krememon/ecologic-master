@@ -20,6 +20,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         NSLog("[AppDelegate] didFinishLaunchingWithOptions CALLED")
+        // Defensive: if the window already exists at this point (rare with
+        // scene-based apps, but possible on older iOS or restoration paths),
+        // make sure its background is white so no black surface can show
+        // through behind the status bar.
+        self.window?.backgroundColor = .white
         wipeStaleWebDataIfNeeded()
         logStartupDiagnostics()
 

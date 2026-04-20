@@ -36,9 +36,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         let window = UIWindow(windowScene: windowScene)
+        // Belt-and-suspenders: the UIWindow is the bottommost surface on screen.
+        // If anything above it is ever transparent, this is what shows through.
+        // Default is black on iOS — which produced the black status-bar strip.
+        window.backgroundColor = .white
 
         let storyboard = UIStoryboard(name: "Main", bundle: nil)
         if let vc = storyboard.instantiateInitialViewController() {
+            // Force the root VC's view white as well, in case the storyboard
+            // VC isn't our SafeAreaViewController (e.g. during a future swap).
+            vc.view.backgroundColor = .white
             window.rootViewController = vc
         }
 

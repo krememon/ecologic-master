@@ -1,0 +1,70 @@
+The iOS app still has a black status bar/safe-area strip at the very top. The app content below it is white, but the native iOS status bar background is still black. We need this fixed properly.
+
+Goal:
+Make the iPhone top status bar area white, with dark status bar icons, matching the app header.
+
+Current issue:
+- On iPhone, the area behind the time/WiFi/battery is black.
+- The app header below it is white.
+- We already tried StatusBar config and JS calls, but it is still black.
+- This means the actual native UIWindow / root view / launch/status background is still black somewhere.
+
+Tasks:
+
+1. Inspect native iOS files:
+   - ios/App/App/AppDelegate.swift
+   - ios/App/App/SceneDelegate.swift if it exists
+   - ios/App/App/Info.plist
+   - ios/App/App/Base.lproj/LaunchScreen.storyboard
+   - ios/App/App/capacitor.config.json
+   - capacitor.config.ts
+   - client/src/main.tsx
+   - client/src/index.css
+
+2. In native iOS, force the window and root view background to white:
+   - In AppDelegate.swift, after the app/window/bridge is initialized, set:
+     - window?.backgroundColor = UIColor.white
+     - bridge?.viewController?.view.backgroundColor = UIColor.white if accessible
+   - If SceneDelegate.swift exists, also set:
+     - window?.backgroundColor = UIColor.white
+     - rootViewController.view.backgroundColor = UIColor.white
+
+3. Confirm Capacitor config:
+   - ios.backgroundColor must be "#FFFFFF"
+   - StatusBar style should make icons dark on white.
+   - overlaysWebView should remain false unless testing proves true is required.
+
+4. Confirm Info.plist:
+   - Make sure status bar style is not forcing light/white icons on black.
+   - If needed, set UIStatusBarStyle to UIStatusBarStyleDarkContent.
+   - Do not break runtime Capacitor StatusBar control.
+
+5. Confirm CSS:
+   - html, body, #root, app root wrapper all have background #FFFFFF.
+   - Ensure no black background is applied to body, safe-area wrappers, native shell wrappers, or top app container.
+
+6. Add a tiny native-safe-area fallback if needed:
+   - Add a fixed top-safe-area background layer only for native iOS:
+     position fixed;
+     top 0;
+     left 0;
+     right 0;
+     height env(safe-area-inset-top);
+     background #FFFFFF;
+     z-index very high;
+     pointer-events none;
+   - Only use this if native background alone does not fix it.
+
+7. Verify on real iPhone:
+   - Top strip behind time/WiFi/battery is white.
+   - Status bar icons are dark.
+   - No black strip appears during launch or after app loads.
+   - Layout does not shift.
+   - Splash screen and app icon are untouched.
+   - Android/web are not negatively affected.
+
+Deliverables:
+- Tell me exactly what file caused the black strip.
+- Tell me every file changed.
+- Confirm iOS build succeeds.
+- Confirm the black top strip is gone on real iPhone.
