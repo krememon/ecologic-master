@@ -86,7 +86,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didReceiveRemoteNotification userInfo: [AnyHashable : Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         NSLog("[APNS] didReceiveRemoteNotification %@", String(describing: userInfo))
-        NotificationCenter.default.post(name: .capacitorDidReceiveRemoteNotification, object: userInfo)
+        NotificationCenter.default.post(name: NSNotification.Name(rawValue: "Capacitor.didReceiveRemoteNotification"), object: userInfo)
         completionHandler(.newData)
     }
 
