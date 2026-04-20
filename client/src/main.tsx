@@ -147,6 +147,28 @@ import { initPushDebug } from "./utils/pushDebug";
   } catch {}
 })();
 
+// ── Native StatusBar config ──────────────────────────────────────────────────
+// Force a white status bar with dark icons/text on every native launch.
+// Safe-no-op on web. Wrapped in its own catch so any plugin error can't ever
+// block the app from rendering.
+//   • setOverlaysWebView(false) — keep the WebView below the status bar
+//   • setBackgroundColor('#FFFFFF') — Android only (iOS uses ios.backgroundColor
+//     in capacitor.config to paint the area behind the status bar)
+//   • setStyle(Style.Light) — "LIGHT" means dark text/icons for light bg
+(async () => {
+  try {
+    const cap = (window as any).Capacitor;
+    if (!cap?.isNativePlatform?.()) return;
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    try { await StatusBar.setOverlaysWebView({ overlay: false }); } catch (e) { console.warn("[statusBar] setOverlaysWebView failed:", e); }
+    try { await StatusBar.setBackgroundColor({ color: "#FFFFFF" }); } catch (e) { console.warn("[statusBar] setBackgroundColor failed (expected no-op on iOS):", e); }
+    try { await StatusBar.setStyle({ style: Style.Light }); } catch (e) { console.warn("[statusBar] setStyle failed:", e); }
+    console.log("[statusBar] configured: overlay=false bg=#FFFFFF style=Light");
+  } catch (e) {
+    console.warn("[statusBar] init outer catch:", e);
+  }
+})();
+
 console.log("[main.tsx] Starting app initialization, pathname:", window.location.pathname);
 
 initPushDebug();

@@ -34,9 +34,17 @@ const config: CapacitorConfig = {
           'appleid.apple.com',
         ],
       },
+  ios: {
+    // Native UIWindow background. Without this, the area iOS reserves for the
+    // status bar (when overlaysWebView=false) defaults to black, producing the
+    // black strip across the top of the screen on iPhone.
+    backgroundColor: '#FFFFFF',
+  },
   plugins: {
     StatusBar: {
       overlaysWebView: false,
+      style: 'LIGHT',           // dark icons/text for our white status bar
+      backgroundColor: '#FFFFFF', // Android only — iOS uses ios.backgroundColor above
     },
   },
 };
