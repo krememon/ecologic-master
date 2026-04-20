@@ -40,6 +40,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // If anything above it is ever transparent, this is what shows through.
         // Default is black on iOS — which produced the black status-bar strip.
         window.backgroundColor = .white
+        // Force the window into light mode so any systemBackground color we
+        // happen to inherit (storyboard defaults, plugin views, etc.) resolves
+        // to the light variant instead of black during the launch transition.
+        // Info.plist UIUserInterfaceStyle=Light covers this app-wide; this is
+        // an extra guarantee at the window level for early frames.
+        window.overrideUserInterfaceStyle = .light
 
         let storyboard = UIStoryboard(name: "Main", bundle: nil)
         if let vc = storyboard.instantiateInitialViewController() {

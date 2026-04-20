@@ -19,6 +19,19 @@ class SafeAreaViewController: CAPBridgeViewController {
         return v
     }()
 
+    override func loadView() {
+        // Run BEFORE viewDidLoad and BEFORE Capacitor's CAPBridgeViewController
+        // base lifecycle adds the WKWebView. By forcing the root view to white
+        // here, the very first frame the window composites already has a
+        // white background — eliminating the split-second black flash that
+        // appears when the storyboard-default view (systemBackground → black
+        // in dark mode) is briefly visible during launch.
+        super.loadView()
+        self.view.backgroundColor = .white
+        self.overrideUserInterfaceStyle = .light
+        NSLog("[SafeAreaVC] loadView — view.bg set white, style=light")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         NSLog("[SafeAreaVC] viewDidLoad — class=%@", String(describing: type(of: self)))

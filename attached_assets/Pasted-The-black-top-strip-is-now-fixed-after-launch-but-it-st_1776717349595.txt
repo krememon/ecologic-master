@@ -1,0 +1,56 @@
+The black top strip is now fixed after launch, but it still flashes black for a split second before turning white.
+
+Goal:
+The iOS status bar/safe-area area must be white immediately from the first frame. No black flash at all.
+
+Current state:
+- SafeAreaViewController.swift now contains topSafeAreaBackgroundView and it works after the app loads.
+- The black strip only appears for a split second during launch / transition before SafeAreaViewController paints.
+- That means we need to fix the earliest native launch/window/storyboard layer.
+
+Tasks:
+
+1. Inspect and fix LaunchScreen.storyboard:
+   - ios/App/App/Base.lproj/LaunchScreen.storyboard
+   - Make sure the root view background is explicitly white, not systemBackground if that can briefly resolve dark.
+   - Make sure any image view/container view background is white.
+   - Do not change the logo/splash layout.
+
+2. Inspect Main.storyboard:
+   - ios/App/App/Base.lproj/Main.storyboard
+   - Make sure the initial view controller/root view background is explicitly white.
+   - Confirm customClass="SafeAreaViewController" customModule="App".
+   - If root view background is default/system/black/clear, make it white.
+
+3. In SceneDelegate.swift:
+   - Set window.backgroundColor = .white immediately after UIWindow(windowScene:)
+   - Before assigning rootViewController, set vc.view.backgroundColor = .white
+   - After assigning rootViewController, call window.makeKeyAndVisible()
+   - Confirm this all happens as early as possible.
+
+4. In AppDelegate.swift:
+   - Set self.window?.backgroundColor = .white as early as possible in didFinishLaunchingWithOptions.
+   - Do not remove existing startup logic.
+
+5. In SafeAreaViewController.swift:
+   - Keep the existing topSafeAreaBackgroundView fix.
+   - Add/keep loadView or viewDidLoad earliest possible white background if safe.
+   - Do not shift WebView layout.
+
+6. Optional but recommended:
+   - Set the app window background white in any place the Capacitor bridge/root controller is created.
+   - Search for `.backgroundColor = .black`, `UIColor.black`, `.clear`, or dark system colors in ios/App/App.
+
+7. Verify:
+   - No black strip during launch.
+   - No black strip after launch.
+   - Status bar icons are dark.
+   - Splash screen still looks correct.
+   - App icon untouched.
+   - Layout unchanged.
+
+Deliverables:
+- Tell me exactly which launch/root layer caused the split-second flash.
+- List every file changed.
+- Confirm SafeAreaViewController logs still appear.
+- Confirm the black flash is gone on real iPhone.
