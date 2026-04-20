@@ -1,0 +1,95 @@
+URGENT: The iOS app is not launching/building after Superwall work/Xcode crash.
+
+Current Xcode build error:
+- File: Pods > Development Pods > Capacitor > CAPPluginCall
+- Errors:
+  - Cannot find type 'JSValueEncoder' in scope
+  - Cannot find type 'JSValueDecoder' in scope
+
+This is now bigger than just splash/icon. The Capacitor iOS native build is broken.
+
+Goal:
+Fix the iOS build first, then restore icon/splash assets.
+
+Important:
+- Do NOT redesign the app.
+- Do NOT change bundle ID.
+- Do NOT change signing/team.
+- Do NOT change server.url / production routing.
+- Do NOT remove Superwall unless it is definitely causing the native build failure.
+- Do NOT edit random Pod source manually as the final fix unless absolutely necessary.
+- Prefer fixing dependency/version mismatch, pod install state, or corrupted generated files.
+
+Tasks:
+
+1. Diagnose why Capacitor’s iOS pod is missing JSValueEncoder / JSValueDecoder.
+   Check:
+   - package.json Capacitor versions
+   - ios/App/Podfile.lock Capacitor versions
+   - ios/App/Pods/Development Pods/Capacitor
+   - node_modules/@capacitor/ios
+   - ios/App/App.xcworkspace
+   - Any recent Superwall install changes
+   - Podfile changes
+   - Swift version / iOS deployment target changes
+
+2. Verify all Capacitor packages are on compatible versions.
+   Specifically check:
+   - @capacitor/core
+   - @capacitor/ios
+   - @capacitor/app
+   - @capacitor/browser
+   - @capacitor/device
+   - @capacitor/geolocation
+   - @capacitor/push-notifications
+   - any other Capacitor plugins
+   - Superwall package/plugin
+
+   If versions are mismatched, align them safely.
+
+3. Clean and regenerate iOS dependencies safely:
+   From repo root:
+   - npm install
+   - npx cap sync ios
+
+   Then from ios/App:
+   - pod deintegrate if needed
+   - rm -rf Pods Podfile.lock
+   - pod install
+
+   Only do the destructive clean if the normal sync/pod install does not fix it.
+
+4. If the issue is caused by stale/corrupted generated Capacitor iOS files:
+   - Re-sync Capacitor iOS cleanly.
+   - Make sure iOS project references the correct Capacitor pod source.
+   - Make sure Xcode is opening App.xcworkspace, not App.xcodeproj.
+
+5. If the issue is caused by a Capacitor version upgrade:
+   - Make the smallest safe fix.
+   - Either upgrade all Capacitor packages together or roll back to the known working version.
+   - Do not leave mixed Capacitor versions.
+
+6. After the iOS build compiles, restore missing native branding assets:
+   - Inspect ios/App/App/Assets.xcassets
+   - Restore AppIcon.appiconset
+   - Restore splash/launch image asset
+   - Inspect ios/App/App/Base.lproj/LaunchScreen.storyboard
+   - Make sure LaunchScreen references a valid image
+   - Use the existing EcoLogic icon/logo/wordmark assets from the repo.
+   - White background, centered EcoLogic branding.
+   - Do not invent new branding.
+
+7. Verify final result:
+   - Xcode builds successfully.
+   - App launches on simulator/device.
+   - App icon appears.
+   - Splash screen appears.
+   - Superwall changes are still present unless they were the confirmed cause.
+   - No unrelated files changed.
+
+Deliverables:
+- Explain the exact root cause.
+- List every file changed.
+- Confirm the build passes.
+- Confirm app launches.
+- Confirm icon and splash are restored.
