@@ -79,17 +79,15 @@ function describeError(method: string, err: unknown): string {
   return `${method} → ${code ? `[${code}] ` : ""}${message}`;
 }
 
-function loadPlugin(): any | null {
+async function loadPluginAsync(): Promise<any | null> {
   if (_pluginUnavailable) return null;
-
   try {
-    log("loadPlugin → registering native plugin 'AppsFlyerPlugin'");
-    const plugin = Capacitor.registerPlugin("AppsFlyerPlugin");
-    log("loadPlugin → AppsFlyerPlugin resolved");
-    return plugin;
+    const { AppsFlyer } = await import("appsflyer-capacitor-plugin");
+    log("loadPlugin → AppsFlyer import resolved");
+    return AppsFlyer;
   } catch (err) {
     _pluginUnavailable = true;
-    warn("loadPlugin → registerPlugin threw:", describeError("registerPlugin", err));
+    warn("loadPlugin → import failed:", describeError("import", err));
     return null;
   }
 }
@@ -124,7 +122,7 @@ export async function initAppsFlyer(): Promise<boolean> {
       warn("initAppsFlyer → VITE_APPSFLYER_IOS_APP_ID missing — install attribution will be limited");
     }
 
-    const AppsFlyer = await loadPlugin();
+    const AppsFlyer = await loadPluginAsync();
     if (!AppsFlyer) {
       warn("initAppsFlyer → plugin unavailable, aborting");
       return false;
@@ -201,7 +199,7 @@ export async function trackAppsFlyerEvent(
         return;
       }
     }
-    const AppsFlyer = await loadPlugin();
+    const AppsFlyer = await loadPluginAsync();
     if (!AppsFlyer) {
       warn(`trackAppsFlyerEvent(${eventName}) → plugin unavailable, dropping event`);
       return;
