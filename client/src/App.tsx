@@ -1047,6 +1047,7 @@ function useAppResumeRefresh() {
 // Loads lazily so the web bundle isn't affected, and fails safely on any error.
 function useAppsFlyerInit() {
   React.useEffect(() => {
+    console.log('[main] isNativePlatform =', Capacitor.isNativePlatform());
     if (Capacitor.isNativePlatform()) {
       import("@/lib/appsflyer").then(async ({ initAppsFlyer, trackAppsFlyerEvent, AF_EVENTS }) => {
         const ok = await initAppsFlyer();
