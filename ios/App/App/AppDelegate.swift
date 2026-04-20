@@ -25,6 +25,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // make sure its background is white so no black surface can show
         // through behind the status bar.
         self.window?.backgroundColor = .white
+        self.window?.overrideUserInterfaceStyle = .light
         wipeStaleWebDataIfNeeded()
         logStartupDiagnostics()
 

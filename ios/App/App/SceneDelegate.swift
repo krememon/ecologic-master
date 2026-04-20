@@ -52,6 +52,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // Force the root VC's view white as well, in case the storyboard
             // VC isn't our SafeAreaViewController (e.g. during a future swap).
             vc.view.backgroundColor = .white
+            vc.overrideUserInterfaceStyle = .light
             window.rootViewController = vc
         }
 

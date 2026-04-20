@@ -1,0 +1,59 @@
+The black top strip is fixed after launch, but still flashes for a split second before going white.
+
+Important:
+- Do NOT touch SafeAreaViewController again unless absolutely necessary.
+- SafeAreaViewController now compiles and fixes the post-launch black strip.
+- The remaining issue happens before/while the initial native launch frame appears.
+
+Fix only the earliest iOS launch-frame layers.
+
+Tasks:
+
+1. Info.plist:
+   Add this key if missing:
+   UIUserInterfaceStyle = Light
+
+   This must force the whole iOS app into light mode from launch, including LaunchScreen.storyboard.
+
+2. LaunchScreen.storyboard:
+   Replace any systemBackgroundColor / systemColor background with explicit white sRGB:
+   red="1" green="1" blue="1" alpha="1"
+   Do this for the root view and any image/container view.
+   Do not change the logo/splash image layout.
+
+3. Main.storyboard:
+   Confirm the initial view controller is SafeAreaViewController.
+   Make the root view explicitly white using sRGB, not systemBackground.
+   Do not change layout.
+
+4. SceneDelegate.swift:
+   Immediately after creating UIWindow, set:
+   window.backgroundColor = .white
+   window.overrideUserInterfaceStyle = .light
+
+   Before assigning rootViewController:
+   vc.view.backgroundColor = .white
+   vc.overrideUserInterfaceStyle = .light
+
+5. AppDelegate.swift:
+   As early as possible in didFinishLaunchingWithOptions:
+   self.window?.backgroundColor = .white
+   self.window?.overrideUserInterfaceStyle = .light
+
+6. Search iOS native files for dark launch colors:
+   Search for:
+   UIColor.black
+   .black
+   .systemBackground
+   systemBackgroundColor
+   UIUserInterfaceStyle
+   userInterfaceStyle
+
+   Replace only launch/root background uses that can affect the first frame.
+
+Deliverables:
+- Exact files changed.
+- Confirm UIUserInterfaceStyle Light was added to Info.plist.
+- Confirm LaunchScreen uses explicit white, not systemBackground.
+- Confirm Main.storyboard root view is explicit white.
+- Confirm SceneDelegate forces light mode on the window.
