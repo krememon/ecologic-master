@@ -7,10 +7,7 @@ class SafeAreaViewController: CAPBridgeViewController {
     /// "page background" the user sees while WKWebView's WebContent process
     /// spins up, the network request to https://app.ecologicc.com is in
     /// flight, and the remote HTML is parsing — none of which are guaranteed
-    /// to paint a background of their own. Without this view, that idle
-    /// period falls through to the bridge VC's view (or worse, the window),
-    /// which on a slow cold launch is exactly the black flash users were
-    /// seeing.
+    /// to paint a background of their own.
     private let webViewBackgroundView: UIView = {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -34,20 +31,21 @@ class SafeAreaViewController: CAPBridgeViewController {
         return v
     }()
 
-    override func loadView() {
-        super.loadView()
-        // Earliest possible white paint, before viewDidLoad and before
-        // Capacitor's CAPBridgeViewController base lifecycle adds the
-        // WKWebView. The very first composited frame is now white.
-        self.view.backgroundColor = .white
-        self.overrideUserInterfaceStyle = .light
-        NSLog("[SafeAreaVC] loadView — view.bg set white, style=light")
-    }
+    /// One-time guard so the topSafeAreaBackgroundView setup (which used to
+    /// live in loadView()) only runs once during the first viewDidLoad pass.
+    private var didInstallBackgrounds = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
         NSLog("[SafeAreaVC] viewDidLoad — class=%@", String(describing: type(of: self)))
+
+        // Earliest white paint we can do without overriding loadView (which is
+        // marked non-open / final in the current CAPBridgeViewController and
+        // produced "Overriding non-open instance method outside of its
+        // defining module" errors). viewDidLoad still fires before the view
+        // is added to the window, so the first composited frame is white.
         self.view.backgroundColor = .white
+        self.overrideUserInterfaceStyle = .light
 
         guard let webView = self.webView else {
             NSLog("[SafeAreaVC] WARNING: webView is nil in viewDidLoad")
@@ -71,15 +69,10 @@ class SafeAreaViewController: CAPBridgeViewController {
         // WebView background config. isOpaque=false lets the white
         // webViewBackgroundView underneath show through any transparent
         // pixels during the WebContent process startup / first paint window.
-        // Combined with backgroundColor=.white, the visible result is always
-        // white — never black.
         webView.isOpaque = false
         webView.backgroundColor = .white
         webView.scrollView.backgroundColor = .white
         webView.scrollView.indicatorStyle = .black
-        // iOS 15+: underPageBackgroundColor controls the area exposed during
-        // rubber-band scroll and the inter-page-load gap. Default is system
-        // background → black in dark mode; force white.
         if #available(iOS 15.0, *) {
             webView.underPageBackgroundColor = .white
         }
@@ -120,26 +113,31 @@ class SafeAreaViewController: CAPBridgeViewController {
             topSafeAreaBackgroundView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
         ])
         NSLog("[SafeAreaVC] topSafeAreaBackgroundView added (white, opaque)")
+
+        didInstallBackgrounds = true
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Defensive: keep our background view at the bottom and the top
-        // filler at the top of the z-order, even if any later subview
-        // insertion (Capacitor, plugins, splash, etc.) reorders the
-        // hierarchy.
+        // Keep our background views correctly z-ordered even if any later
+        // subview insertion (Capacitor, plugins, splash, etc.) reorders the
+        // hierarchy. Cheap idempotent calls.
         if webViewBackgroundView.superview === self.view {
             self.view.sendSubviewToBack(webViewBackgroundView)
         }
         if topSafeAreaBackgroundView.superview === self.view {
             self.view.bringSubviewToFront(topSafeAreaBackgroundView)
         }
+        // Belt-and-suspenders: ensure the root view background never reverts
+        // to a system color on a layout pass.
+        self.view.backgroundColor = .white
         NSLog("[SafeAreaVC] viewDidLayoutSubviews — safeAreaInsets.top=%.1f fillerFrame=%@",
               self.view.safeAreaInsets.top,
               NSCoder.string(for: topSafeAreaBackgroundView.frame))
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
+        // Dark icons/text on our white status-bar strip.
         return .darkContent
     }
 }
