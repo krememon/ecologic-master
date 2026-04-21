@@ -59,6 +59,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         window.makeKeyAndVisible()
 
+        // Proof-of-config logs — confirm every white/light setting actually
+        // took hold by the time the window is on-screen.
+        let bgDesc = window.backgroundColor?.description ?? "(nil)"
+        let styleDesc: String
+        switch window.overrideUserInterfaceStyle {
+        case .light: styleDesc = "light"
+        case .dark: styleDesc = "dark"
+        case .unspecified: styleDesc = "unspecified"
+        @unknown default: styleDesc = "unknown"
+        }
+        let rootClass = window.rootViewController.map { String(describing: type(of: $0)) } ?? "(nil)"
+        let rootBg = window.rootViewController?.view.backgroundColor?.description ?? "(nil)"
+        NSLog("[SceneDelegate] PROOF window.bg=%@ window.style=%@ rootVC=%@ rootVC.view.bg=%@",
+              bgDesc, styleDesc, rootClass, rootBg)
+
         if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
             appDelegate.window = window
         }

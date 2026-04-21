@@ -1,0 +1,67 @@
+The black top flash still happens, but the logs prove SafeAreaViewController is running:
+
+[SafeAreaVC] viewDidLoad
+[SafeAreaVC] topSafeAreaBackgroundView added
+[SafeAreaVC] viewWillAppear
+[SafeAreaVC] viewDidLayoutSubviews — safeAreaInsets.top=62.0 fillerFrame={{0, 0}, {402, 62}}
+
+So the issue is not that SafeAreaViewController is missing.
+
+Important log clue:
+The native app is loading the remote URL:
+Loading app at https://app.ecologicc.com...
+
+Also WebContent/Networking processes take a few seconds to launch. The flash likely happens during the handoff between LaunchScreen → UIWindow/Main.storyboard → WKWebView first paint.
+
+Goal:
+Make the top/status area and full initial WebView background white from the first native frame through WebView load. No black flash.
+
+Tasks:
+
+1. SafeAreaViewController.swift:
+   Keep the existing topSafeAreaBackgroundView.
+   Change WKWebView setup to be extra defensive:
+   - self.view.backgroundColor = .white
+   - webView.isOpaque = false
+   - webView.backgroundColor = .white
+   - webView.scrollView.backgroundColor = .white
+   - if available on iOS 15+, webView.underPageBackgroundColor = .white
+   - webView.scrollView.indicatorStyle = .black
+
+2. Add a full-screen white native background view behind the WebView:
+   - Add a UIView called webViewBackgroundView
+   - backgroundColor = .white
+   - Pin it to all edges of self.view
+   - Add it before/behind the WKWebView
+   - This ensures if WKWebView is delayed or transparent, white is visible, never black.
+
+3. Keep the topSafeAreaBackgroundView in front:
+   - status-bar filler view must stay above everything.
+   - Bring it to front in viewDidLoad and viewDidLayoutSubviews.
+
+4. SceneDelegate.swift:
+   Add temporary logs proving:
+   - window.backgroundColor is white
+   - window.overrideUserInterfaceStyle is light
+   - root vc is SafeAreaViewController
+   - root vc view background is white
+
+5. AppDelegate.swift:
+   Add temporary logs proving:
+   - Info.plist UIUserInterfaceStyle is Light
+   - window background/style lines are reached
+
+6. Web initial paint fallback:
+   Since the app loads https://app.ecologicc.com, ensure the remote HTML/CSS first paint is white:
+   - index.html should include inline style as early as possible:
+     html, body, #root { background: #fff !important; }
+   - body style should be background #fff before JS loads.
+   - Do not wait for React/main CSS to load.
+
+7. Verify:
+   - No black top flash on real iPhone in Dark Mode.
+   - Xcode logs prove SceneDelegate, AppDelegate, and SafeAreaViewController are all using white/light.
+   - SafeAreaViewController logs still appear.
+   - App layout unchanged.
+
+Do not touch icons, splash image assets, bundle ID, signing, or unrelated plugin code.

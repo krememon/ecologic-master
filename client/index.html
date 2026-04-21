@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- Earliest possible white paint. Inlined as the very first <style> in
+         <head> so the browser applies it before any external stylesheet,
+         font, script, or React bundle has loaded. Eliminates the brief black
+         "first paint" the WKWebView shows while https://app.ecologicc.com is
+         being fetched and parsed on cold launch. !important so the React
+         theme cascade can't accidentally suppress it during the splash. -->
+    <style>
+      html, body, #root { background: #FFFFFF !important; }
+    </style>
     <title>Contractor Management Platform</title>
     <meta name="description" content="Professional contractor management platform with AI-powered scheduling" />
     <link rel="manifest" href="/manifest.json" />

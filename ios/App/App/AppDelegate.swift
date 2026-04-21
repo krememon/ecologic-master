@@ -26,6 +26,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // through behind the status bar.
         self.window?.backgroundColor = .white
         self.window?.overrideUserInterfaceStyle = .light
+
+        // Proof-of-config logs — Info.plist value + window state on cold
+        // start, so a quick Xcode console scan confirms the early-frame
+        // white/light path is actually being hit.
+        let plistStyle = Bundle.main.object(forInfoDictionaryKey: "UIUserInterfaceStyle") as? String ?? "(missing)"
+        NSLog("[AppDelegate] PROOF Info.plist UIUserInterfaceStyle=%@", plistStyle)
+        if let w = self.window {
+            NSLog("[AppDelegate] PROOF self.window present — bg=%@ style=%ld",
+                  w.backgroundColor?.description ?? "(nil)",
+                  w.overrideUserInterfaceStyle.rawValue)
+        } else {
+            NSLog("[AppDelegate] PROOF self.window nil at didFinishLaunchingWithOptions (expected for scene-based apps)")
+        }
+
         wipeStaleWebDataIfNeeded()
         logStartupDiagnostics()
 
