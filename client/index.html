@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html lang="en" style="background-color:#FFFFFF">
   <head>
+    <!-- FIRST element in <head>: forces a white paint before the browser
+         loads anything else. Required by the iOS WKWebView so the cold-load
+         of https://app.ecologicc.com never shows black during initial paint. -->
+    <style>
+      html, body, #root {
+        background: #FFFFFF !important;
+        background-color: #FFFFFF !important;
+      }
+    </style>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <!-- Earliest possible white paint. Inlined as the very first <style> in
-         <head> so the browser applies it before any external stylesheet,
-         font, script, or React bundle has loaded. Eliminates the brief black
-         "first paint" the WKWebView shows while https://app.ecologicc.com is
-         being fetched and parsed on cold launch. !important so the React
-         theme cascade can't accidentally suppress it during the splash. -->
-    <style>
-      html, body, #root { background: #FFFFFF !important; }
-    </style>
     <title>Contractor Management Platform</title>
     <meta name="description" content="Professional contractor management platform with AI-powered scheduling" />
     <link rel="manifest" href="/manifest.json" />
@@ -23,8 +23,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
     <script>
+      // Dark-mode startup paint. SKIPPED on native iOS/Android: inside the
+      // Capacitor WKWebView/WebView the white inline style above must win
+      // for the entire cold launch — any pre-React #0F172A flash defeats
+      // the native fix. In a normal browser, behavior is unchanged.
       (function(){
         try {
+          var isNative =
+            document.location.protocol === 'capacitor:' ||
+            (window.Capacitor && window.Capacitor.isNativePlatform &&
+              window.Capacitor.isNativePlatform());
+          if (isNative) return;
           var t = localStorage.getItem('ui-theme');
           var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme:dark)').matches);
           if (isDark) {
