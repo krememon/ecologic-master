@@ -1,0 +1,533 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+html body.with-scroll-bars-hidden {
+  padding-right: 0 !important;
+  overflow: hidden !important;
+}
+
+html body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+html .right-scroll-bar-position {
+  right: 0 !important;
+}
+
+html .width-before-scroll-bar {
+  margin-right: 0 !important;
+}
+
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari */
+}
+
+/* Lock page scroll when chat screen is active */
+body.chat-screen-active {
+  overflow: hidden !important;
+}
+body.chat-screen-active #root {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+
+/* iOS native: pull the conversation screen out of the normal document flow
+   and anchor it to the viewport edges. This is the only reliable way to prevent
+   background page-scroll on WKWebView while keeping inner scroll working. */
+html.native-ios .dmConversationRoot {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+
+/* Prevent zoom and double-tap zoom */
+* {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  -ms-touch-action: manipulation;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Smooth dialog animations with hardware acceleration */
+[data-radix-dialog-overlay] {
+  background-color: rgba(0, 0, 0, 0.5);
+  transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity;
+}
+
+[data-radix-dialog-content] {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  animation: dialogSlideIn 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, -48%, 0) scale3d(0.98, 0.98, 1);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, -50%, 0) scale3d(1, 1, 1);
+  }
+}
+
+/* Mobile dialog positioning */
+@media screen and (max-width: 768px) {
+  [data-radix-dialog-content] {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate3d(-50%, -50%, 0) !important;
+    width: 95vw !important;
+    max-width: 400px !important;
+    max-height: 90vh !important;
+    margin: 0 !important;
+    will-change: transform, opacity !important;
+    backface-visibility: hidden !important;
+  }
+  
+  @keyframes dialogSlideInMobile {
+    from {
+      opacity: 0;
+      transform: translate3d(-50%, -47%, 0) scale3d(0.97, 0.97, 1);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(-50%, -50%, 0) scale3d(1, 1, 1);
+    }
+  }
+  
+  [data-radix-dialog-content] {
+    animation: dialogSlideInMobile 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+}
+
+:root {
+  --background: 210 40% 98%; /* #F8FAFC */
+  --foreground: 222 84% 5%; /* #0F172A */
+  --muted: 210 40% 95%; /* #F1F5F9 */
+  --muted-foreground: 215 16% 47%; /* #64748B */
+  --popover: 0 0% 100%; /* #FFFFFF */
+  --popover-foreground: 222 84% 5%; /* #0F172A */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --card-foreground: 222 84% 5%; /* #0F172A */
+  --border: 214 32% 91%; /* #E2E8F0 */
+  --input: 214 32% 91%; /* #E2E8F0 */
+  --primary: 217 91% 53%; /* #2563EB blue-600 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 210 40% 90%; /* #E2E8F0 */
+  --secondary-foreground: 215 25% 27%; /* #334155 */
+  --accent: 217 91% 60%; /* #3B82F6 */
+  --accent-foreground: 0 0% 100%; /* #FFFFFF */
+  --destructive: 0 84% 60%; /* #DC2626 */
+  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+  --success: 142 76% 36%; /* #059669 */
+  --warning: 45 93% 47%; /* #F59E0B */
+  --urgent: 0 84% 60%; /* #EF4444 */
+  --ring: 217 91% 53%; /* #2563EB blue-600 */
+  --radius: 0.75rem;
+}
+
+/* Google Places Autocomplete z-index fixes */
+.pac-container,
+.gm-style-pac-container,
+.pac-item,
+.autocomplete-container {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
+
+/* Prevent any element from overflowing dialog horizontally */
+.job-wizard * {
+  min-width: 0;
+}
+
+/* Tighten default form controls in compact mode */
+.job-wizard input,
+.job-wizard select,
+.job-wizard textarea {
+  font-size: 0.875rem;   /* text-sm */
+  line-height: 1.25rem;  /* leading-tight */
+}
+
+.dark {
+  --background: 222 84% 5%; /* #0F172A */
+  --foreground: 210 40% 98%; /* #F8FAFC */
+  --muted: 215 28% 17%; /* #1E293B */
+  --muted-foreground: 217 11% 65%; /* #94A3B8 */
+  --popover: 222 84% 5%; /* #0F172A */
+  --popover-foreground: 210 40% 98%; /* #F8FAFC */
+  --card: 215 28% 17%; /* #1E293B */
+  --card-foreground: 210 40% 98%; /* #F8FAFC */
+  --border: 215 16% 27%; /* #334155 */
+  --input: 215 16% 27%; /* #334155 */
+  --primary: 217 91% 53%; /* #2563EB blue-600 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 215 28% 17%; /* #1E293B */
+  --secondary-foreground: 210 40% 98%; /* #F8FAFC */
+  --accent: 217 91% 60%; /* #3B82F6 */
+  --accent-foreground: 0 0% 100%; /* #FFFFFF */
+  --destructive: 0 84% 60%; /* #DC2626 */
+  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+  --success: 142 76% 36%; /* #059669 */
+  --warning: 45 93% 47%; /* #F59E0B */
+  --urgent: 0 84% 60%; /* #EF4444 */
+  --ring: 217 91% 53%; /* #2563EB blue-600 */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    background-color: #FFFFFF;
+    @apply bg-background;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  #root {
+    background-color: #FFFFFF;
+    @apply bg-background min-h-screen;
+  }
+
+  html.dark,
+  html.dark body,
+  html.dark #root {
+    background-color: #0F172A;
+  }
+}
+
+@layer utilities {
+  .status-planning {
+    @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300;
+  }
+  
+  .status-in-progress {
+    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300;
+  }
+  
+  .status-completed {
+    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300;
+  }
+  
+  .status-urgent {
+    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300;
+  }
+  
+  .status-cancelled {
+    @apply bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300;
+  }
+
+  /* Responsive design utilities */
+  .responsive-container {
+    @apply px-4 py-2 max-w-screen-2xl mx-auto;
+  }
+
+  @media (min-width: 640px) {
+    .responsive-container {
+      @apply px-6 py-4;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-container {
+      @apply px-8 py-6;
+    }
+  }
+
+  /* Mobile-first grid layouts */
+  .responsive-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-grid {
+      @apply grid-cols-2 gap-6;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-grid {
+      @apply grid-cols-3 gap-8;
+    }
+  }
+
+  /* Responsive text sizes */
+  .responsive-text-xs {
+    @apply text-xs;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-xs {
+      @apply text-sm;
+    }
+  }
+
+  .responsive-text-sm {
+    @apply text-sm;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-sm {
+      @apply text-base;
+    }
+  }
+
+  .responsive-text-base {
+    @apply text-base;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-base {
+      @apply text-lg;
+    }
+  }
+
+  /* Touch-friendly button sizing */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Safe area padding for mobile devices */
+  .safe-area-padding {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* iPhone specific optimizations */
+  @media screen and (max-width: 430px) {
+    .responsive-container {
+      @apply px-2 py-1;
+    }
+    
+    .responsive-grid {
+      @apply gap-2;
+    }
+    
+    /* Better mobile header sizing */
+    h1 {
+      @apply text-sm leading-tight;
+    }
+    
+    h2 {
+      @apply text-sm leading-tight;
+    }
+    
+    /* Smaller padding for mobile cards */
+    .card {
+      @apply p-2;
+    }
+    
+    /* Ensure buttons are touch-friendly */
+    button {
+      @apply min-h-[36px] text-xs;
+    }
+    
+    /* Mobile menu adjustments */
+    .sheet-content {
+      @apply w-[280px];
+    }
+    
+    /* Prevent zoom on input focus */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Very small screens (iPhone SE, etc.) */
+  @media screen and (max-width: 375px) {
+    .responsive-container {
+      @apply px-1 py-1;
+    }
+    
+    h1 {
+      @apply text-base;
+    }
+    
+    h2 {
+      @apply text-sm;
+    }
+  }
+}
+
+/* Safe area utilities for iOS notch and home indicator */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html.native #root {
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
+}
+
+/* iOS native fallback: explicit white strip pinned to the top safe-area
+   region, sitting above all app content. Backup in case the native
+   topSafeAreaBackgroundView in SafeAreaViewController.swift is ever bypassed
+   (Capacitor upgrade, plugin reorder, splash race, etc.). Pointer-events
+   none so it never blocks interaction. Only applied on native iOS. */
+html.native-ios body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: #FFFFFF;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+/* iOS native: shift drawer panel below notch/status bar */
+html.native .ecologic-drawer {
+  top: env(safe-area-inset-top, 0px) !important;
+}
+
+
+/* iOS native wrapper: push Sheet overlay + content panel below status bar / Dynamic Island.
+   Only targets Radix Sheet elements with appSheetOverlay/appSheetContent classes.
+   --native-safe-top is set from JS (56px for Dynamic Island devices). */
+html.native-ios .appSheetOverlay {
+  top: var(--native-safe-top, 56px) !important;
+}
+html.native-ios .appSheetContent {
+  top: var(--native-safe-top, 56px) !important;
+}
+html.native-ios .appSheetContent.sheetBottomSide {
+  top: auto !important;
+}
+
+/* iPad override: on tablet-width native iOS (≥640px) there is no fixed mobile header,
+   so the Sheet overlay must cover the full viewport and the panel starts at the safe-area
+   boundary rather than at the 56px mobile-header offset. */
+@media (min-width: 640px) {
+  html.native-ios .appSheetOverlay {
+    top: 0 !important;
+  }
+  html.native-ios .appSheetContent {
+    top: env(safe-area-inset-top, 0px) !important;
+  }
+}
+
+/* iOS native wrapper: push DM thread header below status bar / Dynamic Island */
+html.native-ios .dmThreadHeader {
+  padding-top: calc(var(--native-safe-top, 56px) + 8px) !important;
+}
+
+/* ── Global popup / modal safe-area fence (iOS Dynamic Island / notch) ────────
+   All Radix portals render outside #root, so they don't inherit the root
+   padding-top. Each popup type is given a marker class and guarded here.
+
+   html.native-ios is set by main.tsx when running inside Capacitor on iOS.
+
+   1. Dialog / AlertDialog (ecologic-dialog / ecologic-alert-dialog)
+      Centred with top:50% translateY(-50%). When the modal is very tall its top
+      edge can clip into the Dynamic Island. Capping max-height to
+        100dvh − 2 × safe-area-inset-top
+      guarantees: top-edge = 50dvh − height/2 ≥ safe-area-inset-top. ✓
+
+   2. Toast viewport (ecologic-toast-viewport)
+      On < sm breakpoints the viewport sits at fixed top-0, which overlaps the
+      status bar. Shifting it down by safe-area-inset-top fixes this without
+      touching desktop / tablet behaviour (those use sm:top-auto sm:bottom-0).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+html.native-ios .ecologic-dialog,
+html.native-ios .ecologic-alert-dialog {
+  max-height: calc(100dvh - 2 * env(safe-area-inset-top, 0px)) !important;
+  overflow-y: auto !important;
+}
+
+html.native-ios .ecologic-toast-viewport {
+  top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 4px !important;
+}
+
+/* Google Places .pac-container: constrain width, position, and z-index inside modals */
+.pac-container {
+  z-index: 99999 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  font-family: inherit !important;
+  margin-top: 2px !important;
+}
+.pac-item {
+  padding: 8px 12px !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  cursor: pointer !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+}
+.pac-item:first-child {
+  border-top: none !important;
+}
+.pac-item:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+.pac-item-query {
+  font-size: 0.875rem !important;
+}
+
+
+html.native .ecologic-drawer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  height: env(safe-area-inset-top, 0px);
+  background: inherit;
+  z-index: 1;
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}

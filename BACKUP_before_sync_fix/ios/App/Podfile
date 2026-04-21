@@ -1,0 +1,74 @@
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '15.0'
+# Static linkage is required because AppsFlyerLib.xcframework (transitive
+# dependency of AppsflyerCapacitorPlugin) ships as a static xcframework.
+# CocoaPods refuses to embed a static binary inside a dynamic-framework
+# target, so the entire Pods target must be static. Capacitor supports
+# this mode — pods are linked directly into the App binary instead of
+# being embedded as individual .framework folders under App.app/Frameworks/.
+use_frameworks! :linkage => :static
+
+# workaround to avoid Xcode caching of Pods that requires
+# Product -> Clean Build Folder after new Cordova plugins installed
+# Requires CocoaPods 1.6 or newer
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
+  pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
+  pod 'CapacitorClipboard', :path => '../../node_modules/@capacitor/clipboard'
+  pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
+  pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
+  pod 'CapacitorGeolocation', :path => '../../node_modules/@capacitor/geolocation'
+  pod 'CapacitorLocalNotifications', :path => '../../node_modules/@capacitor/local-notifications'
+  pod 'CapacitorPushNotifications', :path => '../../node_modules/@capacitor/push-notifications'
+  pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
+  pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
+  pod 'CapgoNativePurchases', :path => '../../node_modules/@capgo/native-purchases'
+  pod 'AppsflyerCapacitorPlugin', :path => '../../node_modules/appsflyer-capacitor-plugin'
+end
+
+target 'App' do
+  capacitor_pods
+  # Add your Pods here
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)
+
+  # Ensure iOS privacy usage descriptions are always present in Info.plist.
+  # PlistBuddy is built into macOS — no extra gems needed.
+  # "Add" fails silently if the key exists; "Set" updates it if it does.
+  info_plist = File.join(__dir__, 'App', 'Info.plist')
+  if File.exist?(info_plist)
+    privacy_entries = {
+      'NSCameraUsageDescription'          => 'EcoLogic uses the camera to capture photos and videos for job documents.',
+      'NSPhotoLibraryUsageDescription'    => 'EcoLogic accesses your photo library so you can attach images to job documents.',
+      'NSPhotoLibraryAddUsageDescription' => 'EcoLogic may save captured photos to your library for job documentation.',
+      'NSMicrophoneUsageDescription'      => 'EcoLogic uses the microphone to record audio when capturing video for job documents.',
+      'NSLocationWhenInUseUsageDescription' => 'EcoLogic uses your location while the app is open to show your position on the crew map when you are clocked into a job.'
+    }
+    privacy_entries.each do |key, value|
+      # Try Add first (fails silently if key exists), then Set to ensure value is current
+      system("/usr/libexec/PlistBuddy -c 'Add :#{key} string #{value}' '#{info_plist}' 2>/dev/null")
+      system("/usr/libexec/PlistBuddy -c 'Set :#{key} #{value}' '#{info_plist}'")
+    end
+
+    # Remove "Always" location keys — app only uses WhenInUse (foreground) location.
+    # Delete is idempotent: fails silently if the key is already absent.
+    ['NSLocationAlwaysAndWhenInUseUsageDescription', 'NSLocationAlwaysUsageDescription'].each do |key|
+      system("/usr/libexec/PlistBuddy -c 'Delete :#{key}' '#{info_plist}' 2>/dev/null")
+    end
+    puts "✅  iOS privacy usage descriptions verified in Info.plist"
+
+    # UIBackgroundModes: only remote-notification (push). Location background mode removed.
+    # Delete and recreate the array so any previously-added 'location' entry is gone.
+    system("/usr/libexec/PlistBuddy -c 'Delete :UIBackgroundModes' '#{info_plist}' 2>/dev/null")
+    system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes array' '#{info_plist}' 2>/dev/null")
+    system("/usr/libexec/PlistBuddy -c 'Add :UIBackgroundModes: string remote-notification' '#{info_plist}' 2>/dev/null")
+    puts "✅  UIBackgroundModes (remote-notification only) verified in Info.plist"
+  end
+end

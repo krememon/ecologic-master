@@ -1,0 +1,96 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.ecologic.app"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.ecologic.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // Explicitly lock the assets source set to a single directory.
+    // Prevents src/main/assets from being registered twice if multiple
+    // android{} blocks are merged (build.gradle + capacitor.build.gradle).
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+    // FusedLocationProviderClient for background-safe location tracking
+    implementation "com.google.android.gms:play-services-location:21.3.0"
+}
+
+apply from: 'capacitor.build.gradle'
+
+// Force fresh APK packaging after `cap sync` touches capacitor.config.json.
+//
+// ROOT CAUSE: packagingOptions.pickFirsts only resolves conflicts in JNI libs
+// and Java resources inside JAR files — it has NO effect on Android asset files
+// (src/main/assets/**). AGP's incremental packager re-opens the existing
+// app-debug.apk and tries to write the updated asset, but the entry is already
+// present in the ZIP → ZipException "already contains entry".
+//
+// FIX: delete the stale APK before packageDebug/packageRelease so AGP always
+// creates a fresh ZIP with no pre-existing entries.
+//
+// If the error still occurs on your local machine after this fix, run:
+//   ./gradlew :app:mergeDebugAssets --info 2>&1 | grep -E "asset|input|srcDir|config"
+// to identify any second physical source feeding into mergeDebugAssets.
+tasks.whenTaskAdded { task ->
+    if (task.name == 'packageDebug' || task.name == 'packageRelease') {
+        task.doFirst {
+            def variant = task.name == 'packageDebug' ? 'debug' : 'release'
+            def apkDir = new File(projectDir, "build/outputs/apk/${variant}")
+            if (apkDir.exists()) {
+                apkDir.listFiles()?.each { f ->
+                    if (f.name.endsWith('.apk')) {
+                        logger.lifecycle("[EcoLogic] Removing stale ${variant} APK to force fresh asset packaging: ${f.name}")
+                        f.delete()
+                    }
+                }
+            }
+        }
+    }
+}
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
