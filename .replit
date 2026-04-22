@@ -47,6 +47,8 @@ APP_PUBLIC_BASE_URL = "https://staging.ecologicc.com"
 STRIPE_SUBCONTRACT_TRANSFERS_ENABLED = "true"
 VITE_APP_BASE_URL = "https://staging.ecologicc.com"
 ECOLOGIC_PUBLIC_URL = "https://staging.ecologicc.com"
+STAGING_ALLOW_EMAIL_LOGIN = "true"
+STAGING_TEST_LOGIN_EMAIL = "pjpell077@gmail.com"
 
 [userenv.development]
 BYPASS_EMAIL_CODE = "true"

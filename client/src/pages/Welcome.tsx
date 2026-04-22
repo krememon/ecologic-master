@@ -24,30 +24,6 @@ export default function Welcome() {
   
   const { toast } = useToast();
   const [appleLoading, setAppleLoading] = useState(false);
-  const [devLoginLoading, setDevLoginLoading] = useState(false);
-
-  const handleDevLogin = async () => {
-    setDevLoginLoading(true);
-    try {
-      const res = await fetch("/api/dev/auto-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: "pjpell077@gmail.com" }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast({ title: data.message || "Dev login failed", variant: "destructive" });
-        return;
-      }
-      window.location.href = "/";
-    } catch {
-      toast({ title: "Dev login failed", variant: "destructive" });
-    } finally {
-      setDevLoginLoading(false);
-    }
-  };
-
   const handleGoogleAuth = async () => {
     try {
       const { startGoogleAuthNative } = await import("@/lib/capacitor");
@@ -176,20 +152,6 @@ export default function Welcome() {
             </Button>
           </div>
           
-          {import.meta.env.DEV && (
-            <div className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-700">
-              <Button
-                variant="ghost"
-                onClick={handleDevLogin}
-                disabled={devLoginLoading}
-                className="w-full h-9 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-              >
-                {devLoginLoading ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : null}
-                Dev Sign In (pjpell077@gmail.com)
-              </Button>
-            </div>
-          )}
-
           <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-6">
             By continuing, you agree to our{" "}
             <a href="/terms" className="text-blue-600 hover:underline">Terms of Service</a>

@@ -804,6 +804,22 @@ export function setupAuth(app: Express) {
       }
 
       if (!user.password) {
+        // Staging-only bypass: allow direct login for a configured test account.
+        // Requires STAGING_ALLOW_EMAIL_LOGIN=true and STAGING_TEST_LOGIN_EMAIL set.
+        // Has no effect when either env var is absent — production stays strict.
+        const stagingAllowEmail = process.env.STAGING_ALLOW_EMAIL_LOGIN === 'true';
+        const stagingTestEmail = (process.env.STAGING_TEST_LOGIN_EMAIL || '').toLowerCase().trim();
+        if (stagingAllowEmail && stagingTestEmail && normalizedEmail === stagingTestEmail) {
+          req.login(makeSessionUser(user), (loginErr: any) => {
+            if (loginErr) return res.status(500).json({ message: "Staging login failed." });
+            req.session.save((saveErr: any) => {
+              if (saveErr) return res.status(500).json({ message: "Session error." });
+              console.log(`[staging-login] Auto-logged in staging test account: ${normalizedEmail}`);
+              res.json({ ok: true, stagingAutoLogin: true, firstName: user.firstName });
+            });
+          });
+          return;
+        }
         return res.status(400).json({ message: "Please sign in with Google or your original sign-in method." });
       }
 
