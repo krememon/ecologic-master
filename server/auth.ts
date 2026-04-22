@@ -2230,4 +2230,39 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
       res.status(500).json({ message: "Failed to get 2FA status" });
     }
   });
+
+  // Dev-only auto-login endpoint — only active when BYPASS_SUBSCRIPTION=1
+  // Allows signing in as any dev allowlist account without a password.
+  app.post("/api/dev/auto-login", async (req: any, res) => {
+    try {
+      if (process.env.BYPASS_SUBSCRIPTION !== '1') {
+        return res.status(403).json({ message: "Not available in production" });
+      }
+      const { isDevAccount } = await import('./devAuth');
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email required" });
+      if (!isDevAccount({ email })) {
+        return res.status(403).json({ message: "Not a dev account" });
+      }
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (!user) return res.status(404).json({ message: "User not found" });
+      req.login(makeSessionUser(user), (err: any) => {
+        if (err) {
+          console.error("[dev-login] login error:", err);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("[dev-login] session save error:", saveErr);
+            return res.status(500).json({ message: "Session save failed" });
+          }
+          console.log(`[dev-login] Auto-logged in dev account: ${email}`);
+          res.json({ ok: true });
+        });
+      });
+    } catch (error) {
+      console.error("[dev-login] Error:", error);
+      res.status(500).json({ message: "Dev login failed" });
+    }
+  });
 }
