@@ -1,4 +1,4 @@
-modules = ["web", "nodejs-22", "postgresql-16"]
+modules = [ "postgresql-16", "web", "nodejs-22"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -43,12 +43,10 @@ integrations = ["javascript_websocket:1.0.0", "javascript_openai:1.0.0", "javasc
 
 [userenv.shared]
 SUPPORT_INBOX_EMAIL = "support@ecologicc.com"
-APP_PUBLIC_BASE_URL = "https://staging.ecologicc.com"
+APP_PUBLIC_BASE_URL = "https://app.ecologicc.com"
 STRIPE_SUBCONTRACT_TRANSFERS_ENABLED = "true"
-VITE_APP_BASE_URL = "https://staging.ecologicc.com"
-ECOLOGIC_PUBLIC_URL = "https://staging.ecologicc.com"
-STAGING_ALLOW_EMAIL_LOGIN = "true"
-STAGING_TEST_LOGIN_EMAIL = "pjpell077@gmail.com"
+VITE_APP_BASE_URL = "https://app.ecologicc.com"
+ECOLOGIC_PUBLIC_URL = "https://app.ecologicc.com"
 
 [userenv.development]
 BYPASS_EMAIL_CODE = "true"
