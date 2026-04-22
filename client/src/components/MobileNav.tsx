@@ -451,8 +451,8 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                       <div className={cn(
                         "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105",
                         isActive 
-                          ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm" 
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-sm" 
+                          : "text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800 hover:shadow-sm"
                       )}>
                         <Icon className="w-5 h-5 transition-transform duration-200" />
                         <span className="transition-all duration-200">{item.label}</span>
@@ -469,8 +469,8 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                     <div className={cn(
                       "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105",
                       location === "/customize"
-                        ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
+                        ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-sm"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800 hover:shadow-sm"
                     )}>
                       <Wrench className="w-5 h-5 transition-transform duration-200" />
                       <span className="transition-all duration-200">Customize</span>
@@ -488,8 +488,8 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                   <div className={cn(
                     "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105 mb-1",
                     location === "/settings"
-                      ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
+                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-sm"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800 hover:shadow-sm"
                   )}>
                     <Settings className="w-5 h-5 transition-transform duration-200" />
                     <span className="transition-all duration-200">Settings</span>

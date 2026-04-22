@@ -804,6 +804,22 @@ export function setupAuth(app: Express) {
       }
 
       if (!user.password) {
+        // Staging-only bypass: allow direct login for a configured test account.
+        // Requires STAGING_ALLOW_EMAIL_LOGIN=true and STAGING_TEST_LOGIN_EMAIL set.
+        // Has no effect when either env var is absent — production stays strict.
+        const stagingAllowEmail = process.env.STAGING_ALLOW_EMAIL_LOGIN === 'true';
+        const stagingTestEmail = (process.env.STAGING_TEST_LOGIN_EMAIL || '').toLowerCase().trim();
+        if (stagingAllowEmail && stagingTestEmail && normalizedEmail === stagingTestEmail) {
+          req.login(makeSessionUser(user), (loginErr: any) => {
+            if (loginErr) return res.status(500).json({ message: "Staging login failed." });
+            req.session.save((saveErr: any) => {
+              if (saveErr) return res.status(500).json({ message: "Session error." });
+              console.log(`[staging-login] Auto-logged in staging test account: ${normalizedEmail}`);
+              res.json({ ok: true, stagingAutoLogin: true, firstName: user.firstName });
+            });
+          });
+          return;
+        }
         return res.status(400).json({ message: "Please sign in with Google or your original sign-in method." });
       }
 
@@ -2228,6 +2244,41 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
     } catch (error) {
       console.error("[2fa-status] Error:", error);
       res.status(500).json({ message: "Failed to get 2FA status" });
+    }
+  });
+
+  // Dev-only auto-login endpoint — only active when BYPASS_SUBSCRIPTION=1
+  // Allows signing in as any dev allowlist account without a password.
+  app.post("/api/dev/auto-login", async (req: any, res) => {
+    try {
+      if (process.env.BYPASS_SUBSCRIPTION !== '1') {
+        return res.status(403).json({ message: "Not available in production" });
+      }
+      const { isDevAccount } = await import('./devAuth');
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email required" });
+      if (!isDevAccount({ email })) {
+        return res.status(403).json({ message: "Not a dev account" });
+      }
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (!user) return res.status(404).json({ message: "User not found" });
+      req.login(makeSessionUser(user), (err: any) => {
+        if (err) {
+          console.error("[dev-login] login error:", err);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("[dev-login] session save error:", saveErr);
+            return res.status(500).json({ message: "Session save failed" });
+          }
+          console.log(`[dev-login] Auto-logged in dev account: ${email}`);
+          res.json({ ok: true });
+        });
+      });
+    } catch (error) {
+      console.error("[dev-login] Error:", error);
+      res.status(500).json({ message: "Dev login failed" });
     }
   });
 }

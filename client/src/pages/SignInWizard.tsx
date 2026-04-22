@@ -137,7 +137,13 @@ export default function SignInWizard() {
     try {
       const res = await apiRequest("POST", "/api/auth/login/start", { email });
       const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
-      
+
+      // Staging-only: server auto-logged us in (Google account, no password set).
+      if (data?.stagingAutoLogin) {
+        window.location.href = "/";
+        return;
+      }
+
       if (data?.firstName) {
         setFirstName(data.firstName);
       }

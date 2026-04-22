@@ -24,7 +24,6 @@ export default function Welcome() {
   
   const { toast } = useToast();
   const [appleLoading, setAppleLoading] = useState(false);
-
   const handleGoogleAuth = async () => {
     try {
       const { startGoogleAuthNative } = await import("@/lib/capacitor");
