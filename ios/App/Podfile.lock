@@ -1,0 +1,125 @@
+PODS:
+  - AppsflyerCapacitorPlugin (6.17.91):
+    - AppsFlyerFramework (= 6.17.9)
+    - Capacitor
+  - AppsFlyerFramework (6.17.9):
+    - AppsFlyerFramework/Main (= 6.17.9)
+  - AppsFlyerFramework/Main (6.17.9)
+  - Capacitor (8.1.0):
+    - CapacitorCordova
+  - CapacitorApp (8.0.1):
+    - Capacitor
+  - CapacitorBrowser (8.0.1):
+    - Capacitor
+  - CapacitorClipboard (8.0.1):
+    - Capacitor
+  - CapacitorCordova (8.1.0)
+  - CapacitorDevice (8.0.1):
+    - Capacitor
+  - CapacitorFilesystem (8.1.2):
+    - Capacitor
+    - IONFilesystemLib (~> 1.1.1)
+  - CapacitorGeolocation (8.1.0):
+    - Capacitor
+    - IONGeolocationLib (= 2.0.0)
+  - CapacitorLocalNotifications (8.0.1):
+    - Capacitor
+  - CapacitorPushNotifications (8.0.1):
+    - Capacitor
+  - CapacitorShare (8.0.1):
+    - Capacitor
+  - CapacitorStatusBar (8.0.1):
+    - Capacitor
+  - CapawesomeCapacitorSuperwall (0.1.1):
+    - Capacitor
+    - SuperwallKit (~> 4.11)
+  - CapgoNativePurchases (8.2.3):
+    - Capacitor
+  - IONFilesystemLib (1.1.2)
+  - IONGeolocationLib (2.0.0)
+  - Superscript (1.0.13)
+  - SuperwallKit (4.15.0):
+    - Superscript (= 1.0.13)
+
+DEPENDENCIES:
+  - AppsflyerCapacitorPlugin (from `../../node_modules/appsflyer-capacitor-plugin`)
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
+  - "CapacitorBrowser (from `../../node_modules/@capacitor/browser`)"
+  - "CapacitorClipboard (from `../../node_modules/@capacitor/clipboard`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorDevice (from `../../node_modules/@capacitor/device`)"
+  - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
+  - "CapacitorGeolocation (from `../../node_modules/@capacitor/geolocation`)"
+  - "CapacitorLocalNotifications (from `../../node_modules/@capacitor/local-notifications`)"
+  - "CapacitorPushNotifications (from `../../node_modules/@capacitor/push-notifications`)"
+  - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
+  - "CapacitorStatusBar (from `../../node_modules/@capacitor/status-bar`)"
+  - "CapawesomeCapacitorSuperwall (from `../../node_modules/@capawesome/capacitor-superwall`)"
+  - "CapgoNativePurchases (from `../../node_modules/@capgo/native-purchases`)"
+
+SPEC REPOS:
+  trunk:
+    - AppsFlyerFramework
+    - IONFilesystemLib
+    - IONGeolocationLib
+    - Superscript
+    - SuperwallKit
+
+EXTERNAL SOURCES:
+  AppsflyerCapacitorPlugin:
+    :path: "../../node_modules/appsflyer-capacitor-plugin"
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorApp:
+    :path: "../../node_modules/@capacitor/app"
+  CapacitorBrowser:
+    :path: "../../node_modules/@capacitor/browser"
+  CapacitorClipboard:
+    :path: "../../node_modules/@capacitor/clipboard"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorDevice:
+    :path: "../../node_modules/@capacitor/device"
+  CapacitorFilesystem:
+    :path: "../../node_modules/@capacitor/filesystem"
+  CapacitorGeolocation:
+    :path: "../../node_modules/@capacitor/geolocation"
+  CapacitorLocalNotifications:
+    :path: "../../node_modules/@capacitor/local-notifications"
+  CapacitorPushNotifications:
+    :path: "../../node_modules/@capacitor/push-notifications"
+  CapacitorShare:
+    :path: "../../node_modules/@capacitor/share"
+  CapacitorStatusBar:
+    :path: "../../node_modules/@capacitor/status-bar"
+  CapawesomeCapacitorSuperwall:
+    :path: "../../node_modules/@capawesome/capacitor-superwall"
+  CapgoNativePurchases:
+    :path: "../../node_modules/@capgo/native-purchases"
+
+SPEC CHECKSUMS:
+  AppsflyerCapacitorPlugin: 45a9a224ed8bfc0f944b714a405c6f0946584d7a
+  AppsFlyerFramework: 4f9a8237d40e9093941aef760cd77d606238aedd
+  Capacitor: 47b825120c6b8b6d6f9f053e9350a8960d436710
+  CapacitorApp: 942306cd1acf7774a00e89a3986af3a67c8cad7a
+  CapacitorBrowser: e72e572d5dbdbb854fda5950586a2451e981f2d6
+  CapacitorClipboard: c75fdaa6e622111119f35e7914ecfc67b05efecb
+  CapacitorCordova: e8b76fd95fc1e157775abc484c59cc0de464095d
+  CapacitorDevice: ff033fa0c4ec19f5e059a073769a9b2347e69f57
+  CapacitorFilesystem: 2db285a1ac6e475cc27cae2e1bea999000f9e2be
+  CapacitorGeolocation: 7132de914f9d853ec4642dc1d36e4e2018a4e8a8
+  CapacitorLocalNotifications: bc5325611c92ac302732413bc69244575cd4eaaf
+  CapacitorPushNotifications: 99644101c6a82036e459929b6d897ee1cb27d97f
+  CapacitorShare: 0c58305114538568059bfc07111f22dcb9cb2a82
+  CapacitorStatusBar: 32206abd53b14f339763da26f71286deaa891e16
+  CapawesomeCapacitorSuperwall: 2dbf37d1f9387314ddf8e7ea765a3dc3f34a4fb7
+  CapgoNativePurchases: 8e73c6878bccafee0c379c1bbcddb6c588716bd6
+  IONFilesystemLib: 21a63377696b2d8fab5632ecfb7d2ac67bddb68a
+  IONGeolocationLib: a5e40b54edc2ee9902036eda5aaa41ddf07bb68d
+  Superscript: bcb4099b41bed108ab7e88cfc56af0ed1170b582
+  SuperwallKit: d1921d6888a7e8c71943f80209a81e58f1a723ba
+
+PODFILE CHECKSUM: 726f1588cf6461ad3d958476b0b99a4293059dae
+
+COCOAPODS: 1.16.2
