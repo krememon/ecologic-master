@@ -43,10 +43,10 @@ integrations = ["javascript_websocket:1.0.0", "javascript_openai:1.0.0", "javasc
 
 [userenv.shared]
 SUPPORT_INBOX_EMAIL = "support@ecologicc.com"
-APP_PUBLIC_BASE_URL = "https://app.ecologicc.com"
+APP_PUBLIC_BASE_URL = "https://staging.ecologicc.com"
 STRIPE_SUBCONTRACT_TRANSFERS_ENABLED = "true"
-VITE_APP_BASE_URL = "https://app.ecologicc.com"
-ECOLOGIC_PUBLIC_URL = "https://app.ecologicc.com"
+VITE_APP_BASE_URL = "https://staging.ecologicc.com"
+ECOLOGIC_PUBLIC_URL = "https://staging.ecologicc.com"
 
 [userenv.development]
 BYPASS_EMAIL_CODE = "true"
