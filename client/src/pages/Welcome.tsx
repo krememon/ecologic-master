@@ -80,25 +80,10 @@ export default function Welcome() {
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          <div className="text-center mb-5">
-            <h1 
-              className="mx-auto"
-              style={{
-                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                lineHeight: 1.05,
-                marginBottom: "-2px",
-                color: "#0B0B0D",
-                fontSize: "clamp(3rem, 12vw, 4rem)",
-              }}
-            >
-              EcoLogic
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-light mt-1">
-              Professional contractor management
-            </p>
-          </div>
+          {/* Visible "EcoLogic" wordmark + tagline removed — native splash
+              already shows the brand. Kept as sr-only text so screen readers
+              and SEO still announce the page identity. */}
+          <h1 className="sr-only">EcoLogic — Professional contractor management</h1>
           
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 space-y-4">
             <Button 
