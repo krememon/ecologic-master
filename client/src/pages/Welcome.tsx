@@ -82,7 +82,7 @@ export default function Welcome() {
         >
           <div className="text-center mb-5">
             <h1 
-              className="text-5xl md:text-6xl mx-auto"
+              className="mx-auto"
               style={{
                 fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
                 fontWeight: 800,
@@ -90,6 +90,7 @@ export default function Welcome() {
                 lineHeight: 1.05,
                 marginBottom: "-2px",
                 color: "#0B0B0D",
+                fontSize: "clamp(3rem, 12vw, 4rem)",
               }}
             >
               EcoLogic

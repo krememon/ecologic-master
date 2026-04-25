@@ -570,7 +570,7 @@ function AuthenticatedRouter() {
             letterSpacing: '-0.02em',
             lineHeight: 1.05,
             color: '#0B0B0D',
-            fontSize: 'clamp(2.5rem, 8vw, 3.5rem)',
+            fontSize: 'clamp(3rem, 12vw, 4rem)',
           }}
         >
           EcoLogic
