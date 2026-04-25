@@ -1683,14 +1683,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ? 'https://quickbooks.api.intuit.com' 
     : 'https://sandbox-quickbooks.api.intuit.com';
 
-  // Diagnostic log — printed once at startup. QB_CLIENT_SECRET is intentionally omitted.
-  console.log('[QB_CONFIG] QB_ENV=' + QB_ENV);
-  console.log('[QB_CONFIG] QB_REDIRECT_URI=' + QB_REDIRECT_URI);
-  console.log('[QB_CONFIG] QB_AUTH_BASE=' + QB_AUTH_BASE);
-  console.log('[QB_CONFIG] QB_TOKEN_URL=' + QB_TOKEN_URL);
-  console.log('[QB_CONFIG] QB_API_BASE=' + QB_API_BASE);
-  console.log('[QB_CONFIG] QB_CLIENT_ID present=' + !!QB_CLIENT_ID);
-
   function createQboState(companyId: number): string {
     const payload = { c: companyId, t: Date.now() };
     const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
