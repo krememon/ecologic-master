@@ -574,7 +574,10 @@ function AuthenticatedRouter() {
         <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/terms" component={TermsOfService} />
         <Route path="/privacy" component={PrivacyPolicy} />
-        <Route path="/" component={Welcome} />
+        {/* Logged-out users land directly on the SignInWizard (EcoLogic
+            wordmark + Step 1 of 3 + email + Google/Apple). The simplified
+            Welcome choice card is preserved at /welcome for backward links. */}
+        <Route path="/">{() => <Redirect to="/login" />}</Route>
         <Route path="/welcome" component={Welcome} />
         <Route path="/auth">{() => <Redirect to="/login" />}</Route>
         <Route path="/login" component={SignInWizard} />
@@ -583,7 +586,7 @@ function AuthenticatedRouter() {
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
         <Route path="/landing" component={Landing} />
-        <Route component={Welcome} />
+        <Route>{() => <Redirect to="/login" />}</Route>
       </Switch>
     );
   }

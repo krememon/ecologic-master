@@ -1,0 +1,73 @@
+Urgent UI restore.
+
+The Welcome page branding/sign-in flow is still wrong.
+
+Current bad screen:
+It only shows the card with:
+- Create account
+- Sign in
+- Continue with Google
+- Continue with Apple
+and there is no EcoLogic branding above it.
+
+Desired screen:
+Restore the previous auth/sign-in layout exactly like before:
+- EcoLogic wordmark centered at the top
+- Subtitle: Professional contractor management
+- Progress bar
+- Step 1 of 3
+- Email field
+- Continue button
+- “or” divider
+- Continue with Google
+- Continue with Apple
+- “Don’t have an account? Create account”
+
+Important:
+The attached reference/expected screen shows the correct layout:
+EcoLogic + subtitle above a 3-step email sign-in form.
+
+We need to restore that layout for the sign-in/create account flow.
+
+Files to check:
+- client/src/pages/Welcome.tsx
+- client/src/pages/SignInWizard.tsx
+- client/src/pages/SignupWizard.tsx
+- client/src/App.tsx
+
+Important rules:
+1. App.tsx startup placeholder should stay blank white.
+   Do NOT bring back visible EcoLogic text during loading.
+2. The real auth screen SHOULD show EcoLogic branding.
+3. The initial logged-out screen should route/show the proper wizard-style auth page, not the simplified card-only screen.
+4. Restore the previous user experience from the reference image.
+
+Tasks:
+1. Inspect Welcome.tsx and the auth routes.
+2. Find why logged-out users are landing on the simplified choice card instead of the wizard-style auth page.
+3. Restore the previous behavior/layout so users see the wizard-style auth screen with EcoLogic branding and Step 1 of 3.
+4. If Welcome.tsx is supposed to be the simple choice screen and SignInWizard.tsx is the correct screen, then update routing/buttons so the proper page appears immediately or when signing in.
+5. Preserve all auth logic, Google/Apple auth, routing, paywall, RBAC, and subscription logic.
+6. Do not change native splash or the blank startup placeholder.
+
+Expected final flow:
+Native splash with EcoLogic
+→ plain white startup placeholder if loading
+→ real auth screen with:
+   EcoLogic
+   Professional contractor management
+   progress bar
+   Step 1 of 3
+   email input
+   Continue
+   Google/Apple buttons
+
+Build:
+Run npm run build.
+
+Deliverables:
+- Explain why the simplified card screen was showing.
+- Explain what file/routes were restored.
+- Confirm App.tsx loading placeholder remains blank white.
+- Confirm the auth screen matches the reference layout.
+- Confirm build passes.
