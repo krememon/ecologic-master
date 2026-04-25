@@ -550,31 +550,19 @@ function AuthenticatedRouter() {
   //   caused the gate to fire with subActive=false before the query resolved.
   const subStillPending = isAuthenticated && hasCompany && subLoading;
   if ((!authTimedOut && isLoading) || subStillPending) {
-    // Apple-style minimal placeholder. Same wordmark as Welcome / splash so
-    // the visual transition from native splash → web → app feels seamless.
-    // No spinner, no "Loading..." text — silence is the polished default.
-    console.log('[startup] showing wordmark placeholder — authLoading=' + isLoading + ' subLoading=' + subLoading);
+    // Plain white placeholder. The native splash already showed branding;
+    // we deliberately render nothing visible here so there is no second
+    // "intro" screen between splash and app. No spinner, no wordmark, no
+    // "Loading..." text — only an sr-only label for assistive tech.
     return (
       <div
         role="status"
         aria-live="polite"
         aria-busy="true"
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen"
         style={{ backgroundColor: '#FFFFFF' }}
         data-testid="startup-placeholder"
       >
-        <h1
-          style={{
-            fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.05,
-            color: '#0B0B0D',
-            fontSize: 'clamp(3rem, 12vw, 4rem)',
-          }}
-        >
-          EcoLogic
-        </h1>
         <span className="sr-only">Loading EcoLogic</span>
       </div>
     );

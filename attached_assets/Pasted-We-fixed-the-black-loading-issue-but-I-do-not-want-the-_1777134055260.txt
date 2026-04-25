@@ -1,0 +1,64 @@
+We fixed the black/loading issue, but I do not want the extra “EcoLogic” text placeholder screen after the native splash.
+
+Current flow:
+Native splash → EcoLogic text placeholder → App
+
+Desired flow:
+Native splash → plain white screen if auth/subscription is still loading → App
+
+Goal:
+Remove the visible EcoLogic wordmark/text placeholder from the React startup loading state. Keep the background pure white. No spinner. No loading text. No black screen.
+
+Important:
+- Do NOT bring back the old loading spinner.
+- Do NOT show “Loading EcoLogic”.
+- Do NOT show the EcoLogic wordmark/text after the splash.
+- Keep the screen white while auth/subscription loads.
+- Preserve auth logic, routing, paywall, RBAC, subscription checks, and timeout logic.
+- Keep accessibility sr-only text if needed, but nothing visible.
+
+File to check:
+client/src/App.tsx
+
+Around the startup placeholder in AuthenticatedRouter, there is currently something like:
+- role="status"
+- aria-live="polite"
+- aria-busy="true"
+- h1 EcoLogic
+- span sr-only Loading EcoLogic
+
+Change it so the visible content is removed.
+
+Expected JSX should be basically:
+<div
+  role="status"
+  aria-live="polite"
+  aria-busy="true"
+  className="min-h-screen"
+  style={{ backgroundColor: '#FFFFFF' }}
+  data-testid="startup-placeholder"
+>
+  <span className="sr-only">Loading EcoLogic</span>
+</div>
+
+Or equivalent.
+
+Also:
+- Remove the temporary startup console log if it is still there:
+  [startup] showing wordmark placeholder
+- Keep the rest of the startup flow unchanged.
+- Do not touch Welcome.tsx unless needed. The Welcome page can stay normal.
+
+Expected behavior:
+- Native splash appears.
+- If React/auth is not ready yet, user sees a plain white screen.
+- Then the app/welcome/dashboard appears.
+- No visible EcoLogic text between splash and app.
+- No black/navy flash.
+- No spinner.
+
+Deliverables:
+1. Tell me exactly what changed.
+2. Confirm no auth/routing/paywall logic changed.
+3. Confirm the visible startup placeholder is now blank white.
+4. Confirm build passes.
