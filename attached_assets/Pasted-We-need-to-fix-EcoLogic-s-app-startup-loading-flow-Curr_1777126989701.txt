@@ -1,0 +1,108 @@
+We need to fix EcoLogic’s app startup/loading flow.
+
+Current bad flow:
+Splash screen → black screen → loading screen → app
+
+Desired flow:
+Splash screen → app
+Like Instagram/X/Snapchat. No black flash. No separate full-screen loading screen unless absolutely necessary.
+
+Goal:
+Make startup feel instant and polished on iOS/Android/web.
+
+Important context:
+- EcoLogic is a React/Vite app with Capacitor native wrappers.
+- We previously fixed iOS dark/black startup issues, so do NOT reintroduce dark backgrounds.
+- App style should be Apple-like: white background, clean, blue accents.
+- Preserve all auth, routing, paywall, RBAC, and existing app behavior.
+
+Tasks:
+
+1. Audit startup sequence
+Check these areas:
+- client/index.html
+- client/src/main.tsx
+- App.tsx
+- auth provider / session bootstrap logic
+- route guards / protected routes
+- Capacitor splash screen config
+- any global loading screen, spinner, “Loading...” component, or black fallback
+- any CSS setting html/body/#root background to black/dark
+- any native detection logic that delays rendering
+
+2. Remove black flash
+Ensure the entire startup background is always white:
+- html
+- body
+- #root
+- main app shell
+- any fallback div
+- any loading container
+
+There should be no moment where the app shows black, dark navy, or blank black.
+
+3. Replace full-screen loading with app-shell loading
+Do NOT show a separate full-screen loading page after splash.
+
+Instead:
+- Render the normal app shell as early as possible.
+- If auth/user/session data is still loading, show a white Apple-style lightweight placeholder inside the app shell.
+- Prefer a simple white screen with the EcoLogic wordmark/logo centered only if absolutely needed.
+- No black background.
+- No big ugly spinner.
+- No text-heavy loading state.
+
+4. Improve Capacitor splash behavior
+For native iOS/Android:
+- Keep the native splash screen visible until React has mounted and the first safe UI is ready.
+- Hide the native splash only after the app has rendered a white safe startup screen or actual app content.
+- Avoid hiding the native splash too early, which causes the black gap.
+- If using @capacitor/splash-screen, make sure SplashScreen.hide() happens after React hydration/initial app readiness, not immediately on app launch.
+
+5. Avoid blocking the whole app on slow startup calls
+Find any startup logic that blocks rendering, such as:
+- auth fetch
+- subscription check
+- company/member fetch
+- current user fetch
+- role/RBAC fetch
+
+Keep the required checks, but do not let them create a black screen or heavy full-screen loader.
+
+Expected behavior:
+- User taps EcoLogic app.
+- Native splash appears.
+- App transitions directly to the correct screen:
+  - logged-in user → dashboard/app
+  - logged-out user → sign-in/onboarding
+  - subscription required → paywall
+- No black screen in between.
+- No visible “Loading...” page unless something truly fails.
+- If data is still loading, show a clean white app-shell placeholder.
+
+6. Add small diagnostics logs temporarily
+Add targeted console logs only around startup:
+- when React mounts
+- when auth bootstrap starts/finishes
+- when app shell first renders
+- when SplashScreen.hide() is called
+- whether running in Capacitor/native
+
+Do not spam logs.
+
+7. Deliverables
+After changes, summarize:
+- what was causing the black/loading gap
+- what files were changed
+- how the startup flow now works
+- what to test on web and iOS
+
+Testing checklist:
+- Fresh app launch on iPhone
+- Force close app, reopen
+- Logged-in user
+- Logged-out user
+- Slow network simulation if possible
+- Web browser refresh
+- Make sure no black flash appears
+- Make sure routing/auth/paywall still works

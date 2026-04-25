@@ -550,12 +550,32 @@ function AuthenticatedRouter() {
   //   caused the gate to fire with subActive=false before the query resolved.
   const subStillPending = isAuthenticated && hasCompany && subLoading;
   if ((!authTimedOut && isLoading) || subStillPending) {
+    // Apple-style minimal placeholder. Same wordmark as Welcome / splash so
+    // the visual transition from native splash → web → app feels seamless.
+    // No spinner, no "Loading..." text — silence is the polished default.
+    console.log('[startup] showing wordmark placeholder — authLoading=' + isLoading + ' subLoading=' + subLoading);
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFFFFF' }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-          <p className="text-slate-400 text-sm">Loading EcoLogic...</p>
-        </div>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: '#FFFFFF' }}
+        data-testid="startup-placeholder"
+      >
+        <h1
+          style={{
+            fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.05,
+            color: '#0B0B0D',
+            fontSize: 'clamp(2.5rem, 8vw, 3.5rem)',
+          }}
+        >
+          EcoLogic
+        </h1>
+        <span className="sr-only">Loading EcoLogic</span>
       </div>
     );
   }

@@ -23,10 +23,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
     <script>
-      // Dark-mode startup paint. SKIPPED on native iOS/Android: inside the
-      // Capacitor WKWebView/WebView the white inline style above must win
-      // for the entire cold launch — any pre-React #0F172A flash defeats
-      // the native fix. In a normal browser, behavior is unchanged.
+      // Theme-class bootstrap. We add the .dark class early so React's first
+      // paint matches the user's theme — but we DO NOT paint <html> dark here.
+      // The startup must always paint white (Apple-style instant feel). Any
+      // dark surfaces are then handled inside React-rendered components via
+      // .dark CSS rules, never by an inline style on <html>.
       (function(){
         try {
           var isNative =
@@ -38,7 +39,6 @@
           var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme:dark)').matches);
           if (isDark) {
             document.documentElement.classList.add('dark');
-            document.documentElement.style.backgroundColor = '#0F172A';
           }
         } catch(e){}
       })();
