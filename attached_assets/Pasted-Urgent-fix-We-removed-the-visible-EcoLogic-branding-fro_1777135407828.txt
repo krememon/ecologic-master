@@ -1,0 +1,75 @@
+Urgent fix.
+
+We removed the visible EcoLogic branding from the logged-out Welcome page, but that was wrong.
+
+Correct desired behavior:
+1. Native splash shows EcoLogic branding.
+2. Startup loading placeholder after splash should be blank white only.
+3. Actual logged-out Welcome/sign-in page SHOULD show the EcoLogic branding at the top like before.
+
+So:
+- Keep App.tsx startup placeholder blank white.
+- Restore EcoLogic wordmark + "Professional contractor management" on Welcome.tsx.
+
+Files:
+- client/src/App.tsx
+- client/src/pages/Welcome.tsx
+
+Tasks:
+
+1. In client/src/App.tsx:
+Confirm the startup placeholder still has no visible EcoLogic text.
+It should only render a white div and maybe sr-only "Loading EcoLogic".
+Do not change auth/routing/paywall logic.
+
+2. In client/src/pages/Welcome.tsx:
+Restore the visible branding block above the sign-in/create-account card.
+
+It should show:
+- Large EcoLogic wordmark/text
+- Subtitle: Professional contractor management
+
+Use the previous styling, but make it tasteful:
+- Centered
+- Above the card
+- Enough spacing before the card
+- Not too huge
+- Apple-like clean design
+
+Suggested JSX:
+
+<div className="text-center mb-5">
+  <h1
+    className="text-5xl md:text-6xl mx-auto"
+    style={{
+      fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+      fontWeight: 800,
+      letterSpacing: "-0.02em",
+      lineHeight: 1.05,
+      marginBottom: "-2px",
+      color: "#0B0B0D",
+    }}
+  >
+    EcoLogic
+  </h1>
+  <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base mt-1">
+    Professional contractor management
+  </p>
+</div>
+
+3. Remove the sr-only replacement from Welcome.tsx if that is what replaced the branding block.
+
+4. Expected final flow:
+Native splash → blank white loading state if needed → Welcome page with EcoLogic branding and sign-in/create-account card.
+
+Important:
+Do NOT bring back the EcoLogic text in App.tsx loading placeholder.
+Only restore branding on the real Welcome page.
+
+5. Build:
+Run npm run build and report result.
+
+Deliverables:
+- Confirm App.tsx startup placeholder remains blank white.
+- Confirm Welcome.tsx branding is restored.
+- Confirm build passes.
