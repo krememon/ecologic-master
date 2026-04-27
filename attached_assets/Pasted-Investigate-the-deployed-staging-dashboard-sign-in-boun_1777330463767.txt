@@ -1,0 +1,71 @@
+Investigate the deployed staging dashboard sign-in bounce.
+
+Current behavior:
+On https://staging-dashboard.ecologicc.com, the Sign in button is clickable. When clicked, the page appears to navigate/load briefly, then returns back to the same dashboard sign-in screen. It does not end up authenticated in the dashboard.
+
+The Replit preview dashboard works with ?app=dashboard, so the dashboard UI itself works.
+
+Goal:
+Fix the real deployed staging dashboard login flow so clicking Sign in lets an approved admin access the dashboard.
+
+Expected flow:
+1. Visit https://staging-dashboard.ecologicc.com
+2. Click Sign in
+3. Go to https://staging.ecologicc.com/login?returnTo=https%3A%2F%2Fstaging-dashboard.ecologicc.com%2F
+4. Login/auth completes
+5. Return to https://staging-dashboard.ecologicc.com
+6. Dashboard calls /api/admin/dashboard/me
+7. If email is in DASHBOARD_ADMIN_EMAILS, show the dashboard shell
+
+Please check specifically:
+
+1. On click, log the exact URL being navigated to:
+[dashboard-auth] sign in clicked
+[dashboard-auth] login URL: ...
+
+2. Confirm the dashboard is not accidentally setting window.location back to itself.
+
+3. Confirm the returnTo is:
+https://staging-dashboard.ecologicc.com/
+
+4. Confirm /login on staging.ecologicc.com captures and preserves returnTo.
+
+5. Confirm if an existing logged-in session exists, /login redirects to the safe returnTo instead of /jobs.
+
+6. Confirm the session cookie works across:
+staging.ecologicc.com
+staging-dashboard.ecologicc.com
+
+Environment:
+SESSION_COOKIE_DOMAIN should be .ecologicc.com
+
+If SESSION_COOKIE_DOMAIN is missing or not being applied, the dashboard subdomain will not be able to read the login session.
+
+7. Inspect cookie settings:
+- domain should be .ecologicc.com when SESSION_COOKIE_DOMAIN is set
+- SameSite should allow normal same-site subdomain usage
+- secure should be true in deployed HTTPS
+
+8. Confirm /api/admin/dashboard/me on staging-dashboard.ecologicc.com returns:
+- 401 if not logged in
+- { allowed: true, email } if logged in as an approved admin
+- { allowed: false, email } if logged in but not approved
+
+9. Confirm DASHBOARD_ADMIN_EMAILS parsing trims spaces and lowercases emails.
+
+10. If the problem is missing SESSION_COOKIE_DOMAIN, make that clear in the output and tell me exactly what env var to set.
+
+Important:
+Do not loosen the returnTo allow-list.
+Do not allow open redirects.
+Do not break staging.ecologicc.com customer app.
+Do not grant dashboard access based on customer company role.
+Dashboard access must remain based on DASHBOARD_ADMIN_EMAILS only.
+
+Deliverables:
+- Root cause of the bounce
+- Files changed
+- Env vars required
+- Exact login URL generated
+- Exact /api/admin/dashboard/me result after login
+- Testing steps

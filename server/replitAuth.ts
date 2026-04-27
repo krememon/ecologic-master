@@ -230,6 +230,39 @@ export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
 
+  // Auto-patch existing sessions to carry the configured cookie domain.
+  //
+  // Background: when SESSION_COOKIE_DOMAIN was added, sessions that already
+  // existed in the DB had been saved with no `domain` in their stored
+  // `sess.cookie`. express-session re-issues each Set-Cookie from the
+  // session's stored cookie config (NOT the middleware default), so those
+  // existing sessions kept getting host-scoped cookies — breaking
+  // cross-subdomain sharing between staging.ecologicc.com and
+  // staging-dashboard.ecologicc.com.
+  //
+  // This middleware checks each request's session and, if the configured
+  // SESSION_COOKIE_DOMAIN doesn't match what's stored, updates the session's
+  // cookie domain AND marks the session modified (express-session's
+  // shouldSetCookie() ignores cookie-only changes, so we need a real session
+  // mutation to force a save + a fresh Set-Cookie). The browser then writes
+  // a domain-scoped cookie alongside any older host-scoped one. Subsequent
+  // requests skip the patch entirely (idempotent: once saved, cookie.domain
+  // matches and the if-block is a no-op).
+  app.use((req: any, _res: any, next: any) => {
+    const desired = process.env.SESSION_COOKIE_DOMAIN?.trim();
+    if (desired && req.session && req.session.cookie) {
+      if (req.session.cookie.domain !== desired) {
+        req.session.cookie.domain = desired;
+        // Force isModified() to return true so the response includes a
+        // fresh Set-Cookie carrying the new Domain attribute. We stash a
+        // small migration marker — its presence then prevents this branch
+        // from re-firing on every subsequent request for the same session.
+        (req.session as any)._cookieDomainMigratedAt = Date.now();
+      }
+    }
+    next();
+  });
+
   app.use(async (req: any, _res: any, next: any) => {
     const authHeader = req.headers['authorization'];
     // Note: do NOT gate on !req.cookies?.['connect.sid'].
