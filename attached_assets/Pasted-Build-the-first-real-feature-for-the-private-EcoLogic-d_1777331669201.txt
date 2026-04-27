@@ -1,0 +1,318 @@
+Build the first real feature for the private EcoLogic dashboard in STAGING only.
+
+Feature:
+Campaign/source tracking from dashboard tracking links into onboarding and subscriber attribution.
+
+Current working foundation:
+- staging-dashboard.ecologicc.com loads the private dashboard
+- dashboard login works
+- admin APIs are under /api/admin/dashboard/*
+- existing tables include:
+  - growth_subscribers
+  - growth_campaigns
+  - growth_creators
+- dashboard access is controlled by DASHBOARD_ADMIN_EMAILS
+- staging.ecologicc.com still loads the normal customer app
+
+Important:
+Do not touch production.
+Do not break existing customer app routing, login, onboarding, Stripe, Apple IAP, Google Play IAP, jobs, billing, or subscriptions.
+Build and test this in staging only.
+
+Goal flow:
+1. I create a campaign in the private dashboard.
+2. Dashboard generates a tracking link.
+3. Someone opens the tracking link on staging.ecologicc.com.
+4. EcoLogic captures source/ref from the URL.
+5. Onboarding pre-fills referral/source fields.
+6. When onboarding/company setup finishes, EcoLogic saves the subscriber attribution.
+7. The dashboard Subscribers page shows who came from that campaign/source.
+
+PART 1 — Campaigns page UI
+
+Build out the dashboard Campaigns page.
+
+Admins should be able to:
+
+- View all campaigns
+- Create a campaign
+- Edit a campaign
+- Deactivate/reactivate a campaign
+- Copy tracking link
+
+Campaign fields:
+
+- name
+- sourceType
+- sourceName
+- referralCode
+- trackingUrl
+- cost
+- status
+- notes
+
+Source type options:
+
+- instagram_creator
+- tiktok_creator
+- supply_house
+- flyer
+- customer_referral
+- cold_call
+- google
+- app_store
+- organic
+- other
+
+Rules:
+- referralCode is required
+- referralCode should be normalized lowercase in the DB
+- display referralCode uppercase in the UI if helpful
+- referralCode must be unique case-insensitively
+- status should be active/inactive
+- cost can be blank or 0
+- notes optional
+
+Tracking link format for staging:
+
+https://staging.ecologicc.com/signup?source=SOURCE_TYPE&ref=REFERRAL_CODE
+
+Example:
+
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Later production should use:
+
+https://app.ecologicc.com/signup?source=SOURCE_TYPE&ref=REFERRAL_CODE
+
+Generate the tracking link based on environment/hostname. For staging dashboard, use staging.ecologicc.com.
+
+PART 2 — Campaign APIs
+
+Use the existing protected admin API namespace:
+
+GET /api/admin/dashboard/campaigns
+POST /api/admin/dashboard/campaigns
+PATCH /api/admin/dashboard/campaigns/:id
+
+Make sure all routes are dashboard-admin-only.
+
+POST should create a campaign.
+PATCH should edit fields and support activating/deactivating.
+
+Add validation with Zod.
+
+Add helpful logs:
+
+[dashboard-campaigns] creating campaign
+[dashboard-campaigns] updated campaign
+[dashboard-campaigns] duplicate referral code
+[dashboard-campaigns] listing campaigns
+
+PART 3 — Client attribution capture utility
+
+In the normal customer app, create a small attribution utility that runs early on app load.
+
+It should detect URL params:
+
+- ref
+- source
+- campaign
+
+Example:
+
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+When detected, save attribution to localStorage and cookie if possible.
+
+Saved data shape:
+
+{
+  referralCode: "joeplumbing",
+  sourceType: "instagram_creator",
+  campaignParam: null,
+  firstSeenAt: ISO timestamp,
+  lastSeenAt: ISO timestamp,
+  landingPath: current path
+}
+
+Rules:
+- first-touch attribution wins
+- if attribution already exists with referralCode/sourceType, do not overwrite it
+- update lastSeenAt only
+- keep attribution for 90 days
+- normalize referralCode lowercase
+- normalize sourceType lowercase
+- run this early in the customer app load
+- do not run this on dashboard hostnames
+
+Add safe logs:
+
+[attribution] captured from URL
+[attribution] existing attribution kept
+[attribution] no attribution params found
+
+PART 4 — Onboarding fields
+
+Add source/referral fields into onboarding/signup flow.
+
+Add question:
+
+How did you hear about EcoLogic?
+
+Options:
+- Instagram
+- TikTok
+- Friend / referral
+- Supply house
+- Flyer / QR code
+- Google
+- App Store
+- Sales call
+- Other
+
+Add optional field:
+
+Referral or creator code
+
+Behavior:
+- If saved attribution exists, prefill referral code.
+- If saved sourceType exists, preselect the closest source option.
+- User can manually type a code.
+- The fields are optional.
+- Do not block onboarding if blank.
+- Do not fail onboarding if code is invalid.
+
+Make sure these fields are submitted with onboarding/company setup.
+
+PART 5 — Backend attribution save
+
+When onboarding completes or company is created:
+
+- read submitted source answer
+- read submitted referral code
+- also accept saved attribution values sent from the client if available
+- normalize referral code lowercase
+- try to match referralCode against growth_campaigns.referralCode
+- only match active campaigns
+
+If a matching campaign exists:
+- create or update growth_subscribers for this user/company
+- set:
+  - userId
+  - companyId
+  - ownerEmail
+  - companyName
+  - sourceType
+  - sourceName
+  - referralCode
+  - campaignId
+  - signupAt if known
+  - onboardingCompletedAt
+  - platform = unknown for now
+  - subscriptionStatus = unknown or trialing depending on current app logic
+
+If no campaign match exists:
+- still create/update growth_subscribers if the user provided source/referral info
+- campaignId can be null
+- sourceName can come from the selected source answer or be blank
+
+Important:
+- Do not overwrite existing attribution once set.
+- One company/user should keep its original source unless manually changed later.
+- Do not fail onboarding if saving attribution fails. Log it and continue.
+
+Add logs:
+
+[attribution] onboarding attribution received
+[attribution] matched campaign
+[attribution] no campaign match
+[attribution] saved subscriber attribution
+[attribution] attribution already exists, keeping original
+[attribution] failed to save attribution but onboarding continued
+
+PART 6 — Subscribers page
+
+Build out the dashboard Subscribers page.
+
+Use:
+
+GET /api/admin/dashboard/subscribers
+
+Show columns:
+
+- Company
+- Owner email
+- Source type
+- Source name
+- Campaign
+- Referral code
+- Platform
+- Plan
+- Subscription status
+- MRR
+- Signup date
+- Onboarding completed date
+
+Add filters if simple:
+- source type
+- campaign
+- platform
+- subscription status
+
+For now, revenue/plan/platform can show blank, unknown, or $0 until Stripe/Apple/Google sync is added later.
+
+PART 7 — Sources page
+
+Build out the dashboard Sources page.
+
+Group growth_subscribers by sourceType.
+
+Show:
+
+- Source type
+- Signups
+- Trials
+- Paid
+- Canceled
+- MRR
+- Total revenue
+
+For now, if revenue is not connected yet, show $0 safely.
+
+PART 8 — Testing checklist
+
+After implementation, give me exact testing steps:
+
+1. Go to staging-dashboard.ecologicc.com.
+2. Open Campaigns.
+3. Create campaign:
+   - name: Joe Plumbing
+   - sourceType: instagram_creator
+   - sourceName: @joeplumbing
+   - referralCode: joeplumbing
+   - cost: 500
+4. Copy the generated tracking link.
+5. Open the tracking link in an incognito browser:
+   https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+6. Confirm localStorage attribution is saved.
+7. Confirm onboarding referral field is prefilled.
+8. Complete onboarding/company setup.
+9. Confirm growth_subscribers has the new user/company attributed.
+10. Confirm dashboard Subscribers page shows:
+   - sourceType: instagram_creator
+   - sourceName: @joeplumbing
+   - campaign: Joe Plumbing
+   - referralCode: joeplumbing
+11. Confirm Sources page counts the signup under instagram_creator.
+12. Confirm staging.ecologicc.com still works normally without ?ref=.
+13. Confirm normal customer users cannot access /api/admin/dashboard/*.
+
+Deliverables:
+- Files changed
+- APIs added/updated
+- How tracking link generation works
+- How attribution capture works
+- How onboarding sends attribution
+- How subscriber attribution is saved
+- Testing steps

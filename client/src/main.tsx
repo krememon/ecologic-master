@@ -2,7 +2,18 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import PublicSignApp from "./public/PublicSignApp";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { captureAttributionFromUrl } from "@/lib/attribution";
 import "./index.css";
+
+// ── Attribution capture (first-touch, runs before any React mount) ──────────
+// Reads ?ref / ?source / ?campaign from the URL and persists them to
+// localStorage + cookie for 90 days. First-touch wins. Skipped on dashboard
+// hostnames. Wrapped in try/catch — must never block app boot.
+try {
+  captureAttributionFromUrl();
+} catch (e) {
+  console.warn("[attribution] boot-time capture failed (ignored):", e);
+}
 
 // Global error handlers to catch any crashes
 window.addEventListener("error", (e) => {

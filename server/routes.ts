@@ -4348,7 +4348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ code: 'ALREADY_HAS_COMPANY', message: 'You already belong to a company' });
       }
 
-      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country } = req.body;
+      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country, sourceAnswer, referralCode, attribution } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
       const inviteCode = await generateUniqueInviteCode(async (code) => {
@@ -4374,7 +4374,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
         postalCode: postalCode || null,
         country: country || null,
       });
-      
+
+      // ── Attribution save (best-effort, never blocks company creation) ─────
+      // Reads source/referral fields from the onboarding form and the optional
+      // saved-attribution snapshot from the customer-app. First-touch wins.
+      try {
+        const { saveOrKeepSubscriberAttribution, findActiveCampaignByReferralCode, normalizeReferralCode } =
+          await import("./dashboard/storage");
+        const { coerceGrowthSourceType, isGrowthSourceType, GROWTH_SOURCE_LABELS } =
+          await import("@shared/growthSources");
+
+        // Resolve referral code: prefer URL-captured first-touch, then form input.
+        const codeFromAttribution = normalizeReferralCode(attribution?.referralCode ?? null);
+        const codeFromForm = normalizeReferralCode(referralCode ?? null);
+        const finalReferralCode = codeFromAttribution || codeFromForm || null;
+
+        // Resolve source type: prefer URL-captured first-touch, then form answer.
+        const sourceFromAttribution = coerceGrowthSourceType(attribution?.sourceType ?? null);
+        const sourceFromForm = isGrowthSourceType(sourceAnswer) ? sourceAnswer : coerceGrowthSourceType(sourceAnswer);
+        const finalSourceType = sourceFromAttribution || sourceFromForm || null;
+
+        const matchedCampaign = await findActiveCampaignByReferralCode(finalReferralCode);
+
+        console.log(
+          `[attribution] onboarding attribution received companyId=${company.id} userId=${userId} ` +
+          `referralCode=${finalReferralCode ?? "—"} sourceType=${finalSourceType ?? "—"} ` +
+          `formSourceAnswer=${sourceAnswer ?? "—"} hasAttribution=${!!attribution}`
+        );
+
+        if (matchedCampaign) {
+          console.log(
+            `[attribution] matched campaign id=${matchedCampaign.id} name="${matchedCampaign.name}" sourceType=${matchedCampaign.sourceType}`
+          );
+        } else if (finalReferralCode) {
+          console.log(`[attribution] no campaign match for referralCode="${finalReferralCode}"`);
+        }
+
+        // Resolve owner email + display name for the subscriber row.
+        let ownerEmail: string | null = (req.user as any)?.email ?? null;
+        if (!ownerEmail) {
+          try {
+            const u = await storage.getUser(userId);
+            ownerEmail = u?.email ?? null;
+          } catch { /* ignore */ }
+        }
+
+        // Effective source: matched-campaign sourceType overrides the form answer.
+        const effectiveSourceType = matchedCampaign?.sourceType ?? finalSourceType;
+        // Effective sourceName: campaign sourceName wins; otherwise human label of the form answer.
+        const effectiveSourceName =
+          matchedCampaign?.sourceName ??
+          (effectiveSourceType ? GROWTH_SOURCE_LABELS[effectiveSourceType as keyof typeof GROWTH_SOURCE_LABELS] ?? null : null);
+
+        // Only write a row if we actually have *some* attribution signal. A user
+        // who submits onboarding with no source/referral and no URL touch
+        // should not generate an empty subscriber row.
+        if (effectiveSourceType || finalReferralCode || matchedCampaign) {
+          await saveOrKeepSubscriberAttribution({
+            userId,
+            companyId: company.id,
+            ownerEmail,
+            companyName: company.name,
+            sourceType: effectiveSourceType,
+            sourceName: effectiveSourceName,
+            referralCode: finalReferralCode,
+            campaignId: matchedCampaign?.id ?? null,
+            signupAt: new Date(),
+            onboardingCompletedAt: null, // company onboarding completed flag is set elsewhere
+          });
+        } else {
+          console.log("[attribution] no attribution signal — skipping subscriber row");
+        }
+      } catch (attrErr) {
+        // CRITICAL: never fail company creation because attribution failed.
+        console.error("[attribution] failed to save attribution but onboarding continued:", attrErr);
+      }
+
       res.status(201).json(company);
     } catch (error) {
       console.error("Error creating company:", error);

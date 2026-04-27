@@ -13,8 +13,8 @@ import {
   insertGrowthCreatorSchema,
 } from "@shared/schema";
 import {
-  listGrowthSubscribers,
-  listGrowthCampaigns,
+  listGrowthSubscribersWithCampaign,
+  listGrowthCampaignsWithMetrics,
   createGrowthCampaign,
   updateGrowthCampaign,
   listGrowthCreators,
@@ -22,7 +22,12 @@ import {
   updateGrowthCreator,
   getDashboardOverview,
   getSourceBreakdown,
+  normalizeReferralCode,
+  findActiveCampaignByReferralCode,
 } from "./storage";
+import { db } from "../db";
+import { growthCampaigns } from "@shared/schema";
+import { eq, and, ne } from "drizzle-orm";
 
 const gate = [requireAuth, requireDashboardAdmin] as const;
 
@@ -43,7 +48,7 @@ export function registerDashboardRoutes(app: Express): void {
   app.get("/api/admin/dashboard/subscribers", ...gate, async (_req: Request, res: Response) => {
     try {
       console.log("[dashboard] loading subscribers");
-      const data = await listGrowthSubscribers();
+      const data = await listGrowthSubscribersWithCampaign();
       res.json(data);
     } catch (err) {
       console.error("[dashboard] subscribers error:", err);
@@ -66,27 +71,57 @@ export function registerDashboardRoutes(app: Express): void {
   // ── Campaigns ────────────────────────────────────────────────────────────
   app.get("/api/admin/dashboard/campaigns", ...gate, async (_req: Request, res: Response) => {
     try {
-      console.log("[dashboard] loading campaigns");
-      const data = await listGrowthCampaigns();
+      console.log("[dashboard-campaigns] listing campaigns");
+      const data = await listGrowthCampaignsWithMetrics();
       res.json(data);
     } catch (err) {
-      console.error("[dashboard] campaigns error:", err);
+      console.error("[dashboard-campaigns] list error:", err);
       res.status(500).json({ message: "Failed to load campaigns" });
     }
   });
 
   app.post("/api/admin/dashboard/campaigns", ...gate, async (req: Request, res: Response) => {
     try {
+      console.log("[dashboard-campaigns] creating campaign");
       const parsed = insertGrowthCampaignSchema.parse(req.body);
-      const row = await createGrowthCampaign(parsed);
-      console.log(`[dashboard] campaign created id=${row.id} sourceType=${row.sourceType}`);
+      const code = normalizeReferralCode(parsed.referralCode as any);
+      if (!code) {
+        res.status(400).json({ message: "Referral code is required" });
+        return;
+      }
+
+      // Pre-check uniqueness so we can return a friendly error.
+      const [dup] = await db
+        .select({ id: growthCampaigns.id })
+        .from(growthCampaigns)
+        .where(eq(growthCampaigns.referralCode, code))
+        .limit(1);
+      if (dup) {
+        console.warn(`[dashboard-campaigns] duplicate referral code "${code}"`);
+        res.status(409).json({
+          code: "DUPLICATE_REFERRAL_CODE",
+          message: `Referral code "${code}" is already in use`,
+        });
+        return;
+      }
+
+      const row = await createGrowthCampaign({ ...parsed, referralCode: code } as any);
+      console.log(`[dashboard-campaigns] created id=${row.id} sourceType=${row.sourceType} code=${row.referralCode}`);
       res.status(201).json(row);
     } catch (err: any) {
       if (err?.issues) {
         res.status(400).json({ message: "Validation failed", issues: err.issues });
         return;
       }
-      console.error("[dashboard] campaign create error:", err);
+      // Postgres unique-violation safety net (in case of race).
+      if (err?.code === "23505") {
+        res.status(409).json({
+          code: "DUPLICATE_REFERRAL_CODE",
+          message: "Referral code is already in use",
+        });
+        return;
+      }
+      console.error("[dashboard-campaigns] create error:", err);
       res.status(500).json({ message: "Failed to create campaign" });
     }
   });
@@ -99,20 +134,71 @@ export function registerDashboardRoutes(app: Express): void {
         return;
       }
       const parsed = insertGrowthCampaignSchema.partial().parse(req.body);
+
+      // If updating referralCode, ensure no other row already uses it.
+      if ("referralCode" in parsed) {
+        const code = normalizeReferralCode(parsed.referralCode as any);
+        if (!code) {
+          res.status(400).json({ message: "Referral code cannot be empty" });
+          return;
+        }
+        const [dup] = await db
+          .select({ id: growthCampaigns.id })
+          .from(growthCampaigns)
+          .where(and(eq(growthCampaigns.referralCode, code), ne(growthCampaigns.id, id)))
+          .limit(1);
+        if (dup) {
+          console.warn(`[dashboard-campaigns] duplicate referral code "${code}" on patch id=${id}`);
+          res.status(409).json({
+            code: "DUPLICATE_REFERRAL_CODE",
+            message: `Referral code "${code}" is already in use`,
+          });
+          return;
+        }
+        (parsed as any).referralCode = code;
+      }
+
       const row = await updateGrowthCampaign(id, parsed);
       if (!row) {
         res.status(404).json({ message: "Campaign not found" });
         return;
       }
-      console.log(`[dashboard] campaign updated id=${row.id}`);
+      console.log(`[dashboard-campaigns] updated campaign id=${row.id}`);
       res.json(row);
     } catch (err: any) {
       if (err?.issues) {
         res.status(400).json({ message: "Validation failed", issues: err.issues });
         return;
       }
-      console.error("[dashboard] campaign update error:", err);
+      if (err?.code === "23505") {
+        res.status(409).json({
+          code: "DUPLICATE_REFERRAL_CODE",
+          message: "Referral code is already in use",
+        });
+        return;
+      }
+      console.error("[dashboard-campaigns] update error:", err);
       res.status(500).json({ message: "Failed to update campaign" });
+    }
+  });
+
+  // Read-only campaign lookup used by the customer-app onboarding submission to
+  // verify a typed-in referral code (active campaigns only). Returns 404 when
+  // no active campaign matches the code.
+  // (Kept admin-only since it can enumerate campaigns; the customer onboarding
+  //  submits the code to /api/companies and the server resolves it server-side.)
+  app.get("/api/admin/dashboard/campaigns/lookup/:code", ...gate, async (req: Request, res: Response) => {
+    try {
+      const code = String(req.params.code || "");
+      const row = await findActiveCampaignByReferralCode(code);
+      if (!row) {
+        res.status(404).json({ message: "Not found" });
+        return;
+      }
+      res.json(row);
+    } catch (err) {
+      console.error("[dashboard-campaigns] lookup error:", err);
+      res.status(500).json({ message: "Lookup failed" });
     }
   });
 
@@ -139,6 +225,13 @@ export function registerDashboardRoutes(app: Express): void {
         res.status(400).json({ message: "Validation failed", issues: err.issues });
         return;
       }
+      if (err?.code === "23505") {
+        res.status(409).json({
+          code: "DUPLICATE_REFERRAL_CODE",
+          message: "Referral code is already in use",
+        });
+        return;
+      }
       console.error("[dashboard] creator create error:", err);
       res.status(500).json({ message: "Failed to create creator" });
     }
@@ -162,6 +255,13 @@ export function registerDashboardRoutes(app: Express): void {
     } catch (err: any) {
       if (err?.issues) {
         res.status(400).json({ message: "Validation failed", issues: err.issues });
+        return;
+      }
+      if (err?.code === "23505") {
+        res.status(409).json({
+          code: "DUPLICATE_REFERRAL_CODE",
+          message: "Referral code is already in use",
+        });
         return;
       }
       console.error("[dashboard] creator update error:", err);

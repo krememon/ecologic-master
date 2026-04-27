@@ -7,7 +7,7 @@
  */
 
 import { db } from "../db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import {
   growthSubscribers,
   growthCampaigns,
@@ -31,9 +31,72 @@ export async function listGrowthSubscribers(): Promise<GrowthSubscriber[]> {
   return await db.select().from(growthSubscribers).orderBy(desc(growthSubscribers.createdAt));
 }
 
+/**
+ * Subscribers list with the joined campaign name. Used by the dashboard
+ * Subscribers page so it can show "Campaign: Joe Plumbing" instead of just
+ * a numeric campaign_id.
+ */
+export interface SubscriberWithCampaign extends GrowthSubscriber {
+  campaignName: string | null;
+}
+
+export async function listGrowthSubscribersWithCampaign(): Promise<SubscriberWithCampaign[]> {
+  const rows = await db
+    .select({
+      sub: growthSubscribers,
+      campaignName: growthCampaigns.name,
+    })
+    .from(growthSubscribers)
+    .leftJoin(growthCampaigns, eq(growthCampaigns.id, growthSubscribers.campaignId))
+    .orderBy(desc(growthSubscribers.createdAt));
+  return rows.map((r) => ({ ...(r.sub as GrowthSubscriber), campaignName: r.campaignName ?? null }));
+}
+
 // ── Campaigns ──────────────────────────────────────────────────────────────
 export async function listGrowthCampaigns(): Promise<GrowthCampaign[]> {
   return await db.select().from(growthCampaigns).orderBy(desc(growthCampaigns.createdAt));
+}
+
+/** Campaigns list with subscriber counts for the dashboard table. */
+export interface CampaignWithMetrics extends GrowthCampaign {
+  signups: number;
+}
+
+export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetrics[]> {
+  const rows = (await db.execute<{
+    id: number;
+    signups: string;
+  }>(sql`
+    SELECT campaign_id AS id, count(*)::text AS signups
+    FROM growth_subscribers
+    WHERE campaign_id IS NOT NULL
+    GROUP BY campaign_id
+  `)) as unknown as Array<{ id: number; signups: string }>;
+
+  const counts = new Map<number, number>();
+  for (const r of rows) counts.set(Number(r.id), Number(r.signups));
+
+  const campaigns = await listGrowthCampaigns();
+  return campaigns.map((c) => ({ ...c, signups: counts.get(c.id) ?? 0 }));
+}
+
+/**
+ * Look up an active campaign by referral code (case-insensitive).
+ * Returns null if no campaign matches or if the matched campaign is not active.
+ */
+export async function findActiveCampaignByReferralCode(
+  rawCode: string | null | undefined,
+): Promise<GrowthCampaign | null> {
+  const code = normalizeReferralCode(rawCode);
+  if (!code) return null;
+  const [row] = await db
+    .select()
+    .from(growthCampaigns)
+    .where(eq(growthCampaigns.referralCode, code))
+    .limit(1);
+  if (!row) return null;
+  if (row.status !== "active") return null;
+  return row;
 }
 
 export async function createGrowthCampaign(input: InsertGrowthCampaign): Promise<GrowthCampaign> {
@@ -83,6 +146,105 @@ export async function updateGrowthCreator(
     .where(eq(growthCreators.id, id))
     .returning();
   return row ?? null;
+}
+
+// ── Subscriber attribution save (first-touch wins) ─────────────────────────
+
+export interface SaveSubscriberAttributionInput {
+  userId?: string | null;
+  companyId?: number | null;
+  ownerEmail?: string | null;
+  companyName?: string | null;
+  sourceType?: string | null;
+  sourceName?: string | null;
+  referralCode?: string | null;
+  campaignId?: number | null;
+  signupAt?: Date | null;
+  onboardingCompletedAt?: Date | null;
+}
+
+/**
+ * Create or update a growth_subscribers row for the given user/company,
+ * preserving any existing attribution (first-touch wins).
+ *
+ *   • If a row already exists for this (companyId or userId) AND it already
+ *     has a sourceType OR referralCode set, the row is left untouched and
+ *     returned as-is.
+ *   • If a row exists but has empty attribution, it is updated.
+ *   • If no row exists, a new one is inserted.
+ *
+ * This function never throws — callers can fire-and-forget. Errors are logged
+ * with the `[attribution]` prefix.
+ */
+export async function saveOrKeepSubscriberAttribution(
+  input: SaveSubscriberAttributionInput,
+): Promise<{ saved: boolean; row: GrowthSubscriber | null; reason?: string }> {
+  try {
+    const referralCode = normalizeReferralCode(input.referralCode);
+
+    // Look up an existing row by companyId first, then by userId.
+    let existing: GrowthSubscriber | null = null;
+    if (input.companyId != null) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.companyId, input.companyId))
+        .limit(1);
+      if (r) existing = r;
+    }
+    if (!existing && input.userId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.userId, input.userId))
+        .limit(1);
+      if (r) existing = r;
+    }
+
+    if (existing && (existing.sourceType || existing.referralCode || existing.campaignId)) {
+      console.log(
+        `[attribution] attribution already exists, keeping original subscriberId=${existing.id} sourceType=${existing.sourceType ?? "—"} referralCode=${existing.referralCode ?? "—"} campaignId=${existing.campaignId ?? "—"}`
+      );
+      return { saved: false, row: existing, reason: "first_touch_preserved" };
+    }
+
+    const baseValues = {
+      userId: input.userId ?? null,
+      companyId: input.companyId ?? null,
+      ownerEmail: input.ownerEmail ?? null,
+      companyName: input.companyName ?? null,
+      sourceType: (input.sourceType ?? null) as any,
+      sourceName: input.sourceName ?? null,
+      referralCode,
+      campaignId: input.campaignId ?? null,
+      signupAt: input.signupAt ?? null,
+      onboardingCompletedAt: input.onboardingCompletedAt ?? null,
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(growthSubscribers)
+        .set({ ...baseValues, updatedAt: new Date() })
+        .where(eq(growthSubscribers.id, existing.id))
+        .returning();
+      console.log(
+        `[attribution] saved subscriber attribution (updated empty row) subscriberId=${updated.id} campaignId=${updated.campaignId ?? "—"} sourceType=${updated.sourceType ?? "—"} referralCode=${updated.referralCode ?? "—"}`
+      );
+      return { saved: true, row: updated };
+    }
+
+    const [inserted] = await db
+      .insert(growthSubscribers)
+      .values(baseValues as any)
+      .returning();
+    console.log(
+      `[attribution] saved subscriber attribution (new row) subscriberId=${inserted.id} campaignId=${inserted.campaignId ?? "—"} sourceType=${inserted.sourceType ?? "—"} referralCode=${inserted.referralCode ?? "—"}`
+    );
+    return { saved: true, row: inserted };
+  } catch (err) {
+    console.error("[attribution] failed to save attribution but onboarding continued:", err);
+    return { saved: false, row: null, reason: "error" };
+  }
 }
 
 // ── Overview aggregates ────────────────────────────────────────────────────
@@ -174,7 +336,9 @@ export interface SourceRow {
   subscribers: number;
   trialing: number;
   paid: number;
+  canceled: number;
   monthlyRevenue: number;
+  totalRevenue: number;
 }
 
 export async function getSourceBreakdown(): Promise<SourceRow[]> {
@@ -183,14 +347,18 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     subs: string;
     trialing: string;
     paid: string;
+    canceled: string;
     mrr: string | null;
+    total_rev: string | null;
   }>(sql`
     SELECT
       source_type,
       count(*)::text AS subs,
       count(*) FILTER (WHERE subscription_status = 'trialing')::text AS trialing,
       count(*) FILTER (WHERE subscription_status IN ('active','past_due'))::text AS paid,
-      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','trialing','past_due')), 0)::text AS mrr
+      count(*) FILTER (WHERE subscription_status IN ('canceled','expired'))::text AS canceled,
+      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','trialing','past_due')), 0)::text AS mrr,
+      coalesce(sum(total_revenue), 0)::text AS total_rev
     FROM growth_subscribers
     GROUP BY source_type
     ORDER BY count(*) DESC
@@ -199,7 +367,9 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     subs: string;
     trialing: string;
     paid: string;
+    canceled: string;
     mrr: string | null;
+    total_rev: string | null;
   }>;
 
   return rows.map((r) => ({
@@ -207,6 +377,8 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     subscribers: Number(r.subs),
     trialing: Number(r.trialing),
     paid: Number(r.paid),
+    canceled: Number(r.canceled),
     monthlyRevenue: Number(r.mrr ?? 0),
+    totalRevenue: Number(r.total_rev ?? 0),
   }));
 }
