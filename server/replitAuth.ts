@@ -177,6 +177,12 @@ export function getSessionMiddleware() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  // Optional: when set, the session cookie is scoped to the parent domain
+  // (e.g. ".ecologicc.com") so a single login is shared across subdomains
+  // such as app.ecologicc.com and dashboard.ecologicc.com. Leave unset to
+  // keep cookies host-scoped (the previous default behaviour).
+  const cookieDomain = process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined;
+
   _sessionMiddleware = session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
@@ -187,9 +193,10 @@ export function getSessionMiddleware() {
       secure: isSecure,
       sameSite: isSecure ? 'none' : 'lax',
       maxAge: sessionTtl,
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     },
   });
-  console.log(`[session] cookie secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}`);
+  console.log(`[session] cookie secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}, domain=${cookieDomain ?? '(host-scoped)'}`);
   return _sessionMiddleware;
 }
 

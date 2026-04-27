@@ -7,6 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Layout from "@/components/Layout";
+import DashboardApp from "@/dashboard/DashboardApp";
+import { getAppMode } from "@/dashboard/lib/host";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -1097,12 +1099,23 @@ function App() {
   useAppsFlyerInit();
   useSuperwallInit();
 
+  // ── Hostname-based app routing ────────────────────────────────────────────
+  // The same SPA bundle ships to both the customer hostnames (app.* /
+  // staging.*) and the internal dashboard hostnames (dashboard.* /
+  // staging-dashboard.*). We pick which app shell to mount based on the
+  // hostname (with a query/localStorage override for local dev).
+  const appMode = React.useMemo(() => getAppMode(), []);
+  const isDashboard = appMode === "dashboard";
+  React.useEffect(() => {
+    console.log(`[main] appMode = ${appMode} host = ${window.location.hostname}`);
+  }, [appMode]);
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          {isDashboard ? <DashboardApp /> : <Router />}
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

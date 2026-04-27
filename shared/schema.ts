@@ -2168,3 +2168,173 @@ export const subcontractPayoutAudit = pgTable("subcontract_payout_audit", {
 
 export type SubcontractPayoutAudit = typeof subcontractPayoutAudit.$inferSelect;
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// PRIVATE INTERNAL DASHBOARD — Growth / Subscriber Attribution
+// ────────────────────────────────────────────────────────────────────────────
+// These tables back the EcoLogic owner/admin dashboard at
+// dashboard.ecologicc.com (staging-dashboard.ecologicc.com in staging).
+// They are NOT exposed to customers. Read-only for normal users; write access
+// is gated to dashboard admins only via DASHBOARD_ADMIN_EMAILS env var.
+// Names are prefixed `growth_` to avoid colliding with the existing customer
+// `campaigns` table (which is for company → customer email/SMS marketing).
+
+export const growthPlatformEnum = pgEnum("growth_platform", [
+  "stripe",
+  "apple",
+  "google_play",
+  "manual",
+  "unknown",
+]);
+
+export const growthSubStatusEnum = pgEnum("growth_sub_status", [
+  "trialing",
+  "active",
+  "canceled",
+  "past_due",
+  "unpaid",
+  "expired",
+  "unknown",
+]);
+
+export const growthSourceTypeEnum = pgEnum("growth_source_type", [
+  "instagram_creator",
+  "tiktok_creator",
+  "supply_house",
+  "flyer",
+  "customer_referral",
+  "cold_call",
+  "google",
+  "app_store",
+  "organic",
+  "other",
+]);
+
+export const growthCampaignStatusEnum = pgEnum("growth_campaign_status", [
+  "active",
+  "inactive",
+]);
+
+// Marketing campaigns / source registrations (admin-managed)
+export const growthCampaigns = pgTable("growth_campaigns", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  sourceType: growthSourceTypeEnum("source_type").notNull(),
+  sourceName: varchar("source_name", { length: 255 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  trackingUrl: varchar("tracking_url", { length: 500 }),
+  cost: decimal("cost", { precision: 12, scale: 2 }),
+  status: growthCampaignStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  // Case-insensitive uniqueness enforced at the application layer by lowercasing
+  // referralCode before insert/update. The DB unique index is on the literal
+  // value, which combined with normalization gives us case-insensitive unique.
+  uniqueIndex("growth_campaigns_referral_code_unique").on(table.referralCode),
+  index("growth_campaigns_source_type_idx").on(table.sourceType),
+  index("growth_campaigns_status_idx").on(table.status),
+]);
+
+// Creators / influencers (separate from campaigns so one creator can have many)
+export const growthCreators = pgTable("growth_creators", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  instagramHandle: varchar("instagram_handle", { length: 128 }),
+  tiktokHandle: varchar("tiktok_handle", { length: 128 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  cost: decimal("cost", { precision: 12, scale: 2 }),
+  status: growthCampaignStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("growth_creators_referral_code_unique").on(table.referralCode),
+  index("growth_creators_campaign_idx").on(table.campaignId),
+  index("growth_creators_status_idx").on(table.status),
+]);
+
+// Unified subscriber attribution — one row per subscriber across all platforms
+export const growthSubscribers = pgTable("growth_subscribers", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
+  ownerEmail: varchar("owner_email", { length: 255 }),
+  companyName: varchar("company_name", { length: 255 }),
+  // Attribution
+  sourceType: growthSourceTypeEnum("source_type"),
+  sourceName: varchar("source_name", { length: 255 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  creatorId: integer("creator_id").references(() => growthCreators.id, { onDelete: "set null" }),
+  // Subscription
+  platform: growthPlatformEnum("platform").notNull().default("unknown"),
+  plan: varchar("plan", { length: 64 }),
+  subscriptionStatus: growthSubStatusEnum("subscription_status").notNull().default("unknown"),
+  monthlyRevenue: decimal("monthly_revenue", { precision: 12, scale: 2 }),
+  totalRevenue: decimal("total_revenue", { precision: 12, scale: 2 }),
+  currency: varchar("currency", { length: 8 }).default("USD"),
+  // Lifecycle
+  signupAt: timestamp("signup_at"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  trialStartedAt: timestamp("trial_started_at"),
+  becamePaidAt: timestamp("became_paid_at"),
+  canceledAt: timestamp("canceled_at"),
+  // Platform IDs
+  stripeCustomerId: varchar("stripe_customer_id", { length: 128 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 128 }),
+  appleOriginalTransactionId: varchar("apple_original_transaction_id", { length: 128 }),
+  appleTransactionId: varchar("apple_transaction_id", { length: 128 }),
+  googlePurchaseToken: text("google_purchase_token"),
+  googleOrderId: varchar("google_order_id", { length: 128 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("growth_subscribers_user_idx").on(table.userId),
+  index("growth_subscribers_company_idx").on(table.companyId),
+  index("growth_subscribers_owner_email_idx").on(table.ownerEmail),
+  index("growth_subscribers_platform_idx").on(table.platform),
+  index("growth_subscribers_status_idx").on(table.subscriptionStatus),
+  index("growth_subscribers_referral_code_idx").on(table.referralCode),
+  index("growth_subscribers_source_type_idx").on(table.sourceType),
+  index("growth_subscribers_campaign_idx").on(table.campaignId),
+  index("growth_subscribers_creator_idx").on(table.creatorId),
+  uniqueIndex("growth_subscribers_stripe_sub_unique").on(table.stripeSubscriptionId),
+  uniqueIndex("growth_subscribers_apple_orig_tx_unique").on(table.appleOriginalTransactionId),
+]);
+
+// Insert schemas
+export const insertGrowthCampaignSchema = createInsertSchema(growthCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGrowthCreatorSchema = createInsertSchema(growthCreators).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGrowthSubscriberSchema = createInsertSchema(growthSubscribers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type GrowthCampaign = typeof growthCampaigns.$inferSelect;
+export type InsertGrowthCampaign = z.infer<typeof insertGrowthCampaignSchema>;
+
+export type GrowthCreator = typeof growthCreators.$inferSelect;
+export type InsertGrowthCreator = z.infer<typeof insertGrowthCreatorSchema>;
+
+export type GrowthSubscriber = typeof growthSubscribers.$inferSelect;
+export type InsertGrowthSubscriber = z.infer<typeof insertGrowthSubscriberSchema>;
+
+export type GrowthPlatform = typeof growthPlatformEnum.enumValues[number];
+export type GrowthSubStatus = typeof growthSubStatusEnum.enumValues[number];
+export type GrowthSourceType = typeof growthSourceTypeEnum.enumValues[number];
+export type GrowthCampaignStatus = typeof growthCampaignStatusEnum.enumValues[number];

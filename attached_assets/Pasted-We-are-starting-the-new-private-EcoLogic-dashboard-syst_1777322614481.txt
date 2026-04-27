@@ -1,0 +1,257 @@
+We are starting the new private EcoLogic dashboard system in STAGING first.
+
+Goal:
+Create a private internal dashboard website for EcoLogic at:
+
+staging-dashboard.ecologicc.com
+
+This will eventually become:
+
+dashboard.ecologicc.com
+
+This dashboard is NOT the customer app. It is a private owner/admin dashboard to track subscribers, revenue, source attribution, creators, referral codes, Stripe subscriptions, Apple subscriptions, and Google Play subscriptions.
+
+Important:
+Build this in STAGING only right now.
+Do not affect production.
+Do not break the existing app, onboarding, billing, Stripe, Apple IAP, Google Play IAP, or login system.
+
+Current domain structure:
+
+Production app:
+app.ecologicc.com
+
+Staging app:
+staging.ecologicc.com
+
+Future production private dashboard:
+dashboard.ecologicc.com
+
+Staging private dashboard:
+staging-dashboard.ecologicc.com
+
+PART 1 — Domain routing
+
+Add support for hostname-based routing.
+
+If the user visits:
+
+staging-dashboard.ecologicc.com
+
+they should see the private dashboard app/shell.
+
+If the user visits:
+
+staging.ecologicc.com
+
+they should see the normal EcoLogic customer app.
+
+Do not replace the customer app.
+
+The dashboard should be a separate private internal experience.
+
+PART 2 — Dashboard access control
+
+The dashboard must require login.
+
+Only approved owner/admin users can access it.
+
+Normal EcoLogic users should be blocked, even if they have an account.
+
+Use the existing auth system if possible.
+
+Add a server-side and client-side access check.
+
+Allowed roles:
+- owner
+- admin
+
+Also support an env variable for hardcoded dashboard admin emails if useful:
+
+DASHBOARD_ADMIN_EMAILS=ppellegrino@ecologicc.com
+
+Rules:
+- If not logged in, redirect to login.
+- If logged in but not approved, show “Access denied.”
+- Never expose dashboard data to normal users.
+
+PART 3 — Dashboard shell UI
+
+Create a clean dashboard shell for:
+
+staging-dashboard.ecologicc.com
+
+Page name:
+EcoLogic Dashboard
+
+Sidebar or top navigation sections:
+- Overview
+- Subscribers
+- Sources
+- Campaigns
+- Creators
+- Platforms
+- Settings
+
+For now, these can be placeholder pages, but the shell should work.
+
+Overview page should show placeholder cards for:
+- Total subscribers
+- Trialing
+- Paid subscribers
+- Canceled
+- Current MRR
+- Total revenue
+- Top source
+- Top campaign
+
+PART 4 — Database planning / schema
+
+Create or prepare the schema for unified subscriber tracking.
+
+We need one unified view for all subscription platforms:
+
+- Stripe/Web
+- Apple/iOS
+- Google Play/Android
+- Manual/Unknown
+
+Create a table named something like growth_subscribers or subscriber_attribution.
+
+Fields should include:
+
+- id
+- userId
+- companyId
+- ownerEmail
+- companyName
+- sourceType
+- sourceName
+- referralCode
+- campaignId
+- creatorId
+- platform
+  - stripe
+  - apple
+  - google_play
+  - manual
+  - unknown
+- plan
+- subscriptionStatus
+  - trialing
+  - active
+  - canceled
+  - past_due
+  - unpaid
+  - expired
+  - unknown
+- monthlyRevenue
+- totalRevenue
+- currency
+- signupAt
+- onboardingCompletedAt
+- trialStartedAt
+- becamePaidAt
+- canceledAt
+- stripeCustomerId
+- stripeSubscriptionId
+- appleOriginalTransactionId
+- appleTransactionId
+- googlePurchaseToken
+- googleOrderId
+- createdAt
+- updatedAt
+
+Create a campaigns table:
+
+- id
+- name
+- sourceType
+  - instagram_creator
+  - tiktok_creator
+  - supply_house
+  - flyer
+  - customer_referral
+  - cold_call
+  - google
+  - app_store
+  - organic
+  - other
+- sourceName
+- referralCode
+- trackingUrl
+- cost
+- status
+  - active
+  - inactive
+- notes
+- createdAt
+- updatedAt
+
+Create a creators table if separate from campaigns:
+
+- id
+- name
+- instagramHandle
+- tiktokHandle
+- referralCode
+- campaignId
+- cost
+- status
+- notes
+- createdAt
+- updatedAt
+
+Important:
+Referral codes should be case-insensitive and unique.
+Do not overwrite attribution once it is set unless an admin manually changes it.
+
+PART 5 — Backend API foundation
+
+Create owner/admin-only API routes for the dashboard:
+
+GET /api/dashboard/overview
+GET /api/dashboard/subscribers
+GET /api/dashboard/sources
+GET /api/dashboard/campaigns
+POST /api/dashboard/campaigns
+PATCH /api/dashboard/campaigns/:id
+GET /api/dashboard/creators
+POST /api/dashboard/creators
+PATCH /api/dashboard/creators/:id
+
+For now, if there is not enough real data yet, return safe empty results or placeholder calculated results.
+
+But the routes must be protected.
+
+PART 6 — Safety logs
+
+Add clean logs for dashboard access:
+
+[dashboard] hostname detected
+[dashboard] access granted
+[dashboard] access denied
+[dashboard] loading overview
+[dashboard] loading subscribers
+
+Do not log sensitive payment details.
+
+PART 7 — Deliverables for this first step
+
+After implementing, give me:
+
+1. Files changed
+2. Any new environment variables needed
+3. Any database migrations added
+4. How to test staging-dashboard.ecologicc.com locally or in staging
+5. Confirmation that staging.ecologicc.com still loads the normal customer app
+6. Confirmation that dashboard pages are protected from normal users
+
+Important:
+Do not build referral capture, onboarding fields, or Stripe/Apple/Google revenue sync yet.
+
+This first step is just:
+- staging private dashboard domain routing
+- protected dashboard shell
+- schema foundation
+- protected API foundation

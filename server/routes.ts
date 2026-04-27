@@ -12,6 +12,7 @@ import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentRec
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive, markReferralCompleted, ensureReceiverCollectionInvoice } from "./invoiceRecompute";
 import { sendReceiptForPayment } from "./receiptService";
+import { registerDashboardRoutes } from "./dashboard/routes";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
@@ -594,6 +595,20 @@ async function generateInvoicePdfForJob(
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Note: uploads directory and static route handled in index.ts (before all middleware)
+
+  // Hostname diagnostic — helps verify routing for the private dashboard
+  // domains (staging-dashboard.ecologicc.com / dashboard.ecologicc.com).
+  // Customer-app paths are unaffected; this is observational only.
+  app.use((req, _res, next) => {
+    const host = req.get("host") || "";
+    if (/(^|\.)dashboard(\.|-)/i.test(host) || /^staging-dashboard\./i.test(host)) {
+      // Light log: only on /api/dashboard or root navigation, never per asset.
+      if (req.path === "/" || req.path.startsWith("/api/dashboard")) {
+        console.log(`[dashboard] hostname detected host=${host} path=${req.path}`);
+      }
+    }
+    next();
+  });
 
   // Redirect /auth to /login (no Replit auth screen)
   app.get('/auth', (req, res) => {
@@ -20125,6 +20140,11 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
       console.error('[QB-PAY] Periodic retry scan error:', err);
     }
   }, 15 * 60 * 1000);
+
+  // ── Private internal dashboard routes (DASHBOARD_ADMIN_EMAILS gated) ──────
+  // Mount last so customer-app routes are not affected. All /api/dashboard/*
+  // paths go through requireAuth + requireDashboardAdmin.
+  registerDashboardRoutes(app);
 
   // WebSocket server
   const httpServer = createServer(app);
