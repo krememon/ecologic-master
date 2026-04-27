@@ -1,0 +1,53 @@
+Fix the staging dashboard sign-in redirect flow.
+
+Current issue:
+When I visit staging-dashboard.ecologicc.com and click “Sign in”, it sends me to staging.ecologicc.com, but because I am already logged in it lands me in the normal customer app at /jobs. It does not return me to staging-dashboard.ecologicc.com.
+
+Goal:
+The dashboard sign-in flow should always return the user back to the dashboard domain after login/auth is confirmed.
+
+Expected flow:
+
+1. User visits:
+https://staging-dashboard.ecologicc.com
+
+2. If not authenticated, dashboard shows Sign in.
+
+3. User clicks Sign in.
+
+4. Send them to the matching customer app login/auth URL with a returnTo parameter, for example:
+https://staging.ecologicc.com/login?returnTo=https%3A%2F%2Fstaging-dashboard.ecologicc.com%2F
+
+or whatever the app's existing login route is.
+
+5. After login succeeds, redirect back to:
+https://staging-dashboard.ecologicc.com
+
+6. If the user is already logged in on staging.ecologicc.com, do not leave them on /jobs. Immediately redirect them back to the returnTo dashboard URL.
+
+Important:
+- Do this in STAGING only right now.
+- Do not break the normal customer app login flow.
+- Existing customer login with no returnTo should still go to the normal app default.
+- Only allow safe returnTo URLs:
+  - staging-dashboard.ecologicc.com
+  - dashboard.ecologicc.com
+  - localhost dev dashboard URLs if applicable
+- Do not allow open redirects to random domains.
+
+Implementation details:
+- Update the dashboard “Sign in” button to include returnTo pointing back to the current dashboard URL.
+- Update the login/auth success handler to respect safe returnTo.
+- If the user is already authenticated and hits the login route with a safe returnTo, redirect to returnTo instead of /jobs.
+- Preserve query/path if the dashboard had one.
+
+Testing:
+1. Log out.
+2. Go to https://staging-dashboard.ecologicc.com.
+3. Click Sign in.
+4. Log in.
+5. Confirm it returns to https://staging-dashboard.ecologicc.com.
+6. While already logged in, go to https://staging-dashboard.ecologicc.com again.
+7. Confirm dashboard loads and does not send me to /jobs.
+8. Go to staging.ecologicc.com normally.
+9. Confirm normal customer app still opens /jobs or its normal default.

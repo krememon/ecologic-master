@@ -10,6 +10,7 @@ import Layout from "@/components/Layout";
 import DashboardApp from "@/dashboard/DashboardApp";
 import { getAppMode } from "@/dashboard/lib/host";
 import { useAuth } from "@/hooks/useAuth";
+import { peekReturnTo as peekDashboardReturnTo, consumeReturnTo as consumeDashboardReturnTo } from "@/lib/dashboardReturnTo";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useSubscriptionGate } from "@/hooks/useSubscriptionGate";
@@ -765,7 +766,27 @@ function Router() {
   const [location] = useLocation();
   const path = location;
   const windowPath = window.location.pathname;
-  
+  const { isAuthenticated, isLoading: routerAuthLoading } = useAuth();
+
+  // Dashboard returnTo short-circuit:
+  // If a user who is already authenticated lands on /login carrying a
+  // safe `?returnTo=` pointing at a dashboard subdomain, send them
+  // straight back to the dashboard instead of letting the authenticated
+  // shell drop them on /jobs. This must run BEFORE the AuthenticatedRouter
+  // catch-all because that catch-all is what swallows /login otherwise.
+  if (
+    !routerAuthLoading &&
+    isAuthenticated &&
+    (path === "/login" || windowPath === "/login")
+  ) {
+    const returnTo = peekDashboardReturnTo();
+    if (returnTo) {
+      consumeDashboardReturnTo();
+      window.location.replace(returnTo);
+      return null;
+    }
+  }
+
   // Password reset is PUBLIC - check BOTH wouter and window.location
   // Note: main.tsx now handles /reset-password directly, but keep this as backup
   if (path.startsWith('/reset-password') || windowPath.startsWith('/reset-password')) {

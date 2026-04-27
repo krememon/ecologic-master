@@ -8,6 +8,12 @@ import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Capacitor } from "@capacitor/core";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  captureReturnToFromUrl,
+  consumeReturnTo,
+  peekReturnTo,
+} from "@/lib/dashboardReturnTo";
 
 type WizardStep = "email" | "password" | "code";
 
@@ -90,7 +96,28 @@ function StepTransition({ children, direction, stepKey }: StepTransitionProps) {
 export default function SignInWizard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Persist any safe ?returnTo= query so it survives the multi-step wizard
+  // and any OAuth round-trip. The dashboard "Sign in" button sends users
+  // here with returnTo=https://staging-dashboard.ecologicc.com/...
+  useEffect(() => {
+    captureReturnToFromUrl();
+  }, []);
+
+  // Already-authenticated short-circuit: if the user lands on /login but is
+  // already signed in AND there is a safe returnTo waiting, send them
+  // straight back to the dashboard instead of dropping them on /jobs.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) return;
+    const returnTo = peekReturnTo();
+    if (returnTo) {
+      consumeReturnTo();
+      window.location.replace(returnTo);
+    }
+  }, [authLoading, isAuthenticated]);
+
   const [step, setStep] = useState<WizardStep>("email");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   
@@ -140,7 +167,8 @@ export default function SignInWizard() {
 
       // Staging-only: server auto-logged us in (Google account, no password set).
       if (data?.stagingAutoLogin) {
-        window.location.href = "/";
+        const returnTo = consumeReturnTo();
+        window.location.href = returnTo || "/";
         return;
       }
 
@@ -244,9 +272,12 @@ export default function SignInWizard() {
       // Invalidate auth cache and force refresh
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       
-      // Small delay to ensure session cookie is set, then redirect
+      // Small delay to ensure session cookie is set, then redirect.
+      // Honor a captured dashboard returnTo so we land back on the
+      // dashboard subdomain instead of the default customer landing.
+      const returnTo = consumeReturnTo();
       setTimeout(() => {
-        window.location.href = "/";
+        window.location.href = returnTo || "/";
       }, 100);
     } catch (err: any) {
       setError(err.message);

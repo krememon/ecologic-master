@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardAccess } from "./lib/dashboardAuth";
 import { setAppMode } from "./lib/host";
+import { buildLoginUrlWithReturnTo } from "@/lib/dashboardReturnTo";
 import { DashboardLayout } from "./components/DashboardLayout";
 import Overview from "./pages/Overview";
 import Subscribers from "./pages/Subscribers";
@@ -23,18 +24,26 @@ import Settings from "./pages/Settings";
 import AccessDenied from "./pages/AccessDenied";
 
 /**
- * Send the user to the customer hostname's /login. From a real dashboard
- * subdomain we cross-host to the matching customer subdomain. On local dev
- * we just flip the override to customer mode and reload.
+ * Send the user to the customer hostname's /login with a returnTo back to
+ * the current dashboard URL, so after sign-in they land on the dashboard
+ * subdomain instead of the customer app's default /jobs page.
+ *
+ * From a real dashboard subdomain we cross-host to the matching customer
+ * subdomain. On local dev we just flip the override to customer mode and
+ * reload — same SPA, same hostname.
  */
 function goToLogin() {
   const host = window.location.hostname;
   if (/^staging-dashboard\./i.test(host)) {
-    window.location.assign("https://staging.ecologicc.com/login");
+    window.location.assign(
+      buildLoginUrlWithReturnTo("https://staging.ecologicc.com/login"),
+    );
     return;
   }
   if (/^dashboard\./i.test(host)) {
-    window.location.assign("https://app.ecologicc.com/login");
+    window.location.assign(
+      buildLoginUrlWithReturnTo("https://app.ecologicc.com/login"),
+    );
     return;
   }
   setAppMode("customer");
