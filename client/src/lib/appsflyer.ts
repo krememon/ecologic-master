@@ -129,9 +129,17 @@ export async function initAppsFlyer(): Promise<boolean> {
     }
 
     // ── initSDK ───────────────────────────────────────────────────────────────
+    // Phase 2 (Unified Deep Linking):
+    //   • manualStart=true defers session-start until after the UDL listener
+    //     is registered. Without this, AppsFlyer auto-starts inside initSDK
+    //     and the cold-start UDL callback fires before our listener is attached
+    //     — so deferred-deep-link data is lost on first launch after install.
+    //   • registerOnDeepLink stays false because UDL supersedes the legacy
+    //     onDeepLink callback (mixing the two double-fires the handler).
     try {
       console.log('[appsflyer] Capacitor Plugins =', Object.keys((window as any).Capacitor?.Plugins || {}));
       log("initAppsFlyer → BEFORE initSDK call");
+      console.log("[appsflyer-attribution] init");
       const initRes = await AppsFlyer.initSDK({
         devKey: DEV_KEY,
         appID: IOS_APP_ID,        // ignored on Android
@@ -141,6 +149,7 @@ export async function initAppsFlyer(): Promise<boolean> {
         registerOnDeepLink: false,
         registerConversionListener: false,
         registerOnAppOpenAttribution: false,
+        manualStart: true,
       });
       log("initAppsFlyer → AFTER initSDK success:", initRes);
       _initDone = true;
@@ -148,6 +157,77 @@ export async function initAppsFlyer(): Promise<boolean> {
       warn("initAppsFlyer → initSDK FAILED:", describeError("initSDK", err));
       // Fatal — without initSDK nothing else will work.
       return false;
+    }
+
+    // ── Unified Deep Linking listener ────────────────────────────────────────
+    // MUST be attached before startSDK() so the cold-start callback (carrying
+    // the deferred-deep-link payload after install from a OneLink) lands in
+    // our handler. The handler is best-effort: extracts deep_link_value /
+    // deep_link_sub1-4 and forwards them to saveAppsflyerAttribution()
+    // (first-touch-wins; never overwrites existing attribution).
+    try {
+      log("initAppsFlyer → BEFORE addListener(udl_callback)");
+      AppsFlyer.addListener("udl_callback", (event: any) => {
+        try {
+          const status = event?.status ?? "(unknown)";
+          const dl = event?.deepLink ?? event?.deep_link ?? {};
+          // AppsFlyer occasionally returns the payload as a JSON string on iOS.
+          let parsed: Record<string, any> = {};
+          if (typeof dl === "string") {
+            try { parsed = JSON.parse(dl); } catch { parsed = {}; }
+          } else if (dl && typeof dl === "object") {
+            parsed = dl as Record<string, any>;
+          }
+          // Case-insensitive lookup — Android tends to use snake_case, iOS
+          // sometimes camelCases the very same keys.
+          const get = (key: string): string | null => {
+            const want = key.toLowerCase();
+            for (const [k, v] of Object.entries(parsed)) {
+              if (k.toLowerCase() === want && v != null && String(v).trim() !== "") {
+                return String(v);
+              }
+            }
+            return null;
+          };
+          console.log("[appsflyer-attribution] deep link received status=" + status, parsed);
+
+          // Safely import the attribution helper — keeping it lazy avoids
+          // pulling attribution.ts into any code path that doesn't need it.
+          import("@/lib/attribution")
+            .then(({ saveAppsflyerAttribution }) => {
+              saveAppsflyerAttribution({
+                referralCode: get("deep_link_value"),
+                sourceType: get("deep_link_sub1"),
+                campaignId: get("deep_link_sub2"),
+                campaignName: get("deep_link_sub3"),
+                sourceName: get("deep_link_sub4"),
+              });
+            })
+            .catch((err) => {
+              warn("udl_callback → attribution import failed:", describeError("import attribution", err));
+            });
+        } catch (err) {
+          warn("udl_callback → handler threw:", describeError("udl_callback handler", err));
+        }
+      });
+      log("initAppsFlyer → AFTER addListener(udl_callback) registered");
+    } catch (err) {
+      warn("initAppsFlyer → addListener(udl_callback) FAILED:", describeError("addListener", err));
+      // Non-fatal — startSDK still proceeds so events keep flowing even if
+      // UDL never lands. We just won't capture deferred-deep-link attribution.
+    }
+
+    // ── startSDK ─────────────────────────────────────────────────────────────
+    // Required because manualStart=true was passed to initSDK.
+    try {
+      log("initAppsFlyer → BEFORE startSDK call");
+      const startRes = await AppsFlyer.startSDK();
+      log("initAppsFlyer → AFTER startSDK success:", startRes);
+    } catch (err) {
+      warn("initAppsFlyer → startSDK FAILED:", describeError("startSDK", err));
+      // Non-fatal for the boot path — the rest of the helpers will still
+      // attempt to log events; AppsFlyer's native side queues until session
+      // start succeeds on a subsequent call.
     }
 
     // ── IDFV via @capacitor/device (separate plugin, separate failure mode) ──

@@ -189,3 +189,102 @@ export function clearAttribution(): void {
     document.cookie = `${COOKIE_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
   } catch {}
 }
+
+// ── AppsFlyer deferred-deep-link save ────────────────────────────────────────
+// Called from client/src/lib/appsflyer.ts when AppsFlyer's Unified Deep
+// Linking callback fires — both on cold start (deferred deep link, after
+// install from a OneLink) and on warm reopen (direct deep link tap). Mirrors
+// `captureAttributionFromUrl` semantics:
+//   • First-touch wins. If an existing record already has a referralCode or
+//     sourceType (i.e. the user was previously attributed from a web URL or
+//     a prior deep link), we never overwrite it.
+//   • Skipped on dashboard hosts (defence-in-depth — the dashboard never
+//     bundles the AppsFlyer SDK in practice but the guard is cheap).
+//   • Wrapped in try/catch — must never throw out of the SDK callback.
+//
+// Logs use the `[appsflyer-attribution]` prefix so they're filterable in
+// Xcode/Logcat alongside the other `[appsflyer]` SDK lines.
+export interface AppsflyerAttributionInput {
+  referralCode?: string | null;
+  sourceType?: string | null;
+  campaignId?: string | number | null;
+  campaignName?: string | null;
+  sourceName?: string | null;
+}
+
+export type AppsflyerSaveOutcome =
+  | { status: "saved"; attribution: Attribution }
+  | { status: "kept"; attribution: Attribution }
+  | { status: "skipped"; reason: string };
+
+export function saveAppsflyerAttribution(
+  input: AppsflyerAttributionInput,
+): AppsflyerSaveOutcome {
+  try {
+    if (isDashboardHost()) {
+      return { status: "skipped", reason: "dashboard-host" };
+    }
+
+    const ref = normalizeReferralCode(input.referralCode);
+    const source = coerceGrowthSourceType(input.sourceType ?? null);
+
+    if (!ref && !source) {
+      // Nothing useful in this UDL payload — happens when AppsFlyer reports
+      // an organic open or a non-OneLink direct app launch.
+      console.log("[appsflyer-attribution] deep link received with no referral/source — ignored");
+      return { status: "skipped", reason: "no-attributable-fields" };
+    }
+
+    if (ref) {
+      console.log(`[appsflyer-attribution] referralCode received ref=${ref}`);
+    }
+
+    const existing = readLocalStorage();
+    const now = new Date().toISOString();
+
+    // First-touch wins: if existing already has either ref OR source, keep it.
+    // This mirrors captureAttributionFromUrl exactly so web + native paths
+    // never disagree about who "owns" the user.
+    if (existing && (existing.referralCode || existing.sourceType)) {
+      const bumped: Attribution = { ...existing, lastSeenAt: now };
+      writeLocalStorage(bumped);
+      writeCookie(bumped);
+      console.log(
+        `[appsflyer-attribution] existing attribution kept ref=${existing.referralCode ?? "—"} source=${existing.sourceType ?? "—"}`,
+      );
+      return { status: "kept", attribution: bumped };
+    }
+
+    // No prior attribution → write the AppsFlyer-provided one. We use
+    // campaignName for `campaignParam` so it shows up alongside web-captured
+    // attribution in onboarding's existing display fields without any
+    // schema changes.
+    const next: Attribution = {
+      referralCode: ref,
+      sourceType: source,
+      campaignParam:
+        (input.campaignName && String(input.campaignName).trim()) ||
+        (input.campaignId != null ? String(input.campaignId) : null),
+      firstSeenAt: now,
+      lastSeenAt: now,
+      landingPath: (() => {
+        try {
+          return window.location?.pathname || "/";
+        } catch {
+          return "/";
+        }
+      })(),
+    };
+    writeLocalStorage(next);
+    writeCookie(next);
+    console.log(
+      `[appsflyer-attribution] saved attribution ref=${next.referralCode ?? "—"} source=${next.sourceType ?? "—"} campaign=${next.campaignParam ?? "—"} sub4=${input.sourceName ?? "—"}`,
+    );
+    return { status: "saved", attribution: next };
+  } catch (err) {
+    try {
+      console.warn("[appsflyer-attribution] save error (ignored):", err);
+    } catch {}
+    return { status: "skipped", reason: "exception" };
+  }
+}
