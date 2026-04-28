@@ -51,16 +51,39 @@ interface CampaignWithMetrics extends GrowthCampaign {
 }
 
 // ── Tracking-link generation ─────────────────────────────────────────────────
+//
+// Precedence rules (most → least specific):
+//   1. Hostname `staging-dashboard.ecologicc.com` → https://staging.ecologicc.com
+//   2. Hostname `dashboard.ecologicc.com`         → https://app.ecologicc.com
+//   3. VITE_ATTRIBUTION_APP_BASE_URL env var (anything else, e.g. Replit preview)
+//   4. Bare `window.location.origin` as a last-resort dev fallback
+//
+// Staging env var to set:   VITE_ATTRIBUTION_APP_BASE_URL=https://staging.ecologicc.com
+// Production env var later: VITE_ATTRIBUTION_APP_BASE_URL=https://app.ecologicc.com
+function normalizeBaseUrl(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const trimmed = String(raw).trim().replace(/\/+$/, ""); // strip trailing slashes
+  if (!/^https?:\/\//i.test(trimmed)) return null; // require explicit scheme
+  return trimmed;
+}
+
 function customerOriginForTrackingLink(): string {
   if (typeof window === "undefined") return "https://app.ecologicc.com";
   const host = window.location.hostname;
+  // 1 + 2: known dashboard hostnames win unconditionally — these are the
+  // single source of truth for prod/staging splits and must not be overridable
+  // by an env var, since flipping the var on staging-dashboard would otherwise
+  // start handing out prod links from the staging UI.
   if (/^staging-dashboard\.ecologicc\.com$/i.test(host)) {
     return "https://staging.ecologicc.com";
   }
   if (/^dashboard\.ecologicc\.com$/i.test(host)) {
     return "https://app.ecologicc.com";
   }
-  // Local/dev/replit-preview: send links to the same origin so manual testing works.
+  // 3: explicit env override for any other host (Replit preview, local dev).
+  const fromEnv = normalizeBaseUrl(import.meta.env.VITE_ATTRIBUTION_APP_BASE_URL);
+  if (fromEnv) return fromEnv;
+  // 4: dev fallback — same-origin so manual testing still works without setup.
   return window.location.origin;
 }
 
