@@ -315,28 +315,92 @@ function mapStripeStatusToGrowth(status: string):
 }
 
 export async function syncStripeSubscriptionToGrowthSubscriber(
-  companyId: number,
+  companyId: number | null,
   sub: StripeSubSyncInput,
 ): Promise<void> {
   try {
+    const customerId = typeof sub.customer === "string" ? sub.customer : null;
+
     console.log(
-      `[growth-dashboard] syncing Stripe subscription to growth_subscribers companyId=${companyId} subId=${sub.id} status=${sub.status}`
+      `[growth-dashboard] Stripe webhook sync started subId=${sub.id} status=${sub.status} ` +
+        `companyId=${companyId ?? "—"} customerId=${customerId ?? "—"}`
     );
 
-    const [existing] = await db
-      .select()
-      .from(growthSubscribers)
-      .where(eq(growthSubscribers.companyId, companyId))
-      .limit(1);
+    // Multi-key matching: try in order of specificity.
+    //   1. companyId   (canonical — populated on every attribution row)
+    //   2. stripeSubId (covers re-keyed companies + manual rows)
+    //   3. customerId  (last-resort match for legacy/orphan rows)
+    let existing: GrowthSubscriber | undefined;
+    let matchedBy: "companyId" | "stripeSubId" | "stripeCustId" | null = null;
+
+    if (companyId != null) {
+      const [row] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.companyId, companyId))
+        .limit(1);
+      if (row) {
+        existing = row;
+        matchedBy = "companyId";
+      }
+    }
+    // For sub-id and customer-id fallbacks, require company-consistency: when
+    // the caller knows the companyId, the matched row's companyId must be null
+    // (unattributed) or equal. Prevents updating a different company's row if
+    // a Stripe customer/subscription id was reassigned or shared in legacy data.
+    const isCompanyConsistent = (rowCompanyId: number | null): boolean =>
+      companyId == null || rowCompanyId == null || rowCompanyId === companyId;
+
+    if (!existing && sub.id) {
+      // stripeSubscriptionId has a unique constraint, so at most one row.
+      const [row] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.stripeSubscriptionId, sub.id))
+        .limit(1);
+      if (row && isCompanyConsistent(row.companyId)) {
+        existing = row;
+        matchedBy = "stripeSubId";
+      } else if (row) {
+        console.log(
+          `[growth-dashboard] Stripe subscriber match conflict via stripeSubId — ` +
+            `row.companyId=${row.companyId} != event.companyId=${companyId} — skipping`
+        );
+      }
+    }
+    if (!existing && customerId) {
+      // stripeCustomerId is NOT unique — fetch all and reject ambiguity.
+      const candidates = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.stripeCustomerId, customerId));
+      const consistent = candidates.filter((c) => isCompanyConsistent(c.companyId));
+      if (consistent.length === 1) {
+        existing = consistent[0];
+        matchedBy = "stripeCustId";
+      } else if (consistent.length > 1) {
+        console.log(
+          `[growth-dashboard] Stripe subscriber match conflict via stripeCustomerId — ` +
+            `${consistent.length} candidates for customerId=${customerId} companyId=${companyId ?? "—"} — skipping`
+        );
+      } else if (candidates.length > 0) {
+        console.log(
+          `[growth-dashboard] Stripe subscriber match conflict via stripeCustomerId — ` +
+            `${candidates.length} rows but none consistent with companyId=${companyId ?? "—"} — skipping`
+        );
+      }
+    }
 
     if (!existing) {
       console.log(
-        `[growth-dashboard] no growth_subscriber found for Stripe subscription companyId=${companyId} subId=${sub.id} — skipping`
+        `[growth-dashboard] Stripe subscriber not found subId=${sub.id} ` +
+          `companyId=${companyId ?? "—"} customerId=${customerId ?? "—"} — skipping`
       );
       return;
     }
     console.log(
-      `[growth-dashboard] found growth_subscriber for company/user subscriberId=${existing.id} companyId=${companyId}`
+      `[growth-dashboard] Stripe subscriber matched subscriberId=${existing.id} ` +
+        `matchedBy=${matchedBy} companyId=${existing.companyId ?? "—"} userId=${existing.userId ?? "—"}`
     );
 
     const status = mapStripeStatusToGrowth(sub.status);
@@ -398,9 +462,12 @@ export async function syncStripeSubscriptionToGrowthSubscriber(
       .where(eq(growthSubscribers.id, existing.id));
 
     console.log(
-      `[growth-dashboard] updated platform/plan/status/mrr subscriberId=${existing.id} ` +
+      `[growth-dashboard] Stripe subscriber updated subscriberId=${existing.id} ` +
         `platform=stripe plan=${planKey ?? "—"} status=${status} ` +
-        `mrr=${updates.monthlyRevenue ?? "(unchanged)"}`
+        `mrr=${updates.monthlyRevenue ?? "(unchanged)"} ` +
+        `becamePaidAt=${updates.becamePaidAt ? "set" : "unchanged"} ` +
+        `canceledAt=${updates.canceledAt ? "set" : "unchanged"} ` +
+        `onboardingCompletedAt=${updates.onboardingCompletedAt ? "set" : "unchanged"}`
     );
   } catch (err) {
     console.error("[growth-dashboard] sync error (ignored):", err);
