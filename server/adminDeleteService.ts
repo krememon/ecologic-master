@@ -51,6 +51,8 @@ import {
   jobReferrals,
   subcontractPayoutAudit,
   documentFolders,
+  growthSubscribers,
+  growthAccountAdmin,
 } from '@shared/schema';
 
 // ── Protected companies / emails that can NEVER be deleted ──────────────────
@@ -375,6 +377,15 @@ export async function deleteCompanyDeep(companyId: number, actorEmail: string): 
     console.log(`[admin-delete] subcontractors`);
     await tx.delete(subcontractors).where(eq(subcontractors.companyId, companyId));
     tablesAffected.push('subcontractors');
+
+    // ── 31b. growth dashboard tables (per-company attribution + admin notes) ──
+    // NOTE: We never delete growthCampaigns themselves — they are global marketing
+    // entities and other accounts may reference them. We only remove THIS company's
+    // attribution row + admin metadata.
+    console.log(`[admin-delete] growth_subscribers + growth_account_admin`);
+    await tx.delete(growthSubscribers).where(eq(growthSubscribers.companyId, companyId));
+    await tx.delete(growthAccountAdmin).where(eq(growthAccountAdmin.companyId, companyId));
+    tablesAffected.push('growth_subscribers', 'growth_account_admin');
 
     // ── 32. company members ───────────────────────────────────────────────────
     console.log(`[admin-delete] company_members`);

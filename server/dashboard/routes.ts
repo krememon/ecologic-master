@@ -33,9 +33,16 @@ import {
   updateAccountStatus,
   updateAccountNotes,
   refreshAccountSubscription,
+  previewAccountDeletion,
+  isAccountDeletionEnabled,
+  isSelfAccountDeleteAllowed,
 } from "./storage";
 import { db } from "../db";
-import { growthCampaigns } from "@shared/schema";
+import {
+  growthCampaigns,
+  companyMembers,
+  adminAuditLogs,
+} from "@shared/schema";
 import { eq, and, ne } from "drizzle-orm";
 
 const gate = [requireAuth, requireDashboardAdmin] as const;
@@ -305,7 +312,8 @@ export function registerDashboardRoutes(app: Express): void {
         res.status(404).json({ message: "Account not found" });
         return;
       }
-      res.json(data);
+      // Surface the env-var gate so the UI can show/hide the destructive button.
+      res.json({ ...data, deletionEnabled: isAccountDeletionEnabled() });
     } catch (err) {
       console.error("[dashboard-accounts] detail error:", err);
       res.status(500).json({ message: "Failed to load account" });
@@ -425,6 +433,241 @@ export function registerDashboardRoutes(app: Express): void {
       res.status(500).json({ message: err?.message ?? "Failed to refresh subscription" });
     }
   });
+
+  // ── Delete account (preview) ─────────────────────────────────────────────
+  // Returns counts + warnings for the confirmation modal. Read-only.
+  app.post(
+    "/api/admin/dashboard/accounts/:companyId/delete-preview",
+    ...gate,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = parseInt(req.params.companyId, 10);
+        if (!Number.isFinite(companyId)) {
+          res.status(400).json({ message: "Invalid companyId" });
+          return;
+        }
+        const preview = await previewAccountDeletion(companyId);
+        if (!preview.exists) {
+          res.status(404).json({ message: "Account not found" });
+          return;
+        }
+
+        // Layer in environment-level gates so the UI can reflect them directly.
+        const enabled = isAccountDeletionEnabled();
+        const protectionMessage = await (async () => {
+          try {
+            const { getProtectionReason } = await import("../adminDeleteService");
+            return await getProtectionReason(companyId);
+          } catch {
+            return null;
+          }
+        })();
+
+        res.json({
+          ...preview,
+          deletionEnabled: enabled,
+          protected: !!protectionMessage,
+          protectedReason: protectionMessage,
+        });
+      } catch (err) {
+        console.error("[dashboard-accounts] delete-preview error:", err);
+        res.status(500).json({ message: "Failed to load delete preview" });
+      }
+    },
+  );
+
+  // ── Delete account (irreversible) ────────────────────────────────────────
+  // Hard-deletes the company and every per-company row across the system.
+  // Gated on multiple layers:
+  //   • requireAuth + requireDashboardAdmin (route gate)
+  //   • ALLOW_DASHBOARD_ACCOUNT_DELETION env-var (default OFF; staging-only)
+  //   • Confirmation payload { confirmText: "DELETE", understood: true }
+  //   • Self-delete blocked unless ALLOW_SELF_ACCOUNT_DELETE=true
+  //   • Hardcoded protected list in adminDeleteService
+  // Stripe / Apple / Google subscriptions are NOT auto-canceled — local refs only.
+  app.delete(
+    "/api/admin/dashboard/accounts/:companyId",
+    ...gate,
+    async (req: Request, res: Response) => {
+      // Resolve actor identity from req.userContext.userId (populated by
+      // requireAuth) → DB. userContext does NOT carry the user email, so
+      // a lookup is required for accurate audit attribution.
+      const actorUserId = req.userContext?.userId ?? null;
+      let actorEmail = "unknown";
+      if (actorUserId) {
+        try {
+          const { storage } = await import("../storage");
+          const u = await storage.getUser(actorUserId);
+          if (u?.email) actorEmail = u.email;
+        } catch (lookupErr: any) {
+          console.error(
+            `[dashboard-accounts] actor email lookup failed for userId=${actorUserId}:`,
+            lookupErr?.message ?? lookupErr,
+          );
+        }
+      }
+      const companyId = parseInt(req.params.companyId, 10);
+
+      console.log(
+        `[dashboard-accounts] delete requested — companyId=${req.params.companyId} actor=${actorEmail} actorUserId=${actorUserId ?? "<none>"}`,
+      );
+
+      // Hard requirement: we must know who is performing the deletion.
+      // If we can't resolve the email, refuse rather than write "unknown" to audit.
+      if (actorEmail === "unknown") {
+        console.error(
+          `[dashboard-accounts] delete blocked by safety check — could not resolve actor email (userId=${actorUserId ?? "<none>"})`,
+        );
+        res.status(500).json({
+          code: "ACTOR_UNRESOLVED",
+          message:
+            "Could not resolve the dashboard admin's email for audit logging. Refusing to proceed.",
+        });
+        return;
+      }
+
+      if (!Number.isFinite(companyId)) {
+        console.warn(
+          `[dashboard-accounts] delete blocked by safety check — invalid companyId actor=${actorEmail}`,
+        );
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+
+      // ── Env-var gate: must be explicitly enabled per environment.
+      if (!isAccountDeletionEnabled()) {
+        console.warn(
+          `[dashboard-accounts] delete blocked by safety check — ALLOW_DASHBOARD_ACCOUNT_DELETION not set (companyId=${companyId} actor=${actorEmail})`,
+        );
+        res.status(403).json({
+          code: "DELETION_DISABLED",
+          message:
+            "Account deletion is not enabled in this environment. Set ALLOW_DASHBOARD_ACCOUNT_DELETION=true to enable.",
+        });
+        return;
+      }
+
+      // ── Confirmation payload validation.
+      const body = req.body ?? {};
+      if (body.confirmText !== "DELETE" || body.understood !== true) {
+        console.warn(
+          `[dashboard-accounts] delete blocked by safety check — missing/invalid confirmation (companyId=${companyId} actor=${actorEmail})`,
+        );
+        res.status(400).json({
+          code: "CONFIRMATION_REQUIRED",
+          message:
+            "Confirmation required: { confirmText: 'DELETE', understood: true }",
+        });
+        return;
+      }
+      console.log(
+        `[dashboard-accounts] delete confirmation validated — companyId=${companyId} actor=${actorEmail}`,
+      );
+
+      try {
+        // ── Self-delete guard.
+        const userId = (req as any).userContext?.userId;
+        if (userId) {
+          const memberRow = await db
+            .select({ id: companyMembers.id })
+            .from(companyMembers)
+            .where(
+              and(
+                eq(companyMembers.userId, userId),
+                eq(companyMembers.companyId, companyId),
+              ),
+            )
+            .limit(1);
+          if (memberRow.length > 0 && !isSelfAccountDeleteAllowed()) {
+            console.warn(
+              `[dashboard-accounts] delete blocked by safety check — admin is a member of this company (companyId=${companyId} actor=${actorEmail})`,
+            );
+            res.status(403).json({
+              code: "SELF_DELETE_BLOCKED",
+              message:
+                "You are a member of this company. Set ALLOW_SELF_ACCOUNT_DELETE=true to bypass this guard.",
+            });
+            return;
+          }
+        }
+
+        const { deleteCompanyDeep, getProtectionReason } = await import(
+          "../adminDeleteService"
+        );
+
+        const protectionReason = await getProtectionReason(companyId);
+        if (protectionReason) {
+          console.warn(
+            `[dashboard-accounts] delete blocked by safety check — ${protectionReason} (companyId=${companyId} actor=${actorEmail})`,
+          );
+          res.status(403).json({
+            code: "COMPANY_PROTECTED",
+            message: protectionReason,
+          });
+          return;
+        }
+
+        // Snapshot a preview before deletion so the audit log captures counts.
+        const preview = await previewAccountDeletion(companyId);
+
+        console.log(
+          `[dashboard-accounts] deleting company data — companyId=${companyId} actor=${actorEmail}`,
+        );
+        const result = await deleteCompanyDeep(companyId, actorEmail);
+
+        // Best-effort audit log write — never fail the request if logging fails.
+        try {
+          await db.insert(adminAuditLogs).values({
+            actorEmail,
+            targetType: "company",
+            targetId: String(companyId),
+            targetName: result.companyName ?? preview.companyName ?? null,
+            action: "delete_account",
+            beforeValue: {
+              ownerEmail: preview.ownerEmail,
+              counts: preview.counts,
+              subscription: preview.subscription,
+              tablesAffected: result.tablesAffected,
+              orphanedUsersDeleted: result.orphanedUsersDeleted,
+            } as any,
+            afterValue: null,
+            note: preview.warnings.length
+              ? preview.warnings.join(" | ")
+              : null,
+          });
+          console.log(
+            `[dashboard-accounts] deleted table records — tables=${result.tablesAffected.length} orphanedUsers=${result.orphanedUsersDeleted}`,
+          );
+        } catch (auditErr: any) {
+          console.error(
+            `[dashboard-accounts] audit log write failed (non-fatal): ${auditErr?.message ?? auditErr}`,
+          );
+        }
+
+        console.log(
+          `[dashboard-accounts] account deleted — companyId=${companyId} name="${result.companyName}" actor=${actorEmail}`,
+        );
+
+        res.json({
+          ok: true,
+          companyId: result.companyId,
+          companyName: result.companyName,
+          tablesAffected: result.tablesAffected,
+          orphanedUsersDeleted: result.orphanedUsersDeleted,
+          warnings: preview.warnings,
+        });
+      } catch (err: any) {
+        console.error(
+          `[dashboard-accounts] delete failed — companyId=${companyId} actor=${actorEmail}:`,
+          err,
+        );
+        res.status(500).json({
+          ok: false,
+          message: err?.message ?? "Failed to delete account",
+        });
+      }
+    },
+  );
 
   // ── Whoami: tells the client whether the current session is a dashboard
   // admin. This drives the client-side gate so the SPA can render Access

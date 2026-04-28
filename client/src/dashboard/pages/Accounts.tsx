@@ -31,12 +31,23 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { GROWTH_SOURCE_LABELS, type GrowthSourceType, GROWTH_SOURCE_TYPES } from "@shared/growthSources";
 import { subscriptionPlans } from "@shared/subscriptionPlans";
 import { ACCOUNT_ADMIN_STATUSES, type AccountAdminStatus } from "@shared/schema";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 
 // ── Local types (mirror server/dashboard/storage.ts) ─────────────────────
 interface AccountListRow {
@@ -77,6 +88,39 @@ interface AccountDetail extends AccountListRow {
   googleOrderId: string | null;
   notes: string | null;
   members: AccountDetailMember[];
+  // Server-derived flag from ALLOW_DASHBOARD_ACCOUNT_DELETION env-var.
+  // Hide the destructive UI entirely when false.
+  deletionEnabled?: boolean;
+}
+
+interface DeletePreview {
+  exists: boolean;
+  companyId: number;
+  companyName: string | null;
+  ownerEmail: string | null;
+  counts: {
+    members: number;
+    jobs: number;
+    customers: number;
+    invoices: number;
+    payments: number;
+    documents: number;
+    conversations: number;
+    messages: number;
+    growthSubscribers: number;
+  };
+  subscription: {
+    platform: string | null;
+    status: string | null;
+    hasStripeSub: boolean;
+    hasStripeCustomer: boolean;
+    hasAppleSub: boolean;
+    hasGoogleSub: boolean;
+  };
+  warnings: string[];
+  deletionEnabled: boolean;
+  protected: boolean;
+  protectedReason: string | null;
 }
 
 // ── Display helpers ──────────────────────────────────────────────────────
@@ -701,11 +745,251 @@ function AccountDetailDrawer({
                   </ul>
                 )}
               </section>
+
+              {/* Danger zone — visually separated, only when env-var enables it. */}
+              {account.deletionEnabled && (
+                <>
+                  <Separator />
+                  <section className="space-y-3 rounded-md border border-red-200 bg-red-50 p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-red-900">Danger zone</h3>
+                        <p className="text-xs text-red-800 mt-0.5">
+                          Permanently delete this account and all related EcoLogic data. This action cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <DeleteAccountButton
+                        companyId={account.companyId}
+                        companyName={account.companyName}
+                        onDeleted={() => {
+                          invalidate();
+                          onClose();
+                        }}
+                      />
+                    </div>
+                  </section>
+                </>
+              )}
             </div>
           </>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ── Destructive: Delete Account button + confirmation modal ─────────────
+function DeleteAccountButton({
+  companyId,
+  companyName,
+  onDeleted,
+}: {
+  companyId: number;
+  companyName: string;
+  onDeleted: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [understood, setUnderstood] = useState(false);
+
+  // Re-fetch a fresh preview every time the modal opens — counts can drift.
+  const { data: preview, isLoading: previewLoading } = useQuery<DeletePreview>({
+    queryKey: ["/api/admin/dashboard/accounts", companyId, "delete-preview"],
+    enabled: open,
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/dashboard/accounts/${companyId}/delete-preview`,
+      );
+      return res.json();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "DELETE",
+        `/api/admin/dashboard/accounts/${companyId}`,
+        { confirmText: "DELETE", understood: true },
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Account deleted permanently." });
+      setOpen(false);
+      setConfirmText("");
+      setUnderstood(false);
+      onDeleted();
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Delete failed",
+        description: err?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const protectedReason = preview?.protected ? preview.protectedReason : null;
+  const canSubmit =
+    !!preview &&
+    !preview.protected &&
+    confirmText === "DELETE" &&
+    understood &&
+    !deleteMutation.isPending;
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        onClick={() => setOpen(true)}
+        data-testid="account-delete-button"
+      >
+        <Trash2 className="h-3.5 w-3.5 mr-1" />
+        Delete account
+      </Button>
+
+      <AlertDialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) {
+            setOpen(false);
+            setConfirmText("");
+            setUnderstood(false);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-900">
+              Delete this account permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this company and all related EcoLogic data. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 text-sm">
+            {previewLoading ? (
+              <p className="text-slate-400">Loading preview…</p>
+            ) : !preview ? (
+              <p className="text-slate-400">Preview unavailable.</p>
+            ) : (
+              <>
+                <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 space-y-1">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Company</span>
+                    <span className="font-medium text-slate-900 truncate" title={preview.companyName ?? companyName}>
+                      {preview.companyName ?? companyName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Company ID</span>
+                    <span className="font-mono text-xs text-slate-700">#{preview.companyId}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Owner email</span>
+                    <span className="text-slate-700 truncate" title={preview.ownerEmail ?? "—"}>
+                      {preview.ownerEmail ?? "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Subscription</span>
+                    <span className="text-slate-700">
+                      {preview.subscription.platform ?? "—"} · {preview.subscription.status ?? "—"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 bg-white px-3 py-2 grid grid-cols-2 gap-y-1 gap-x-3 text-xs">
+                  <CountRow label="Team members" v={preview.counts.members} />
+                  <CountRow label="Jobs" v={preview.counts.jobs} />
+                  <CountRow label="Customers" v={preview.counts.customers} />
+                  <CountRow label="Invoices" v={preview.counts.invoices} />
+                  <CountRow label="Payments" v={preview.counts.payments} />
+                  <CountRow label="Documents" v={preview.counts.documents} />
+                  <CountRow label="Conversations" v={preview.counts.conversations} />
+                  <CountRow label="Messages" v={preview.counts.messages} />
+                  <CountRow label="Growth attribution rows" v={preview.counts.growthSubscribers} />
+                </div>
+
+                {preview.warnings.length > 0 && (
+                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-1">
+                    {preview.warnings.map((w, i) => (
+                      <div key={i} className="flex gap-1.5">
+                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {protectedReason && (
+                  <div className="rounded border border-red-300 bg-red-100 px-3 py-2 text-xs text-red-900">
+                    <strong>Cannot delete:</strong> {protectedReason}
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-1">
+                  <Label className="text-xs text-slate-700">
+                    Type <span className="font-mono font-bold">DELETE</span> to confirm
+                  </Label>
+                  <Input
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    autoComplete="off"
+                    disabled={preview.protected}
+                    data-testid="account-delete-confirm-input"
+                  />
+                </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-700">
+                  <Checkbox
+                    checked={understood}
+                    onCheckedChange={(v) => setUnderstood(!!v)}
+                    disabled={preview.protected}
+                    data-testid="account-delete-understood"
+                  />
+                  <span>I understand this cannot be undone.</span>
+                </label>
+              </>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="account-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canSubmit}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!canSubmit) return;
+                deleteMutation.mutate();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:bg-red-300 disabled:cursor-not-allowed"
+              data-testid="account-delete-submit"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete account"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function CountRow({ label, v }: { label: string; v: number }) {
+  return (
+    <>
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-slate-800 tabular-nums">{v.toLocaleString()}</span>
+    </>
   );
 }
 

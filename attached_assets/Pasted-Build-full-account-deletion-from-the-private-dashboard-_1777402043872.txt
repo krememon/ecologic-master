@@ -1,0 +1,274 @@
+Build full account deletion from the private dashboard Accounts tab in STAGING only.
+
+Context:
+We have a private admin dashboard at staging-dashboard.ecologicc.com.
+There is/should be an Accounts page where admins can manage EcoLogic customer accounts.
+
+New goal:
+From the Accounts tab, I want to be able to delete a customer account/company entirely.
+
+When deleted:
+- The company/account should be completely removed from the system.
+- All related data for that company should be wiped.
+- It should disappear from the Accounts dashboard.
+- It should disappear from Subscribers/growth dashboard tables too.
+- The deleted customer should no longer be able to log into or access that company data.
+
+Important:
+Build this in STAGING only first.
+Do not deploy to production yet.
+Do not break normal customer app behavior.
+Do not accidentally delete unrelated companies/users.
+Dashboard access must remain controlled by DASHBOARD_ADMIN_EMAILS only.
+
+PART 1 — Add delete button in Accounts page
+
+On each account row/detail view, add a destructive action:
+
+Delete Account
+
+This should be visually dangerous:
+- red/destructive styling
+- not next to normal edit buttons if possible
+- only visible to dashboard admins
+
+PART 2 — Confirmation modal
+
+Before deleting, show a strong confirmation modal.
+
+Modal copy:
+
+Title:
+Delete this account permanently?
+
+Body:
+This will permanently delete this company and all related EcoLogic data. This cannot be undone.
+
+Show:
+- Company name
+- Company ID
+- Owner email
+- Number of users/team members if available
+- Subscription platform/status if available
+
+Require the admin to type:
+
+DELETE
+
+The delete button stays disabled until they type DELETE exactly.
+
+Also include a checkbox:
+
+I understand this cannot be undone.
+
+Both must be completed before the delete button enables.
+
+PART 3 — Backend API
+
+Create a protected admin-only endpoint:
+
+DELETE /api/admin/dashboard/accounts/:companyId
+
+Rules:
+- Must require dashboard admin access.
+- Must validate companyId.
+- Must not allow deleting without confirmation payload:
+  {
+    confirmText: "DELETE",
+    understood: true
+  }
+- Must return a clear success/error response.
+
+PART 4 — Full data deletion plan
+
+Implement deletion inside a single database transaction if possible.
+
+Before deleting, inspect schema relations and delete all company-related data safely.
+
+Delete data tied to the company, including but not limited to:
+
+Core:
+- company
+- company members / memberships
+- users that only belong to this company if safe
+- invitations
+- onboarding records
+
+Jobs/field operations:
+- jobs
+- job assignments
+- job notes
+- job files/documents
+- job messages/comments
+- schedules
+- timesheets
+- time entries
+- crew assignments
+- location records
+- checklists
+- safety records
+
+Customers/CRM:
+- customers
+- contacts
+- leads
+- estimates
+- proposals
+- contracts
+
+Documents:
+- uploaded documents
+- document approvals
+- e-signature records/tokens
+- file metadata
+- linked storage objects if the app has storage delete utilities
+
+Billing/payments:
+- invoices
+- payments
+- payment history
+- QuickBooks sync records
+- Stripe customer/subscription references stored locally
+- Apple/Google subscription records stored locally
+- subcontract/referral payout records tied to the company
+
+Messaging:
+- conversations
+- conversation participants
+- direct messages
+- notifications
+
+Growth dashboard:
+- growth_subscribers
+- growth_campaign attribution links if account-specific
+- growth_account_admin
+- any account notes/status rows
+
+Important:
+Do not delete global campaign records just because an account came from that campaign.
+Example:
+Deleting ABC Plumbing should delete ABC Plumbing’s growth_subscribers row, but should NOT delete the Joe Plumbing campaign itself.
+
+PART 5 — Stripe / Apple / Google handling
+
+For V1 in staging:
+- Do NOT automatically cancel live Stripe/Apple/Google subscriptions unless already implemented safely.
+- If a Stripe subscription/customer exists, return a warning in the modal/detail response:
+  “This account has a Stripe subscription. Cancel billing separately or add cancellation support later.”
+- Same for Apple/Google.
+- The database deletion should remove local references, but do not attempt destructive external billing actions in this version unless explicitly asked later.
+
+PART 6 — Storage/file deletion
+
+If uploaded files are stored in object storage/local storage:
+- Delete file metadata from DB.
+- If there is an existing safe storage delete utility, also delete the actual files.
+- If not, log orphaned file paths and return them in the admin response so we can add physical file cleanup later.
+
+PART 7 — Safety checks
+
+Add safety checks:
+- Cannot delete if companyId is missing.
+- Cannot delete the current dashboard admin’s own active company unless an extra env variable allows it:
+  ALLOW_SELF_ACCOUNT_DELETE=true
+- Cannot delete system/internal/demo company if marked internal unless confirmed.
+- Never delete dashboard admin access settings.
+- Never delete global campaigns, global app settings, or unrelated users.
+
+PART 8 — After deletion UI behavior
+
+After successful deletion:
+- Show success toast:
+  “Account deleted permanently.”
+- Close modal.
+- Refetch Accounts list.
+- The deleted account should disappear from Accounts.
+- It should also disappear from Subscribers if it had attribution.
+- Overview metrics should update.
+
+PART 9 — Audit log
+
+Create an admin deletion audit log if one does not exist.
+
+Table suggestion:
+
+dashboard_admin_audit_log
+- id
+- adminEmail
+- action
+- targetCompanyId
+- targetCompanyName
+- metadata json
+- createdAt
+
+Log:
+- who deleted it
+- company deleted
+- counts of deleted records by table if possible
+- timestamp
+
+PART 10 — Logging
+
+Add safe server logs:
+
+[dashboard-accounts] delete requested
+[dashboard-accounts] delete confirmation validated
+[dashboard-accounts] deleting company data
+[dashboard-accounts] deleted table records
+[dashboard-accounts] account deleted
+[dashboard-accounts] delete failed
+[dashboard-accounts] delete blocked by safety check
+
+Do not log sensitive payment data.
+
+PART 11 — Dry run endpoint if simple
+
+If easy, add:
+
+POST /api/admin/dashboard/accounts/:companyId/delete-preview
+
+This returns what would be deleted:
+- company name
+- owner email
+- users count
+- jobs count
+- documents count
+- invoices count
+- messages count
+- growth subscriber rows count
+- subscription warning
+
+Use this preview in the confirmation modal.
+
+PART 12 — Testing in staging
+
+After implementation, test with a fake staging account only.
+
+Testing steps:
+1. Create a test company through staging signup.
+2. Confirm it appears in Accounts.
+3. Confirm it appears in Subscribers if it used a referral.
+4. Open account detail.
+5. Click Delete Account.
+6. Confirm modal shows company name, owner email, and warning.
+7. Confirm delete button is disabled until:
+   - checkbox is checked
+   - DELETE is typed
+8. Delete the account.
+9. Confirm it disappears from Accounts.
+10. Confirm it disappears from Subscribers.
+11. Confirm related growth_subscribers row is gone.
+12. Confirm logging/audit row was created.
+13. Try logging in as that deleted account.
+14. Confirm the deleted account/company data is not accessible.
+15. Confirm unrelated companies still work.
+
+Deliverables:
+- Files changed
+- New API endpoint
+- Tables included in deletion
+- Tables intentionally not deleted
+- Safety checks added
+- Whether actual uploaded files are physically deleted or only DB metadata
+- Stripe/Apple/Google billing behavior
+- Testing steps

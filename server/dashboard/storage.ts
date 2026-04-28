@@ -16,6 +16,13 @@ import {
   companies,
   users,
   companyMembers,
+  jobs,
+  customers,
+  invoices,
+  payments,
+  documents,
+  conversations,
+  messages,
   ACCOUNT_ADMIN_STATUSES,
   type GrowthSubscriber,
   type GrowthCampaign,
@@ -1111,4 +1118,213 @@ export async function refreshAccountSubscription(
   });
 
   return { refreshed: true, status: sub.status };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account deletion preview
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AccountDeletionPreview {
+  exists: boolean;
+  companyId: number;
+  companyName: string | null;
+  ownerEmail: string | null;
+  counts: {
+    members: number;
+    jobs: number;
+    customers: number;
+    invoices: number;
+    payments: number;
+    documents: number;
+    conversations: number;
+    messages: number;
+    growthSubscribers: number;
+  };
+  subscription: {
+    platform: string | null;
+    status: string | null;
+    hasStripeSub: boolean;
+    hasStripeCustomer: boolean;
+    hasAppleSub: boolean;
+    hasGoogleSub: boolean;
+  };
+  warnings: string[];
+}
+
+/**
+ * Snapshot of what would be deleted if `deleteCompanyDeep(companyId)` ran now.
+ * Read-only — does not modify any data. Used to populate the confirmation modal.
+ */
+export async function previewAccountDeletion(
+  companyId: number,
+): Promise<AccountDeletionPreview> {
+  console.log(`[dashboard-accounts] preview deletion — companyId=${companyId}`);
+
+  const [company] = await db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      ownerId: companies.ownerId,
+      stripeSubscriptionId: companies.stripeSubscriptionId,
+      stripeCustomerId: companies.stripeCustomerId,
+      subscriptionPlatform: companies.subscriptionPlatform,
+      subscriptionStatus: companies.subscriptionStatus,
+      originalTransactionId: companies.originalTransactionId,
+    })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+
+  if (!company) {
+    return {
+      exists: false,
+      companyId,
+      companyName: null,
+      ownerEmail: null,
+      counts: {
+        members: 0,
+        jobs: 0,
+        customers: 0,
+        invoices: 0,
+        payments: 0,
+        documents: 0,
+        conversations: 0,
+        messages: 0,
+        growthSubscribers: 0,
+      },
+      subscription: {
+        platform: null,
+        status: null,
+        hasStripeSub: false,
+        hasStripeCustomer: false,
+        hasAppleSub: false,
+        hasGoogleSub: false,
+      },
+      warnings: [],
+    };
+  }
+
+  const [ownerRow] = company.ownerId
+    ? await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, company.ownerId))
+        .limit(1)
+    : [{ email: null as string | null }];
+
+  // Run count queries in parallel — read-only, safe to fan out.
+  const countOf = (
+    table: any,
+    col: any,
+  ): Promise<number> =>
+    db
+      .select({ c: sql<number>`COUNT(*)::int` })
+      .from(table)
+      .where(eq(col, companyId))
+      .then((r) => Number(r[0]?.c ?? 0));
+
+  // For messages, count via conversations subquery (no companyId on messages).
+  const messagesCountPromise = db
+    .select({ c: sql<number>`COUNT(*)::int` })
+    .from(messages)
+    .where(
+      sql`${messages.conversationId} IN (SELECT id FROM ${conversations} WHERE company_id = ${companyId})`,
+    )
+    .then((r) => Number(r[0]?.c ?? 0));
+
+  const [
+    membersCount,
+    jobsCount,
+    customersCount,
+    invoicesCount,
+    paymentsCount,
+    documentsCount,
+    conversationsCount,
+    messagesCount,
+    growthSubsCount,
+  ] = await Promise.all([
+    countOf(companyMembers, companyMembers.companyId),
+    countOf(jobs, jobs.companyId),
+    countOf(customers, customers.companyId),
+    countOf(invoices, invoices.companyId),
+    countOf(payments, payments.companyId),
+    countOf(documents, documents.companyId),
+    countOf(conversations, conversations.companyId),
+    messagesCountPromise,
+    countOf(growthSubscribers, growthSubscribers.companyId),
+  ]);
+
+  const platform = (company.subscriptionPlatform || "").toLowerCase();
+  const hasStripeSub = !!company.stripeSubscriptionId;
+  const hasStripeCustomer = !!company.stripeCustomerId;
+  const hasAppleSub = platform === "ios" && !!company.originalTransactionId;
+  const hasGoogleSub = platform === "android" && !!company.originalTransactionId;
+
+  const warnings: string[] = [];
+  if (hasStripeSub) {
+    warnings.push(
+      "This account has an active Stripe subscription. Cancel billing in Stripe separately — local references will be removed but the subscription will not be auto-canceled.",
+    );
+  }
+  if (hasStripeCustomer && !hasStripeSub) {
+    warnings.push(
+      "This account has a Stripe customer record. Local references will be removed but the customer will not be deleted from Stripe.",
+    );
+  }
+  if (hasAppleSub) {
+    warnings.push(
+      "This account has an Apple in-app subscription. Apple subscriptions cannot be canceled server-side — they must be canceled by the user from their Apple ID.",
+    );
+  }
+  if (hasGoogleSub) {
+    warnings.push(
+      "This account has a Google Play in-app subscription. Google subscriptions are not auto-canceled here — handle in Play Console if needed.",
+    );
+  }
+
+  return {
+    exists: true,
+    companyId: company.id,
+    companyName: company.name,
+    ownerEmail: ownerRow?.email ?? null,
+    counts: {
+      members: membersCount,
+      jobs: jobsCount,
+      customers: customersCount,
+      invoices: invoicesCount,
+      payments: paymentsCount,
+      documents: documentsCount,
+      conversations: conversationsCount,
+      messages: messagesCount,
+      growthSubscribers: growthSubsCount,
+    },
+    subscription: {
+      platform: company.subscriptionPlatform,
+      status: company.subscriptionStatus,
+      hasStripeSub,
+      hasStripeCustomer,
+      hasAppleSub,
+      hasGoogleSub,
+    },
+    warnings,
+  };
+}
+
+/**
+ * Whether the dashboard "delete account" UI is enabled in this environment.
+ * Defaults to OFF. Must be explicitly enabled per environment with
+ * ALLOW_DASHBOARD_ACCOUNT_DELETION=true. The intent is staging-only for now.
+ */
+export function isAccountDeletionEnabled(): boolean {
+  const v = (process.env.ALLOW_DASHBOARD_ACCOUNT_DELETION || "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
+}
+
+/**
+ * Whether an admin is allowed to delete a company they themselves are a member of.
+ * Off by default — guard against an admin nuking their own active workspace by mistake.
+ */
+export function isSelfAccountDeleteAllowed(): boolean {
+  const v = (process.env.ALLOW_SELF_ACCOUNT_DELETE || "").trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
 }
