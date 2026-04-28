@@ -1,0 +1,314 @@
+Connect Apple App Store and Google Play subscription data to the private dashboard in STAGING only.
+
+Context:
+The private dashboard is working at:
+
+staging-dashboard.ecologicc.com
+
+Currently working:
+- Campaign tracking links
+- Referral/source attribution
+- Subscribers dashboard
+- Sources dashboard
+- Accounts dashboard
+- Stripe trial/subscription sync
+- Full account deletion from Accounts
+- Dashboard access controlled by DASHBOARD_ADMIN_EMAILS
+
+Now I want Apple and Android subscription data to feed into the same dashboard.
+
+Goal:
+When a user subscribes through iOS Apple IAP or Android Google Play billing, the dashboard should update the matching growth_subscribers row just like Stripe does.
+
+The dashboard should show:
+- Platform: Apple or Google Play
+- Plan
+- Status: Free Trial / Active / Canceled / Expired / Unknown
+- MRR
+- Onboarded: Yes
+- Source/campaign/referral code if they came from a campaign link
+
+Important:
+Build in STAGING only.
+Do not break Stripe.
+Do not break Apple IAP validation.
+Do not break Google Play validation.
+Do not break login, onboarding, jobs, billing, account deletion, or campaign tracking.
+
+PART 1 — Find existing mobile subscription validation
+
+Find the existing endpoint:
+
+POST /api/subscriptions/validate
+
+It should already support:
+- platform: apple
+- platform: google_play
+
+The app already validates:
+- Apple JWS / transaction
+- Google Play purchaseToken + productId
+
+Do not rewrite the whole validation system.
+Just hook the successful validation result into growth_subscribers.
+
+PART 2 — Apple sync to growth_subscribers
+
+When Apple subscription validation succeeds:
+
+Find the company/user for the validated subscription.
+
+Then find the matching growth_subscribers row by:
+1. companyId
+2. userId
+3. appleOriginalTransactionId
+4. appleTransactionId
+
+Update growth_subscribers:
+
+- platform = apple
+- plan = friendly plan label
+- subscriptionStatus = mapped Apple status
+- monthlyRevenue = 0 if trialing
+- monthlyRevenue = plan price if active/paid
+- appleOriginalTransactionId
+- appleTransactionId
+- trialStartedAt if applicable
+- becamePaidAt if paid/active and not already set
+- canceledAt if canceled/expired/revoked
+- onboardingCompletedAt if company onboarding is completed
+
+Status mapping:
+- trial / trialing / intro offer trial → trialing
+- active/paid → active
+- canceled/revoked/expired → canceled or expired
+- unknown → unknown
+
+Friendly display labels:
+- platform apple → Apple
+- trialing → Free Trial
+- active → Active
+- canceled → Canceled
+- expired → Expired
+
+PART 3 — Google Play sync to growth_subscribers
+
+When Google Play subscription validation succeeds:
+
+Find the company/user for the validated subscription.
+
+Then find the matching growth_subscribers row by:
+1. companyId
+2. userId
+3. googlePurchaseToken
+4. googleOrderId
+
+Update growth_subscribers:
+
+- platform = google_play
+- plan = friendly plan label
+- subscriptionStatus = mapped Google Play status
+- monthlyRevenue = 0 if trialing
+- monthlyRevenue = plan price if active/paid
+- googlePurchaseToken
+- googleOrderId
+- trialStartedAt if applicable
+- becamePaidAt if paid/active and not already set
+- canceledAt if canceled/expired
+- onboardingCompletedAt if company onboarding is completed
+
+Status mapping:
+- trial/free trial → trialing
+- active/purchased/renewing → active
+- canceled → canceled
+- expired → expired
+- paused/on hold if supported → past_due or unpaid
+- unknown → unknown
+
+Friendly display labels:
+- platform google_play → Google Play
+- trialing → Free Trial
+- active → Active
+- canceled → Canceled
+- expired → Expired
+
+PART 4 — Plan and pricing mapping
+
+Use the existing EcoLogic plan/product mapping if available.
+
+Plan display should look like:
+
+Free Trial - Starter ($29/mo)
+Free Trial - Team ($79/mo)
+Free Trial - Pro ($149/mo)
+Free Trial - Scale ($299.99/mo)
+
+or for active paid users:
+
+Starter ($29/mo)
+Team ($79/mo)
+Pro ($149/mo)
+Scale ($299.99/mo)
+
+If the product ID is all we have, map known product IDs:
+
+Apple:
+- ecologic_starter → Starter
+- ecologic_team → Team
+- ecologic_pro → Pro
+- ecologic_scale → Scale
+
+Google Play:
+- ecologic_starter_monthly → Starter
+- ecologic_team_monthly → Team
+- ecologic_pro_monthly → Pro
+- ecologic_scale_monthly → Scale
+
+If there are other current IDs in the code, include them too.
+
+PART 5 — MRR rules
+
+During free trial:
+- monthlyRevenue = 0
+- status = trialing
+- Overview Trialing count increases
+- Current MRR does NOT include this user
+
+When active/paid:
+- monthlyRevenue = plan amount
+- status = active
+- Overview Paid Subscribers increases
+- Current MRR includes this user
+
+When canceled/expired:
+- monthlyRevenue = 0
+- status = canceled or expired
+- Overview Canceled increases if canceled/expired is counted there
+
+PART 6 — Matching and safety
+
+Do not create duplicate growth_subscribers rows if one already exists for the same company/user.
+
+If a user has campaign attribution:
+- preserve sourceType
+- preserve sourceName
+- preserve campaignId
+- preserve referralCode
+
+Do not overwrite attribution.
+
+Only update subscription fields:
+- platform
+- plan
+- subscriptionStatus
+- monthlyRevenue
+- Apple/Google identifiers
+- trial/paid/canceled timestamps
+
+If no growth_subscribers row exists:
+- If company exists but no attribution row exists, create a growth_subscribers row with:
+  - companyId
+  - userId
+  - ownerEmail
+  - companyName
+  - sourceType = unknown
+  - platform = apple or google_play
+  - subscription fields
+This is different from earlier Stripe-only behavior. Going forward, the dashboard should include all subscribers, even if source is unknown.
+
+PART 7 — Update Stripe behavior to match
+
+Currently Stripe may skip non-attributed signups.
+
+Update Stripe sync so that if a company has a Stripe subscription but no growth_subscribers row, create one with:
+- sourceType = unknown
+- platform = stripe
+- company/user info
+- subscription fields
+
+This makes the dashboard a true all-in-one subscriber dashboard, not only attributed signups.
+
+Do not lose campaign attribution when it exists.
+
+PART 8 — Dashboard display
+
+Subscribers page should show:
+- Platform: Stripe / Apple / Google Play / Unknown
+- Source: friendly source label or Unknown
+- Campaign: campaign name or —
+- Plan
+- Status
+- MRR
+- Onboarded Yes/No
+
+Platforms page should show breakdown:
+- Stripe
+- Apple
+- Google Play
+- Unknown
+
+Sources page should include Unknown source for non-attributed subscribers.
+
+Overview should now count all subscribers in growth_subscribers, not only attributed ones.
+
+PART 9 — Logs
+
+Add safe logs:
+
+[growth-dashboard] Apple subscription sync started
+[growth-dashboard] Apple subscriber matched
+[growth-dashboard] Apple subscriber created
+[growth-dashboard] Apple subscriber updated
+[growth-dashboard] Apple subscriber not found
+
+[growth-dashboard] Google Play subscription sync started
+[growth-dashboard] Google Play subscriber matched
+[growth-dashboard] Google Play subscriber created
+[growth-dashboard] Google Play subscriber updated
+[growth-dashboard] Google Play subscriber not found
+
+[growth-dashboard] Stripe subscriber created for unattributed company
+
+Do not log sensitive payment payloads.
+
+PART 10 — Testing in staging
+
+Give me testing steps for:
+
+Apple sandbox:
+1. Open staging app on iOS sandbox/test build.
+2. Start subscription through Apple.
+3. Validate receipt/JWS.
+4. Confirm dashboard Subscribers shows:
+   Platform Apple
+   Correct plan
+   Free Trial or Active
+   MRR $0 during trial or plan amount if active
+5. Confirm Platforms page counts Apple.
+
+Google Play test:
+1. Open Android test build.
+2. Start subscription through Google Play test billing.
+3. Validate purchase token.
+4. Confirm dashboard Subscribers shows:
+   Platform Google Play
+   Correct plan
+   Free Trial or Active
+   MRR $0 during trial or plan amount if active
+5. Confirm Platforms page counts Google Play.
+
+Stripe regression:
+1. Create a Stripe web signup without referral.
+2. Confirm dashboard still creates a subscriber row with source Unknown.
+3. Create a Stripe web signup with Joe Plumbing referral.
+4. Confirm attribution is preserved.
+
+Deliverables:
+- Files changed
+- Apple sync location
+- Google Play sync location
+- Stripe behavior update
+- Plan/product mapping
+- Status mapping
+- How non-attributed subscribers are handled
+- Testing steps
