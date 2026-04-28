@@ -1,0 +1,102 @@
+Fix account deletion so the email/user auth record is removed when deleting a company from the private dashboard.
+
+Current issue:
+I deleted a test account/company from staging-dashboard.ecologicc.com, but when I try to create a new account with the same email on staging.ecologicc.com, signup fails with:
+
+400: {"message":"An account with this email already exists. Please log in instead."}
+
+That means the company/account delete removed enough for the dashboard, but it did not fully delete the user/auth record tied to that email.
+
+Goal:
+When deleting an account/company from the private dashboard, the deleted account should be fully reusable for testing. If the owner/user only belonged to that deleted company, their user/auth record and email identity should be removed too.
+
+Important:
+Build/fix in STAGING only first.
+Do not affect production.
+Do not delete dashboard admin users accidentally.
+Do not delete users who belong to other companies.
+
+Please investigate and fix:
+
+1. Find where signup checks if an email already exists.
+The error is coming from:
+POST /api/auth/signup/start
+400: "An account with this email already exists. Please log in instead."
+
+2. Identify which table still contains the deleted email:
+- users
+- auth users
+- email login identities
+- verification table
+- sessions
+- memberships
+- company members
+- any account/profile table
+- any auth provider identity table
+
+3. Update the dashboard account deletion deep-delete service.
+
+When deleting a company:
+- Delete company membership rows.
+- Find all users/members attached to that company.
+- For each user:
+  - If the user belongs to no other companies after deletion:
+    - delete their auth/email identity records
+    - delete their user/profile record
+    - delete related sessions if possible
+    - delete verification/OTP records if tied to the email/user
+  - If the user belongs to another company:
+    - do NOT delete the user
+    - only remove their membership to the deleted company
+
+4. Safety rules:
+- Never delete the current dashboard admin user.
+- Never delete users listed in DASHBOARD_ADMIN_EMAILS.
+- Never delete protected owner email/company 415.
+- Never delete a user if they still belongs to another company.
+- If a user is skipped for safety, return that in the delete response.
+
+5. Delete preview should show:
+- users that will be deleted
+- users that will be kept because they belong to another company
+- users skipped because protected/admin
+- auth/email identity rows that will be deleted
+- sessions that will be deleted if supported
+
+6. Audit log should include:
+- deleted users count
+- deleted auth identity count
+- skipped users list/reasons
+- deleted email addresses for test accounts if safe
+
+7. Add logs:
+[dashboard-accounts] deleting company users
+[dashboard-accounts] user has no other companies, deleting auth/user
+[dashboard-accounts] user belongs to other companies, keeping user
+[dashboard-accounts] skipping protected/admin user
+[dashboard-accounts] deleted auth identity rows
+[dashboard-accounts] deleted sessions
+[dashboard-accounts] delete completed with user cleanup
+
+8. Backfill/fix the current stuck staging test email:
+For staging only, clean up the orphaned user/auth records for:
+staging@ecologicc.com
+
+Only do this if that user is no longer attached to a real company.
+
+9. Testing:
+- Delete a fake test account from Accounts.
+- Try signing up again with the same email.
+- Confirm signup no longer says the email already exists.
+- Confirm the account disappears from Accounts and Subscribers.
+- Confirm dashboard admin account still works.
+- Confirm unrelated users/companies still work.
+
+Deliverables:
+- Root cause
+- Which table caused the email conflict
+- Files changed
+- Updated delete-preview behavior
+- Updated delete behavior
+- Confirmation staging@ecologicc.com can be reused
+- Testing steps

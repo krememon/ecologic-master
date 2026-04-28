@@ -118,6 +118,13 @@ interface DeletePreview {
     hasGoogleSub: boolean;
   };
   warnings: string[];
+  // Per-user breakdown — what the deep-delete will do to user/auth records.
+  users?: {
+    willDelete: Array<{ userId: string; email: string | null }>;
+    willKeepBecauseOtherCompany: Array<{ userId: string; email: string | null }>;
+    willKeepBecauseProtected: Array<{ userId: string; email: string | null }>;
+  };
+  pendingSignupsToDelete?: number;
   deletionEnabled: boolean;
   protected: boolean;
   protectedReason: string | null;
@@ -818,8 +825,17 @@ function DeleteAccountButton({
       );
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Account deleted permanently." });
+    onSuccess: (data: any) => {
+      const deleted = Number(data?.orphanedUsersDeleted ?? 0);
+      const kept = Array.isArray(data?.keptUsers) ? data.keptUsers.length : 0;
+      const auth = Number(data?.authIdentitiesDeleted ?? 0);
+      toast({
+        title: "Account deleted permanently.",
+        description:
+          `Removed ${deleted} user${deleted === 1 ? "" : "s"}` +
+          (kept > 0 ? `, kept ${kept} (still in another company / protected)` : "") +
+          (auth > 0 ? `. Cleared ${auth} auth identity row${auth === 1 ? "" : "s"}.` : "."),
+      });
       setOpen(false);
       setConfirmText("");
       setUnderstood(false);
@@ -927,6 +943,82 @@ function DeleteAccountButton({
                         <span>{w}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {preview.users && (
+                  <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs space-y-2">
+                    <div className="font-medium text-slate-900">User accounts affected</div>
+                    {preview.users.willDelete.length > 0 ? (
+                      <div>
+                        <div className="text-slate-700">
+                          Will be removed (email becomes reusable for new sign-up):
+                          <span className="ml-1 font-semibold">{preview.users.willDelete.length}</span>
+                        </div>
+                        <ul className="mt-1 ml-4 list-disc text-slate-600 space-y-0.5">
+                          {preview.users.willDelete.slice(0, 8).map((u) => (
+                            <li key={u.userId} className="truncate">
+                              {u.email ?? <span className="italic text-slate-400">(no email)</span>}
+                            </li>
+                          ))}
+                          {preview.users.willDelete.length > 8 && (
+                            <li className="text-slate-400">
+                              …and {preview.users.willDelete.length - 8} more
+                            </li>
+                          )}
+                        </ul>
+                        {typeof preview.pendingSignupsToDelete === "number" &&
+                          preview.pendingSignupsToDelete > 0 && (
+                            <div className="mt-1 text-slate-500">
+                              + {preview.pendingSignupsToDelete} pending-signup row
+                              {preview.pendingSignupsToDelete === 1 ? "" : "s"} will be cleared.
+                            </div>
+                          )}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500">No user accounts will be removed.</div>
+                    )}
+
+                    {preview.users.willKeepBecauseOtherCompany.length > 0 && (
+                      <div>
+                        <div className="text-slate-700">
+                          Will be kept (still belongs to another company):
+                          <span className="ml-1 font-semibold">
+                            {preview.users.willKeepBecauseOtherCompany.length}
+                          </span>
+                        </div>
+                        <ul className="mt-1 ml-4 list-disc text-slate-600 space-y-0.5">
+                          {preview.users.willKeepBecauseOtherCompany.slice(0, 5).map((u) => (
+                            <li key={u.userId} className="truncate">
+                              {u.email ?? <span className="italic text-slate-400">(no email)</span>}
+                            </li>
+                          ))}
+                          {preview.users.willKeepBecauseOtherCompany.length > 5 && (
+                            <li className="text-slate-400">
+                              …and {preview.users.willKeepBecauseOtherCompany.length - 5} more
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+
+                    {preview.users.willKeepBecauseProtected.length > 0 && (
+                      <div>
+                        <div className="text-slate-700">
+                          Will be kept (protected / dashboard admin):
+                          <span className="ml-1 font-semibold">
+                            {preview.users.willKeepBecauseProtected.length}
+                          </span>
+                        </div>
+                        <ul className="mt-1 ml-4 list-disc text-slate-600 space-y-0.5">
+                          {preview.users.willKeepBecauseProtected.map((u) => (
+                            <li key={u.userId} className="truncate">
+                              {u.email ?? <span className="italic text-slate-400">(no email)</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 

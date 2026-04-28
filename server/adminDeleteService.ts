@@ -1,5 +1,5 @@
 import { db } from './db';
-import { inArray, or, eq } from 'drizzle-orm';
+import { inArray, or, eq, sql } from 'drizzle-orm';
 import {
   companies,
   companyMembers,
@@ -53,6 +53,8 @@ import {
   documentFolders,
   growthSubscribers,
   growthAccountAdmin,
+  pendingSignups,
+  loginChallenges,
 } from '@shared/schema';
 
 // ── Protected companies / emails that can NEVER be deleted ──────────────────
@@ -66,13 +68,48 @@ const PROTECTED_OWNER_EMAILS = new Set<string>([
   'pjpell077@gmail.com',
 ]);
 
+export interface KeptUser {
+  userId: string;
+  email: string | null;
+  reason:
+    | "belongs_to_other_company"
+    | "protected_or_admin"
+    | "actor_self";
+}
+
 export interface DeleteCompanyResult {
   ok: boolean;
   companyId: number;
   companyName: string;
   tablesAffected: string[];
   orphanedUsersDeleted: number;
+  /** Lowercased emails of users actually removed from the users table. */
+  deletedUserEmails: string[];
+  /** Users we intentionally did NOT delete, with the reason why. */
+  keptUsers: KeptUser[];
+  /** Total auth-side rows wiped (pending_signups + login_challenges). */
+  authIdentitiesDeleted: number;
+  /** Sessions deleted via best-effort scan. -1 if scan failed/skipped. */
+  sessionsDeleted: number;
   error?: string;
+}
+
+/**
+ * Build the set of emails that must NEVER be deleted from the users table,
+ * regardless of orphan status. Includes hardcoded protected owners plus the
+ * runtime DASHBOARD_ADMIN_EMAILS allow-list (admins must be able to keep
+ * logging in even if every company they admin gets removed).
+ */
+function getProtectedEmailSet(): Set<string> {
+  const set = new Set<string>();
+  // Array.from() avoids needing the --downlevelIteration TS flag.
+  Array.from(PROTECTED_OWNER_EMAILS).forEach((e) => set.add(e.toLowerCase()));
+  const raw = process.env.DASHBOARD_ADMIN_EMAILS || "";
+  for (const e of raw.split(/[,\s;]+/)) {
+    const trimmed = e.trim().toLowerCase();
+    if (trimmed) set.add(trimmed);
+  }
+  return set;
 }
 
 /**
@@ -134,6 +171,10 @@ export async function deleteCompanyDeep(companyId: number, actorEmail: string): 
   const companyName = companyRow.name;
   const tablesAffected: string[] = [];
   let orphanedUsersDeleted = 0;
+  const deletedUserEmails: string[] = [];
+  const keptUsers: KeptUser[] = [];
+  let authIdentitiesDeleted = 0;
+  let sessionsDeleted = 0;
 
   await db.transaction(async (tx) => {
     // ── Pre-fetch IDs needed for child table deletions ─────────────────────
@@ -142,6 +183,27 @@ export async function deleteCompanyDeep(companyId: number, actorEmail: string): 
       .from(companyMembers)
       .where(eq(companyMembers.companyId, companyId));
     const memberUserIds = memberRows.map(m => m.userId);
+
+    // Owner is always considered a candidate even if they aren't (or aren't
+    // any longer) in companyMembers. createCompany typically inserts an
+    // OWNER row but defensively dedupe in case the membership was removed.
+    const [companyMeta] = await tx.select({ ownerId: companies.ownerId })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1);
+    const candidateUserIdSet = new Set<string>(memberUserIds);
+    if (companyMeta?.ownerId) candidateUserIdSet.add(companyMeta.ownerId);
+    const candidateUserIds = Array.from(candidateUserIdSet);
+
+    // Pre-fetch emails for safety classification (protected/admin/actor).
+    const userInfoRows = candidateUserIds.length
+      ? await tx.select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.id, candidateUserIds))
+      : [];
+    const emailById = new Map<string, string | null>(
+      userInfoRows.map((u) => [u.id, u.email ? u.email.toLowerCase() : null]),
+    );
 
     const jobRows = await tx.select({ id: jobs.id })
       .from(jobs)
@@ -397,29 +459,138 @@ export async function deleteCompanyDeep(companyId: number, actorEmail: string): 
     await tx.delete(companies).where(eq(companies.id, companyId));
     tablesAffected.push('companies');
 
-    // ── 34. Orphaned user cleanup ─────────────────────────────────────────────
-    // After company_members deleted, check which users have zero remaining memberships
-    console.log(`[admin-delete] orphan user check — candidates: ${memberUserIds.length}`);
+    // ── 34. Orphaned user + auth-identity cleanup ─────────────────────────────
+    // After companies + company_members are deleted, classify every candidate
+    // user (members + owner) into delete/keep buckets. Per requested spec:
+    //   • If user still belongs to ANOTHER company → KEEP (only membership wiped)
+    //   • If user email is in DASHBOARD_ADMIN_EMAILS or PROTECTED_OWNER_EMAILS
+    //     → KEEP (admins must stay alive even when their workspaces vanish)
+    //   • If user is the dashboard admin performing this delete → KEEP
+    //   • Otherwise → DELETE the user row + every auth-side identity tied to
+    //     that email so the email is fully reusable for re-signup testing.
+    console.log(
+      `[dashboard-accounts] deleting company users — candidates=${candidateUserIds.length} actor=${actorEmail}`,
+    );
+
+    const protectedEmails = getProtectedEmailSet();
+    const actorEmailLower = actorEmail ? actorEmail.toLowerCase() : null;
     const orphanedUserIds: string[] = [];
-    for (const userId of memberUserIds) {
+
+    for (const userId of candidateUserIds) {
+      const email = emailById.get(userId) ?? null;
+
+      // 1) Protected/admin guard — never delete these regardless of orphan status.
+      if (email && protectedEmails.has(email)) {
+        keptUsers.push({ userId, email, reason: "protected_or_admin" });
+        console.log(
+          `[dashboard-accounts] skipping protected/admin user — userId=${userId} email=${email}`,
+        );
+        continue;
+      }
+
+      // 2) Actor self-guard — never delete the dashboard admin running the delete.
+      if (actorEmailLower && email === actorEmailLower) {
+        keptUsers.push({ userId, email, reason: "actor_self" });
+        console.log(
+          `[dashboard-accounts] skipping actor user (self) — userId=${userId} email=${email}`,
+        );
+        continue;
+      }
+
+      // 3) Multi-tenant guard — keep users still belonging to another company.
       const remaining = await tx.select({ id: companyMembers.id })
         .from(companyMembers)
         .where(eq(companyMembers.userId, userId))
         .limit(1);
-      if (remaining.length === 0) orphanedUserIds.push(userId);
+      if (remaining.length > 0) {
+        keptUsers.push({ userId, email, reason: "belongs_to_other_company" });
+        console.log(
+          `[dashboard-accounts] user belongs to other companies, keeping user — userId=${userId} email=${email ?? "<none>"}`,
+        );
+        continue;
+      }
+
+      // Eligible for full removal.
+      orphanedUserIds.push(userId);
+      if (email) deletedUserEmails.push(email);
+      console.log(
+        `[dashboard-accounts] user has no other companies, deleting auth/user — userId=${userId} email=${email ?? "<none>"}`,
+      );
     }
 
     if (orphanedUserIds.length > 0) {
-      console.log(`[admin-delete] deleting orphaned users: ${orphanedUserIds.join(', ')}`);
-      // Clean up push tokens tied to orphaned users (userId-scoped, no companyId)
+      // (a) Clean up push tokens (userId-scoped, no companyId).
       await tx.delete(pushTokens).where(inArray(pushTokens.userId, orphanedUserIds));
+
+      // (b) Login challenges keyed by userId.
+      const lcDel = await tx.delete(loginChallenges)
+        .where(inArray(loginChallenges.userId, orphanedUserIds));
+      const lcCount = (lcDel as any)?.rowCount ?? 0;
+      authIdentitiesDeleted += lcCount;
+
+      // (c) Pending signups keyed by lower(email) — this is what makes
+      //     "An account with this email already exists" go away on re-signup.
+      if (deletedUserEmails.length > 0) {
+        const psDel = await tx.delete(pendingSignups)
+          .where(sql`LOWER(${pendingSignups.email}) IN (${sql.join(deletedUserEmails.map((e) => sql`${e}`), sql`, `)})`);
+        const psCount = (psDel as any)?.rowCount ?? 0;
+        authIdentitiesDeleted += psCount;
+      }
+      console.log(
+        `[dashboard-accounts] deleted auth identity rows — pendingSignups+loginChallenges+pushTokens for ${orphanedUserIds.length} users (auth rows=${authIdentitiesDeleted})`,
+      );
+
+      // (d) Sessions: connect-pg-simple stores sess as JSONB. Passport puts
+      //     the authenticated user under sess.passport.user.id, so we match
+      //     that EXACT JSON path instead of a substring scan — that prevents
+      //     accidentally logging out unrelated users whose ids happen to
+      //     contain a matching substring. Failures are non-fatal —
+      //     express-session will TTL-expire stale rows anyway.
+      try {
+        const sDel = await tx.execute(
+          sql`DELETE FROM sessions
+              WHERE (sess->'passport'->'user'->>'id') IN (${sql.join(
+                orphanedUserIds.map((u) => sql`${u}`),
+                sql`, `,
+              )})`,
+        );
+        sessionsDeleted = Number((sDel as any)?.rowCount ?? 0);
+        console.log(
+          `[dashboard-accounts] deleted sessions — count=${sessionsDeleted} (exact JSON path match)`,
+        );
+      } catch (sessErr: any) {
+        sessionsDeleted = -1;
+        console.warn(
+          `[dashboard-accounts] session cleanup skipped (non-fatal): ${sessErr?.message ?? sessErr}`,
+        );
+      }
+
+      // (e) Finally: the users row itself.
       await tx.delete(users).where(inArray(users.id, orphanedUserIds));
       orphanedUsersDeleted = orphanedUserIds.length;
       tablesAffected.push('users (orphaned)');
+      tablesAffected.push('pending_signups (by email)');
+      tablesAffected.push('login_challenges (by userId)');
+      if (sessionsDeleted >= 0) tablesAffected.push('sessions (best-effort)');
     }
 
-    console.log(`[admin-delete] DONE — companyId=${companyId} name="${companyName}" tables=${tablesAffected.length} orphaned=${orphanedUsersDeleted}`);
+    console.log(
+      `[dashboard-accounts] delete completed with user cleanup — companyId=${companyId} deletedUsers=${orphanedUsersDeleted} keptUsers=${keptUsers.length} authIdentities=${authIdentitiesDeleted} sessions=${sessionsDeleted}`,
+    );
+    console.log(
+      `[admin-delete] DONE — companyId=${companyId} name="${companyName}" tables=${tablesAffected.length} orphaned=${orphanedUsersDeleted}`,
+    );
   });
 
-  return { ok: true, companyId, companyName, tablesAffected, orphanedUsersDeleted };
+  return {
+    ok: true,
+    companyId,
+    companyName,
+    tablesAffected,
+    orphanedUsersDeleted,
+    deletedUserEmails,
+    keptUsers,
+    authIdentitiesDeleted,
+    sessionsDeleted,
+  };
 }

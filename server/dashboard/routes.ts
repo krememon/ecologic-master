@@ -446,7 +446,20 @@ export function registerDashboardRoutes(app: Express): void {
           res.status(400).json({ message: "Invalid companyId" });
           return;
         }
-        const preview = await previewAccountDeletion(companyId);
+        // Resolve actor email so the preview can mark the actor as kept (not
+        // deleted) — mirrors the live skip-actor behavior in deleteCompanyDeep.
+        let actorEmailForPreview: string | null = null;
+        const actorUserId = req.userContext?.userId ?? null;
+        if (actorUserId) {
+          try {
+            const { storage } = await import("../storage");
+            const u = await storage.getUser(actorUserId);
+            if (u?.email) actorEmailForPreview = u.email;
+          } catch {
+            /* non-fatal — preview will still render without actor email */
+          }
+        }
+        const preview = await previewAccountDeletion(companyId, actorEmailForPreview);
         if (!preview.exists) {
           res.status(404).json({ message: "Account not found" });
           return;
@@ -629,6 +642,10 @@ export function registerDashboardRoutes(app: Express): void {
               subscription: preview.subscription,
               tablesAffected: result.tablesAffected,
               orphanedUsersDeleted: result.orphanedUsersDeleted,
+              deletedUserEmails: result.deletedUserEmails,
+              keptUsers: result.keptUsers,
+              authIdentitiesDeleted: result.authIdentitiesDeleted,
+              sessionsDeleted: result.sessionsDeleted,
             } as any,
             afterValue: null,
             note: preview.warnings.length
@@ -636,7 +653,7 @@ export function registerDashboardRoutes(app: Express): void {
               : null,
           });
           console.log(
-            `[dashboard-accounts] deleted table records — tables=${result.tablesAffected.length} orphanedUsers=${result.orphanedUsersDeleted}`,
+            `[dashboard-accounts] deleted table records — tables=${result.tablesAffected.length} orphanedUsers=${result.orphanedUsersDeleted} keptUsers=${result.keptUsers.length} authRows=${result.authIdentitiesDeleted}`,
           );
         } catch (auditErr: any) {
           console.error(
@@ -645,7 +662,7 @@ export function registerDashboardRoutes(app: Express): void {
         }
 
         console.log(
-          `[dashboard-accounts] account deleted — companyId=${companyId} name="${result.companyName}" actor=${actorEmail}`,
+          `[dashboard-accounts] account deleted — companyId=${companyId} name="${result.companyName}" actor=${actorEmail} deletedUsers=${result.orphanedUsersDeleted} keptUsers=${result.keptUsers.length}`,
         );
 
         res.json({
@@ -654,6 +671,10 @@ export function registerDashboardRoutes(app: Express): void {
           companyName: result.companyName,
           tablesAffected: result.tablesAffected,
           orphanedUsersDeleted: result.orphanedUsersDeleted,
+          deletedUserEmails: result.deletedUserEmails,
+          keptUsers: result.keptUsers,
+          authIdentitiesDeleted: result.authIdentitiesDeleted,
+          sessionsDeleted: result.sessionsDeleted,
           warnings: preview.warnings,
         });
       } catch (err: any) {

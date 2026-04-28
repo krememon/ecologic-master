@@ -23,6 +23,7 @@ import {
   documents,
   conversations,
   messages,
+  pendingSignups,
   ACCOUNT_ADMIN_STATUSES,
   type GrowthSubscriber,
   type GrowthCampaign,
@@ -1149,6 +1150,18 @@ export interface AccountDeletionPreview {
     hasGoogleSub: boolean;
   };
   warnings: string[];
+  /**
+   * Per-user breakdown of what will happen to the auth/user records when
+   * delete runs. The classification mirrors the logic inside
+   * deleteCompanyDeep so the modal can warn the admin upfront.
+   */
+  users: {
+    willDelete: Array<{ userId: string; email: string | null }>;
+    willKeepBecauseOtherCompany: Array<{ userId: string; email: string | null }>;
+    willKeepBecauseProtected: Array<{ userId: string; email: string | null }>;
+  };
+  /** Pending signup rows that will be removed (so the email is reusable). */
+  pendingSignupsToDelete: number;
 }
 
 /**
@@ -1157,6 +1170,7 @@ export interface AccountDeletionPreview {
  */
 export async function previewAccountDeletion(
   companyId: number,
+  actorEmail?: string | null,
 ): Promise<AccountDeletionPreview> {
   console.log(`[dashboard-accounts] preview deletion — companyId=${companyId}`);
 
@@ -1201,6 +1215,12 @@ export async function previewAccountDeletion(
         hasGoogleSub: false,
       },
       warnings: [],
+      users: {
+        willDelete: [],
+        willKeepBecauseOtherCompany: [],
+        willKeepBecauseProtected: [],
+      },
+      pendingSignupsToDelete: 0,
     };
   }
 
@@ -1282,6 +1302,85 @@ export async function previewAccountDeletion(
     );
   }
 
+  // ── Per-user breakdown ────────────────────────────────────────────────
+  // Mirrors the live classification inside deleteCompanyDeep so the modal
+  // can show "X users will be removed, Y will be kept (still in another
+  // company), Z protected" before the admin types DELETE.
+  const memberRows = await db
+    .select({ userId: companyMembers.userId })
+    .from(companyMembers)
+    .where(eq(companyMembers.companyId, companyId));
+  const candidateUserIdSet = new Set<string>(memberRows.map((m) => m.userId));
+  if (company.ownerId) candidateUserIdSet.add(company.ownerId);
+  const candidateUserIds = Array.from(candidateUserIdSet);
+
+  const userInfoRows = candidateUserIds.length
+    ? await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(sql`${users.id} IN (${sql.join(candidateUserIds.map((id) => sql`${id}`), sql`, `)})`)
+    : [];
+
+  const protectedEmails = (() => {
+    const set = new Set<string>(["pjpell077@gmail.com"]);
+    for (const e of (process.env.DASHBOARD_ADMIN_EMAILS || "").split(/[,\s;]+/)) {
+      const t = e.trim().toLowerCase();
+      if (t) set.add(t);
+    }
+    // Mirror live behavior: deleteCompanyDeep also skips the acting admin so
+    // they don't lock themselves out. Include the actor email here so the
+    // modal doesn't falsely warn that the actor will be deleted.
+    if (actorEmail) set.add(actorEmail.toLowerCase());
+    return set;
+  })();
+
+  const willDelete: Array<{ userId: string; email: string | null }> = [];
+  const willKeepBecauseOtherCompany: Array<{ userId: string; email: string | null }> = [];
+  const willKeepBecauseProtected: Array<{ userId: string; email: string | null }> = [];
+
+  // Run other-membership checks in parallel — read-only.
+  const otherMembershipChecks = await Promise.all(
+    userInfoRows.map(async (u) => {
+      const other = await db
+        .select({ id: companyMembers.id })
+        .from(companyMembers)
+        .where(
+          and(
+            eq(companyMembers.userId, u.id),
+            sql`${companyMembers.companyId} != ${companyId}`,
+          ),
+        )
+        .limit(1);
+      return { user: u, hasOther: other.length > 0 };
+    }),
+  );
+
+  for (const { user: u, hasOther } of otherMembershipChecks) {
+    const emailLower = u.email ? u.email.toLowerCase() : null;
+    if (emailLower && protectedEmails.has(emailLower)) {
+      willKeepBecauseProtected.push({ userId: u.id, email: u.email });
+    } else if (hasOther) {
+      willKeepBecauseOtherCompany.push({ userId: u.id, email: u.email });
+    } else {
+      willDelete.push({ userId: u.id, email: u.email });
+    }
+  }
+
+  // Count pending signup rows that will be cleared (so the email is reusable).
+  const willDeleteEmailsLower = willDelete
+    .map((u) => u.email?.toLowerCase())
+    .filter((e): e is string => !!e);
+  let pendingSignupsToDelete = 0;
+  if (willDeleteEmailsLower.length > 0) {
+    const psRow = await db
+      .select({ c: sql<number>`COUNT(*)::int` })
+      .from(pendingSignups)
+      .where(
+        sql`LOWER(${pendingSignups.email}) IN (${sql.join(willDeleteEmailsLower.map((e) => sql`${e}`), sql`, `)})`,
+      );
+    pendingSignupsToDelete = Number(psRow[0]?.c ?? 0);
+  }
+
   return {
     exists: true,
     companyId: company.id,
@@ -1307,6 +1406,12 @@ export async function previewAccountDeletion(
       hasGoogleSub,
     },
     warnings,
+    users: {
+      willDelete,
+      willKeepBecauseOtherCompany,
+      willKeepBecauseProtected,
+    },
+    pendingSignupsToDelete,
   };
 }
 
