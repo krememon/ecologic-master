@@ -13,6 +13,7 @@ import {
   growthCampaigns,
   growthCreators,
   growthAccountAdmin,
+  growthMobileEvents,
   companies,
   users,
   companyMembers,
@@ -28,10 +29,19 @@ import {
   type GrowthSubscriber,
   type GrowthCampaign,
   type GrowthCreator,
+  type GrowthMobileEvent,
   type InsertGrowthCampaign,
   type InsertGrowthCreator,
+  type InsertGrowthMobileEvent,
   type AccountAdminStatus,
 } from "@shared/schema";
+import {
+  createBranchLink,
+  isBranchConfigured,
+  isBranchIntegrationEnabled,
+  type CreateBranchLinkResult,
+  type ParsedBranchEvent,
+} from "../branch";
 import { subscriptionPlans } from "@shared/subscriptionPlans";
 import { getPlanKeyForPriceId } from "../billingService";
 
@@ -73,9 +83,12 @@ export async function listGrowthCampaigns(): Promise<GrowthCampaign[]> {
   return await db.select().from(growthCampaigns).orderBy(desc(growthCampaigns.createdAt));
 }
 
-/** Campaigns list with subscriber counts for the dashboard table. */
+/** Campaigns list with subscriber + mobile-event counts for the dashboard table. */
 export interface CampaignWithMetrics extends GrowthCampaign {
   signups: number;
+  mobileClicks: number;
+  mobileInstalls: number;
+  mobileOpens: number;
 }
 
 export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetrics[]> {
@@ -83,19 +96,52 @@ export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetr
   // QueryResult object — the rows live on `.rows`, NOT on the result itself.
   // Destructuring or iterating the result directly throws
   // "TypeError: (intermediate value) is not iterable".
-  const result = await db.execute<{ id: number; signups: string }>(sql`
+  const subRes = await db.execute<{ id: number; signups: string }>(sql`
     SELECT campaign_id AS id, count(*)::text AS signups
     FROM growth_subscribers
     WHERE campaign_id IS NOT NULL
     GROUP BY campaign_id
   `);
-  const rows = (result as any).rows ?? [];
+  const subCounts = new Map<number, number>();
+  for (const r of (subRes as any).rows ?? []) subCounts.set(Number(r.id), Number(r.signups));
 
-  const counts = new Map<number, number>();
-  for (const r of rows) counts.set(Number(r.id), Number(r.signups));
+  // Per-campaign mobile event counts. Pivoted in SQL so we get one row per
+  // campaign with click / install / open buckets.
+  const mobRes = await db.execute<{
+    id: number;
+    clicks: string;
+    installs: string;
+    opens: string;
+  }>(sql`
+    SELECT
+      campaign_id AS id,
+      count(*) FILTER (WHERE event_type = 'click')::text   AS clicks,
+      count(*) FILTER (WHERE event_type = 'install')::text AS installs,
+      count(*) FILTER (WHERE event_type = 'open')::text    AS opens
+    FROM growth_mobile_events
+    WHERE campaign_id IS NOT NULL
+    GROUP BY campaign_id
+  `);
+  const mobCounts = new Map<number, { clicks: number; installs: number; opens: number }>();
+  for (const r of (mobRes as any).rows ?? []) {
+    mobCounts.set(Number(r.id), {
+      clicks: Number(r.clicks ?? 0),
+      installs: Number(r.installs ?? 0),
+      opens: Number(r.opens ?? 0),
+    });
+  }
 
   const campaigns = await listGrowthCampaigns();
-  return campaigns.map((c) => ({ ...c, signups: counts.get(c.id) ?? 0 }));
+  return campaigns.map((c) => {
+    const m = mobCounts.get(c.id);
+    return {
+      ...c,
+      signups: subCounts.get(c.id) ?? 0,
+      mobileClicks: m?.clicks ?? 0,
+      mobileInstalls: m?.installs ?? 0,
+      mobileOpens: m?.opens ?? 0,
+    };
+  });
 }
 
 /**
@@ -1947,3 +1993,207 @@ export function isSelfAccountDeleteAllowed(): boolean {
   const v = (process.env.ALLOW_SELF_ACCOUNT_DELETE || "").trim().toLowerCase();
   return v === "true" || v === "1" || v === "yes";
 }
+
+// ── Branch.io / mobile attribution ─────────────────────────────────────────
+//
+// Helpers for the dashboard Campaigns page to (a) generate Branch deep links
+// per-campaign, (b) record mobile events from the webhook, and (c) resolve
+// a Branch payload back to the right growth_campaigns row.
+//
+// All Branch network failures are surfaced to the caller as `{ ok: false }` —
+// the calling route translates that into a friendly error response without
+// breaking the rest of the dashboard.
+
+export interface BranchLinkResult {
+  ok: boolean;
+  campaign?: GrowthCampaign;
+  branchUrl?: string | null;
+  error?: string;
+}
+
+/**
+ * Generate a fresh Branch link for the given campaign and persist the result
+ * onto the growth_campaigns row. Idempotent: re-running on a campaign with an
+ * existing alias passes `overwrite=true` so Branch updates the link instead
+ * of returning a 409.
+ *
+ * Pre-conditions enforced here (route also checks):
+ *   • Branch must be configured (key + integration enabled).
+ *   • Campaign must exist and have a non-empty referral code (we use that
+ *     as the human-readable Branch alias).
+ */
+export async function createOrRegenerateBranchLinkForCampaign(
+  campaignId: number,
+  opts: { webFallbackUrl: string },
+): Promise<BranchLinkResult> {
+  if (!isBranchConfigured()) {
+    return { ok: false, error: "Branch is not configured on this server" };
+  }
+
+  // Concurrency guard: two admins clicking "Regenerate" on the same row at
+  // the same time would otherwise both call Branch and then race on the
+  // UPDATE. We serialize per-campaign via a Postgres transaction-scoped
+  // advisory lock. The first arg `33` is an arbitrary namespace constant for
+  // "branch link regen"; the second is the campaign id. Lock is auto-released
+  // when the transaction commits/rolls back.
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(33, ${campaignId})`);
+
+    // SELECT … FOR UPDATE so we read the latest row state under the lock.
+    const lockedRows = await tx.execute<typeof growthCampaigns.$inferSelect>(sql`
+      SELECT * FROM growth_campaigns WHERE id = ${campaignId} FOR UPDATE
+    `);
+    const campaign = (lockedRows as any).rows?.[0] as
+      | typeof growthCampaigns.$inferSelect
+      | undefined;
+    if (!campaign) {
+      return { ok: false, error: "Campaign not found" } as BranchLinkResult;
+    }
+    const referralCode = normalizeReferralCode(campaign.referralCode);
+    if (!referralCode) {
+      return {
+        ok: false,
+        error: "Campaign has no referral code — set one before generating a mobile link",
+      } as BranchLinkResult;
+    }
+
+    const branchResult: CreateBranchLinkResult = await createBranchLink({
+      referralCode,
+      sourceType: campaign.sourceType,
+      sourceName: campaign.sourceName,
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      webFallbackUrl: opts.webFallbackUrl,
+      // Always pass overwrite=true so re-generation updates instead of 409-ing.
+      overwriteAlias: true,
+    });
+
+    if (!branchResult.ok || !branchResult.url) {
+      return {
+        ok: false,
+        error: branchResult.error || "Branch did not return a link",
+      } as BranchLinkResult;
+    }
+
+    const now = new Date();
+    const [updated] = await tx
+      .update(growthCampaigns)
+      .set({
+        branchLinkUrl: branchResult.url,
+        branchLinkId: branchResult.branchLinkId ?? null,
+        branchAlias: branchResult.alias ?? referralCode,
+        mobileTrackingEnabled: true,
+        branchChannel: branchResult.channel ?? null,
+        branchFeature: branchResult.feature ?? null,
+        branchCampaign: branchResult.campaign ?? null,
+        branchCreatedAt: campaign.branchCreatedAt ?? now,
+        branchUpdatedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(growthCampaigns.id, campaign.id))
+      .returning();
+
+    return { ok: true, campaign: updated, branchUrl: updated?.branchLinkUrl ?? null };
+  });
+}
+
+/**
+ * Best-effort resolution of a parsed Branch event back to a growth_campaigns
+ * row. Strategy (in order):
+ *
+ *   1. Match on the explicit campaignId we put into the link's custom data.
+ *   2. Match on the referralCode echoed back in the payload.
+ *   3. Match on the saved branchLinkUrl that fired the event.
+ *
+ * Returns `null` when nothing matches — the event is still recorded with a
+ * null campaign_id so we have a forensic record.
+ */
+export async function findCampaignForBranchPayload(
+  parsed: ParsedBranchEvent,
+): Promise<GrowthCampaign | null> {
+  // 1. campaignId direct match
+  if (parsed.metadata.campaignId && Number.isFinite(parsed.metadata.campaignId)) {
+    const [byId] = await db
+      .select()
+      .from(growthCampaigns)
+      .where(eq(growthCampaigns.id, parsed.metadata.campaignId))
+      .limit(1);
+    if (byId) return byId;
+  }
+  // 2. referralCode match (case-insensitive via normalize)
+  const code = normalizeReferralCode(parsed.metadata.referralCode);
+  if (code) {
+    const [byCode] = await db
+      .select()
+      .from(growthCampaigns)
+      .where(eq(growthCampaigns.referralCode, code))
+      .limit(1);
+    if (byCode) return byCode;
+  }
+  // 3. branchLinkUrl match
+  if (parsed.metadata.branchLinkUrl) {
+    const [byUrl] = await db
+      .select()
+      .from(growthCampaigns)
+      .where(eq(growthCampaigns.branchLinkUrl, parsed.metadata.branchLinkUrl))
+      .limit(1);
+    if (byUrl) return byUrl;
+  }
+  return null;
+}
+
+/**
+ * Insert a mobile event row. Idempotent on `branchEventId` — if Branch
+ * re-delivers the same event id, the unique index throws a 23505 and we
+ * swallow it (returning the existing row when possible, or null otherwise).
+ *
+ * Never throws on duplicate; other errors propagate to the route handler.
+ */
+export async function recordMobileEvent(
+  input: InsertGrowthMobileEvent,
+): Promise<{ inserted: boolean; row: GrowthMobileEvent | null }> {
+  try {
+    const [row] = await db.insert(growthMobileEvents).values(input).returning();
+    return { inserted: true, row };
+  } catch (err: any) {
+    // Postgres unique-violation = 23505. Treat as duplicate (already recorded).
+    if (err?.code === "23505") {
+      const where = input.branchEventId
+        ? eq(growthMobileEvents.branchEventId, input.branchEventId)
+        : undefined;
+      if (where) {
+        const [existing] = await db.select().from(growthMobileEvents).where(where).limit(1);
+        return { inserted: false, row: existing ?? null };
+      }
+      return { inserted: false, row: null };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Lightweight metrics roll-up for a single campaign. Used by the regenerate
+ * route response so the UI can update its row counters without re-fetching
+ * the entire campaigns list.
+ */
+export async function getMobileMetricsByCampaign(
+  campaignId: number,
+): Promise<{ clicks: number; installs: number; opens: number }> {
+  const res = await db.execute<{ clicks: string; installs: string; opens: string }>(sql`
+    SELECT
+      count(*) FILTER (WHERE event_type = 'click')::text   AS clicks,
+      count(*) FILTER (WHERE event_type = 'install')::text AS installs,
+      count(*) FILTER (WHERE event_type = 'open')::text    AS opens
+    FROM growth_mobile_events
+    WHERE campaign_id = ${campaignId}
+  `);
+  const row = (res as any).rows?.[0] ?? {};
+  return {
+    clicks: Number(row.clicks ?? 0),
+    installs: Number(row.installs ?? 0),
+    opens: Number(row.opens ?? 0),
+  };
+}
+
+/** Re-export the Branch config probe so routes can show a helpful error msg. */
+export { isBranchConfigured, isBranchIntegrationEnabled };

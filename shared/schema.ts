@@ -2226,6 +2226,20 @@ export const growthCampaigns = pgTable("growth_campaigns", {
   cost: decimal("cost", { precision: 12, scale: 2 }),
   status: growthCampaignStatusEnum("status").notNull().default("active"),
   notes: text("notes"),
+  // ── Branch.io deferred deep-link fields (Phase 1, staging only) ──────────
+  // These are populated by POST /api/admin/dashboard/campaigns/:id/branch-link
+  // when an admin enables mobile tracking on a campaign. All fields are
+  // optional and the campaign continues to function with web-only tracking
+  // when Branch is unconfigured or hasn't been generated yet.
+  branchLinkUrl: varchar("branch_link_url", { length: 500 }),
+  branchLinkId: varchar("branch_link_id", { length: 255 }),
+  branchAlias: varchar("branch_alias", { length: 255 }),
+  mobileTrackingEnabled: boolean("mobile_tracking_enabled").notNull().default(false),
+  branchChannel: varchar("branch_channel", { length: 128 }),
+  branchFeature: varchar("branch_feature", { length: 128 }),
+  branchCampaign: varchar("branch_campaign", { length: 128 }),
+  branchCreatedAt: timestamp("branch_created_at"),
+  branchUpdatedAt: timestamp("branch_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -2235,6 +2249,59 @@ export const growthCampaigns = pgTable("growth_campaigns", {
   uniqueIndex("growth_campaigns_referral_code_unique").on(table.referralCode),
   index("growth_campaigns_source_type_idx").on(table.sourceType),
   index("growth_campaigns_status_idx").on(table.status),
+]);
+
+// ── Branch / mobile-attribution event types ────────────────────────────────
+export const growthMobileEventTypeEnum = pgEnum("growth_mobile_event_type", [
+  "click",
+  "install",
+  "open",
+  "signup",
+  "subscribe",
+  "unknown",
+]);
+
+export const growthMobilePlatformEnum = pgEnum("growth_mobile_platform", [
+  "ios",
+  "android",
+  "web",
+  "unknown",
+]);
+
+// Per-event log of mobile activity coming from Branch.io webhooks. Used to
+// power the Clicks / Installs / Opens columns on the dashboard Campaigns page.
+// Signup / subscribe attribution still lives in growth_subscribers — these
+// rows are an *event log*, not a source-of-truth for revenue.
+export const growthMobileEvents = pgTable("growth_mobile_events", {
+  id: serial("id").primaryKey(),
+  // Resolved from the Branch payload. May be null if no campaign matched.
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  // Snapshot of the campaign's referral code / source at event-receipt time
+  // so historical events stay attributable even if the campaign is later
+  // edited or deactivated.
+  referralCode: varchar("referral_code", { length: 64 }),
+  sourceType: varchar("source_type", { length: 64 }),
+  sourceName: varchar("source_name", { length: 255 }),
+  branchLinkUrl: varchar("branch_link_url", { length: 500 }),
+  eventType: growthMobileEventTypeEnum("event_type").notNull().default("unknown"),
+  platform: growthMobilePlatformEnum("platform").notNull().default("unknown"),
+  // Branch identifiers — used for idempotency + cross-event correlation.
+  branchEventId: varchar("branch_event_id", { length: 255 }),
+  branchIdentityId: varchar("branch_identity_id", { length: 255 }),
+  deviceId: varchar("device_id", { length: 255 }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
+  // Sanitized Branch payload (PII-stripped: email/ip/user_agent removed).
+  rawPayload: jsonb("raw_payload"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("growth_mobile_events_campaign_idx").on(table.campaignId),
+  index("growth_mobile_events_event_type_idx").on(table.eventType),
+  index("growth_mobile_events_referral_code_idx").on(table.referralCode),
+  index("growth_mobile_events_created_idx").on(table.createdAt),
+  // Unique-when-present so duplicate webhook deliveries are rejected at the
+  // DB layer without forcing a NOT-NULL constraint on Branch event ids.
+  uniqueIndex("growth_mobile_events_branch_event_id_unique").on(table.branchEventId),
 ]);
 
 // Creators / influencers (separate from campaigns so one creator can have many)
@@ -2342,6 +2409,11 @@ export const insertGrowthSubscriberSchema = createInsertSchema(growthSubscribers
   updatedAt: true,
 });
 
+export const insertGrowthMobileEventSchema = createInsertSchema(growthMobileEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type GrowthCampaign = typeof growthCampaigns.$inferSelect;
 export type InsertGrowthCampaign = z.infer<typeof insertGrowthCampaignSchema>;
@@ -2351,6 +2423,11 @@ export type InsertGrowthCreator = z.infer<typeof insertGrowthCreatorSchema>;
 
 export type GrowthSubscriber = typeof growthSubscribers.$inferSelect;
 export type InsertGrowthSubscriber = z.infer<typeof insertGrowthSubscriberSchema>;
+
+export type GrowthMobileEvent = typeof growthMobileEvents.$inferSelect;
+export type InsertGrowthMobileEvent = z.infer<typeof insertGrowthMobileEventSchema>;
+export type GrowthMobileEventType = typeof growthMobileEventTypeEnum.enumValues[number];
+export type GrowthMobilePlatform = typeof growthMobilePlatformEnum.enumValues[number];
 
 export type GrowthPlatform = typeof growthPlatformEnum.enumValues[number];
 export type GrowthSubStatus = typeof growthSubStatusEnum.enumValues[number];

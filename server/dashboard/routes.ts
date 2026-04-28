@@ -37,7 +37,18 @@ import {
   previewAccountDeletion,
   isAccountDeletionEnabled,
   isSelfAccountDeleteAllowed,
+  createOrRegenerateBranchLinkForCampaign,
+  getMobileMetricsByCampaign,
+  recordMobileEvent,
+  findCampaignForBranchPayload,
+  isBranchConfigured,
+  isBranchIntegrationEnabled,
 } from "./storage";
+import {
+  parseBranchWebhookPayload,
+  verifyWebhookSecret,
+  getBranchPublicConfigSummary,
+} from "../branch";
 import { db } from "../db";
 import {
   growthCampaigns,
@@ -49,6 +60,57 @@ import { eq, and, ne } from "drizzle-orm";
 const gate = [requireAuth, requireDashboardAdmin] as const;
 
 export function registerDashboardRoutes(app: Express): void {
+  // ── Branch.io webhook (PUBLIC, secret-verified) ──────────────────────────
+  //
+  // Mounted before the gated routes so the `gate` array is NOT applied. We
+  // require BRANCH_WEBHOOK_SECRET to match either the
+  // `X-Branch-Webhook-Secret` header OR the `?token=` query param. If the env
+  // var is unset, every request is rejected fail-closed — this is the same
+  // behavior as the rest of the dashboard's "missing secret" path.
+  //
+  // Always returns 200 once auth passes — even on parse / persist errors —
+  // so Branch doesn't aggressively retry and saturate the queue. Any error
+  // is logged with the [branch-webhook] prefix and surfaced in the response
+  // body for forensic purposes.
+  app.post("/api/webhooks/branch", async (req: Request, res: Response) => {
+    const auth = verifyWebhookSecret(req);
+    if (!auth.ok) {
+      console.warn(`[branch-webhook] rejected: ${auth.reason}`);
+      // 401 so Branch knows the secret is wrong; they won't retry forever.
+      res.status(401).json({ ok: false, reason: auth.reason });
+      return;
+    }
+    try {
+      const parsed = parseBranchWebhookPayload(req.body);
+      const campaign = await findCampaignForBranchPayload(parsed);
+
+      const result = await recordMobileEvent({
+        campaignId: campaign?.id ?? null,
+        referralCode: parsed.metadata.referralCode ?? campaign?.referralCode ?? null,
+        sourceType: parsed.metadata.sourceType ?? campaign?.sourceType ?? null,
+        sourceName: parsed.metadata.sourceName ?? campaign?.sourceName ?? null,
+        branchLinkUrl: parsed.metadata.branchLinkUrl ?? campaign?.branchLinkUrl ?? null,
+        eventType: parsed.eventType,
+        platform: parsed.platform,
+        branchEventId: parsed.branchEventId,
+        branchIdentityId: parsed.branchIdentityId,
+        deviceId: null,
+        userId: null,
+        companyId: null,
+        rawPayload: parsed.sanitized,
+      });
+
+      console.log(
+        `[branch-webhook] ${parsed.eventType}/${parsed.platform} campaignId=${campaign?.id ?? "null"} inserted=${result.inserted}`,
+      );
+      res.status(200).json({ ok: true, recorded: result.inserted, campaignId: campaign?.id ?? null });
+    } catch (err: any) {
+      console.error("[branch-webhook] processing error:", err?.message ?? err);
+      // Still return 200 so Branch doesn't aggressively retry; we logged it.
+      res.status(200).json({ ok: false, error: "internal processing error" });
+    }
+  });
+
   // ── Overview ─────────────────────────────────────────────────────────────
   app.get("/api/admin/dashboard/overview", ...gate, async (_req: Request, res: Response) => {
     try {
@@ -230,6 +292,86 @@ export function registerDashboardRoutes(app: Express): void {
       res.status(500).json({ message: "Lookup failed" });
     }
   });
+
+  // ── Branch.io: config probe (admin) ──────────────────────────────────────
+  // Surface enough info for the dashboard to show "Branch not configured"
+  // when env vars are missing, without leaking any secret values themselves.
+  app.get("/api/admin/dashboard/branch/config", ...gate, async (_req: Request, res: Response) => {
+    try {
+      res.json(getBranchPublicConfigSummary());
+    } catch (err) {
+      console.error("[dashboard-branch] config probe error:", err);
+      res.status(500).json({ message: "Failed to load Branch config" });
+    }
+  });
+
+  // ── Branch.io: generate (or regenerate) a deep link for a campaign ───────
+  //
+  // POST /api/admin/dashboard/campaigns/:id/branch-link
+  //
+  // Pre-conditions:
+  //   • Admin-gated (same as the rest of /api/admin/dashboard/...)
+  //   • BRANCH_INTEGRATION_ENABLED must be "true" — staging-only kill switch.
+  //   • BRANCH_KEY must be set.
+  //   • Campaign must exist and have a referral code.
+  //
+  // Idempotent: regenerate on an existing alias always passes overwrite=true
+  // so Branch updates the link in place.
+  app.post(
+    "/api/admin/dashboard/campaigns/:id/branch-link",
+    ...gate,
+    async (req: Request, res: Response) => {
+      try {
+        if (!isBranchIntegrationEnabled()) {
+          res.status(503).json({
+            code: "BRANCH_DISABLED",
+            message: "Branch integration is disabled on this server (BRANCH_INTEGRATION_ENABLED != true)",
+          });
+          return;
+        }
+        if (!isBranchConfigured()) {
+          res.status(503).json({
+            code: "BRANCH_NOT_CONFIGURED",
+            message: "Branch is not configured (missing BRANCH_KEY)",
+          });
+          return;
+        }
+
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0) {
+          res.status(400).json({ message: "Invalid campaign id" });
+          return;
+        }
+
+        // Web fallback URL: prefer an explicit body override, otherwise build
+        // one from the request's host so links degrade gracefully on desktop.
+        const bodyFallback = (typeof req.body?.webFallbackUrl === "string"
+          ? String(req.body.webFallbackUrl)
+          : ""
+        ).trim();
+        const proto = (req.header("x-forwarded-proto") || req.protocol || "https").split(",")[0].trim();
+        const host = req.header("x-forwarded-host") || req.get("host") || "";
+        const inferredFallback = host ? `${proto}://${host}/` : "https://www.ecologicc.com/";
+        const webFallbackUrl = bodyFallback || inferredFallback;
+
+        console.log(`[dashboard-branch] generate link campaignId=${id} fallback=${webFallbackUrl}`);
+        const result = await createOrRegenerateBranchLinkForCampaign(id, { webFallbackUrl });
+        if (!result.ok) {
+          console.warn(`[dashboard-branch] link gen failed campaignId=${id}: ${result.error}`);
+          res.status(400).json({
+            code: "BRANCH_LINK_FAILED",
+            message: result.error || "Branch link generation failed",
+          });
+          return;
+        }
+        const metrics = await getMobileMetricsByCampaign(id);
+        res.json({ campaign: result.campaign, metrics });
+      } catch (err: any) {
+        console.error("[dashboard-branch] route error:", err?.message ?? err);
+        res.status(500).json({ message: "Branch link generation failed" });
+      }
+    },
+  );
 
   // ── Creators ─────────────────────────────────────────────────────────────
   app.get("/api/admin/dashboard/creators", ...gate, async (_req: Request, res: Response) => {
