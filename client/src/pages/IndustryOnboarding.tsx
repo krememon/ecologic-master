@@ -37,6 +37,12 @@ export default function IndustryOnboarding() {
   
   const onboardingChoice = localStorage.getItem("onboardingChoice");
   console.log("[industry-onboarding] mounted, choice:", onboardingChoice, "route:", window.location.pathname);
+  // The hard auth guard happens one level up in <AuthenticatedRouter>; this
+  // page only renders if the user is already authenticated. We log the result
+  // so the [signup-flow] trace shows the page actually mounted.
+  console.log("[signup-flow] onboarding auth guard result — mounted /onboarding/industry", {
+    choiceFromLocalStorage: onboardingChoice,
+  });
   
   useEffect(() => {
     // Guard: employees should go to join-company instead

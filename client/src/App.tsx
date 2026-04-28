@@ -572,6 +572,29 @@ function AuthenticatedRouter() {
   }
 
   if (!isAuthenticated) {
+    // Defensive guard: post-signup routes (/onboarding/*, /join-company,
+    // /paywall) require authentication. If a user lands on one of them while
+    // unauthenticated — typically a transient race right after set-password
+    // returns but before /api/auth/user has refetched — falling through to
+    // <Welcome> made the screen show "Create account / Sign in" again, which
+    // looks like the signup flow bounced back to auth. Instead, send them to
+    // /signup and preserve the original query string so attribution
+    // (?source=, ?ref=, ?campaign=) is not lost.
+    const path = typeof window !== "undefined" ? window.location.pathname : "/";
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const isPostAuthRoute =
+      path.startsWith("/onboarding/") || path === "/join-company" || path === "/paywall";
+    if (isPostAuthRoute) {
+      const target = `/signup${search || ""}`;
+      console.log(
+        `[signup-flow] onboarding auth guard result — unauthenticated at ${path}, redirecting to ${target}`
+      );
+      return (
+        <Switch>
+          <Route>{() => <Redirect to={target} />}</Route>
+        </Switch>
+      );
+    }
     return (
       <Switch>
         <Route path="/billing/success" component={BillingSuccess} />

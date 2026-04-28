@@ -1,0 +1,62 @@
+Debug the signup/onboarding routing from campaign tracking links in STAGING.
+
+Current issue:
+I opened this clean tracking link:
+
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+I started creating an account. After choosing Owner, the app immediately routed me to:
+
+https://staging.ecologicc.com/onboarding/industry
+
+But instead of continuing onboarding normally, it shows the create account/sign in screen again.
+
+This feels like the app is routing to onboarding before the user is actually authenticated or before the signup state is complete.
+
+Goal:
+The tracking link signup flow should work normally:
+
+1. User opens:
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+2. App captures attribution.
+
+3. User creates account as Owner.
+
+4. User should move through the normal signup/onboarding flow without getting bounced back to auth.
+
+5. Onboarding should eventually show:
+- How did you hear about EcoLogic?
+- Referral or creator code prefilled with joeplumbing
+
+Please investigate:
+
+1. Confirm /signup with query params does not break the signup wizard state.
+2. Confirm choosing Owner does not route to /onboarding/industry before account creation/auth is complete.
+3. Confirm auth guard behavior on /onboarding/industry.
+4. Confirm any redirect logic preserves signup state and does not send the user back to auth.
+5. Confirm attribution capture is not causing a redirect loop.
+6. Confirm that if /onboarding/industry requires auth, unauthenticated users are not sent there prematurely.
+7. Confirm the normal signup flow without ?ref still works.
+8. Confirm the signup flow with ?ref works.
+
+Expected behavior:
+- If user is unauthenticated, they should stay in the create-account wizard until account creation completes.
+- Only after authentication/account creation should the app route to onboarding pages.
+- Query params ?source and ?ref should be captured, then should not interfere with routing.
+
+Add temporary logs:
+[signup-flow] signup page loaded
+[signup-flow] attribution params present
+[signup-flow] owner selected
+[signup-flow] account creation started
+[signup-flow] account creation success
+[signup-flow] redirecting to onboarding
+[signup-flow] onboarding auth guard result
+
+Deliverables:
+- Root cause
+- Files changed
+- Confirmation normal signup still works
+- Confirmation tracking-link signup works
+- Testing steps
