@@ -2240,6 +2240,15 @@ export const growthCampaigns = pgTable("growth_campaigns", {
   branchCampaign: varchar("branch_campaign", { length: 128 }),
   branchCreatedAt: timestamp("branch_created_at"),
   branchUpdatedAt: timestamp("branch_updated_at"),
+  // ── AppsFlyer OneLink (Phase 1, staging only) ────────────────────────────
+  // Optional URL for deferred-deep-link mobile attribution via AppsFlyer.
+  // Either pasted from the AppsFlyer dashboard (e.g. branded short link) or
+  // left null — when null, the dashboard derives a OneLink URL on the fly
+  // from APPSFLYER_ONELINK_TEMPLATE_ID + APPSFLYER_ONELINK_DOMAIN + this
+  // campaign's referralCode/sourceType/id/name. Persisting only the override
+  // means changing the template later automatically propagates to existing
+  // campaigns that haven't pasted a custom URL.
+  appsflyerOneLinkUrl: varchar("appsflyer_onelink_url", { length: 500 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

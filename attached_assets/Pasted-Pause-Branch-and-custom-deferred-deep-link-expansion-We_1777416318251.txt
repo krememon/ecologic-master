@@ -1,0 +1,106 @@
+Pause Branch and custom deferred deep link expansion. We are going to use AppsFlyer OneLink instead.
+
+Goal:
+Use AppsFlyer to handle mobile deferred deep linking for creator/referral campaigns, while keeping EcoLogic Dashboard as the control center.
+
+Important:
+Do not remove the existing custom smart-link work yet. Keep it dormant/secondary.
+Do not use Branch.
+Do not break existing web campaign tracking, Stripe, Apple IAP, Google Play IAP, onboarding, dashboard, account deletion, or Accounts page.
+
+AppsFlyer goal:
+Campaign created in EcoLogic Dashboard
+→ EcoLogic creates/stores AppsFlyer OneLink
+→ creator shares AppsFlyer/OneLink campaign URL
+→ user installs app from App Store/Google Play
+→ AppsFlyer SDK passes deferred deep link data to EcoLogic app
+→ EcoLogic saves attribution
+→ signup/onboarding prefilled
+→ Apple/Google/Stripe subscription sync updates dashboard revenue
+
+Please build this in STAGING only.
+
+Phase 1:
+Add AppsFlyer config + dashboard link support.
+
+Environment variables:
+APPSFLYER_DEV_KEY
+APPSFLYER_APP_ID_IOS
+APPSFLYER_APP_ID_ANDROID
+APPSFLYER_ONELINK_TEMPLATE_ID
+APPSFLYER_ONELINK_DOMAIN
+APPSFLYER_API_TOKEN if API link creation is available/needed
+VITE_APPSFLYER_DEV_KEY
+VITE_APPSFLYER_APP_ID_IOS
+VITE_APPSFLYER_APP_ID_ANDROID
+
+Dashboard Campaigns page:
+- Add AppsFlyer/OneLink field to campaigns.
+- Allow admin to paste or generate an AppsFlyer OneLink.
+- Show Copy AppsFlyer Link.
+- Keep Copy Web Link.
+- Do not rely on Branch.
+
+AppsFlyer link metadata should carry:
+- deep_link_value = referralCode
+- deep_link_sub1 = sourceType
+- deep_link_sub2 = campaignId
+- deep_link_sub3 = campaignName
+- deep_link_sub4 = sourceName
+
+If AppsFlyer API creation is available with our plan:
+- Add backend route to create OneLink from campaign.
+- Save returned URL to growth_campaigns.
+If not:
+- Allow manually pasting the AppsFlyer OneLink into the campaign record.
+
+Phase 2:
+Native app integration.
+
+Add AppsFlyer SDK/Capacitor integration for iOS and Android.
+Use AppsFlyer Unified Deep Linking callbacks.
+When deep link/deferred deep link data is received:
+- read deep_link_value as referralCode
+- read deep_link_sub1 as sourceType
+- read deep_link_sub2 as campaignId
+- read deep_link_sub3 as campaignName
+- save into existing attribution storage
+- first-touch wins
+- do not overwrite existing attribution
+
+Logs:
+[appsflyer-attribution] init
+[appsflyer-attribution] deep link received
+[appsflyer-attribution] referralCode received
+[appsflyer-attribution] saved attribution
+[appsflyer-attribution] existing attribution kept
+
+Phase 3:
+Dashboard metrics.
+
+Keep subscription revenue coming from growth_subscribers.
+If AppsFlyer click/install/open event export/webhook is available:
+- add webhook later
+- write events into growth_mobile_events
+- show clicks/installs/opens
+For now, priority is attribution through install → signup → subscription.
+
+Manual setup checklist:
+Tell me exactly what I need to configure in AppsFlyer:
+- iOS app
+- Android app
+- OneLink template
+- App Store URL
+- Google Play URL
+- custom domain if available
+- iOS associated domains
+- Android app links
+- required SDK keys
+- webhook/export setup if needed
+
+Deliverables:
+- Files changed
+- Whether AppsFlyer link creation is API-based or manual paste for now
+- Env vars needed
+- How deferred deep link data maps to EcoLogic attribution
+- Testing steps for iPhone and Android

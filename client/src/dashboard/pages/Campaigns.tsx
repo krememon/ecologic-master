@@ -163,6 +163,60 @@ function buildSmartLink(opts: {
   return null;
 }
 
+// ── AppsFlyer OneLink helpers ────────────────────────────────────────────────
+// Phase 1: dashboard-only. We compute the OneLink URL deterministically from
+// the server-supplied template + domain so every campaign gets a working URL
+// the moment APPSFLYER_ONELINK_TEMPLATE_ID + APPSFLYER_ONELINK_DOMAIN are set.
+// Admins can override per-campaign by pasting a custom branded short URL into
+// the form — that override (campaign.appsflyerOneLinkUrl) wins when present.
+//
+// Resolution order — same shape as buildSmartLink so the row buttons feel
+// consistent:
+//   1. campaign.appsflyerOneLinkUrl  → admin paste (always wins)
+//   2. computed from config + campaign  → "https://<domain>/<template>?…"
+// Returns null when neither is available, so the row buttons hide cleanly.
+type AppsflyerConfigSummary = {
+  oneLinkConfigured: boolean;
+  apiConfigured: boolean;
+  oneLinkDomain: string | null;
+  oneLinkTemplateId: string | null;
+  hasDevKey: boolean;
+  hasIosAppId: boolean;
+  hasAndroidAppId: boolean;
+};
+
+function buildAppsflyerLink(
+  c: Pick<GrowthCampaign, "id" | "name" | "sourceType" | "sourceName" | "referralCode"> & {
+    appsflyerOneLinkUrl?: string | null;
+  },
+  config: AppsflyerConfigSummary | undefined,
+): { url: string; isCustom: boolean } | null {
+  // 1. Admin override always wins.
+  const override = (c.appsflyerOneLinkUrl || "").trim();
+  if (override) return { url: override, isCustom: true };
+
+  // 2. Compute from config — only when the campaign has a referral code AND
+  //    the server has both template + domain configured.
+  const code = (c.referralCode || "").trim().toLowerCase();
+  if (!code) return null;
+  const domain = (config?.oneLinkDomain || "").trim();
+  const template = (config?.oneLinkTemplateId || "").trim();
+  if (!domain || !template) return null;
+
+  const host = domain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  const tpl = template.replace(/^\/+|\/+$/g, "");
+  const params = new URLSearchParams();
+  params.set("af_xp", "custom");
+  params.set("pid", c.sourceType as string);
+  params.set("c", code);
+  params.set("deep_link_value", code);
+  params.set("deep_link_sub1", c.sourceType as string);
+  params.set("deep_link_sub2", String(c.id));
+  params.set("deep_link_sub3", c.name);
+  if (c.sourceName) params.set("deep_link_sub4", c.sourceName);
+  return { url: `https://${host}/${tpl}?${params.toString()}`, isCustom: false };
+}
+
 // ── Form state ───────────────────────────────────────────────────────────────
 interface CampaignFormState {
   name: string;
@@ -176,6 +230,10 @@ interface CampaignFormState {
   // a separate button in the row — flipping this on by itself does NOT call
   // Branch (no implicit network calls during a normal save).
   mobileTrackingEnabled: boolean;
+  // AppsFlyer: optional manual OneLink URL override. Empty string means the
+  // dashboard auto-derives the URL from APPSFLYER_ONELINK_TEMPLATE_ID +
+  // APPSFLYER_ONELINK_DOMAIN at display time (no DB write needed).
+  appsflyerOneLinkUrl: string;
 }
 
 function emptyForm(): CampaignFormState {
@@ -188,6 +246,7 @@ function emptyForm(): CampaignFormState {
     notes: "",
     status: "active",
     mobileTrackingEnabled: false,
+    appsflyerOneLinkUrl: "",
   };
 }
 
@@ -201,6 +260,7 @@ function fromCampaign(c: GrowthCampaign): CampaignFormState {
     notes: c.notes ?? "",
     status: (c.status as "active" | "inactive") ?? "active",
     mobileTrackingEnabled: Boolean((c as any).mobileTrackingEnabled),
+    appsflyerOneLinkUrl: ((c as any).appsflyerOneLinkUrl as string | null | undefined) ?? "",
   };
 }
 
@@ -213,6 +273,7 @@ function formToPayload(f: CampaignFormState) {
     notes: f.notes.trim() || null,
     status: f.status,
     mobileTrackingEnabled: !!f.mobileTrackingEnabled,
+    appsflyerOneLinkUrl: f.appsflyerOneLinkUrl.trim() || null,
   };
   const costTrim = f.cost.trim();
   if (costTrim === "") {
@@ -268,6 +329,14 @@ export default function Campaigns() {
   // primary mobile attribution path going forward.
   const { data: smartLinkConfig } = useQuery<SmartLinkConfigSummary>({
     queryKey: ["/api/admin/dashboard/smart-link/config"],
+  });
+
+  // AppsFlyer OneLink config — server-side template + domain. When both are
+  // set, the row buttons can derive a OneLink URL for any campaign with a
+  // referral code without hitting the AppsFlyer API. Failures here are
+  // non-fatal — buttons just hide cleanly when config is missing.
+  const { data: appsflyerConfig } = useQuery<AppsflyerConfigSummary>({
+    queryKey: ["/api/admin/dashboard/appsflyer/config"],
   });
 
   // Track which row is currently regenerating its Branch link so we can show
@@ -339,6 +408,23 @@ export default function Campaigns() {
 
   function onOpenWebLink(link: string) {
     console.log("[campaign-links] open web link:", link);
+  }
+
+  function onCopyAppsflyerLink(_c: CampaignWithMetrics, url: string, isCustom: boolean) {
+    console.log("[campaign-links] copy appsflyer link:", url, isCustom ? "(custom paste)" : "(derived)");
+    navigator.clipboard
+      .writeText(url)
+      .then(() =>
+        toast({
+          title: isCustom ? "AppsFlyer link copied (custom)" : "AppsFlyer link copied",
+          description: url,
+        }),
+      )
+      .catch(() => toast({ title: "Copy failed", description: url, variant: "destructive" as any }));
+  }
+
+  function onOpenAppsflyerLink(url: string, isCustom: boolean) {
+    console.log("[campaign-links] open appsflyer link:", url, isCustom ? "(custom paste)" : "(derived)");
   }
 
   const createMutation = useMutation({
@@ -456,6 +542,7 @@ export default function Campaigns() {
             submitting={createMutation.isPending}
             showBranchToggle={branchUiVisible}
             smartLinkDomain={smartLinkConfig?.smartLinkDomain ?? null}
+            appsflyerConfig={appsflyerConfig}
           />
         </Dialog>
       </header>
@@ -533,6 +620,7 @@ export default function Campaigns() {
                     referralCode: c.referralCode,
                     serverDomain: smartLinkConfig?.smartLinkDomain,
                   });
+                  const appsflyerLink = buildAppsflyerLink(c, appsflyerConfig);
                   const statusActive = c.status === "active";
                   return (
                     <tr key={c.id} className="hover:bg-slate-50" data-testid={`campaign-row-${c.id}`}>
@@ -662,6 +750,44 @@ export default function Campaigns() {
                               </a>
                             </>
                           ) : null}
+                          {/* ── AppsFlyer OneLink (deferred deep link) ── */}
+                          {/* Hidden unless EITHER server config is set OR the   */}
+                          {/* campaign has an admin-pasted OneLink override.      */}
+                          {appsflyerLink ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onCopyAppsflyerLink(c, appsflyerLink.url, appsflyerLink.isCustom)}
+                                title={
+                                  appsflyerLink.isCustom
+                                    ? `Copy AppsFlyer link (custom paste) — ${appsflyerLink.url}`
+                                    : `Copy AppsFlyer OneLink — ${appsflyerLink.url}`
+                                }
+                                aria-label="Copy AppsFlyer link"
+                                data-testid={`copy-appsflyer-link-${c.id}`}
+                              >
+                                <Smartphone className="w-4 h-4 text-violet-600" />
+                              </Button>
+                              <a
+                                href={appsflyerLink.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => onOpenAppsflyerLink(appsflyerLink.url, appsflyerLink.isCustom)}
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                                title={
+                                  appsflyerLink.isCustom
+                                    ? `Open AppsFlyer link (custom paste) — ${appsflyerLink.url}`
+                                    : `Open AppsFlyer OneLink — ${appsflyerLink.url}`
+                                }
+                                aria-label="Open AppsFlyer link"
+                                data-testid={`open-appsflyer-link-${c.id}`}
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            </>
+                          ) : null}
                           {/* ── Mobile (Branch) link controls — hidden unless Branch is enabled ── */}
                           {branchUiVisible && c.mobileTrackingEnabled ? (
                             c.branchLinkUrl ? (
@@ -767,6 +893,7 @@ export default function Campaigns() {
             submitting={updateMutation.isPending}
             showBranchToggle={branchUiVisible}
             smartLinkDomain={smartLinkConfig?.smartLinkDomain ?? null}
+            appsflyerConfig={appsflyerConfig}
           />
         ) : null}
       </Dialog>
@@ -785,6 +912,7 @@ function CampaignFormDialog({
   submitting,
   showBranchToggle,
   smartLinkDomain,
+  appsflyerConfig,
 }: {
   title: string;
   description: string;
@@ -795,6 +923,7 @@ function CampaignFormDialog({
   submitting: boolean;
   showBranchToggle: boolean;
   smartLinkDomain: string | null;
+  appsflyerConfig: AppsflyerConfigSummary | undefined;
 }) {
   const previewLink = form.referralCode.trim()
     ? buildTrackingLink({
@@ -806,6 +935,20 @@ function CampaignFormDialog({
     referralCode: form.referralCode.trim() || null,
     serverDomain: smartLinkDomain,
   });
+  // AppsFlyer preview uses the same builder the row buttons use, fed with a
+  // synthetic campaign shape (id=0 so deep_link_sub2 is "0" while the form
+  // is unsaved — this is fine, the real id replaces it on first save).
+  const previewAppsflyerLink = buildAppsflyerLink(
+    {
+      id: 0,
+      name: form.name.trim() || "(unsaved)",
+      sourceType: form.sourceType,
+      sourceName: form.sourceName.trim() || null,
+      referralCode: form.referralCode.trim().toLowerCase() || null,
+      appsflyerOneLinkUrl: form.appsflyerOneLinkUrl.trim() || null,
+    },
+    appsflyerConfig,
+  );
   const canSubmit = form.name.trim().length > 0 && form.referralCode.trim().length > 0 && !submitting;
 
   return (
@@ -922,6 +1065,29 @@ function CampaignFormDialog({
           />
         </div>
 
+        {/* ── AppsFlyer: optional manual OneLink override ────────────────── */}
+        {/* Always shown — even with no server template configured — because   */}
+        {/* an admin can paste a OneLink URL minted in the AppsFlyer dashboard */}
+        {/* (e.g. a branded short link) which then wins over the auto-derived  */}
+        {/* URL on the row buttons.                                            */}
+        <div>
+          <Label htmlFor="campaign-appsflyer-onelink">
+            AppsFlyer OneLink URL <span className="text-slate-400 font-normal">(optional)</span>
+          </Label>
+          <Input
+            id="campaign-appsflyer-onelink"
+            type="url"
+            value={form.appsflyerOneLinkUrl}
+            onChange={(e) => setForm({ ...form, appsflyerOneLinkUrl: e.target.value })}
+            placeholder="https://ecologic.onelink.me/abc1?…"
+            data-testid="campaign-appsflyer-onelink-input"
+          />
+          <p className="text-[11px] text-slate-400 mt-1">
+            Paste a OneLink URL from the AppsFlyer dashboard to override the auto-derived URL.
+            Leave blank to use the server-configured template.
+          </p>
+        </div>
+
         {/* ── Branch.io: opt-in mobile install tracking ────────────────────── */}
         {/* Hidden by default since Branch is paused. Re-appears when         */}
         {/* BRANCH_INTEGRATION_ENABLED=true on the server.                    */}
@@ -950,8 +1116,24 @@ function CampaignFormDialog({
           </div>
         ) : null}
 
-        {(previewLink || previewSmartLink) ? (
+        {(previewLink || previewSmartLink || previewAppsflyerLink) ? (
           <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2 break-all">
+            {previewAppsflyerLink ? (
+              <div>
+                <div className="text-slate-500 mb-1">
+                  AppsFlyer OneLink preview{previewAppsflyerLink.isCustom ? " (custom paste)" : ""}:
+                </div>
+                <a
+                  href={previewAppsflyerLink.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-violet-700 hover:text-violet-800 underline-offset-2 hover:underline"
+                  data-testid="campaign-appsflyer-link-preview"
+                >
+                  {previewAppsflyerLink.url}
+                </a>
+              </div>
+            ) : null}
             {previewSmartLink ? (
               <div>
                 <div className="text-slate-500 mb-1">

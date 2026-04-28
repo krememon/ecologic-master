@@ -318,6 +318,21 @@ export function registerDashboardRoutes(app: Express): void {
     }
   });
 
+  // ── AppsFlyer OneLink config probe (admin) ───────────────────────────────
+  // Surfaces the OneLink template + domain so the dashboard can derive a
+  // OneLink URL per campaign client-side. Phase 1 is read-only — admins
+  // either rely on the auto-derived URL or paste a custom branded URL into
+  // the campaign's appsflyerOneLinkUrl field on save. No secrets returned.
+  app.get("/api/admin/dashboard/appsflyer/config", ...gate, async (_req: Request, res: Response) => {
+    try {
+      const { getAppsflyerPublicConfigSummary } = await import("../appsflyer");
+      res.json(getAppsflyerPublicConfigSummary());
+    } catch (err) {
+      console.error("[dashboard-appsflyer] config probe error:", err);
+      res.status(500).json({ message: "Failed to load AppsFlyer config" });
+    }
+  });
+
   // ── Branch.io: generate (or regenerate) a deep link for a campaign ───────
   //
   // POST /api/admin/dashboard/campaigns/:id/branch-link
