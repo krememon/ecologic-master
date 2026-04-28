@@ -1168,6 +1168,7 @@ export function setupAuth(app: Express) {
     const returnTo = req.query.returnTo as string || "";
 
     console.log(`[auth/google][debug] host=${req.headers.host} x-fwd-host=${req.headers["x-forwarded-host"] || "-"} origin=${req.headers.origin || "-"} referer=${req.headers.referer || "-"} platform=${platform}`);
+    console.log(`[signup-flow] request host: ${req.headers.host}`);
 
     let state: string;
     if (platform === "ios" && nonce) {
@@ -1193,11 +1194,44 @@ export function setupAuth(app: Express) {
     // 3. APP_BASE_URL — the Replit deployment URL, used only as a last resort
     const requestBase = `${req.protocol}://${req.get("host")}`;
     const productionBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL;
-    if (productionBase) {
+
+    // ── Self-hosted OAuth detection ──────────────────────────────────────────
+    // Real subdomains of ecologicc.com (staging.ecologicc.com,
+    // staging-dashboard.ecologicc.com, app.ecologicc.com, …) host the
+    // Google OAuth flow themselves so the callback returns to the SAME host
+    // the user signed in on. Only Replit canvas/preview hostnames
+    // (*.replit.dev, *.replit.app) and localhost are trampolined through the
+    // canonical APP_PUBLIC_BASE_URL — those hostnames are not registered as
+    // authorized redirect URIs in Google Cloud Console, so they must borrow
+    // the production callback.
+    //
+    // An optional env override OAUTH_SELF_HOSTS (comma-separated hostnames)
+    // forces specific hosts into self-hosted mode without touching code.
+    const currentHost = (req.headers.host || "").toLowerCase();
+    const currentHostname = currentHost.split(":")[0];
+    const isLocalhost = currentHostname === "localhost" || currentHostname.startsWith("127.0.0.1");
+    const isReplitPreview =
+      currentHostname.endsWith(".replit.dev") || currentHostname.endsWith(".replit.app");
+    const selfHostOverride = (process.env.OAUTH_SELF_HOSTS || "")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    const isEcologicSubdomain =
+      currentHostname === "ecologicc.com" || currentHostname.endsWith(".ecologicc.com");
+    const selfHostsOAuth =
+      !isLocalhost &&
+      !isReplitPreview &&
+      (isEcologicSubdomain || selfHostOverride.includes(currentHostname));
+
+    console.log(
+      `[signup-flow] OAuth host decision — host=${currentHost} ` +
+        `selfHostsOAuth=${selfHostsOAuth} (ecologic=${isEcologicSubdomain} ` +
+        `replit=${isReplitPreview} localhost=${isLocalhost} override=${selfHostOverride.includes(currentHostname)})`
+    );
+
+    if (productionBase && !selfHostsOAuth) {
       try {
         const prodHost = new URL(productionBase).host;
-        const currentHost = req.headers.host || "";
-        const isLocalhost = currentHost.includes("localhost") || currentHost.includes("127.0.0.1");
         if (!isLocalhost && currentHost !== prodHost) {
           const qs = new URLSearchParams();
           if (platform && platform !== "web") qs.set("platform", platform);
@@ -1243,12 +1277,21 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       } catch (_) {}
     }
 
-    // Resolve the base URL: prefer APP_PUBLIC_BASE_URL, then the request-derived origin,
-    // then APP_BASE_URL as a last resort. This ensures the Google consent screen always
-    // shows app.ecologicc.com regardless of which host the internal request arrived on.
-    const resolvedBase = productionBase || requestBase;
+    // Resolve the base URL:
+    //   • Self-hosted real ecologicc subdomains (staging.ecologicc.com,
+    //     app.ecologicc.com, …) → use the current request host so Google
+    //     redirects the user back to the SAME host they signed in on.
+    //   • Replit canvas/preview/localhost → the trampoline above already
+    //     forwarded them to APP_PUBLIC_BASE_URL; if we somehow reach here
+    //     anyway (e.g. trampoline disabled / no productionBase) fall back
+    //     to APP_PUBLIC_BASE_URL when present so the Google consent screen
+    //     still shows the branded domain, otherwise use requestBase.
+    const resolvedBase = selfHostsOAuth
+      ? requestBase
+      : (productionBase || requestBase);
     const callbackURL = `${resolvedBase}/api/auth/google/callback`;
-    console.log(`[OAuth] baseUrl resolved to: ${resolvedBase}`);
+    console.log(`[OAuth] baseUrl resolved to: ${resolvedBase} (selfHostsOAuth=${selfHostsOAuth})`);
+    console.log(`[signup-flow] [GoogleAuth] callback URL chosen: ${callbackURL}`);
     console.log(`[auth/google][debug] starting OAuth: host=${req.headers.host} requestBase=${requestBase} state=${state.substring(0, 12)} callbackURL=${callbackURL} platform=${platform} returnTo=${returnTo || "(none)"}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],

@@ -1,0 +1,90 @@
+Fix Google auth using the production callback/domain while testing on staging.
+
+Current issue:
+On staging.ecologicc.com, Google sign-in is opening the Google popup but the callback is using app.ecologicc.com instead of staging.ecologicc.com.
+
+Console errors:
+- senderOrigin=https://app.ecologicc.com
+- Access to fetch at 'https://app.ecologicc.com/api/auth/exchange-code' from origin 'https://staging.ecologicc.com' has been blocked by CORS
+- POST https://app.ecologicc.com/api/auth/exchange-code net::ERR_FAILED
+- /api/auth/user remains 401 after Google popup
+
+Goal:
+When testing on staging.ecologicc.com, Google auth must use staging.ecologicc.com for callback/exchange, not app.ecologicc.com.
+
+Expected staging behavior:
+Google auth callback should be:
+https://staging.ecologicc.com/api/auth/google/callback
+
+Exchange endpoint should be:
+https://staging.ecologicc.com/api/auth/exchange-code
+
+Expected production behavior:
+Google auth callback should remain:
+https://app.ecologicc.com/api/auth/google/callback
+
+Please investigate and fix:
+
+1. Find where GoogleAuth callbackURL is being set.
+Current logs show:
+[GoogleAuth] callbackURL: https://app.ecologicc.com/api/auth/google/callback
+
+That is wrong for staging.
+
+2. Make Google callback/base URL environment-aware.
+
+For staging, it should use:
+APP_PUBLIC_BASE_URL=https://staging.ecologicc.com
+or
+ECOLOGIC_PUBLIC_URL=https://staging.ecologicc.com
+
+For production, it should use:
+APP_PUBLIC_BASE_URL=https://app.ecologicc.com
+or
+ECOLOGIC_PUBLIC_URL=https://app.ecologicc.com
+
+3. Make sure staging Replit secrets do not have app.ecologicc.com accidentally overriding staging.
+
+Check these env vars:
+- ECOLOGIC_PUBLIC_URL
+- APP_PUBLIC_BASE_URL
+- APP_BASE_URL
+- VITE_APP_BASE_URL
+- GOOGLE_CALLBACK_URL
+- GOOGLE_REDIRECT_URI
+- any hardcoded app.ecologicc.com fallback in Google auth
+
+4. If a GOOGLE_CALLBACK_URL or GOOGLE_REDIRECT_URI env var exists, staging should use:
+https://staging.ecologicc.com/api/auth/google/callback
+
+5. Update the frontend popup/exchange logic so when the opener origin is staging.ecologicc.com, it posts/exchanges against staging.ecologicc.com, not app.ecologicc.com.
+
+6. Do not loosen CORS broadly.
+This should not be fixed by allowing everything.
+The real fix is staging auth should stay on staging.
+
+7. Confirm Google OAuth authorized redirect URIs include:
+https://staging.ecologicc.com/api/auth/google/callback
+
+If this is missing in Google Cloud Console, tell me clearly.
+
+8. Confirm after fix:
+- staging Google popup callback uses staging.ecologicc.com
+- POST /api/auth/exchange-code goes to staging.ecologicc.com
+- /api/auth/user returns 200 after sign-in
+- Owner signup continues to /onboarding/industry
+- referral attribution still stays saved
+
+Important:
+Do not break production Google login.
+Do not break app.ecologicc.com.
+Do not break staging-dashboard.ecologicc.com login.
+Do not change Stripe, Apple, Google Play, billing, or jobs.
+
+Deliverables:
+- Root cause
+- Files changed
+- Env vars that need to be changed in staging
+- Exact Google callback URL after fix
+- Whether Google Cloud Console needs a new authorized redirect URI
+- Testing steps
