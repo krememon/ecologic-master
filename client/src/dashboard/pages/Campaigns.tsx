@@ -155,18 +155,38 @@ export default function Campaigns() {
 
   const createMutation = useMutation({
     mutationFn: async (form: CampaignFormState) => {
-      const res = await apiRequest("POST", "/api/admin/dashboard/campaigns", formToPayload(form));
-      return res.json();
+      const payload = formToPayload(form);
+      console.log("[dashboard-campaigns] create payload", payload);
+      const res = await apiRequest("POST", "/api/admin/dashboard/campaigns", payload);
+      const json = await res.json();
+      console.log("[dashboard-campaigns] create response", { status: res.status, body: json });
+      return json;
     },
-    onSuccess: () => {
+    onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/dashboard/campaigns"] });
       setCreateOpen(false);
       setCreateForm(emptyForm());
-      toast({ title: "Campaign created" });
+      toast({ title: "Campaign created", description: row?.name ? `“${row.name}” is live.` : undefined });
     },
     onError: async (err: any) => {
-      const msg = (err?.message || "Failed to create campaign").toString();
-      toast({ title: "Could not create campaign", description: msg, variant: "destructive" });
+      const raw = (err?.message || "Failed to create campaign").toString();
+      console.error("[dashboard-campaigns] create error", raw);
+      let title = "Could not create campaign";
+      let description = raw;
+      // apiRequest throws messages of the form "STATUS: BODY".
+      if (/^403:/.test(raw)) {
+        title = "Permission denied";
+        description = "You do not have permission to create campaigns.";
+      } else if (/^401:/.test(raw)) {
+        title = "Not signed in";
+        description = "Your session has ended — please sign in again.";
+      } else if (/DUPLICATE_REFERRAL_CODE|already in use/i.test(raw)) {
+        title = "Duplicate referral code";
+        description = "That referral code already exists. Pick a different one.";
+      } else if (/Validation failed/i.test(raw)) {
+        description = "One of the fields is invalid. Check the form and try again.";
+      }
+      toast({ title, description, variant: "destructive" });
     },
   });
 

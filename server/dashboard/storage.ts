@@ -63,15 +63,17 @@ export interface CampaignWithMetrics extends GrowthCampaign {
 }
 
 export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetrics[]> {
-  const rows = (await db.execute<{
-    id: number;
-    signups: string;
-  }>(sql`
+  // NOTE: `db.execute()` on the neon-serverless Pool driver returns a
+  // QueryResult object — the rows live on `.rows`, NOT on the result itself.
+  // Destructuring or iterating the result directly throws
+  // "TypeError: (intermediate value) is not iterable".
+  const result = await db.execute<{ id: number; signups: string }>(sql`
     SELECT campaign_id AS id, count(*)::text AS signups
     FROM growth_subscribers
     WHERE campaign_id IS NOT NULL
     GROUP BY campaign_id
-  `)) as unknown as Array<{ id: number; signups: string }>;
+  `);
+  const rows = (result as any).rows ?? [];
 
   const counts = new Map<number, number>();
   for (const r of rows) counts.set(Number(r.id), Number(r.signups));
@@ -265,7 +267,9 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   // is small, and individual aggregates so the SQL stays portable. If the
   // dataset grows, fold these into a single CTE.
 
-  const [counts] = await db.execute<{
+  // NOTE: neon-serverless `db.execute()` returns a QueryResult — rows are on
+  // `.rows`, the result itself is NOT an iterable.
+  const countsResult = await db.execute<{
     total: string;
     trialing: string;
     paid: string;
@@ -281,24 +285,21 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','trialing','past_due')), 0)::text AS current_mrr,
       coalesce(sum(total_revenue), 0)::text AS total_revenue
     FROM growth_subscribers
-  `) as unknown as Array<{
-    total: string;
-    trialing: string;
-    paid: string;
-    canceled: string;
-    current_mrr: string | null;
-    total_revenue: string | null;
-  }>;
+  `);
+  const counts = ((countsResult as any).rows ?? [])[0] as
+    | { total: string; trialing: string; paid: string; canceled: string; current_mrr: string | null; total_revenue: string | null; }
+    | undefined;
 
-  const topSourceRows = (await db.execute<{ source_type: string | null; cnt: string }>(sql`
+  const topSourceResult = await db.execute<{ source_type: string | null; cnt: string }>(sql`
     SELECT source_type, count(*)::text AS cnt
     FROM growth_subscribers
     GROUP BY source_type
     ORDER BY count(*) DESC NULLS LAST
     LIMIT 1
-  `)) as unknown as Array<{ source_type: string | null; cnt: string }>;
+  `);
+  const topSourceRows = ((topSourceResult as any).rows ?? []) as Array<{ source_type: string | null; cnt: string }>;
 
-  const topCampaignRows = (await db.execute<{ campaign_id: number | null; name: string | null; cnt: string }>(sql`
+  const topCampaignResult = await db.execute<{ campaign_id: number | null; name: string | null; cnt: string }>(sql`
     SELECT s.campaign_id, c.name, count(*)::text AS cnt
     FROM growth_subscribers s
     LEFT JOIN growth_campaigns c ON c.id = s.campaign_id
@@ -306,7 +307,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     GROUP BY s.campaign_id, c.name
     ORDER BY count(*) DESC
     LIMIT 1
-  `)) as unknown as Array<{ campaign_id: number | null; name: string | null; cnt: string }>;
+  `);
+  const topCampaignRows = ((topCampaignResult as any).rows ?? []) as Array<{ campaign_id: number | null; name: string | null; cnt: string }>;
 
   const c = counts || ({} as any);
   return {
@@ -342,7 +344,9 @@ export interface SourceRow {
 }
 
 export async function getSourceBreakdown(): Promise<SourceRow[]> {
-  const rows = (await db.execute<{
+  // NOTE: neon-serverless `db.execute()` returns a QueryResult — rows are on
+  // `.rows`, the result itself is NOT an iterable / does NOT have `.map`.
+  const result = await db.execute<{
     source_type: string | null;
     subs: string;
     trialing: string;
@@ -362,7 +366,8 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     FROM growth_subscribers
     GROUP BY source_type
     ORDER BY count(*) DESC
-  `)) as unknown as Array<{
+  `);
+  const rows = ((result as any).rows ?? []) as Array<{
     source_type: string | null;
     subs: string;
     trialing: string;

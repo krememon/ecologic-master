@@ -1,0 +1,74 @@
+Debug why creating a campaign on staging-dashboard.ecologicc.com does not save/create the campaign.
+
+Current issue:
+I filled out the Campaigns create form and clicked Create, but the campaign did not appear to be created. No campaign showed up in the list.
+
+Context:
+This is in STAGING.
+Dashboard domain:
+https://staging-dashboard.ecologicc.com
+
+Campaign API routes should be:
+POST /api/admin/dashboard/campaigns
+GET /api/admin/dashboard/campaigns
+
+Access is gated by DASHBOARD_ADMIN_EMAILS.
+
+Please investigate and fix.
+
+Check these areas:
+
+1. Frontend submit handler
+- Confirm the Create button is actually submitting the form.
+- Confirm there is no disabled/loading state blocking the request.
+- Add clear console logs:
+  [dashboard-campaigns] create clicked
+  [dashboard-campaigns] create payload
+  [dashboard-campaigns] create response
+
+2. Network request
+- Confirm the frontend is calling the correct API:
+  POST /api/admin/dashboard/campaigns
+- Confirm it is sending credentials/cookies correctly.
+- Confirm it is not accidentally calling the old/non-admin endpoint.
+
+3. Auth/admin gate
+- Confirm the POST request is not returning 401 or 403.
+- If it returns 403, confirm DASHBOARD_ADMIN_EMAILS includes my logged-in email.
+- Make the UI show a clear error:
+  “You do not have permission to create campaigns.”
+
+4. Validation
+- Confirm Zod validation matches the form payload.
+- Check if fields like cost, sourceType, referralCode, or status are being rejected.
+- If validation fails, show the exact validation error in the UI.
+
+5. Database insert
+- Confirm the insert into growth_campaigns succeeds.
+- Confirm referralCode is normalized lowercase before insert.
+- Confirm duplicate referral code errors are handled cleanly.
+- If duplicate code, show:
+  “That referral code already exists.”
+
+6. UI refresh
+- After successful create, close/reset the form and refetch campaigns.
+- The new campaign should appear immediately without requiring a page refresh.
+- Also show a success toast/message:
+  “Campaign created.”
+
+7. Server logs
+Add/confirm logs:
+[dashboard-campaigns] creating campaign
+[dashboard-campaigns] campaign created
+[dashboard-campaigns] validation failed
+[dashboard-campaigns] unauthorized
+[dashboard-campaigns] duplicate referral code
+[dashboard-campaigns] database insert failed
+
+Deliverables:
+- Root cause
+- Files changed
+- Exact API response before fix
+- Exact API response after fix
+- Confirmation that creating a campaign works on staging
+- Testing steps
