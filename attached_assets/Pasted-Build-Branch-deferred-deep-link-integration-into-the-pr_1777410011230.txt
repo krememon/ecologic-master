@@ -1,0 +1,367 @@
+Build Branch deferred deep link integration into the private EcoLogic dashboard in STAGING only.
+
+Goal:
+I want to create mobile campaign links from my EcoLogic dashboard, copy the link, send it to creators, and track:
+- clicks
+- installs
+- app opens
+- signups
+- subscriptions
+- revenue
+
+The user experience should be:
+
+Creator shares one link:
+https://go.ecologicc.com/joeplumbing
+
+If user has app installed:
+→ opens EcoLogic app
+→ app receives referral/campaign data
+→ attribution is saved
+→ onboarding prefilled
+
+If user does not have app:
+→ iPhone goes to App Store
+→ Android goes to Google Play
+→ user installs EcoLogic
+→ first app open receives referral/campaign data from Branch
+→ attribution is saved
+→ onboarding prefilled
+→ Apple/Google subscription later connects to the same campaign in dashboard
+
+Important:
+Build in STAGING only.
+Do not break existing web campaign links.
+Do not break Stripe, Apple IAP, Google Play IAP, onboarding, account deletion, dashboard login, or normal customer app routing.
+
+PART 1 — Branch setup assumptions
+
+We will use Branch for deferred deep linking.
+
+Add support for these environment variables:
+
+BRANCH_KEY
+BRANCH_SECRET
+BRANCH_API_KEY if required by the selected Branch API
+BRANCH_APP_ID if required
+BRANCH_LINK_DOMAIN=go.ecologicc.com
+VITE_BRANCH_KEY if needed client-side
+BRANCH_WEBHOOK_SECRET if Branch supports webhook signature verification in our setup
+
+For staging, use Branch test/dev keys if available.
+
+If any required Branch dashboard setup cannot be done from code, tell me exactly what I need to configure manually in Branch:
+- iOS app
+- Android app
+- App Store URL
+- Google Play URL
+- custom domain go.ecologicc.com
+- Universal Links / Associated Domains
+- Android App Links
+- Branch webhooks
+
+PART 2 — Database changes
+
+Add Branch/mobile tracking fields to growth_campaigns if not already available:
+
+- branchLinkUrl
+- branchLinkId
+- branchAlias
+- mobileTrackingEnabled
+- branchChannel
+- branchFeature
+- branchCampaign
+- branchCreatedAt
+- branchUpdatedAt
+
+Add a new table for mobile link events:
+
+growth_mobile_events
+
+Fields:
+- id
+- campaignId
+- referralCode
+- sourceType
+- sourceName
+- branchLinkUrl
+- eventType
+  - click
+  - install
+  - open
+  - signup
+  - subscribe
+  - unknown
+- platform
+  - ios
+  - android
+  - web
+  - unknown
+- branchEventId
+- branchIdentityId
+- deviceId if safely available
+- userId if known
+- companyId if known
+- rawPayload jsonb
+- createdAt
+
+Important:
+Do not store sensitive personal/payment data in rawPayload if avoidable. Keep rawPayload minimal or sanitized.
+
+PART 3 — Dashboard Campaigns page
+
+Update Campaigns page so each campaign has:
+
+- Web tracking link
+- Mobile app/install link
+
+Example:
+
+Web link:
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Mobile link:
+https://go.ecologicc.com/joeplumbing
+
+Buttons:
+- Copy Web Link
+- Copy Mobile Link
+- Open Mobile Link
+- Regenerate Branch Link if needed
+
+When creating a campaign, add a toggle:
+
+Enable mobile install tracking with Branch
+
+If enabled:
+- call our backend to create a Branch link
+- save the returned Branch URL and identifiers to growth_campaigns
+
+If Branch API fails:
+- campaign should still be created
+- show warning: “Campaign created, but mobile link failed. Try regenerating Branch link.”
+- do not block normal web tracking links
+
+PART 4 — Branch link creation backend
+
+Create admin-only route:
+
+POST /api/admin/dashboard/campaigns/:id/branch-link
+
+This should:
+1. Load the campaign
+2. Build Branch link data with:
+   - referralCode
+   - sourceType
+   - sourceName
+   - campaignId
+   - campaignName
+3. Request a Branch deep link through Branch API
+4. Prefer custom domain:
+   go.ecologicc.com
+5. Prefer alias:
+   referralCode
+   Example:
+   go.ecologicc.com/joeplumbing
+6. Save returned Branch link fields to growth_campaigns
+7. Return the Branch link URL
+
+Branch metadata should include:
+- $deeplink_path = signup?source=SOURCE_TYPE&ref=REFERRAL_CODE
+- referralCode
+- sourceType
+- sourceName
+- campaignId
+- campaignName
+- dashboardCampaignId
+- webFallbackUrl = https://staging.ecologicc.com/signup?source=SOURCE_TYPE&ref=REFERRAL_CODE
+- iosFallbackUrl = App Store URL
+- androidFallbackUrl = Google Play URL
+
+Use official Branch API patterns for creating tagged links. Branch supports creating links through its Deep Linking API with campaign/channel tags.
+
+PART 5 — Mobile app Branch SDK integration
+
+Integrate Branch into the native Capacitor app if not already installed.
+
+Check current Capacitor setup.
+
+Need support for:
+- iOS Branch SDK
+- Android Branch SDK
+- Capacitor listener for Branch deep link data
+
+When app opens from a Branch link, extract:
+
+- referralCode
+- sourceType
+- campaignId
+- campaignName
+
+Then save into the same attribution storage we already use for web:
+
+{
+  referralCode,
+  sourceType,
+  campaignParam: campaignId,
+  branchLinkUrl,
+  firstSeenAt,
+  lastSeenAt,
+  landingPath: "branch_deferred_deep_link"
+}
+
+Rules:
+- first-touch attribution still wins
+- do not overwrite existing attribution if already set
+- if no existing attribution, save Branch attribution
+- onboarding should prefill exactly like web referral links
+
+Add logs:
+[branch-attribution] Branch init
+[branch-attribution] Branch params received
+[branch-attribution] saved attribution
+[branch-attribution] existing attribution kept
+[branch-attribution] no clicked Branch link
+
+PART 6 — Branch webhook endpoint
+
+Create endpoint:
+
+POST /api/webhooks/branch
+
+Purpose:
+Receive Branch events such as clicks, installs, opens, and any available conversion events.
+
+Security:
+- Verify Branch webhook signature/secret if available in our setup.
+- If Branch does not provide a signature for our plan/setup, require a shared secret token in the webhook URL or header.
+- Do not leave this endpoint fully open without protection.
+
+When webhook received:
+- Parse campaign/referral metadata from payload
+- Match growth_campaigns by:
+  1. campaignId/dashboardCampaignId
+  2. referralCode
+  3. branchLinkUrl
+- Insert row into growth_mobile_events
+- Increment/aggregate counts in dashboard queries if needed
+
+Event mappings:
+- click → click
+- install → install
+- open/reopen → open
+- unknown/unmapped → unknown
+
+PART 7 — Dashboard metrics
+
+Update Campaigns page to show mobile metrics:
+
+Columns:
+- Web link
+- Mobile link
+- Clicks
+- Installs
+- Opens
+- Signups
+- Paid subscribers
+- MRR
+
+If Branch webhook data is available:
+- clicks/install/open counts come from growth_mobile_events
+
+Signups/subscribers/MRR still come from growth_subscribers.
+
+Add a Campaign detail view or drawer if simple:
+- campaign info
+- web link
+- mobile link
+- clicks
+- installs
+- app opens
+- signups
+- paid subscribers
+- revenue/MRR
+- recent mobile events
+
+PART 8 — Connect app signup/subscription to Branch attribution
+
+When a user signs up after Branch attribution:
+- growth_subscribers should preserve:
+  - sourceType
+  - sourceName
+  - referralCode
+  - campaignId
+
+When Apple/Google subscription validation runs:
+- it should update the same growth_subscribers row
+- platform should become apple or google_play
+- status/MRR should update as already implemented
+
+This means:
+Branch link → install → signup → Apple/Google subscription → dashboard campaign revenue
+
+PART 9 — Fallback behavior
+
+If Branch is not configured:
+- Campaigns page should still generate web links
+- Mobile link area should show:
+  “Branch not configured”
+- Do not break campaign creation
+
+If user opens mobile link on desktop:
+- it should fallback to web signup link
+
+If Branch does not return attribution after install:
+- onboarding manual referral code still works as backup
+
+PART 10 — Manual setup checklist
+
+After implementation, give me exact manual setup steps for Branch:
+
+- Branch account/app setup
+- iOS bundle ID
+- Android package name
+- App Store URL
+- Google Play URL
+- custom domain go.ecologicc.com
+- DNS records needed
+- iOS Associated Domains entry
+- Android intent/app links setup
+- Branch webhook URL:
+  https://staging.ecologicc.com/api/webhooks/branch
+- Which Branch keys/secrets go into Replit env vars
+
+PART 11 — Testing in staging
+
+Give testing steps:
+
+1. Create campaign Joe Plumbing.
+2. Enable Branch mobile tracking.
+3. Confirm mobile link is generated:
+   https://go.ecologicc.com/joeplumbing
+4. Tap link on iPhone with app installed.
+5. Confirm app opens and attribution saves.
+6. Tap link on iPhone without app installed.
+7. Confirm App Store opens.
+8. Install app.
+9. Open app.
+10. Confirm Branch deferred data is received if available.
+11. Complete signup.
+12. Confirm dashboard subscriber shows Joe Plumbing.
+13. Subscribe through Apple.
+14. Confirm dashboard platform Apple and campaign revenue updates.
+15. Repeat Android path with Google Play.
+16. Confirm Branch webhook events appear in Campaign metrics.
+
+Deliverables:
+- Files changed
+- Env vars needed
+- Branch manual setup checklist
+- How dashboard creates Branch links
+- How mobile app receives Branch attribution
+- How Branch webhooks are secured
+- How campaign metrics are calculated
+- Testing steps
+
+Important:
+If anything requires manual Branch dashboard setup before code can fully work, stop and tell me exactly what to set up instead of guessing.
