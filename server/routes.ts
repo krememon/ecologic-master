@@ -21803,6 +21803,17 @@ window.location.href = '${deepLink}';
         customer: sessionCustomerId,
       });
 
+      const { syncStripeSubscriptionToGrowthSubscriber: syncGrowthVerify } = await import('./dashboard/storage');
+      await syncGrowthVerify(company.id, {
+        id: fullSub.id,
+        status: fullSub.status,
+        customer: sessionCustomerId ?? null,
+        items: fullSub.items as any,
+        trial_start: (fullSub as any).trial_start ?? null,
+        trial_end: (fullSub as any).trial_end ?? null,
+        metadata: fullSub.metadata as Record<string, string>,
+      });
+
       console.log(`[billing/verify-session] ✅ synced companyId=${company.id} subId=${fullSub.id} status=${fullSub.status}`);
       return res.json({ ok: true, synced: true, status: fullSub.status, subId: fullSub.id });
     } catch (err: any) {
@@ -21886,6 +21897,17 @@ window.location.href = '${deepLink}';
         items: updatedSub.items,
         metadata: updatedSub.metadata as Record<string, string>,
         customer: typeof updatedSub.customer === 'string' ? updatedSub.customer : undefined,
+      });
+
+      const { syncStripeSubscriptionToGrowthSubscriber: syncGrowthSwitch } = await import('./dashboard/storage');
+      await syncGrowthSwitch(company.id, {
+        id: updatedSub.id,
+        status: updatedSub.status,
+        customer: typeof updatedSub.customer === 'string' ? updatedSub.customer : null,
+        items: updatedSub.items as any,
+        trial_start: (updatedSub as any).trial_start ?? null,
+        trial_end: (updatedSub as any).trial_end ?? null,
+        metadata: updatedSub.metadata as Record<string, string>,
       });
 
       console.log(`[billing/switch-plan] ✅ done — company=${company.id} now on plan=${planKey} sub=${updatedSub.id}`);

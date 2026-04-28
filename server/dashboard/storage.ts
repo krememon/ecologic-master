@@ -7,17 +7,20 @@
  */
 
 import { db } from "../db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import {
   growthSubscribers,
   growthCampaigns,
   growthCreators,
+  companies,
   type GrowthSubscriber,
   type GrowthCampaign,
   type GrowthCreator,
   type InsertGrowthCampaign,
   type InsertGrowthCreator,
 } from "@shared/schema";
+import { subscriptionPlans } from "@shared/subscriptionPlans";
+import { getPlanKeyForPriceId } from "../billingService";
 
 /** Normalize a referral code: trim, lowercase, collapse internal whitespace. */
 export function normalizeReferralCode(code: string | null | undefined): string | null {
@@ -249,6 +252,203 @@ export async function saveOrKeepSubscriberAttribution(
   }
 }
 
+// ── Stripe subscription → growth_subscribers sync ──────────────────────────
+//
+// Keeps the unified `growth_subscribers` row in step with the canonical
+// Stripe subscription on `companies`. Called from every Stripe billing
+// webhook (customer.subscription.*, invoice.paid, invoice.payment_failed)
+// after the existing `syncSubscriptionToCompany` finishes its work, so the
+// source-of-truth (companies) is always written first.
+//
+// Behavior:
+//   • If no growth_subscribers row exists for this companyId, do nothing —
+//     this only enriches existing attribution rows. We don't want to create
+//     orphan subscriber rows for companies that came in without attribution.
+//   • Trial: status=trialing, monthlyRevenue=0, plan=<planKey>, trialStartedAt
+//     stamped once. Counted as "Trialing" in the dashboard, NOT as MRR.
+//   • Paid: status=active, monthlyRevenue=<plan price>, becamePaidAt stamped
+//     once on first transition into a paid status.
+//   • Canceled / past_due / unpaid / expired: status passed through, monthly
+//     revenue zeroed for canceled/expired, canceledAt stamped on canceled.
+//   • onboardingCompletedAt stamped once when the row is first observed with
+//     a Stripe subscription — by that point the user has gone through the
+//     full onboarding wizard (they wouldn't have a subscription otherwise).
+//
+// Always best-effort: errors are logged but never thrown.
+export interface StripeSubSyncInput {
+  id: string;
+  status: string;
+  customer?: string | null;
+  items?: { data: Array<{ price: { id: string } }> };
+  trial_start?: number | null;
+  trial_end?: number | null;
+  metadata?: Record<string, string> | null;
+}
+
+const PAID_STATUSES = new Set(["active", "past_due"]);
+const CLOSED_STATUSES = new Set(["canceled", "expired", "unpaid"]);
+
+function mapStripeStatusToGrowth(status: string):
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "unpaid"
+  | "expired"
+  | "unknown" {
+  switch (status) {
+    case "trialing":
+    case "active":
+    case "past_due":
+    case "canceled":
+    case "unpaid":
+      return status as any;
+    case "incomplete_expired":
+      // Stripe's terminal "trial/setup never paid" state — treat as expired
+      // so we zero MRR and don't keep counting it.
+      return "expired";
+    case "incomplete":
+      return "unknown";
+    default:
+      return "unknown";
+  }
+}
+
+export async function syncStripeSubscriptionToGrowthSubscriber(
+  companyId: number,
+  sub: StripeSubSyncInput,
+): Promise<void> {
+  try {
+    console.log(
+      `[growth-dashboard] syncing Stripe subscription to growth_subscribers companyId=${companyId} subId=${sub.id} status=${sub.status}`
+    );
+
+    const [existing] = await db
+      .select()
+      .from(growthSubscribers)
+      .where(eq(growthSubscribers.companyId, companyId))
+      .limit(1);
+
+    if (!existing) {
+      console.log(
+        `[growth-dashboard] no growth_subscriber found for Stripe subscription companyId=${companyId} subId=${sub.id} — skipping`
+      );
+      return;
+    }
+    console.log(
+      `[growth-dashboard] found growth_subscriber for company/user subscriberId=${existing.id} companyId=${companyId}`
+    );
+
+    const status = mapStripeStatusToGrowth(sub.status);
+    const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+
+    // Plan resolution mirrors syncSubscriptionToCompany: priceId → metadata → existing.
+    // Otherwise a valid event with an unknown price would clear the plan and zero MRR.
+    const planKeyFromPrice = priceId ? getPlanKeyForPriceId(priceId) : null;
+    const planKeyFromMeta = sub.metadata?.planKey ?? null;
+    const planKey: string | null =
+      planKeyFromPrice || planKeyFromMeta || existing.plan || null;
+    const planPrice = planKey ? subscriptionPlans[planKey as keyof typeof subscriptionPlans]?.price ?? null : null;
+
+    const updates: Partial<typeof growthSubscribers.$inferInsert> & { updatedAt: Date } = {
+      platform: "stripe" as any,
+      subscriptionStatus: status as any,
+      stripeCustomerId: typeof sub.customer === "string" ? sub.customer : existing.stripeCustomerId ?? null,
+      stripeSubscriptionId: sub.id,
+      updatedAt: new Date(),
+    };
+
+    if (planKey) updates.plan = planKey;
+
+    // Monthly revenue rules — explicit for every status to avoid stale paid MRR
+    // surviving a transition into a non-paid state:
+    //   trialing                     → $0 (don't count trial dollars yet)
+    //   active / past_due            → plan price (or 0 if unknown)
+    //   canceled / expired / unpaid  → $0
+    //   unknown / incomplete         → $0 (we don't know if it's billable)
+    if (status === "trialing") {
+      updates.monthlyRevenue = "0" as any;
+    } else if (PAID_STATUSES.has(status)) {
+      updates.monthlyRevenue = String(planPrice ?? 0) as any;
+    } else {
+      // CLOSED_STATUSES + 'unknown' all collapse to $0
+      updates.monthlyRevenue = "0" as any;
+    }
+
+    // Lifecycle stamps (only set once)
+    if (status === "trialing" && !existing.trialStartedAt) {
+      updates.trialStartedAt = sub.trial_start ? new Date(sub.trial_start * 1000) : new Date();
+    }
+    if (PAID_STATUSES.has(status) && !existing.becamePaidAt) {
+      updates.becamePaidAt = new Date();
+    }
+    if (status === "canceled" && !existing.canceledAt) {
+      updates.canceledAt = new Date();
+    }
+    if (!existing.onboardingCompletedAt) {
+      updates.onboardingCompletedAt = new Date();
+      console.log(
+        `[growth-dashboard] onboardingCompletedAt set subscriberId=${existing.id} companyId=${companyId}`
+      );
+    }
+
+    await db
+      .update(growthSubscribers)
+      .set(updates as any)
+      .where(eq(growthSubscribers.id, existing.id));
+
+    console.log(
+      `[growth-dashboard] updated platform/plan/status/mrr subscriberId=${existing.id} ` +
+        `platform=stripe plan=${planKey ?? "—"} status=${status} ` +
+        `mrr=${updates.monthlyRevenue ?? "(unchanged)"}`
+    );
+  } catch (err) {
+    console.error("[growth-dashboard] sync error (ignored):", err);
+  }
+}
+
+/**
+ * One-time backfill: for every growth_subscribers row that has a matching
+ * company with a Stripe subscription, sync the row from the company's
+ * canonical billing fields. Safe to call repeatedly — uses the same idempotent
+ * helper above. Logged but never throws.
+ */
+export async function backfillGrowthSubscribersFromCompanies(): Promise<{ scanned: number; updated: number }> {
+  const rows = await db
+    .select({
+      subId: growthSubscribers.id,
+      companyId: companies.id,
+      stripeSubId: companies.stripeSubscriptionId,
+      stripeCustId: companies.stripeCustomerId,
+      status: companies.subscriptionStatus,
+      planKey: companies.subscriptionPlan,
+      priceId: companies.stripePriceId,
+      trialEndsAt: companies.trialEndsAt,
+    })
+    .from(growthSubscribers)
+    .innerJoin(companies, eq(companies.id, growthSubscribers.companyId));
+
+  let updated = 0;
+  for (const r of rows) {
+    if (!r.stripeSubId) continue;
+    await syncStripeSubscriptionToGrowthSubscriber(r.companyId, {
+      id: r.stripeSubId,
+      status: r.status ?? "unknown",
+      customer: r.stripeCustId ?? null,
+      items: r.priceId ? { data: [{ price: { id: r.priceId } }] } : undefined,
+      trial_start: r.trialEndsAt
+        ? Math.floor((new Date(r.trialEndsAt).getTime() - 7 * 24 * 60 * 60 * 1000) / 1000)
+        : null,
+      trial_end: r.trialEndsAt ? Math.floor(new Date(r.trialEndsAt).getTime() / 1000) : null,
+    });
+    updated += 1;
+  }
+  console.log(
+    `[growth-dashboard] backfill complete — scanned=${rows.length} updated=${updated}`
+  );
+  return { scanned: rows.length, updated };
+}
+
 // ── Overview aggregates ────────────────────────────────────────────────────
 export interface DashboardOverview {
   totalSubscribers: number;
@@ -282,7 +482,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       count(*) FILTER (WHERE subscription_status = 'trialing')::text AS trialing,
       count(*) FILTER (WHERE subscription_status IN ('active','past_due'))::text AS paid,
       count(*) FILTER (WHERE subscription_status IN ('canceled','expired'))::text AS canceled,
-      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','trialing','past_due')), 0)::text AS current_mrr,
+      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','past_due')), 0)::text AS current_mrr,
       coalesce(sum(total_revenue), 0)::text AS total_revenue
     FROM growth_subscribers
   `);
@@ -361,7 +561,7 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
       count(*) FILTER (WHERE subscription_status = 'trialing')::text AS trialing,
       count(*) FILTER (WHERE subscription_status IN ('active','past_due'))::text AS paid,
       count(*) FILTER (WHERE subscription_status IN ('canceled','expired'))::text AS canceled,
-      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','trialing','past_due')), 0)::text AS mrr,
+      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','past_due')), 0)::text AS mrr,
       coalesce(sum(total_revenue), 0)::text AS total_rev
     FROM growth_subscribers
     GROUP BY source_type

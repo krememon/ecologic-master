@@ -1,0 +1,184 @@
+Fix the private dashboard display and subscription attribution fields in STAGING.
+
+Context:
+The campaign/referral tracking now works. A test signup from the Joe Plumbing campaign appeared in:
+
+staging-dashboard.ecologicc.com/dashboard/subscribers
+
+But a few fields are wrong or missing.
+
+Current issues:
+
+1. Overview card text is too large
+On the Overview page, the “Top Source” and “Top Campaign” card values are too large and overflow/cut off.
+
+Example:
+Top Source shows instagram_creator but the text is huge and gets clipped.
+Top Campaign shows Joe Plumbing but the text is too large.
+
+Fix:
+- Reduce the font size for Top Source and Top Campaign values.
+- Allow wrapping cleanly.
+- Convert source labels to friendly display names.
+  Example:
+  instagram_creator → Instagram Creator
+  tiktok_creator → TikTok Creator
+  supply_house → Supply House
+  customer_referral → Customer Referral
+- Keep the cards clean and aligned with the other overview cards.
+
+2. Subscriber Platform is wrong
+The subscriber table currently shows platform as “unknown”.
+
+For this test user, I subscribed through Stripe/web checkout, so platform should show:
+
+Stripe
+
+Fix:
+When a user starts or completes Stripe checkout/trial, update the related growth_subscribers row with:
+- platform = stripe
+
+3. Subscriber Plan is wrong/blank
+The subscriber table currently shows plan as blank or dash.
+
+For this test, I selected the $299.99 plan, but because there is a 7-day free trial, the plan/status display should make that clear.
+
+Preferred dashboard display:
+- Plan should show the selected plan name if available.
+- If plan name is not available, show the price:
+  $299.99/mo
+- Status should show:
+  Free Trial
+  or Trialing
+- MRR should stay $0 during the free trial because the user has not been charged yet.
+- After the trial converts to paid later, MRR should become $299.99.
+
+So for a Stripe trial right now, the row should look like:
+Platform: Stripe
+Plan: Free Trial - $299.99/mo
+Status: Trialing or Free Trial
+MRR: $0
+Onboarded: Yes
+
+4. Onboarded status is wrong
+The subscriber table currently shows onboarded as blank/dash.
+
+Since the user completed onboarding, it should show:
+
+Yes
+
+Fix:
+When onboarding/company setup completes and growth_subscribers is created or updated, set:
+- onboardingCompletedAt = current timestamp
+
+In the dashboard table:
+- If onboardingCompletedAt exists, show “Yes”
+- If not, show “No”
+- If needed, keep the date available in tooltip or secondary text later, but for now just Yes/No is fine.
+
+5. Connect Stripe checkout/trial to growth_subscribers
+
+Find the existing Stripe checkout/session verification and subscription webhook logic.
+
+When a user starts checkout or finishes checkout/session verification:
+- Find the growth_subscribers row by companyId or userId.
+- Update it with:
+  platform = stripe
+  plan = selected plan name or amount/price label
+  subscriptionStatus = trialing if Stripe says trialing
+  monthlyRevenue = 0 while trialing
+  stripeCustomerId
+  stripeSubscriptionId
+  trialStartedAt if available
+  becamePaidAt only when subscription becomes active/paid after trial
+
+Important:
+During free trial:
+- Do NOT count the $299.99 as current MRR yet.
+- Display the selected future plan as “Free Trial - $299.99/mo” or similar.
+- Count it under Trialing, not Paid Subscribers.
+
+When Stripe subscription becomes active/paid:
+- subscriptionStatus = active
+- monthlyRevenue = plan amount, for example 299.99
+- becamePaidAt = current timestamp if not already set
+
+When canceled:
+- subscriptionStatus = canceled
+- canceledAt = timestamp
+- monthlyRevenue = 0
+
+6. Overview card counts should respect status
+
+Overview should calculate:
+- Trialing = subscriptionStatus trialing/free_trial
+- Paid Subscribers = active/past_due if you currently count past_due as paid
+- Current MRR = sum monthlyRevenue only from active paid subscriptions, not trials
+- Total Subscribers = all attributed subscribers
+- Total Revenue = leave $0 for now unless actual paid invoice data exists
+
+7. Make dashboard labels friendly
+
+In Subscribers table:
+- platform stripe → Stripe
+- platform apple → Apple
+- platform google_play → Google Play
+- platform unknown → Unknown
+
+Status labels:
+- trialing → Free Trial
+- active → Active
+- canceled → Canceled
+- past_due → Past Due
+- unknown → Unknown
+
+Source labels:
+- instagram_creator → Instagram Creator
+- tiktok_creator → TikTok Creator
+- supply_house → Supply House
+- customer_referral → Customer Referral
+- cold_call → Cold Call
+- app_store → App Store
+- organic → Organic
+- other → Other
+
+8. Existing row backfill for this staging test
+
+For the existing Joe Plumbing test signup:
+- If the linked company/user has a Stripe subscription/trial record, backfill:
+  platform = stripe
+  plan = Free Trial - $299.99/mo or selected Stripe plan label
+  subscriptionStatus = trialing
+  monthlyRevenue = 0
+  onboardingCompletedAt = current timestamp if onboarding is completed
+
+Do this carefully and only in staging.
+
+9. Logs
+
+Add safe logs:
+
+[growth-dashboard] syncing Stripe subscription to growth_subscribers
+[growth-dashboard] found growth_subscriber for company/user
+[growth-dashboard] no growth_subscriber found for Stripe subscription
+[growth-dashboard] updated platform/plan/status/mrr
+[growth-dashboard] onboardingCompletedAt set
+[growth-dashboard] overview metrics calculated
+
+Do not log sensitive payment details.
+
+10. Deliverables
+
+Tell me:
+- Files changed
+- Root cause of missing platform/plan/onboarded values
+- Where Stripe checkout/trial now updates growth_subscribers
+- How MRR is calculated during trial vs paid
+- Confirmation that Top Source/Top Campaign card text no longer overflows
+- Confirmation that the current test signup now shows:
+  Platform: Stripe
+  Plan: Free Trial - $299.99/mo or similar
+  Status: Free Trial/Trialing
+  MRR: $0
+  Onboarded: Yes
+- Testing steps

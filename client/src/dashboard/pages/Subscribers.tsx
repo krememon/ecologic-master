@@ -18,13 +18,52 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { GrowthSubscriber } from "@shared/schema";
 import { GROWTH_SOURCE_LABELS, type GrowthSourceType } from "@shared/growthSources";
+import { subscriptionPlans } from "@shared/subscriptionPlans";
 
 interface SubscriberWithCampaign extends GrowthSubscriber {
   campaignName: string | null;
 }
 
-const PLATFORMS = ["unknown", "stripe", "apple", "google", "manual"] as const;
-const STATUSES = ["unknown", "trialing", "active", "past_due", "canceled", "expired"] as const;
+const PLATFORMS = ["unknown", "stripe", "apple", "google_play", "manual"] as const;
+const STATUSES = ["unknown", "trialing", "active", "past_due", "canceled", "expired", "unpaid"] as const;
+
+const PLATFORM_LABELS: Record<string, string> = {
+  unknown: "Unknown",
+  stripe: "Stripe (web)",
+  apple: "Apple",
+  google_play: "Google Play",
+  manual: "Manual",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  unknown: "Unknown",
+  trialing: "Free trial",
+  active: "Active",
+  past_due: "Past due",
+  canceled: "Canceled",
+  expired: "Expired",
+  unpaid: "Unpaid",
+};
+
+function platformLabel(p: string | null | undefined): string {
+  if (!p) return "—";
+  return PLATFORM_LABELS[p] ?? p;
+}
+
+function statusLabel(s: string | null | undefined): string {
+  if (!s) return "—";
+  return STATUS_LABELS[s] ?? s;
+}
+
+/** Human plan label: "Free Trial – Scale ($299.99/mo)" or "Scale ($299.99/mo)". */
+function planLabel(planKey: string | null | undefined, status: string | null | undefined): string {
+  if (!planKey) return status === "trialing" ? "Free trial" : "—";
+  const plan = (subscriptionPlans as Record<string, { label: string; price: number }>)[planKey];
+  const planName = plan?.label ?? planKey;
+  const price = plan ? `$${plan.price.toFixed(2)}/mo` : null;
+  const base = price ? `${planName} (${price})` : planName;
+  return status === "trialing" ? `Free trial – ${base}` : base;
+}
 
 function fmtMoney(v: string | number | null | undefined): string {
   if (v == null || v === "") return "—";
@@ -146,7 +185,7 @@ export default function Subscribers() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              {PLATFORMS.map((p) => <SelectItem key={p} value={p}>{PLATFORM_LABELS[p] ?? p}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -158,7 +197,7 @@ export default function Subscribers() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -211,14 +250,19 @@ export default function Subscribers() {
                     <td className="px-4 py-3 font-mono text-xs">
                       {s.referralCode ? s.referralCode.toUpperCase() : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{s.platform}</td>
-                    <td className="px-4 py-3 text-slate-500">{s.plan ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-500">{s.subscriptionStatus}</td>
+                    <td className="px-4 py-3 text-slate-700">{platformLabel(s.platform)}</td>
+                    <td className="px-4 py-3 text-slate-700">{planLabel(s.plan, s.subscriptionStatus)}</td>
+                    <td className="px-4 py-3 text-slate-700">{statusLabel(s.subscriptionStatus)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                       {fmtMoney(s.monthlyRevenue as any)}
                     </td>
                     <td className="px-4 py-3 text-slate-500">{fmtDate(s.signupAt as any)}</td>
-                    <td className="px-4 py-3 text-slate-500">{fmtDate(s.onboardingCompletedAt as any)}</td>
+                    <td
+                      className="px-4 py-3 text-slate-700"
+                      title={s.onboardingCompletedAt ? fmtDate(s.onboardingCompletedAt as any) : undefined}
+                    >
+                      {s.onboardingCompletedAt ? "Yes" : "No"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

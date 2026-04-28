@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { GROWTH_SOURCE_LABELS, type GrowthSourceType } from "@shared/growthSources";
 
 interface OverviewData {
   totalSubscribers: number;
@@ -16,16 +17,23 @@ function formatCurrency(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0);
 }
 
+function friendlySourceLabel(sourceType: string | null | undefined): string {
+  if (!sourceType) return "—";
+  return GROWTH_SOURCE_LABELS[sourceType as GrowthSourceType] ?? sourceType;
+}
+
 function StatCard({
   label,
   value,
   hint,
   testId,
+  small,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   testId?: string;
+  small?: boolean;
 }) {
   return (
     <div
@@ -33,7 +41,16 @@ function StatCard({
       data-testid={testId}
     >
       <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-semibold text-slate-900">{value}</div>
+      <div
+        className={
+          small
+            ? "mt-2 text-lg font-semibold text-slate-900 leading-snug break-words"
+            : "mt-2 text-3xl font-semibold text-slate-900"
+        }
+        title={typeof value === "string" ? value : undefined}
+      >
+        {value}
+      </div>
       {hint && <div className="mt-1 text-xs text-slate-400">{hint}</div>}
     </div>
   );
@@ -79,6 +96,7 @@ export default function Overview() {
         <StatCard
           label="Current MRR"
           value={isLoading ? "—" : formatCurrency(data?.currentMrr ?? 0)}
+          hint="paid subscribers only — trials excluded"
           testId="card-mrr"
         />
         <StatCard
@@ -89,21 +107,23 @@ export default function Overview() {
         />
         <StatCard
           label="Top source"
-          value={isLoading ? "—" : data?.topSource?.sourceType ?? "—"}
-          hint={data?.topSource ? `${data.topSource.count} subscribers` : undefined}
+          value={isLoading ? "—" : friendlySourceLabel(data?.topSource?.sourceType ?? null)}
+          hint={data?.topSource ? `${data.topSource.count} subscriber${data.topSource.count === 1 ? "" : "s"}` : undefined}
           testId="card-top-source"
+          small
         />
         <StatCard
           label="Top campaign"
           value={isLoading ? "—" : data?.topCampaign?.name ?? "—"}
-          hint={data?.topCampaign ? `${data.topCampaign.count} subscribers` : undefined}
+          hint={data?.topCampaign ? `${data.topCampaign.count} subscriber${data.topCampaign.count === 1 ? "" : "s"}` : undefined}
           testId="card-top-campaign"
+          small
         />
       </div>
 
       <p className="text-xs text-slate-400">
         Showing live data from <code className="bg-slate-100 px-1 py-0.5 rounded">growth_subscribers</code>.
-        Empty values mean no attribution data has been written yet — that capture pipeline ships next.
+        MRR counts only active paid subscribers — trials are tracked separately.
       </p>
     </div>
   );

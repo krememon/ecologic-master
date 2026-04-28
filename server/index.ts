@@ -15,6 +15,7 @@ import { startJobScheduler } from "./jobScheduler";
 import { sendReceiptForPayment } from "./receiptService";
 import * as stripeConnectService from "./services/stripeConnect";
 import { syncSubscriptionToCompany, resolveCompanyFromStripeEvent } from "./billingService";
+import { syncStripeSubscriptionToGrowthSubscriber } from "./dashboard/storage";
 
 const app = express();
 
@@ -1015,6 +1016,16 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           customer: customerId,
         });
         console.log(`[billing-webhook] ${event.type} synced → companyId=${companyId} status=${sub.status}`);
+
+        await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+          id: sub.id,
+          status: sub.status,
+          customer: customerId,
+          items: sub.items as any,
+          trial_start: (sub as any).trial_start ?? null,
+          trial_end: (sub as any).trial_end ?? null,
+          metadata: sub.metadata as Record<string, string>,
+        });
       }
     } catch (err: any) {
       console.error(`[billing-webhook] ${event.type} error:`, err.message);
@@ -1045,6 +1056,15 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                 customer: customerId,
               });
               console.log(`[billing-webhook] invoice.paid synced → companyId=${companyId} subId=${freshSub.id}`);
+              await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+                id: freshSub.id,
+                status: freshSub.status,
+                customer: customerId,
+                items: freshSub.items as any,
+                trial_start: (freshSub as any).trial_start ?? null,
+                trial_end: (freshSub as any).trial_end ?? null,
+                metadata: freshSub.metadata as Record<string, string>,
+              });
             } catch (subErr: any) {
               console.error('[billing-webhook] invoice.paid: could not retrieve subscription:', subErr.message);
             }
@@ -1081,6 +1101,15 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                 customer: customerId,
               });
               console.log(`[billing-webhook] invoice.payment_failed synced → companyId=${companyId} status=${freshSub.status}`);
+              await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+                id: freshSub.id,
+                status: freshSub.status,
+                customer: customerId,
+                items: freshSub.items as any,
+                trial_start: (freshSub as any).trial_start ?? null,
+                trial_end: (freshSub as any).trial_end ?? null,
+                metadata: freshSub.metadata as Record<string, string>,
+              });
             } catch (subErr: any) {
               console.error('[billing-webhook] invoice.payment_failed: could not retrieve subscription:', subErr.message);
             }
