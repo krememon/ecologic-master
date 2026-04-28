@@ -25,6 +25,7 @@ import {
   updateGrowthCreator,
   getDashboardOverview,
   getSourceBreakdown,
+  getPlatformBreakdown,
   normalizeReferralCode,
   findActiveCampaignByReferralCode,
   listAccounts,
@@ -81,6 +82,18 @@ export function registerDashboardRoutes(app: Express): void {
     } catch (err) {
       console.error("[dashboard] sources error:", err);
       res.status(500).json({ message: "Failed to load sources" });
+    }
+  });
+
+  // ── Platforms ────────────────────────────────────────────────────────────
+  app.get("/api/admin/dashboard/platforms", ...gate, async (_req: Request, res: Response) => {
+    try {
+      console.log("[dashboard] loading platforms");
+      const data = await getPlatformBreakdown();
+      res.json(data);
+    } catch (err) {
+      console.error("[dashboard] platforms error:", err);
+      res.status(500).json({ message: "Failed to load platforms" });
     }
   });
 

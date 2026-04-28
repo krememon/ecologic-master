@@ -5085,6 +5085,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           onboardingCompleted: true,
         });
 
+        // ── Mirror into growth_subscribers (private dashboard) ─────────────
+        // Best-effort: never throw, never block the validate response.
+        try {
+          const { syncAppleSubscriptionToGrowthSubscriber } = await import('./dashboard/storage');
+          await syncAppleSubscriptionToGrowthSubscriber({
+            companyId: company.id,
+            userId,
+            originalTransactionId: txInfo.originalTransactionId,
+            transactionId: (txInfo as any).transactionId ?? null,
+            planKey: planToWrite,
+            // Trial state derived inside verifyAppleTransaction from the JWS
+            // payload's `offerDiscountType === "FREE_TRIAL"` (StoreKit 2) with
+            // a fallback to `offerType === 1` (introductory). Drives the
+            // `trialing / $0 MRR` branch of the dashboard sync.
+            isTrial: txInfo.isTrial === true,
+            expiresDate: txInfo.expiresDate,
+          });
+        } catch (growthErr: any) {
+          console.error('[growth-dashboard] Apple sync threw (ignored):', growthErr?.message ?? growthErr);
+        }
+
         return res.json({
           ok: true,
           active: true,
@@ -5192,6 +5213,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           billingUpdatedAt: new Date(),
           onboardingCompleted: true,
         });
+
+        // ── Mirror into growth_subscribers (private dashboard) ─────────────
+        // Best-effort: never throw, never block the validate response.
+        try {
+          const { syncGoogleSubscriptionToGrowthSubscriber } = await import('./dashboard/storage');
+          await syncGoogleSubscriptionToGrowthSubscriber({
+            companyId: company.id,
+            userId,
+            purchaseToken: txInfo.purchaseToken,
+            orderId: (txInfo as any).orderId ?? null,
+            planKey: txInfo.planKey,
+            paymentState: txInfo.paymentState,
+            expiresDate: txInfo.expiresDate,
+            autoRenewing: (txInfo as any).autoRenewing ?? null,
+          });
+        } catch (growthErr: any) {
+          console.error('[growth-dashboard] Google Play sync threw (ignored):', growthErr?.message ?? growthErr);
+        }
 
         const { getEffectiveBillingAccess: postWriteCheck } = await import('./billingResolver');
         const postWriteBilling = postWriteCheck(updatedCompany);

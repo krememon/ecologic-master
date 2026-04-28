@@ -327,6 +327,78 @@ function mapStripeStatusToGrowth(status: string):
   }
 }
 
+// Apple StoreKit 2 status → growth status. We currently only invoke the sync
+// from successful validation paths (active/trial), but mapping covers the full
+// lifecycle for future server-notification webhook hooks.
+function mapAppleStatusToGrowth(opts: { isTrial: boolean; expiresMs?: number | null }):
+  | "trialing"
+  | "active"
+  | "expired"
+  | "unknown" {
+  if (opts.expiresMs && opts.expiresMs < Date.now()) return "expired";
+  if (opts.isTrial) return "trialing";
+  return "active";
+}
+
+// Google Play paymentState (1 received, 2 free trial) + subscription state
+// → growth status. Validation only grants access for paymentState 1/2, so
+// the sync is invoked in those two states. Cancellation/expiry will arrive
+// via separate flows (RTDN webhook future work).
+function mapGoogleStatusToGrowth(opts: {
+  paymentState?: number | null;
+  expiresMs?: number | null;
+}): "trialing" | "active" | "expired" | "unknown" {
+  if (opts.expiresMs && opts.expiresMs < Date.now()) return "expired";
+  if (opts.paymentState === 2) return "trialing";
+  if (opts.paymentState === 1) return "active";
+  return "unknown";
+}
+
+/**
+ * Load the minimum company + owner info required to seed a new growth_subscribers
+ * row. Mirrors the seeding pattern used in updateAccountAttribution. Returns
+ * null when the company can't be found (caller should skip create).
+ */
+async function loadCompanyMeta(companyId: number): Promise<{
+  ownerId: string | null;
+  ownerEmail: string | null;
+  companyName: string;
+  companyCreatedAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+} | null> {
+  const [company] = await db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      ownerId: companies.ownerId,
+      createdAt: companies.createdAt,
+      stripeCustomerId: companies.stripeCustomerId,
+      stripeSubscriptionId: companies.stripeSubscriptionId,
+    })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+  if (!company) return null;
+
+  const [owner] = company.ownerId
+    ? await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, company.ownerId))
+        .limit(1)
+    : [];
+
+  return {
+    ownerId: company.ownerId ?? null,
+    ownerEmail: owner?.email ?? null,
+    companyName: company.name,
+    companyCreatedAt: company.createdAt ?? null,
+    stripeCustomerId: company.stripeCustomerId ?? null,
+    stripeSubscriptionId: company.stripeSubscriptionId ?? null,
+  };
+}
+
 export async function syncStripeSubscriptionToGrowthSubscriber(
   companyId: number | null,
   sub: StripeSubSyncInput,
@@ -404,10 +476,74 @@ export async function syncStripeSubscriptionToGrowthSubscriber(
       }
     }
 
+    // ── Create-on-miss for unattributed Stripe signups ─────────────────
+    // Previously we'd bail here so the dashboard only ever showed attributed
+    // (referral / campaign) subscribers. The dashboard is now the all-in-one
+    // subscriber view, so we create a row with sourceType=unknown for any
+    // Stripe subscription whose company we can identify but doesn't already
+    // have a growth_subscribers row.
     if (!existing) {
+      if (companyId == null) {
+        console.log(
+          `[growth-dashboard] Stripe subscriber not found and no companyId — skipping ` +
+            `subId=${sub.id} customerId=${customerId ?? "—"}`
+        );
+        return;
+      }
+      const meta = await loadCompanyMeta(companyId);
+      if (!meta) {
+        console.log(
+          `[growth-dashboard] Stripe subscriber not found and company missing — skipping ` +
+            `subId=${sub.id} companyId=${companyId}`
+        );
+        return;
+      }
+      const status = mapStripeStatusToGrowth(sub.status);
+      const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+      const planKeyFromPrice = priceId ? getPlanKeyForPriceId(priceId) : null;
+      const planKeyFromMeta = sub.metadata?.planKey ?? null;
+      const planKey: string | null = planKeyFromPrice || planKeyFromMeta || null;
+      const planPrice = planKey
+        ? subscriptionPlans[planKey as keyof typeof subscriptionPlans]?.price ?? null
+        : null;
+      const mrr =
+        status === "trialing"
+          ? "0"
+          : PAID_STATUSES.has(status)
+          ? String(planPrice ?? 0)
+          : "0";
+
+      const [created] = await db
+        .insert(growthSubscribers)
+        .values({
+          userId: meta.ownerId,
+          companyId,
+          ownerEmail: meta.ownerEmail,
+          companyName: meta.companyName,
+          sourceType: "unknown" as any,
+          platform: "stripe" as any,
+          plan: planKey,
+          subscriptionStatus: status as any,
+          monthlyRevenue: mrr as any,
+          currency: "USD",
+          stripeCustomerId: customerId ?? meta.stripeCustomerId,
+          stripeSubscriptionId: sub.id,
+          signupAt: meta.companyCreatedAt ?? new Date(),
+          onboardingCompletedAt: new Date(),
+          trialStartedAt:
+            status === "trialing"
+              ? sub.trial_start
+                ? new Date(sub.trial_start * 1000)
+                : new Date()
+              : null,
+          becamePaidAt: PAID_STATUSES.has(status) ? new Date() : null,
+          canceledAt: status === "canceled" ? new Date() : null,
+        } as any)
+        .returning();
       console.log(
-        `[growth-dashboard] Stripe subscriber not found subId=${sub.id} ` +
-          `companyId=${companyId ?? "—"} customerId=${customerId ?? "—"} — skipping`
+        `[growth-dashboard] Stripe subscriber created for unattributed company ` +
+          `subscriberId=${created?.id} companyId=${companyId} sourceType=unknown ` +
+          `plan=${planKey ?? "—"} status=${status} mrr=${mrr}`
       );
       return;
     }
@@ -484,6 +620,335 @@ export async function syncStripeSubscriptionToGrowthSubscriber(
     );
   } catch (err) {
     console.error("[growth-dashboard] sync error (ignored):", err);
+  }
+}
+
+// ── Apple IAP → growth_subscribers sync ────────────────────────────────────
+//
+// Mirrors the Stripe sync but is invoked by the in-app /api/subscriptions/validate
+// endpoint after Apple StoreKit 2 JWS verification + companies update succeeds.
+// Match keys in priority order:
+//   1. companyId
+//   2. userId
+//   3. appleOriginalTransactionId (unique)
+//   4. appleTransactionId
+// On miss → create a row with sourceType=unknown, platform=apple. Attribution
+// (sourceType / sourceName / referralCode / campaignId) is NEVER overwritten
+// on update.
+export interface AppleSubSyncInput {
+  companyId: number;
+  userId: string | null;
+  originalTransactionId: string;
+  transactionId?: string | null;
+  planKey: string;
+  isTrial: boolean;
+  expiresDate?: Date | null;
+}
+
+export async function syncAppleSubscriptionToGrowthSubscriber(
+  input: AppleSubSyncInput,
+): Promise<void> {
+  try {
+    console.log(
+      `[growth-dashboard] Apple subscription sync started companyId=${input.companyId} ` +
+        `userId=${input.userId ?? "—"} planKey=${input.planKey} isTrial=${input.isTrial} ` +
+        `origTxId=${input.originalTransactionId}`
+    );
+
+    const expiresMs = input.expiresDate ? input.expiresDate.getTime() : null;
+    const status = mapAppleStatusToGrowth({ isTrial: input.isTrial, expiresMs });
+    const planPrice = subscriptionPlans[input.planKey as keyof typeof subscriptionPlans]?.price ?? null;
+    const mrr = status === "active" ? String(planPrice ?? 0) : "0";
+
+    let existing: GrowthSubscriber | undefined;
+    let matchedBy: string | null = null;
+
+    if (input.companyId != null) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.companyId, input.companyId))
+        .orderBy(desc(growthSubscribers.createdAt), desc(growthSubscribers.id))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "companyId";
+      }
+    }
+    if (!existing && input.userId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.userId, input.userId))
+        .orderBy(desc(growthSubscribers.createdAt), desc(growthSubscribers.id))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "userId";
+      }
+    }
+    if (!existing && input.originalTransactionId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.appleOriginalTransactionId, input.originalTransactionId))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "appleOriginalTransactionId";
+      }
+    }
+    if (!existing && input.transactionId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.appleTransactionId, input.transactionId))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "appleTransactionId";
+      }
+    }
+
+    if (!existing) {
+      const meta = await loadCompanyMeta(input.companyId);
+      if (!meta) {
+        console.warn(
+          `[growth-dashboard] Apple subscriber not found and company missing companyId=${input.companyId} — skipping`
+        );
+        return;
+      }
+      const [created] = await db
+        .insert(growthSubscribers)
+        .values({
+          userId: input.userId ?? meta.ownerId,
+          companyId: input.companyId,
+          ownerEmail: meta.ownerEmail,
+          companyName: meta.companyName,
+          sourceType: "unknown" as any,
+          platform: "apple" as any,
+          plan: input.planKey,
+          subscriptionStatus: status as any,
+          monthlyRevenue: mrr as any,
+          currency: "USD",
+          appleOriginalTransactionId: input.originalTransactionId,
+          appleTransactionId: input.transactionId ?? null,
+          signupAt: meta.companyCreatedAt ?? new Date(),
+          onboardingCompletedAt: new Date(),
+          trialStartedAt: status === "trialing" ? new Date() : null,
+          becamePaidAt: status === "active" ? new Date() : null,
+        } as any)
+        .returning();
+      console.log(
+        `[growth-dashboard] Apple subscriber created subscriberId=${created?.id} ` +
+          `companyId=${input.companyId} sourceType=unknown plan=${input.planKey} ` +
+          `status=${status} mrr=${mrr}`
+      );
+      return;
+    }
+
+    console.log(
+      `[growth-dashboard] Apple subscriber matched subscriberId=${existing.id} ` +
+        `matchedBy=${matchedBy} companyId=${existing.companyId ?? "—"} userId=${existing.userId ?? "—"}`
+    );
+
+    const updates: Partial<typeof growthSubscribers.$inferInsert> & { updatedAt: Date } = {
+      platform: "apple" as any,
+      plan: input.planKey,
+      subscriptionStatus: status as any,
+      monthlyRevenue: mrr as any,
+      appleOriginalTransactionId: input.originalTransactionId,
+      appleTransactionId: input.transactionId ?? existing.appleTransactionId ?? null,
+      updatedAt: new Date(),
+    };
+    if (status === "trialing" && !existing.trialStartedAt) updates.trialStartedAt = new Date();
+    if (status === "active" && !existing.becamePaidAt) updates.becamePaidAt = new Date();
+    if (status === "expired" && !existing.canceledAt) updates.canceledAt = new Date();
+    if (!existing.onboardingCompletedAt) updates.onboardingCompletedAt = new Date();
+    // Backfill ownerEmail / companyName / userId / signupAt if the row was
+    // seeded earlier with a partial shape (e.g. attribution-only landing rows).
+    if (!existing.ownerEmail || !existing.companyName || !existing.userId || !existing.signupAt) {
+      const meta = await loadCompanyMeta(input.companyId);
+      if (meta) {
+        if (!existing.ownerEmail) updates.ownerEmail = meta.ownerEmail;
+        if (!existing.companyName) updates.companyName = meta.companyName;
+        if (!existing.userId) updates.userId = input.userId ?? meta.ownerId;
+        if (!existing.signupAt) updates.signupAt = meta.companyCreatedAt ?? new Date();
+      }
+    }
+
+    await db
+      .update(growthSubscribers)
+      .set(updates as any)
+      .where(eq(growthSubscribers.id, existing.id));
+    console.log(
+      `[growth-dashboard] Apple subscriber updated subscriberId=${existing.id} ` +
+        `plan=${input.planKey} status=${status} mrr=${mrr} ` +
+        `trialStartedAt=${updates.trialStartedAt ? "set" : "unchanged"} ` +
+        `becamePaidAt=${updates.becamePaidAt ? "set" : "unchanged"}`
+    );
+  } catch (err) {
+    console.error("[growth-dashboard] Apple sync error (ignored):", err);
+  }
+}
+
+// ── Google Play → growth_subscribers sync ──────────────────────────────────
+//
+// Mirrors the Apple sync. Match keys: companyId → userId → googlePurchaseToken
+// → googleOrderId. On miss → create with sourceType=unknown, platform=google_play.
+export interface GoogleSubSyncInput {
+  companyId: number;
+  userId: string | null;
+  purchaseToken: string;
+  orderId?: string | null;
+  planKey: string;
+  paymentState: number; // 1=received, 2=trial
+  expiresDate?: Date | null;
+  autoRenewing?: boolean | null;
+}
+
+export async function syncGoogleSubscriptionToGrowthSubscriber(
+  input: GoogleSubSyncInput,
+): Promise<void> {
+  try {
+    console.log(
+      `[growth-dashboard] Google Play subscription sync started companyId=${input.companyId} ` +
+        `userId=${input.userId ?? "—"} planKey=${input.planKey} paymentState=${input.paymentState} ` +
+        `orderId=${input.orderId ?? "—"} tokenPrefix=${input.purchaseToken.slice(0, 12)}…`
+    );
+
+    const expiresMs = input.expiresDate ? input.expiresDate.getTime() : null;
+    const status = mapGoogleStatusToGrowth({ paymentState: input.paymentState, expiresMs });
+    const planPrice = subscriptionPlans[input.planKey as keyof typeof subscriptionPlans]?.price ?? null;
+    const mrr = status === "active" ? String(planPrice ?? 0) : "0";
+
+    let existing: GrowthSubscriber | undefined;
+    let matchedBy: string | null = null;
+
+    if (input.companyId != null) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.companyId, input.companyId))
+        .orderBy(desc(growthSubscribers.createdAt), desc(growthSubscribers.id))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "companyId";
+      }
+    }
+    if (!existing && input.userId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.userId, input.userId))
+        .orderBy(desc(growthSubscribers.createdAt), desc(growthSubscribers.id))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "userId";
+      }
+    }
+    if (!existing && input.purchaseToken) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.googlePurchaseToken, input.purchaseToken))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "googlePurchaseToken";
+      }
+    }
+    if (!existing && input.orderId) {
+      const [r] = await db
+        .select()
+        .from(growthSubscribers)
+        .where(eq(growthSubscribers.googleOrderId, input.orderId))
+        .limit(1);
+      if (r) {
+        existing = r;
+        matchedBy = "googleOrderId";
+      }
+    }
+
+    if (!existing) {
+      const meta = await loadCompanyMeta(input.companyId);
+      if (!meta) {
+        console.warn(
+          `[growth-dashboard] Google Play subscriber not found and company missing companyId=${input.companyId} — skipping`
+        );
+        return;
+      }
+      const [created] = await db
+        .insert(growthSubscribers)
+        .values({
+          userId: input.userId ?? meta.ownerId,
+          companyId: input.companyId,
+          ownerEmail: meta.ownerEmail,
+          companyName: meta.companyName,
+          sourceType: "unknown" as any,
+          platform: "google_play" as any,
+          plan: input.planKey,
+          subscriptionStatus: status as any,
+          monthlyRevenue: mrr as any,
+          currency: "USD",
+          googlePurchaseToken: input.purchaseToken,
+          googleOrderId: input.orderId ?? null,
+          signupAt: meta.companyCreatedAt ?? new Date(),
+          onboardingCompletedAt: new Date(),
+          trialStartedAt: status === "trialing" ? new Date() : null,
+          becamePaidAt: status === "active" ? new Date() : null,
+        } as any)
+        .returning();
+      console.log(
+        `[growth-dashboard] Google Play subscriber created subscriberId=${created?.id} ` +
+          `companyId=${input.companyId} sourceType=unknown plan=${input.planKey} ` +
+          `status=${status} mrr=${mrr}`
+      );
+      return;
+    }
+
+    console.log(
+      `[growth-dashboard] Google Play subscriber matched subscriberId=${existing.id} ` +
+        `matchedBy=${matchedBy} companyId=${existing.companyId ?? "—"} userId=${existing.userId ?? "—"}`
+    );
+
+    const updates: Partial<typeof growthSubscribers.$inferInsert> & { updatedAt: Date } = {
+      platform: "google_play" as any,
+      plan: input.planKey,
+      subscriptionStatus: status as any,
+      monthlyRevenue: mrr as any,
+      googlePurchaseToken: input.purchaseToken,
+      googleOrderId: input.orderId ?? existing.googleOrderId ?? null,
+      updatedAt: new Date(),
+    };
+    if (status === "trialing" && !existing.trialStartedAt) updates.trialStartedAt = new Date();
+    if (status === "active" && !existing.becamePaidAt) updates.becamePaidAt = new Date();
+    if (status === "expired" && !existing.canceledAt) updates.canceledAt = new Date();
+    if (!existing.onboardingCompletedAt) updates.onboardingCompletedAt = new Date();
+    if (!existing.ownerEmail || !existing.companyName || !existing.userId || !existing.signupAt) {
+      const meta = await loadCompanyMeta(input.companyId);
+      if (meta) {
+        if (!existing.ownerEmail) updates.ownerEmail = meta.ownerEmail;
+        if (!existing.companyName) updates.companyName = meta.companyName;
+        if (!existing.userId) updates.userId = input.userId ?? meta.ownerId;
+        if (!existing.signupAt) updates.signupAt = meta.companyCreatedAt ?? new Date();
+      }
+    }
+
+    await db
+      .update(growthSubscribers)
+      .set(updates as any)
+      .where(eq(growthSubscribers.id, existing.id));
+    console.log(
+      `[growth-dashboard] Google Play subscriber updated subscriberId=${existing.id} ` +
+        `plan=${input.planKey} status=${status} mrr=${mrr} ` +
+        `trialStartedAt=${updates.trialStartedAt ? "set" : "unchanged"} ` +
+        `becamePaidAt=${updates.becamePaidAt ? "set" : "unchanged"}`
+    );
+  } catch (err) {
+    console.error("[growth-dashboard] Google Play sync error (ignored):", err);
   }
 }
 
@@ -665,6 +1130,55 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     canceled: Number(r.canceled),
     monthlyRevenue: Number(r.mrr ?? 0),
     totalRevenue: Number(r.total_rev ?? 0),
+  }));
+}
+
+// ── Platform breakdown for the /platforms page ─────────────────────────────
+export interface PlatformRow {
+  platform: string;
+  subscribers: number;
+  trialing: number;
+  paid: number;
+  canceled: number;
+  monthlyRevenue: number;
+}
+
+export async function getPlatformBreakdown(): Promise<PlatformRow[]> {
+  // Same shape as getSourceBreakdown — grouped by platform instead.
+  const result = await db.execute<{
+    platform: string | null;
+    subs: string;
+    trialing: string;
+    paid: string;
+    canceled: string;
+    mrr: string | null;
+  }>(sql`
+    SELECT
+      platform,
+      count(*)::text AS subs,
+      count(*) FILTER (WHERE subscription_status = 'trialing')::text AS trialing,
+      count(*) FILTER (WHERE subscription_status IN ('active','past_due'))::text AS paid,
+      count(*) FILTER (WHERE subscription_status IN ('canceled','expired'))::text AS canceled,
+      coalesce(sum(monthly_revenue) FILTER (WHERE subscription_status IN ('active','past_due')), 0)::text AS mrr
+    FROM growth_subscribers
+    GROUP BY platform
+    ORDER BY count(*) DESC
+  `);
+  const rows = ((result as any).rows ?? []) as Array<{
+    platform: string | null;
+    subs: string;
+    trialing: string;
+    paid: string;
+    canceled: string;
+    mrr: string | null;
+  }>;
+  return rows.map((r) => ({
+    platform: r.platform ?? "unknown",
+    subscribers: Number(r.subs),
+    trialing: Number(r.trialing),
+    paid: Number(r.paid),
+    canceled: Number(r.canceled),
+    monthlyRevenue: Number(r.mrr ?? 0),
   }));
 }
 

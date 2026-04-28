@@ -1,0 +1,71 @@
+Go A.
+
+Proceed with Apple + Google Play subscription sync into growth_subscribers, plus the Stripe unattributed signup update.
+
+Important:
+The full account deletion feature is already built and working. Do not redo the deletion work.
+
+Build this task:
+
+1. Apple App Store subscriptions should sync into growth_subscribers.
+2. Google Play / Android subscriptions should sync into growth_subscribers.
+3. Stripe should also create a growth_subscribers row for subscribers with no referral/source attribution, using sourceType = unknown.
+4. The dashboard should become the all-in-one subscriber view for:
+   - Stripe/Web
+   - Apple/iOS
+   - Google Play/Android
+   - Unknown/unattributed sources
+
+Expected behavior:
+
+Apple:
+- Successful Apple validation updates or creates a growth_subscribers row.
+- platform = apple
+- plan = friendly plan label
+- subscriptionStatus = trialing / active / canceled / expired / unknown
+- monthlyRevenue = 0 during trial
+- monthlyRevenue = plan price when active
+- store appleOriginalTransactionId and appleTransactionId when available
+
+Google Play:
+- Successful Google Play validation updates or creates a growth_subscribers row.
+- platform = google_play
+- plan = friendly plan label
+- subscriptionStatus = trialing / active / canceled / expired / unknown
+- monthlyRevenue = 0 during trial
+- monthlyRevenue = plan price when active
+- store googlePurchaseToken and googleOrderId when available
+
+Stripe:
+- If Stripe sync finds no existing growth_subscribers row, create one using:
+  - companyId
+  - userId
+  - ownerEmail
+  - companyName
+  - sourceType = unknown
+  - platform = stripe
+  - subscription fields
+- If attribution already exists, preserve it. Do not overwrite source/campaign/referral data.
+
+Dashboard:
+- Subscribers page should show all subscribers, including unattributed ones.
+- Sources page should include Unknown.
+- Platforms page should break down Stripe, Apple, Google Play, and Unknown.
+- Overview should count all subscribers in growth_subscribers.
+
+Do not touch:
+- account deletion
+- customer app jobs
+- billing logic beyond sync hooks
+- onboarding
+- campaign attribution
+- dashboard access control
+
+Deliverables:
+- Files changed
+- Apple sync location
+- Google sync location
+- Stripe unattributed row creation behavior
+- Plan/product mapping
+- Status mapping
+- Testing steps
