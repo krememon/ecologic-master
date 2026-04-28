@@ -123,44 +123,44 @@ function buildTrackingLink(c: { sourceType: string; referralCode: string | null 
 //
 // Format: https://<smartLinkDomain>/<referralCode>
 //
-// Hostname precedence (mirrors customerOriginForTrackingLink so prod/staging
-// can never get crossed up):
-//   1. staging-dashboard.ecologicc.com → staging-go.ecologicc.com
-//   2. dashboard.ecologicc.com         → go.ecologicc.com
-//   3. Server-provided smartLinkDomain (env var SMART_LINK_DOMAIN)
-//   4. Same-origin path-style fallback `<origin>/go/<code>` (Replit preview).
-function smartLinkOriginForDashboard(serverDomain: string | null | undefined): string {
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (/^staging-dashboard\.ecologicc\.com$/i.test(host)) {
-      return "https://staging-go.ecologicc.com";
-    }
-    if (/^dashboard\.ecologicc\.com$/i.test(host)) {
-      return "https://go.ecologicc.com";
-    }
-  }
-  if (serverDomain && serverDomain.trim()) {
-    return `https://${serverDomain.trim()}`;
-  }
-  if (typeof window !== "undefined") {
-    return window.location.origin; // path-style fallback (will append /go/...)
-  }
-  return "https://staging-go.ecologicc.com";
-}
-
+// Resolution priority (so prod and staging can never get crossed up):
+//   1. Hard hostname match on the *dashboard* host the admin is viewing from
+//      — staging-dashboard.ecologicc.com → staging-go.ecologicc.com
+//      — dashboard.ecologicc.com         → go.ecologicc.com
+//   2. Server-provided `smartLinkDomain` (SMART_LINK_DOMAIN env on the API).
+//   3. Same-origin path-style fallback `<origin>/go/<code>` — only for dev
+//      previews (Replit, localhost) where neither (1) nor (2) is set.
+//
+// Returns `{ url, isFallback }`. `isFallback === true` means we resorted to
+// the path-style dev fallback — the caller can choose to mark the link
+// visually so admins don't share a Replit preview URL with a creator.
 function buildSmartLink(opts: {
   referralCode: string | null;
   serverDomain: string | null | undefined;
-}): string | null {
+}): { url: string; isFallback: boolean } | null {
   if (!opts.referralCode) return null;
   const code = opts.referralCode.trim().toLowerCase();
   if (!code) return null;
-  const origin = smartLinkOriginForDashboard(opts.serverDomain);
-  // If origin matches a "real" smart-link host (DNS configured), use the
-  // bare `/<code>` form. Otherwise use the path-style `/go/<code>` form so
-  // it works on Replit preview without DNS.
-  const isSmartHost = /\bgo\.ecologicc\.com$/i.test(origin) || /\bstaging-go\.ecologicc\.com$/i.test(origin);
-  return isSmartHost ? `${origin}/${code}` : `${origin}/go/${code}`;
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (/^staging-dashboard\.ecologicc\.com$/i.test(host)) {
+      return { url: `https://staging-go.ecologicc.com/${code}`, isFallback: false };
+    }
+    if (/^dashboard\.ecologicc\.com$/i.test(host)) {
+      return { url: `https://go.ecologicc.com/${code}`, isFallback: false };
+    }
+  }
+
+  const dom = (opts.serverDomain || "").trim().split(",")[0]?.trim();
+  if (dom) {
+    return { url: `https://${dom}/${code}`, isFallback: false };
+  }
+
+  if (typeof window !== "undefined") {
+    return { url: `${window.location.origin}/go/${code}`, isFallback: true };
+  }
+  return null;
 }
 
 // ── Form state ───────────────────────────────────────────────────────────────
@@ -320,11 +320,25 @@ export default function Campaigns() {
       .catch(() => toast({ title: "Copy failed", description: c.branchLinkUrl ?? "", variant: "destructive" as any }));
   }
 
-  function onCopySmartLink(_c: CampaignWithMetrics, smartLink: string) {
+  function onCopySmartLink(_c: CampaignWithMetrics, smartLink: string, isFallback: boolean) {
+    console.log("[campaign-links] copy smart link:", smartLink, isFallback ? "(dev fallback)" : "");
     navigator.clipboard
       .writeText(smartLink)
-      .then(() => toast({ title: "Smart link copied", description: smartLink }))
+      .then(() =>
+        toast({
+          title: isFallback ? "Smart link copied (dev fallback)" : "Smart link copied",
+          description: smartLink,
+        }),
+      )
       .catch(() => toast({ title: "Copy failed", description: smartLink, variant: "destructive" as any }));
+  }
+
+  function onOpenSmartLink(smartLink: string, isFallback: boolean) {
+    console.log("[campaign-links] open smart link:", smartLink, isFallback ? "(dev fallback)" : "");
+  }
+
+  function onOpenWebLink(link: string) {
+    console.log("[campaign-links] open web link:", link);
   }
 
   const createMutation = useMutation({
@@ -401,15 +415,16 @@ export default function Campaigns() {
     return data.filter((c) => c.status === statusFilter);
   }, [data, statusFilter]);
 
-  const onCopyLink = async (c: GrowthCampaign) => {
+  const onCopyWebLink = async (c: GrowthCampaign) => {
     if (!c.referralCode) {
       toast({ title: "No referral code", description: "Add a referral code first.", variant: "destructive" });
       return;
     }
     const link = buildTrackingLink({ sourceType: c.sourceType as string, referralCode: c.referralCode });
+    console.log("[campaign-links] copy web link:", link);
     try {
       await navigator.clipboard.writeText(link);
-      toast({ title: "Tracking link copied", description: link });
+      toast({ title: "Web link copied", description: link });
     } catch {
       toast({ title: "Could not copy", description: link, variant: "destructive" });
     }
@@ -578,15 +593,16 @@ export default function Campaigns() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          {/* ── Web tracking link ── */}
+                          {/* ── Web tracking link (always points at the customer app) ── */}
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
                             disabled={!link}
-                            onClick={() => onCopyLink(c)}
-                            title={link ? `Copy web link: ${link}` : "Add a referral code first"}
-                            data-testid={`copy-link-${c.id}`}
+                            onClick={() => onCopyWebLink(c)}
+                            title={link ? `Copy web link — ${link}` : "Add a referral code first"}
+                            aria-label="Copy web link"
+                            data-testid={`copy-web-link-${c.id}`}
                           >
                             <Copy className="w-4 h-4" />
                           </Button>
@@ -595,9 +611,11 @@ export default function Campaigns() {
                               href={link}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => onOpenWebLink(link)}
                               className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                              title={`Open web link: ${link}`}
-                              data-testid={`open-link-${c.id}`}
+                              title={`Open web link — ${link}`}
+                              aria-label="Open web link"
+                              data-testid={`open-web-link-${c.id}`}
                             >
                               <ExternalLink className="w-4 h-4" />
                             </a>
@@ -609,18 +627,35 @@ export default function Campaigns() {
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => onCopySmartLink(c, smartLink)}
-                                title={`Copy smart link: ${smartLink}`}
+                                onClick={() => onCopySmartLink(c, smartLink.url, smartLink.isFallback)}
+                                title={
+                                  smartLink.isFallback
+                                    ? `Copy smart link (dev fallback) — ${smartLink.url}`
+                                    : `Copy smart link — ${smartLink.url}`
+                                }
+                                aria-label="Copy smart link"
                                 data-testid={`copy-smart-link-${c.id}`}
                               >
-                                <Link2 className="w-4 h-4 text-emerald-600" />
+                                <Link2
+                                  className={`w-4 h-4 ${smartLink.isFallback ? "text-amber-500" : "text-emerald-600"}`}
+                                />
                               </Button>
                               <a
-                                href={smartLink}
+                                href={smartLink.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                title={`Open smart link: ${smartLink}`}
+                                onClick={() => onOpenSmartLink(smartLink.url, smartLink.isFallback)}
+                                className={`inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-emerald-50 ${
+                                  smartLink.isFallback
+                                    ? "text-amber-500 hover:text-amber-600"
+                                    : "text-emerald-600 hover:text-emerald-700"
+                                }`}
+                                title={
+                                  smartLink.isFallback
+                                    ? `Open smart link (dev fallback) — ${smartLink.url}`
+                                    : `Open smart link — ${smartLink.url}`
+                                }
+                                aria-label="Open smart link"
                                 data-testid={`open-smart-link-${c.id}`}
                               >
                                 <ExternalLink className="w-4 h-4" />
@@ -919,15 +954,21 @@ function CampaignFormDialog({
           <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2 break-all">
             {previewSmartLink ? (
               <div>
-                <div className="text-slate-500 mb-1">Smart link preview:</div>
+                <div className="text-slate-500 mb-1">
+                  Smart link preview{previewSmartLink.isFallback ? " (dev fallback)" : ""}:
+                </div>
                 <a
-                  href={previewSmartLink}
+                  href={previewSmartLink.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-emerald-700 hover:text-emerald-800 underline-offset-2 hover:underline"
+                  className={`font-mono ${
+                    previewSmartLink.isFallback
+                      ? "text-amber-700 hover:text-amber-800"
+                      : "text-emerald-700 hover:text-emerald-800"
+                  } underline-offset-2 hover:underline`}
                   data-testid="campaign-smart-link-preview"
                 >
-                  {previewSmartLink}
+                  {previewSmartLink.url}
                 </a>
               </div>
             ) : null}

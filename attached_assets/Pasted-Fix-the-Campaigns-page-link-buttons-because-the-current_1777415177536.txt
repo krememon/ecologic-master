@@ -1,0 +1,80 @@
+Fix the Campaigns page link buttons because the current buttons are confusing/miswired.
+
+Current behavior:
+- The green open/link button opens:
+  https://8fcd742c-7227-4bca-94ca-4cdd115e7c77-00-2xidmmov9gx8r.kirk.replit.dev/go/joeplumbing
+
+- The copy button copies:
+  https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+That is confusing.
+
+Goal:
+Make the Campaigns page clearly separate Web Link and Smart Link actions.
+
+Expected links for staging:
+
+Web Link:
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Smart Link:
+https://staging-go.ecologicc.com/joeplumbing
+
+Expected links for production later:
+
+Web Link:
+https://app.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Smart Link:
+https://go.ecologicc.com/joeplumbing
+
+Fix requirements:
+
+1. Add clear actions/tooltips:
+- Copy Web Link
+- Open Web Link
+- Copy Smart Link
+- Open Smart Link
+
+2. Web link must always use the app/customer domain:
+- staging dashboard/replit preview should generate https://staging.ecologicc.com/signup?source=...&ref=...
+- production dashboard should generate https://app.ecologicc.com/signup?source=...&ref=...
+
+3. Smart link must always use the smart-link domain if SMART_LINK_DOMAIN is configured:
+- staging: https://staging-go.ecologicc.com/joeplumbing
+- production: https://go.ecologicc.com/joeplumbing
+
+4. The Open Smart Link button should NOT use the Replit preview URL when SMART_LINK_DOMAIN is set.
+It should open:
+https://staging-go.ecologicc.com/joeplumbing
+
+5. The Copy Smart Link button should also copy:
+https://staging-go.ecologicc.com/joeplumbing
+
+6. Use one shared buildWebTrackingLink(campaign) function for both copy/open web link.
+Use one shared buildSmartLink(campaign) function for both copy/open smart link.
+
+7. If SMART_LINK_DOMAIN is not configured, only then fallback smart link to:
+currentOrigin/go/referralCode
+
+8. Hide or disable smart-link buttons if the smart-link domain is missing, unless using dev fallback.
+
+9. Add temporary console logs when clicking buttons:
+[campaign-links] copy web link: ...
+[campaign-links] open web link: ...
+[campaign-links] copy smart link: ...
+[campaign-links] open smart link: ...
+
+10. Confirm Joe Plumbing in staging:
+Copy Web Link = https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+Open Web Link = https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+Copy Smart Link = https://staging-go.ecologicc.com/joeplumbing
+Open Smart Link = https://staging-go.ecologicc.com/joeplumbing
+
+Do not break:
+- click tracking
+- smart-link redirect route
+- campaign metrics
+- subscribers dashboard
+- Stripe/Apple/Google sync
+- account deletion
