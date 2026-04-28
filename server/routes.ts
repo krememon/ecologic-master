@@ -596,6 +596,15 @@ async function generateInvoicePdfForJob(
 export async function registerRoutes(app: Express): Promise<Server> {
   // Note: uploads directory and static route handled in index.ts (before all middleware)
 
+  // ── Smart-link redirector ──────────────────────────────────────────────
+  // Mounted FIRST so that:
+  //   • The smart-link hostname (go.ecologicc.com / staging-go.ecologicc.com)
+  //     never falls through to the React SPA.
+  //   • `/go/:referralCode` works on every hostname (Replit preview included).
+  // Read more in server/smartLinks.ts. Custom (Branch-free) implementation.
+  const { mountSmartLinkRoutes } = await import("./smartLinks");
+  mountSmartLinkRoutes(app);
+
   // Hostname diagnostic — helps verify routing for the private dashboard
   // domains (staging-dashboard.ecologicc.com / dashboard.ecologicc.com).
   // Customer-app paths are unaffected; this is observational only.

@@ -38,7 +38,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Copy, Pencil, Plus, Power, ExternalLink, Smartphone, RefreshCw } from "lucide-react";
+import { Copy, Pencil, Plus, Power, ExternalLink, Smartphone, RefreshCw, Link2 } from "lucide-react";
 import type { GrowthCampaign } from "@shared/schema";
 import {
   GROWTH_SOURCE_TYPES,
@@ -48,6 +48,8 @@ import {
 
 interface CampaignWithMetrics extends GrowthCampaign {
   signups: number;
+  paid: number;
+  mrr: number;
   mobileClicks: number;
   mobileInstalls: number;
   mobileOpens: number;
@@ -61,6 +63,15 @@ interface BranchConfigSummary {
   hasIosFallback: boolean;
   hasAndroidFallback: boolean;
   hasWebhookSecret: boolean;
+}
+
+// Smart-link config probe shape — matches getSmartLinkPublicConfig() server-side.
+interface SmartLinkConfigSummary {
+  smartLinkDomain: string | null;
+  webBaseUrl: string;
+  hasAppStoreUrl: boolean;
+  hasPlayStoreUrl: boolean;
+  knownHosts: string[];
 }
 
 // ── Tracking-link generation ─────────────────────────────────────────────────
@@ -106,6 +117,50 @@ function buildTrackingLink(c: { sourceType: string; referralCode: string | null 
   params.set("source", c.sourceType);
   if (c.referralCode) params.set("ref", c.referralCode);
   return `${origin}/signup?${params.toString()}`;
+}
+
+// ── Smart-link generation (custom branded redirector) ────────────────────────
+//
+// Format: https://<smartLinkDomain>/<referralCode>
+//
+// Hostname precedence (mirrors customerOriginForTrackingLink so prod/staging
+// can never get crossed up):
+//   1. staging-dashboard.ecologicc.com → staging-go.ecologicc.com
+//   2. dashboard.ecologicc.com         → go.ecologicc.com
+//   3. Server-provided smartLinkDomain (env var SMART_LINK_DOMAIN)
+//   4. Same-origin path-style fallback `<origin>/go/<code>` (Replit preview).
+function smartLinkOriginForDashboard(serverDomain: string | null | undefined): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (/^staging-dashboard\.ecologicc\.com$/i.test(host)) {
+      return "https://staging-go.ecologicc.com";
+    }
+    if (/^dashboard\.ecologicc\.com$/i.test(host)) {
+      return "https://go.ecologicc.com";
+    }
+  }
+  if (serverDomain && serverDomain.trim()) {
+    return `https://${serverDomain.trim()}`;
+  }
+  if (typeof window !== "undefined") {
+    return window.location.origin; // path-style fallback (will append /go/...)
+  }
+  return "https://staging-go.ecologicc.com";
+}
+
+function buildSmartLink(opts: {
+  referralCode: string | null;
+  serverDomain: string | null | undefined;
+}): string | null {
+  if (!opts.referralCode) return null;
+  const code = opts.referralCode.trim().toLowerCase();
+  if (!code) return null;
+  const origin = smartLinkOriginForDashboard(opts.serverDomain);
+  // If origin matches a "real" smart-link host (DNS configured), use the
+  // bare `/<code>` form. Otherwise use the path-style `/go/<code>` form so
+  // it works on Replit preview without DNS.
+  const isSmartHost = /\bgo\.ecologicc\.com$/i.test(origin) || /\bstaging-go\.ecologicc\.com$/i.test(origin);
+  return isSmartHost ? `${origin}/${code}` : `${origin}/go/${code}`;
 }
 
 // ── Form state ───────────────────────────────────────────────────────────────
@@ -203,6 +258,17 @@ export default function Campaigns() {
     queryKey: ["/api/admin/dashboard/branch/config"],
   });
   const branchReady = !!(branchConfig?.enabled && branchConfig?.hasKey);
+  // When Branch is not enabled (the default since we paused that integration),
+  // the entire Branch UI surface — toggle in form, mobile column, mobile-link
+  // buttons — is hidden so it never confuses admins. This flips back on as
+  // soon as BRANCH_INTEGRATION_ENABLED=true.
+  const branchUiVisible = !!branchConfig?.enabled;
+
+  // Smart-link config — feeds the Smart link column. Always-on; this is the
+  // primary mobile attribution path going forward.
+  const { data: smartLinkConfig } = useQuery<SmartLinkConfigSummary>({
+    queryKey: ["/api/admin/dashboard/smart-link/config"],
+  });
 
   // Track which row is currently regenerating its Branch link so we can show
   // a per-row spinner (multiple in flight is allowed but rare in practice).
@@ -252,6 +318,13 @@ export default function Campaigns() {
       .writeText(c.branchLinkUrl)
       .then(() => toast({ title: "Mobile link copied", description: c.branchLinkUrl ?? "" }))
       .catch(() => toast({ title: "Copy failed", description: c.branchLinkUrl ?? "", variant: "destructive" as any }));
+  }
+
+  function onCopySmartLink(_c: CampaignWithMetrics, smartLink: string) {
+    navigator.clipboard
+      .writeText(smartLink)
+      .then(() => toast({ title: "Smart link copied", description: smartLink }))
+      .catch(() => toast({ title: "Copy failed", description: smartLink, variant: "destructive" as any }));
   }
 
   const createMutation = useMutation({
@@ -366,6 +439,8 @@ export default function Campaigns() {
             onSubmit={() => createMutation.mutate(createForm)}
             submitLabel={createMutation.isPending ? "Creating…" : "Create campaign"}
             submitting={createMutation.isPending}
+            showBranchToggle={branchUiVisible}
+            smartLinkDomain={smartLinkConfig?.smartLinkDomain ?? null}
           />
         </Dialog>
       </header>
@@ -403,8 +478,33 @@ export default function Campaigns() {
                   <th className="text-left px-4 py-3">Source</th>
                   <th className="text-left px-4 py-3">Code</th>
                   <th className="text-left px-4 py-3">Status</th>
+                  <th
+                    className="text-right px-4 py-3"
+                    title="Clicks on the smart link (go.ecologicc.com/<code>)"
+                  >
+                    Clicks
+                  </th>
                   <th className="text-right px-4 py-3">Signups</th>
-                  <th className="text-right px-4 py-3" title="Mobile clicks / installs / opens (Branch)">Mobile</th>
+                  <th
+                    className="text-right px-4 py-3"
+                    title="Subscribers with subscription_status = active"
+                  >
+                    Paid
+                  </th>
+                  <th
+                    className="text-right px-4 py-3"
+                    title="Sum of monthly_revenue across active subscribers"
+                  >
+                    MRR
+                  </th>
+                  {branchUiVisible ? (
+                    <th
+                      className="text-right px-4 py-3"
+                      title="Mobile clicks / installs / opens (Branch — disabled by default)"
+                    >
+                      Mobile
+                    </th>
+                  ) : null}
                   <th className="text-right px-4 py-3">Cost</th>
                   <th className="text-right px-4 py-3">Actions</th>
                 </tr>
@@ -414,6 +514,10 @@ export default function Campaigns() {
                   const link = c.referralCode
                     ? buildTrackingLink({ sourceType: c.sourceType as string, referralCode: c.referralCode })
                     : null;
+                  const smartLink = buildSmartLink({
+                    referralCode: c.referralCode,
+                    serverDomain: smartLinkConfig?.smartLinkDomain,
+                  });
                   const statusActive = c.status === "active";
                   return (
                     <tr key={c.id} className="hover:bg-slate-50" data-testid={`campaign-row-${c.id}`}>
@@ -445,16 +549,30 @@ export default function Campaigns() {
                           {c.status}
                         </span>
                       </td>
+                      <td
+                        className="px-4 py-3 text-right text-slate-600 tabular-nums"
+                        title="Smart-link clicks (growth_mobile_events.event_type=click)"
+                      >
+                        {c.mobileClicks}
+                      </td>
                       <td className="px-4 py-3 text-right tabular-nums">{c.signups}</td>
                       <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
-                        {c.mobileTrackingEnabled ? (
-                          <span title="Clicks · Installs · Opens">
-                            {c.mobileClicks} · {c.mobileInstalls} · {c.mobileOpens}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                        {c.paid}
                       </td>
+                      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
+                        {c.mrr > 0 ? `$${c.mrr.toFixed(0)}` : "—"}
+                      </td>
+                      {branchUiVisible ? (
+                        <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
+                          {c.mobileTrackingEnabled ? (
+                            <span title="Clicks · Installs · Opens (Branch)">
+                              {c.mobileClicks} · {c.mobileInstalls} · {c.mobileOpens}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3 text-right text-slate-600 tabular-nums">
                         {c.cost != null ? `$${Number(c.cost).toFixed(0)}` : "—"}
                       </td>
@@ -467,7 +585,7 @@ export default function Campaigns() {
                             variant="ghost"
                             disabled={!link}
                             onClick={() => onCopyLink(c)}
-                            title={link ?? "Add a referral code first"}
+                            title={link ? `Copy web link: ${link}` : "Add a referral code first"}
                             data-testid={`copy-link-${c.id}`}
                           >
                             <Copy className="w-4 h-4" />
@@ -478,14 +596,39 @@ export default function Campaigns() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center justify-center h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                              title={link}
+                              title={`Open web link: ${link}`}
                               data-testid={`open-link-${c.id}`}
                             >
                               <ExternalLink className="w-4 h-4" />
                             </a>
                           ) : null}
-                          {/* ── Mobile (Branch) link controls ── */}
-                          {c.mobileTrackingEnabled ? (
+                          {/* ── Smart link (custom branded redirector) ── */}
+                          {smartLink ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onCopySmartLink(c, smartLink)}
+                                title={`Copy smart link: ${smartLink}`}
+                                data-testid={`copy-smart-link-${c.id}`}
+                              >
+                                <Link2 className="w-4 h-4 text-emerald-600" />
+                              </Button>
+                              <a
+                                href={smartLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center h-8 w-8 rounded-md text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                title={`Open smart link: ${smartLink}`}
+                                data-testid={`open-smart-link-${c.id}`}
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            </>
+                          ) : null}
+                          {/* ── Mobile (Branch) link controls — hidden unless Branch is enabled ── */}
+                          {branchUiVisible && c.mobileTrackingEnabled ? (
                             c.branchLinkUrl ? (
                               <>
                                 <Button
@@ -493,7 +636,7 @@ export default function Campaigns() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => onCopyMobileLink(c)}
-                                  title={`Copy mobile link: ${c.branchLinkUrl}`}
+                                  title={`Copy Branch link: ${c.branchLinkUrl}`}
                                   data-testid={`copy-mobile-link-${c.id}`}
                                 >
                                   <Smartphone className="w-4 h-4 text-emerald-600" />
@@ -587,6 +730,8 @@ export default function Campaigns() {
             onSubmit={() => updateMutation.mutate({ id: editing.id, form: editForm })}
             submitLabel={updateMutation.isPending ? "Saving…" : "Save changes"}
             submitting={updateMutation.isPending}
+            showBranchToggle={branchUiVisible}
+            smartLinkDomain={smartLinkConfig?.smartLinkDomain ?? null}
           />
         ) : null}
       </Dialog>
@@ -603,6 +748,8 @@ function CampaignFormDialog({
   onSubmit,
   submitLabel,
   submitting,
+  showBranchToggle,
+  smartLinkDomain,
 }: {
   title: string;
   description: string;
@@ -611,6 +758,8 @@ function CampaignFormDialog({
   onSubmit: () => void;
   submitLabel: string;
   submitting: boolean;
+  showBranchToggle: boolean;
+  smartLinkDomain: string | null;
 }) {
   const previewLink = form.referralCode.trim()
     ? buildTrackingLink({
@@ -618,6 +767,10 @@ function CampaignFormDialog({
         referralCode: form.referralCode.trim().toLowerCase(),
       })
     : null;
+  const previewSmartLink = buildSmartLink({
+    referralCode: form.referralCode.trim() || null,
+    serverDomain: smartLinkDomain,
+  });
   const canSubmit = form.name.trim().length > 0 && form.referralCode.trim().length > 0 && !submitting;
 
   return (
@@ -735,40 +888,62 @@ function CampaignFormDialog({
         </div>
 
         {/* ── Branch.io: opt-in mobile install tracking ────────────────────── */}
-        <div className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-slate-50">
-          <input
-            id="campaign-mobile-tracking"
-            type="checkbox"
-            className="mt-1 h-4 w-4 accent-emerald-600"
-            checked={!!form.mobileTrackingEnabled}
-            onChange={(e) => setForm({ ...form, mobileTrackingEnabled: e.target.checked })}
-            data-testid="campaign-mobile-tracking-toggle"
-          />
-          <div className="text-xs text-slate-600 leading-snug">
-            <Label
-              htmlFor="campaign-mobile-tracking"
-              className="text-sm font-medium text-slate-800 cursor-pointer"
-            >
-              Enable mobile install tracking with Branch
-            </Label>
-            <p className="mt-0.5 text-slate-500">
-              When on, you can generate a Branch deep link for this campaign from the row actions.
-              Mobile clicks, installs and opens will be recorded once Branch is configured on the server.
-            </p>
+        {/* Hidden by default since Branch is paused. Re-appears when         */}
+        {/* BRANCH_INTEGRATION_ENABLED=true on the server.                    */}
+        {showBranchToggle ? (
+          <div className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-slate-50">
+            <input
+              id="campaign-mobile-tracking"
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-emerald-600"
+              checked={!!form.mobileTrackingEnabled}
+              onChange={(e) => setForm({ ...form, mobileTrackingEnabled: e.target.checked })}
+              data-testid="campaign-mobile-tracking-toggle"
+            />
+            <div className="text-xs text-slate-600 leading-snug">
+              <Label
+                htmlFor="campaign-mobile-tracking"
+                className="text-sm font-medium text-slate-800 cursor-pointer"
+              >
+                Enable mobile install tracking with Branch
+              </Label>
+              <p className="mt-0.5 text-slate-500">
+                When on, you can generate a Branch deep link for this campaign from the row actions.
+                Mobile clicks, installs and opens will be recorded once Branch is configured on the server.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {previewLink ? (
-          <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 break-all">
-            <div className="text-slate-500 mb-1">Tracking link preview:</div>
-            <a
-              href={previewLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-slate-800 hover:text-slate-900 underline-offset-2 hover:underline"
-            >
-              {previewLink}
-            </a>
+        {(previewLink || previewSmartLink) ? (
+          <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2 break-all">
+            {previewSmartLink ? (
+              <div>
+                <div className="text-slate-500 mb-1">Smart link preview:</div>
+                <a
+                  href={previewSmartLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-emerald-700 hover:text-emerald-800 underline-offset-2 hover:underline"
+                  data-testid="campaign-smart-link-preview"
+                >
+                  {previewSmartLink}
+                </a>
+              </div>
+            ) : null}
+            {previewLink ? (
+              <div>
+                <div className="text-slate-500 mb-1">Web link preview:</div>
+                <a
+                  href={previewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-slate-800 hover:text-slate-900 underline-offset-2 hover:underline"
+                >
+                  {previewLink}
+                </a>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -49,6 +49,7 @@ import {
   verifyWebhookSecret,
   getBranchPublicConfigSummary,
 } from "../branch";
+import { getSmartLinkPublicConfig } from "../smartLinks";
 import { db } from "../db";
 import {
   growthCampaigns,
@@ -302,6 +303,18 @@ export function registerDashboardRoutes(app: Express): void {
     } catch (err) {
       console.error("[dashboard-branch] config probe error:", err);
       res.status(500).json({ message: "Failed to load Branch config" });
+    }
+  });
+
+  // ── Smart-link redirector config probe (admin) ───────────────────────────
+  // Lets the dashboard show the canonical smart link for each campaign and
+  // warn if iOS/Android fallbacks are missing. Non-secret values only.
+  app.get("/api/admin/dashboard/smart-link/config", ...gate, async (_req: Request, res: Response) => {
+    try {
+      res.json(getSmartLinkPublicConfig());
+    } catch (err) {
+      console.error("[dashboard-smart-link] config probe error:", err);
+      res.status(500).json({ message: "Failed to load smart-link config" });
     }
   });
 

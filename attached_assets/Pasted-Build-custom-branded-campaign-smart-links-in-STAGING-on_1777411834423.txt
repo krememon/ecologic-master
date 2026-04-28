@@ -1,0 +1,168 @@
+Build custom branded campaign smart links in STAGING only.
+
+Goal:
+Create our own Branch-free link system using:
+
+go.ecologicc.com/:referralCode
+
+Example:
+https://go.ecologicc.com/joeplumbing
+
+When someone clicks the link:
+- Track the click in growth_mobile_events
+- Match the referralCode to growth_campaigns
+- Detect device type
+- iPhone/iPad → App Store URL
+- Android → Google Play URL
+- Desktop → web signup URL
+- Preserve source/ref for web signup
+
+Important:
+Build in STAGING only.
+Do not use Branch.
+Do not require Branch env vars.
+Do not break existing web campaign links, dashboard, Stripe, Apple, Google Play, onboarding, or account deletion.
+
+PART 1 — Domain behavior
+
+Support a new branded link domain:
+
+go.ecologicc.com
+
+For staging testing, also support:
+
+staging-go.ecologicc.com
+
+or allow testing from Replit preview with a path like:
+
+/go/:referralCode
+
+Preferred production link:
+https://go.ecologicc.com/joeplumbing
+
+Preferred staging link:
+https://staging-go.ecologicc.com/joeplumbing
+
+PART 2 — Redirect route
+
+Create a public route:
+
+GET /go/:referralCode
+
+Also support root-domain smart links when hostname is go.ecologicc.com or staging-go.ecologicc.com:
+
+GET /:referralCode
+
+but only on the go-link hostnames, not app/staging customer app hostnames.
+
+Logic:
+1. Normalize referralCode lowercase.
+2. Find active campaign in growth_campaigns by referralCode.
+3. If no campaign found, redirect to normal web signup.
+4. Insert click event into growth_mobile_events:
+   eventType = click
+   referralCode
+   campaignId
+   sourceType
+   sourceName
+   platform = ios/android/web/unknown based on user agent
+   createdAt
+5. Build fallback URLs:
+   Desktop/web:
+   https://staging.ecologicc.com/signup?source=SOURCE_TYPE&ref=REFERRAL_CODE
+
+   iPhone/iPad:
+   App Store URL from env:
+   APP_STORE_URL
+
+   Android:
+   Google Play URL from env:
+   PLAY_STORE_URL
+
+6. Redirect based on device:
+   iOS → APP_STORE_URL
+   Android → PLAY_STORE_URL
+   desktop → web signup URL
+
+PART 3 — Environment variables
+
+Add support for:
+
+APP_STORE_URL
+PLAY_STORE_URL
+SMART_LINK_WEB_BASE_URL=https://staging.ecologicc.com
+SMART_LINK_DOMAIN=staging-go.ecologicc.com
+
+Later production will use:
+SMART_LINK_WEB_BASE_URL=https://app.ecologicc.com
+SMART_LINK_DOMAIN=go.ecologicc.com
+
+PART 4 — Dashboard Campaigns UI
+
+On Campaigns page, show:
+
+Web link:
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Smart link:
+https://staging-go.ecologicc.com/joeplumbing
+
+Buttons:
+- Copy Web Link
+- Copy Smart Link
+- Open Smart Link
+
+Do not show Branch buttons as the primary action.
+If Branch code is dormant, keep it hidden unless BRANCH_INTEGRATION_ENABLED=true.
+
+Campaigns table should show:
+- Clicks
+- Signups
+- Paid
+- MRR
+
+Clicks should come from growth_mobile_events where eventType=click.
+
+PART 5 — Dashboard metrics
+
+Update campaign metrics:
+- Clicks = click events from growth_mobile_events
+- Signups = growth_subscribers count
+- Paid = active subscribers count
+- MRR = active monthlyRevenue sum
+
+Sources page can stay as-is for now.
+
+PART 6 — Safety
+
+Do not track sensitive personal data.
+Do not store full IP addresses unless already standard.
+Do not break normal app routing.
+Do not let go-link hostname render the full app.
+go.ecologicc.com should only be a redirect/link domain.
+
+PART 7 — Testing
+
+After implementation, give testing steps:
+
+1. Create or use Joe Plumbing campaign.
+2. Confirm smart link displays:
+   https://staging-go.ecologicc.com/joeplumbing
+3. Open smart link on desktop.
+4. Confirm it redirects to:
+   https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+5. Confirm Campaigns clicks increments.
+6. Test iPhone user-agent or real iPhone:
+   smart link redirects to App Store URL.
+7. Test Android user-agent or real Android:
+   smart link redirects to Google Play URL.
+8. Confirm normal web signup attribution still works.
+9. Confirm dashboard Subscribers still works.
+
+Deliverables:
+- Files changed
+- Env vars needed
+- DNS/domain setup needed
+- How clicks are tracked
+- How device redirects work
+- Testing steps

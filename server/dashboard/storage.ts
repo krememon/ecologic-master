@@ -89,6 +89,11 @@ export interface CampaignWithMetrics extends GrowthCampaign {
   mobileClicks: number;
   mobileInstalls: number;
   mobileOpens: number;
+  // Active subscriber count per campaign (status = 'active'). Used as the
+  // "Paid" column on the dashboard.
+  paid: number;
+  // Sum of monthly_revenue across active subscribers (in USD, 2dp).
+  mrr: number;
 }
 
 export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetrics[]> {
@@ -96,14 +101,37 @@ export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetr
   // QueryResult object — the rows live on `.rows`, NOT on the result itself.
   // Destructuring or iterating the result directly throws
   // "TypeError: (intermediate value) is not iterable".
-  const subRes = await db.execute<{ id: number; signups: string }>(sql`
-    SELECT campaign_id AS id, count(*)::text AS signups
+  //
+  // Single roll-up query covers all subscriber-derived counters per campaign:
+  //   • signups = total rows
+  //   • paid    = rows with subscription_status = 'active'
+  //   • mrr     = sum of monthly_revenue across those active rows
+  const subRes = await db.execute<{
+    id: number;
+    signups: string;
+    paid: string;
+    mrr: string;
+  }>(sql`
+    SELECT
+      campaign_id AS id,
+      count(*)::text AS signups,
+      count(*) FILTER (WHERE subscription_status = 'active')::text AS paid,
+      COALESCE(
+        sum(monthly_revenue) FILTER (WHERE subscription_status = 'active'),
+        0
+      )::text AS mrr
     FROM growth_subscribers
     WHERE campaign_id IS NOT NULL
     GROUP BY campaign_id
   `);
-  const subCounts = new Map<number, number>();
-  for (const r of (subRes as any).rows ?? []) subCounts.set(Number(r.id), Number(r.signups));
+  const subCounts = new Map<number, { signups: number; paid: number; mrr: number }>();
+  for (const r of (subRes as any).rows ?? []) {
+    subCounts.set(Number(r.id), {
+      signups: Number(r.signups ?? 0),
+      paid: Number(r.paid ?? 0),
+      mrr: Number(r.mrr ?? 0),
+    });
+  }
 
   // Per-campaign mobile event counts. Pivoted in SQL so we get one row per
   // campaign with click / install / open buckets.
@@ -134,9 +162,12 @@ export async function listGrowthCampaignsWithMetrics(): Promise<CampaignWithMetr
   const campaigns = await listGrowthCampaigns();
   return campaigns.map((c) => {
     const m = mobCounts.get(c.id);
+    const s = subCounts.get(c.id);
     return {
       ...c,
-      signups: subCounts.get(c.id) ?? 0,
+      signups: s?.signups ?? 0,
+      paid: s?.paid ?? 0,
+      mrr: s?.mrr ?? 0,
       mobileClicks: m?.clicks ?? 0,
       mobileInstalls: m?.installs ?? 0,
       mobileOpens: m?.opens ?? 0,
