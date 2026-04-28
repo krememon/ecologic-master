@@ -1,0 +1,249 @@
+Build an Accounts management section inside the private EcoLogic dashboard in STAGING only.
+
+Context:
+We now have a private admin dashboard at staging-dashboard.ecologicc.com.
+It already tracks campaigns, subscribers, sources, and Stripe subscription sync.
+I now want to manage EcoLogic customer accounts from this private admin dashboard.
+
+Important:
+Build in STAGING only.
+Do not touch production.
+Do not break the customer app, login, billing, Stripe, Apple IAP, Google Play IAP, jobs, onboarding, or subscriptions.
+All new APIs must stay under the admin dashboard namespace:
+/api/admin/dashboard/*
+
+Dashboard access must remain controlled by DASHBOARD_ADMIN_EMAILS only.
+Do not grant access based on normal customer company role.
+
+Goal:
+Add an “Accounts” page to the private dashboard where approved admins can view and manage customer companies/accounts.
+
+PART 1 — Navigation
+
+Add a new sidebar nav item:
+
+Accounts
+
+Place it near Subscribers.
+
+Suggested order:
+- Overview
+- Accounts
+- Subscribers
+- Sources
+- Campaigns
+- Creators
+- Platforms
+- Settings
+
+PART 2 — Accounts list page
+
+Create:
+
+/dashboard/accounts
+
+The page should show all customer companies/accounts.
+
+Columns:
+- Company name
+- Owner name
+- Owner email
+- Account status
+- Subscription status
+- Plan
+- Platform
+- MRR
+- Source
+- Campaign
+- Signup date
+- Onboarded
+- Actions
+
+Add filters/search:
+- Search by company name
+- Search by owner email
+- Subscription status
+- Platform
+- Source
+- Campaign
+- Onboarded yes/no
+
+Important:
+This page should include accounts even if they do NOT have attribution.
+Unlike the Subscribers page, Accounts should show all companies/customers.
+
+PART 3 — Account detail view
+
+When clicking an account row, open a detail drawer or detail page.
+
+Show:
+- Company name
+- Company ID
+- Owner name
+- Owner email
+- Owner user ID
+- Created date
+- Onboarding status
+- Account status
+- Subscription platform
+- Subscription status
+- Plan
+- Monthly revenue
+- Stripe customer ID if available
+- Stripe subscription ID if available
+- Apple transaction/original transaction ID if available
+- Google purchase token/order ID if available
+- Source type
+- Source name
+- Campaign
+- Referral code
+- Notes
+
+Also show users/team members if easy:
+- Name
+- Email
+- Role
+- Joined date
+
+PART 4 — Safe account management actions
+
+For V1, add only safe actions first:
+
+1. Edit attribution/source
+Allow admin to manually update:
+- sourceType
+- sourceName
+- campaignId
+- referralCode
+
+2. Edit admin notes
+Allow internal notes on the account.
+
+3. Mark account status
+Allow:
+- active
+- inactive
+- test
+- internal
+- blocked
+
+This should be an internal dashboard status only unless an existing app-level status already exists.
+
+4. Refresh subscription data
+Button:
+Refresh Subscription
+
+This should re-check current known Stripe subscription/customer data if available and update the dashboard fields.
+
+Do NOT add destructive actions yet:
+- Do not delete companies
+- Do not delete users
+- Do not permanently cancel subscriptions unless we explicitly add it later
+- Do not impersonate users yet
+
+PART 5 — Backend APIs
+
+Create protected admin-only APIs:
+
+GET /api/admin/dashboard/accounts
+GET /api/admin/dashboard/accounts/:companyId
+PATCH /api/admin/dashboard/accounts/:companyId/attribution
+PATCH /api/admin/dashboard/accounts/:companyId/status
+PATCH /api/admin/dashboard/accounts/:companyId/notes
+POST /api/admin/dashboard/accounts/:companyId/refresh-subscription
+
+All routes must be dashboard-admin-only.
+
+PART 6 — Data source
+
+The Accounts page should join data from:
+- companies table
+- users/memberships table
+- growth_subscribers table if it exists
+- growth_campaigns table if attribution exists
+- subscription/billing/company fields already used by EcoLogic
+- Stripe customer/subscription IDs if available
+
+Important:
+If a company has no growth_subscribers row yet, still show it in Accounts.
+If an admin manually adds attribution to an account, create or update a growth_subscribers row for that company.
+
+PART 7 — Account status and notes
+
+If existing schema does not already support internal account status/notes, add a small admin-only table:
+
+growth_account_admin
+
+Fields:
+- id
+- companyId
+- status
+- notes
+- createdAt
+- updatedAt
+
+Status options:
+- active
+- inactive
+- test
+- internal
+- blocked
+
+This should not affect customer access yet unless we explicitly wire blocked later.
+
+PART 8 — UI design
+
+Keep it clean and simple.
+
+Accounts page should look similar to Subscribers page.
+
+Use friendly labels:
+- stripe → Stripe
+- apple → Apple
+- google_play → Google Play
+- unknown → Unknown
+- trialing → Free Trial
+- active → Active
+- canceled → Canceled
+- past_due → Past Due
+- unknown → Unknown
+
+PART 9 — Logs
+
+Add safe logs:
+
+[dashboard-accounts] listing accounts
+[dashboard-accounts] loading account detail
+[dashboard-accounts] updating attribution
+[dashboard-accounts] updating account status
+[dashboard-accounts] updating notes
+[dashboard-accounts] refreshing subscription
+[dashboard-accounts] access denied
+
+Do not log sensitive payment details.
+
+PART 10 — Testing
+
+After implementation, give me testing steps for:
+
+1. Open staging-dashboard.ecologicc.com/dashboard/accounts.
+2. Confirm all companies show, not just attributed subscribers.
+3. Search by company name.
+4. Search by owner email.
+5. Open an account detail.
+6. Confirm subscription/source fields show.
+7. Edit attribution manually.
+8. Confirm the account updates.
+9. Confirm Subscribers page also reflects attribution if applicable.
+10. Add internal note.
+11. Change internal account status to test.
+12. Refresh subscription data.
+13. Confirm normal customer app still works.
+
+Deliverables:
+- Files changed
+- New APIs
+- Any schema changes
+- How Accounts differs from Subscribers
+- What actions are safe in V1
+- Testing steps

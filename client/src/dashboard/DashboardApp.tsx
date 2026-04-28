@@ -15,6 +15,7 @@ import { setAppMode } from "./lib/host";
 import { buildLoginUrlWithReturnTo } from "@/lib/dashboardReturnTo";
 import { DashboardLayout } from "./components/DashboardLayout";
 import Overview from "./pages/Overview";
+import Accounts from "./pages/Accounts";
 import Subscribers from "./pages/Subscribers";
 import Sources from "./pages/Sources";
 import Campaigns from "./pages/Campaigns";
@@ -120,6 +121,7 @@ export default function DashboardApp() {
     <DashboardLayout email={email}>
       <Switch>
         <Route path="/" component={Overview} />
+        <Route path="/accounts" component={Accounts} />
         <Route path="/subscribers" component={Subscribers} />
         <Route path="/sources" component={Sources} />
         <Route path="/campaigns" component={Campaigns} />

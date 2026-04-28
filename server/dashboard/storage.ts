@@ -12,12 +12,17 @@ import {
   growthSubscribers,
   growthCampaigns,
   growthCreators,
+  growthAccountAdmin,
   companies,
+  users,
+  companyMembers,
+  ACCOUNT_ADMIN_STATUSES,
   type GrowthSubscriber,
   type GrowthCampaign,
   type GrowthCreator,
   type InsertGrowthCampaign,
   type InsertGrowthCreator,
+  type AccountAdminStatus,
 } from "@shared/schema";
 import { subscriptionPlans } from "@shared/subscriptionPlans";
 import { getPlanKeyForPriceId } from "../billingService";
@@ -653,4 +658,457 @@ export async function getSourceBreakdown(): Promise<SourceRow[]> {
     monthlyRevenue: Number(r.mrr ?? 0),
     totalRevenue: Number(r.total_rev ?? 0),
   }));
+}
+
+// ── Accounts (private dashboard) ──────────────────────────────────────────
+//
+// The Accounts surface lists EVERY customer company — attributed or not —
+// joined to its owner, internal admin metadata (status/notes), and any
+// existing growth_subscribers attribution row. It is admin-only and never
+// exposed to the customer app.
+
+export interface AccountListRow {
+  companyId: number;
+  companyName: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerUserId: string | null;
+  // Internal status (defaults to "active" when no admin row exists yet)
+  accountStatus: AccountAdminStatus;
+  // Subscription (read from growth_subscribers when present, else companies)
+  subscriptionStatus: string | null;
+  plan: string | null;
+  platform: string | null;
+  monthlyRevenue: string | null;
+  // Attribution (from growth_subscribers)
+  sourceType: string | null;
+  sourceName: string | null;
+  campaignId: number | null;
+  campaignName: string | null;
+  referralCode: string | null;
+  // Lifecycle
+  signupAt: Date | null;
+  onboardingCompletedAt: Date | null;
+  hasGrowthSubscriber: boolean;
+}
+
+/**
+ * List every customer company with joined owner + attribution + admin info.
+ *
+ * Differs from the Subscribers list:
+ *   • Subscribers iterates `growth_subscribers` (attribution-only).
+ *   • Accounts iterates `companies` (every customer, attributed or not).
+ *
+ * `growth_subscribers.companyId` is NOT unique by schema, so we use a
+ * DISTINCT ON subquery to deterministically pick the newest attribution row
+ * per company. Otherwise a duplicate subscriber row would inflate the list.
+ */
+export async function listAccounts(): Promise<AccountListRow[]> {
+  // NOTE: neon-serverless `db.execute()` returns a QueryResult — rows live on
+  // `.rows`, not on the result itself.
+  const result = await db.execute<{
+    company_id: number;
+    company_name: string;
+    company_created_at: string | null;
+    company_onboarding_completed: boolean | null;
+    company_sub_status: string | null;
+    company_plan: string | null;
+    company_platform: string | null;
+    owner_id: string | null;
+    owner_email: string | null;
+    owner_first_name: string | null;
+    owner_last_name: string | null;
+    admin_status: string | null;
+    sub_id: number | null;
+    sub_status: string | null;
+    sub_plan: string | null;
+    sub_platform: string | null;
+    sub_mrr: string | null;
+    sub_source_type: string | null;
+    sub_source_name: string | null;
+    sub_campaign_id: number | null;
+    sub_referral_code: string | null;
+    sub_signup_at: string | null;
+    sub_onboarding_completed_at: string | null;
+    campaign_name: string | null;
+  }>(sql`
+    WITH attribution AS (
+      SELECT DISTINCT ON (company_id) *
+      FROM growth_subscribers
+      WHERE company_id IS NOT NULL
+      ORDER BY company_id, created_at DESC NULLS LAST, id DESC
+    )
+    SELECT
+      c.id                          AS company_id,
+      c.name                        AS company_name,
+      c.created_at                  AS company_created_at,
+      c.onboarding_completed        AS company_onboarding_completed,
+      c.subscription_status         AS company_sub_status,
+      c.subscription_plan           AS company_plan,
+      c.subscription_platform       AS company_platform,
+      u.id                          AS owner_id,
+      u.email                       AS owner_email,
+      u.first_name                  AS owner_first_name,
+      u.last_name                   AS owner_last_name,
+      a.status                      AS admin_status,
+      s.id                          AS sub_id,
+      s.subscription_status         AS sub_status,
+      s.plan                        AS sub_plan,
+      s.platform                    AS sub_platform,
+      s.monthly_revenue             AS sub_mrr,
+      s.source_type                 AS sub_source_type,
+      s.source_name                 AS sub_source_name,
+      s.campaign_id                 AS sub_campaign_id,
+      s.referral_code               AS sub_referral_code,
+      s.signup_at                   AS sub_signup_at,
+      s.onboarding_completed_at     AS sub_onboarding_completed_at,
+      camp.name                     AS campaign_name
+    FROM companies c
+    LEFT JOIN users u                ON u.id = c.owner_id
+    LEFT JOIN attribution s          ON s.company_id = c.id
+    LEFT JOIN growth_campaigns camp  ON camp.id = s.campaign_id
+    LEFT JOIN growth_account_admin a ON a.company_id = c.id
+    ORDER BY c.created_at DESC NULLS LAST
+  `);
+  const rows = (result as any).rows ?? [];
+
+  return rows.map((r: any) => ({
+    companyId: Number(r.company_id),
+    companyName: r.company_name,
+    ownerName: [r.owner_first_name, r.owner_last_name].filter(Boolean).join(" ") || null,
+    ownerEmail: r.owner_email ?? null,
+    ownerUserId: r.owner_id ?? null,
+    accountStatus: ((r.admin_status as AccountAdminStatus) ?? "active"),
+    subscriptionStatus: r.sub_status ?? r.company_sub_status ?? null,
+    plan: r.sub_plan ?? r.company_plan ?? null,
+    platform: r.sub_platform ?? r.company_platform ?? null,
+    monthlyRevenue: r.sub_mrr != null ? String(r.sub_mrr) : null,
+    sourceType: r.sub_source_type ?? null,
+    sourceName: r.sub_source_name ?? null,
+    campaignId: r.sub_campaign_id != null ? Number(r.sub_campaign_id) : null,
+    campaignName: r.campaign_name ?? null,
+    referralCode: r.sub_referral_code ?? null,
+    signupAt: r.sub_signup_at ?? r.company_created_at ?? null,
+    onboardingCompletedAt:
+      r.sub_onboarding_completed_at ??
+      (r.company_onboarding_completed ? r.company_created_at ?? null : null),
+    hasGrowthSubscriber: r.sub_id != null,
+  }));
+}
+
+export interface AccountDetailMember {
+  userId: string;
+  email: string | null;
+  name: string | null;
+  role: string;
+  joinedAt: Date | null;
+}
+
+export interface AccountDetail extends AccountListRow {
+  // Identifiers / billing IDs
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  appleOriginalTransactionId: string | null;
+  appleTransactionId: string | null;
+  googlePurchaseToken: string | null;
+  googleOrderId: string | null;
+  // Internal admin fields
+  notes: string | null;
+  // Team
+  members: AccountDetailMember[];
+}
+
+export async function getAccountDetail(companyId: number): Promise<AccountDetail | null> {
+  const [row] = await db
+    .select({
+      companyId: companies.id,
+      companyName: companies.name,
+      companyCreatedAt: companies.createdAt,
+      companyOnboardingCompleted: companies.onboardingCompleted,
+      companySubStatus: companies.subscriptionStatus,
+      companyPlan: companies.subscriptionPlan,
+      companyPlatform: companies.subscriptionPlatform,
+      companyStripeCustId: companies.stripeCustomerId,
+      companyStripeSubId: companies.stripeSubscriptionId,
+      ownerId: users.id,
+      ownerEmail: users.email,
+      ownerFirstName: users.firstName,
+      ownerLastName: users.lastName,
+      adminStatus: growthAccountAdmin.status,
+      adminNotes: growthAccountAdmin.notes,
+      subId: growthSubscribers.id,
+      subStatus: growthSubscribers.subscriptionStatus,
+      subPlan: growthSubscribers.plan,
+      subPlatform: growthSubscribers.platform,
+      subMrr: growthSubscribers.monthlyRevenue,
+      subSourceType: growthSubscribers.sourceType,
+      subSourceName: growthSubscribers.sourceName,
+      subCampaignId: growthSubscribers.campaignId,
+      subReferralCode: growthSubscribers.referralCode,
+      subSignupAt: growthSubscribers.signupAt,
+      subOnboardingCompletedAt: growthSubscribers.onboardingCompletedAt,
+      subStripeCustId: growthSubscribers.stripeCustomerId,
+      subStripeSubId: growthSubscribers.stripeSubscriptionId,
+      subAppleOrig: growthSubscribers.appleOriginalTransactionId,
+      subAppleTx: growthSubscribers.appleTransactionId,
+      subGoogleToken: growthSubscribers.googlePurchaseToken,
+      subGoogleOrder: growthSubscribers.googleOrderId,
+      campaignName: growthCampaigns.name,
+    })
+    .from(companies)
+    .leftJoin(users, eq(users.id, companies.ownerId))
+    .leftJoin(growthSubscribers, eq(growthSubscribers.companyId, companies.id))
+    .leftJoin(growthCampaigns, eq(growthCampaigns.id, growthSubscribers.campaignId))
+    .leftJoin(growthAccountAdmin, eq(growthAccountAdmin.companyId, companies.id))
+    .where(eq(companies.id, companyId))
+    .limit(1);
+
+  if (!row) return null;
+
+  const memberRows = await db
+    .select({
+      userId: companyMembers.userId,
+      role: companyMembers.role,
+      joinedAt: companyMembers.createdAt,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    })
+    .from(companyMembers)
+    .leftJoin(users, eq(users.id, companyMembers.userId))
+    .where(eq(companyMembers.companyId, companyId));
+
+  return {
+    companyId: row.companyId,
+    companyName: row.companyName,
+    ownerName: [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") || null,
+    ownerEmail: row.ownerEmail ?? null,
+    ownerUserId: row.ownerId ?? null,
+    accountStatus: ((row.adminStatus as AccountAdminStatus) ?? "active"),
+    subscriptionStatus: row.subStatus ?? row.companySubStatus ?? null,
+    plan: row.subPlan ?? row.companyPlan ?? null,
+    platform: row.subPlatform ?? row.companyPlatform ?? null,
+    monthlyRevenue: row.subMrr != null ? String(row.subMrr) : null,
+    sourceType: row.subSourceType ?? null,
+    sourceName: row.subSourceName ?? null,
+    campaignId: row.subCampaignId ?? null,
+    campaignName: row.campaignName ?? null,
+    referralCode: row.subReferralCode ?? null,
+    signupAt: row.subSignupAt ?? row.companyCreatedAt ?? null,
+    onboardingCompletedAt:
+      row.subOnboardingCompletedAt ??
+      (row.companyOnboardingCompleted ? row.companyCreatedAt ?? null : null),
+    hasGrowthSubscriber: row.subId != null,
+    stripeCustomerId: row.subStripeCustId ?? row.companyStripeCustId ?? null,
+    stripeSubscriptionId: row.subStripeSubId ?? row.companyStripeSubId ?? null,
+    appleOriginalTransactionId: row.subAppleOrig ?? null,
+    appleTransactionId: row.subAppleTx ?? null,
+    googlePurchaseToken: row.subGoogleToken ?? null,
+    googleOrderId: row.subGoogleOrder ?? null,
+    notes: row.adminNotes ?? null,
+    members: memberRows.map((m) => ({
+      userId: m.userId,
+      email: m.email ?? null,
+      name: [m.firstName, m.lastName].filter(Boolean).join(" ") || null,
+      role: String(m.role),
+      joinedAt: m.joinedAt ?? null,
+    })),
+  };
+}
+
+/**
+ * Manually set or update the attribution on a company. If the company already
+ * has a growth_subscribers row we patch it in place; otherwise we create one
+ * seeded from the company + owner so the row has the same shape as one
+ * created naturally during onboarding. Idempotent.
+ *
+ * If a campaign with the supplied referralCode exists, its id wins over any
+ * caller-supplied campaignId so the join in the Accounts/Subscribers UI lights
+ * up correctly.
+ */
+export async function updateAccountAttribution(
+  companyId: number,
+  payload: {
+    sourceType?: string | null;
+    sourceName?: string | null;
+    campaignId?: number | null;
+    referralCode?: string | null;
+  },
+): Promise<{ created: boolean; row: GrowthSubscriber | null }> {
+  const [company] = await db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      createdAt: companies.createdAt,
+      ownerId: companies.ownerId,
+      stripeCustId: companies.stripeCustomerId,
+      stripeSubId: companies.stripeSubscriptionId,
+    })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+  if (!company) return { created: false, row: null };
+
+  const [owner] = company.ownerId
+    ? await db.select({ email: users.email }).from(users).where(eq(users.id, company.ownerId)).limit(1)
+    : [];
+
+  const code = normalizeReferralCode(payload.referralCode ?? null);
+  const matchedCampaign = code ? await findActiveCampaignByReferralCode(code) : null;
+
+  const baseAttribution: Record<string, any> = {
+    sourceType: (payload.sourceType ?? null) as any,
+    sourceName: payload.sourceName ?? null,
+    referralCode: code,
+    // Prefer matched campaign id when the code resolves; else accept caller's id.
+    campaignId: matchedCampaign?.id ?? payload.campaignId ?? null,
+    updatedAt: new Date(),
+  };
+
+  // companyId is not unique on growth_subscribers (no DB constraint), so we
+  // deterministically pick the newest row to update — same row used by the
+  // Accounts list query — instead of relying on insert order.
+  const [existing] = await db
+    .select()
+    .from(growthSubscribers)
+    .where(eq(growthSubscribers.companyId, companyId))
+    .orderBy(desc(growthSubscribers.createdAt), desc(growthSubscribers.id))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(growthSubscribers)
+      .set(baseAttribution as any)
+      .where(eq(growthSubscribers.id, existing.id));
+    const [row] = await db
+      .select()
+      .from(growthSubscribers)
+      .where(eq(growthSubscribers.id, existing.id))
+      .limit(1);
+    console.log(
+      `[dashboard-accounts] updating attribution — companyId=${companyId} subscriberId=${existing.id} sourceType=${payload.sourceType ?? "—"} code=${code ?? "—"}`
+    );
+    return { created: false, row: row ?? null };
+  }
+
+  // Seed a fresh attribution row so the company shows up on Subscribers too.
+  const [created] = await db
+    .insert(growthSubscribers)
+    .values({
+      ...baseAttribution,
+      userId: company.ownerId,
+      companyId: company.id,
+      ownerEmail: owner?.email ?? null,
+      companyName: company.name,
+      platform: "stripe" as any,
+      subscriptionStatus: "unknown" as any,
+      stripeCustomerId: company.stripeCustId ?? null,
+      stripeSubscriptionId: company.stripeSubId ?? null,
+      signupAt: company.createdAt ?? new Date(),
+    } as any)
+    .returning();
+  console.log(
+    `[dashboard-accounts] updating attribution — companyId=${companyId} created new growth_subscribers row id=${created?.id} sourceType=${payload.sourceType ?? "—"} code=${code ?? "—"}`
+  );
+  return { created: true, row: created ?? null };
+}
+
+async function upsertAccountAdmin(
+  companyId: number,
+  patch: { status?: AccountAdminStatus; notes?: string | null },
+): Promise<typeof growthAccountAdmin.$inferSelect | null> {
+  const [existing] = await db
+    .select()
+    .from(growthAccountAdmin)
+    .where(eq(growthAccountAdmin.companyId, companyId))
+    .limit(1);
+
+  if (existing) {
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (patch.status !== undefined) updates.status = patch.status;
+    if (patch.notes !== undefined) updates.notes = patch.notes;
+    await db.update(growthAccountAdmin).set(updates).where(eq(growthAccountAdmin.id, existing.id));
+    const [row] = await db
+      .select()
+      .from(growthAccountAdmin)
+      .where(eq(growthAccountAdmin.id, existing.id))
+      .limit(1);
+    return row ?? null;
+  }
+
+  const [created] = await db
+    .insert(growthAccountAdmin)
+    .values({
+      companyId,
+      status: patch.status ?? "active",
+      notes: patch.notes ?? null,
+    })
+    .returning();
+  return created ?? null;
+}
+
+export async function updateAccountStatus(
+  companyId: number,
+  status: AccountAdminStatus,
+): Promise<typeof growthAccountAdmin.$inferSelect | null> {
+  if (!(ACCOUNT_ADMIN_STATUSES as readonly string[]).includes(status)) {
+    throw new Error(`Invalid account status: ${status}`);
+  }
+  console.log(`[dashboard-accounts] updating account status — companyId=${companyId} status=${status}`);
+  return upsertAccountAdmin(companyId, { status });
+}
+
+export async function updateAccountNotes(
+  companyId: number,
+  notes: string | null,
+): Promise<typeof growthAccountAdmin.$inferSelect | null> {
+  console.log(`[dashboard-accounts] updating notes — companyId=${companyId} length=${(notes ?? "").length}`);
+  return upsertAccountAdmin(companyId, { notes });
+}
+
+/**
+ * Re-fetch the company's Stripe subscription and re-run BOTH sync paths:
+ *   1. syncSubscriptionToCompany   — refreshes companies.* billing fields
+ *   2. syncStripeSubscriptionToGrowthSubscriber — refreshes growth_subscribers
+ *
+ * Read-only against Stripe; writes only to our own DB. No-op when the company
+ * has no stripeSubscriptionId on file.
+ */
+export async function refreshAccountSubscription(
+  companyId: number,
+): Promise<{ refreshed: boolean; reason?: string; status?: string | null }> {
+  console.log(`[dashboard-accounts] refreshing subscription — companyId=${companyId}`);
+  const [company] = await db
+    .select({
+      id: companies.id,
+      stripeSubId: companies.stripeSubscriptionId,
+    })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+
+  if (!company) return { refreshed: false, reason: "company_not_found" };
+  if (!company.stripeSubId) return { refreshed: false, reason: "no_stripe_subscription" };
+
+  // Lazy imports to avoid a circular load at module-init time.
+  const { default: Stripe } = await import("stripe");
+  const { syncSubscriptionToCompany } = await import("../billingService");
+
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) return { refreshed: false, reason: "stripe_not_configured" };
+  const stripe = new Stripe(apiKey);
+
+  const sub = await stripe.subscriptions.retrieve(company.stripeSubId);
+  await syncSubscriptionToCompany(company.id, sub as any);
+  await syncStripeSubscriptionToGrowthSubscriber(company.id, {
+    id: sub.id,
+    status: sub.status,
+    customer: typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null,
+    items: sub.items as any,
+    trial_start: sub.trial_start ?? null,
+    trial_end: sub.trial_end ?? null,
+    metadata: (sub.metadata as any) ?? null,
+  });
+
+  return { refreshed: true, status: sub.status };
 }

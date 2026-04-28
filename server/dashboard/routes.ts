@@ -11,7 +11,10 @@ import { requireDashboardAdmin } from "./access";
 import {
   insertGrowthCampaignSchema,
   insertGrowthCreatorSchema,
+  ACCOUNT_ADMIN_STATUSES,
+  type AccountAdminStatus,
 } from "@shared/schema";
+import { GROWTH_SOURCE_TYPES } from "@shared/growthSources";
 import {
   listGrowthSubscribersWithCampaign,
   listGrowthCampaignsWithMetrics,
@@ -24,6 +27,12 @@ import {
   getSourceBreakdown,
   normalizeReferralCode,
   findActiveCampaignByReferralCode,
+  listAccounts,
+  getAccountDetail,
+  updateAccountAttribution,
+  updateAccountStatus,
+  updateAccountNotes,
+  refreshAccountSubscription,
 } from "./storage";
 import { db } from "../db";
 import { growthCampaigns } from "@shared/schema";
@@ -266,6 +275,154 @@ export function registerDashboardRoutes(app: Express): void {
       }
       console.error("[dashboard] creator update error:", err);
       res.status(500).json({ message: "Failed to update creator" });
+    }
+  });
+
+  // ── Accounts ─────────────────────────────────────────────────────────────
+  // List every customer company joined to owner / attribution / admin status.
+  // Different from /subscribers, which only lists attributed companies.
+  app.get("/api/admin/dashboard/accounts", ...gate, async (_req: Request, res: Response) => {
+    try {
+      console.log("[dashboard-accounts] listing accounts");
+      const data = await listAccounts();
+      res.json(data);
+    } catch (err) {
+      console.error("[dashboard-accounts] list error:", err);
+      res.status(500).json({ message: "Failed to load accounts" });
+    }
+  });
+
+  app.get("/api/admin/dashboard/accounts/:companyId", ...gate, async (req: Request, res: Response) => {
+    try {
+      const companyId = parseInt(req.params.companyId, 10);
+      if (!Number.isFinite(companyId)) {
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+      console.log(`[dashboard-accounts] loading account detail — companyId=${companyId}`);
+      const data = await getAccountDetail(companyId);
+      if (!data) {
+        res.status(404).json({ message: "Account not found" });
+        return;
+      }
+      res.json(data);
+    } catch (err) {
+      console.error("[dashboard-accounts] detail error:", err);
+      res.status(500).json({ message: "Failed to load account" });
+    }
+  });
+
+  app.patch("/api/admin/dashboard/accounts/:companyId/attribution", ...gate, async (req: Request, res: Response) => {
+    try {
+      const companyId = parseInt(req.params.companyId, 10);
+      if (!Number.isFinite(companyId)) {
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+      const body = req.body ?? {};
+
+      // ── sourceType: must be null OR a known GrowthSourceType
+      let sourceType: string | null | undefined;
+      if (body.sourceType === null) {
+        sourceType = null;
+      } else if (typeof body.sourceType === "string") {
+        if (!(GROWTH_SOURCE_TYPES as readonly string[]).includes(body.sourceType)) {
+          res.status(400).json({
+            message: `sourceType must be one of: ${GROWTH_SOURCE_TYPES.join(", ")}`,
+          });
+          return;
+        }
+        sourceType = body.sourceType;
+      } else {
+        sourceType = undefined;
+      }
+
+      // ── campaignId: number, null, or absent. Reject NaN.
+      let campaignId: number | null | undefined;
+      if (body.campaignId === null) {
+        campaignId = null;
+      } else if (typeof body.campaignId === "number") {
+        if (!Number.isFinite(body.campaignId)) {
+          res.status(400).json({ message: "campaignId must be a finite number" });
+          return;
+        }
+        campaignId = body.campaignId;
+      } else if (typeof body.campaignId === "string" && body.campaignId.length) {
+        const parsed = parseInt(body.campaignId, 10);
+        if (!Number.isFinite(parsed)) {
+          res.status(400).json({ message: "campaignId must be a finite number" });
+          return;
+        }
+        campaignId = parsed;
+      } else {
+        campaignId = undefined;
+      }
+
+      const payload = {
+        sourceType,
+        sourceName: typeof body.sourceName === "string" || body.sourceName === null ? body.sourceName : undefined,
+        campaignId,
+        referralCode: typeof body.referralCode === "string" || body.referralCode === null ? body.referralCode : undefined,
+      };
+      const result = await updateAccountAttribution(companyId, payload);
+      res.json(result);
+    } catch (err) {
+      console.error("[dashboard-accounts] attribution error:", err);
+      res.status(500).json({ message: "Failed to update attribution" });
+    }
+  });
+
+  app.patch("/api/admin/dashboard/accounts/:companyId/status", ...gate, async (req: Request, res: Response) => {
+    try {
+      const companyId = parseInt(req.params.companyId, 10);
+      if (!Number.isFinite(companyId)) {
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+      const status = req.body?.status as string | undefined;
+      if (!status || !(ACCOUNT_ADMIN_STATUSES as readonly string[]).includes(status)) {
+        res.status(400).json({
+          message: `status must be one of: ${ACCOUNT_ADMIN_STATUSES.join(", ")}`,
+        });
+        return;
+      }
+      const row = await updateAccountStatus(companyId, status as AccountAdminStatus);
+      res.json(row);
+    } catch (err) {
+      console.error("[dashboard-accounts] status error:", err);
+      res.status(500).json({ message: "Failed to update status" });
+    }
+  });
+
+  app.patch("/api/admin/dashboard/accounts/:companyId/notes", ...gate, async (req: Request, res: Response) => {
+    try {
+      const companyId = parseInt(req.params.companyId, 10);
+      if (!Number.isFinite(companyId)) {
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+      const raw = req.body?.notes;
+      const notes = raw == null ? null : String(raw);
+      const row = await updateAccountNotes(companyId, notes);
+      res.json(row);
+    } catch (err) {
+      console.error("[dashboard-accounts] notes error:", err);
+      res.status(500).json({ message: "Failed to update notes" });
+    }
+  });
+
+  app.post("/api/admin/dashboard/accounts/:companyId/refresh-subscription", ...gate, async (req: Request, res: Response) => {
+    try {
+      const companyId = parseInt(req.params.companyId, 10);
+      if (!Number.isFinite(companyId)) {
+        res.status(400).json({ message: "Invalid companyId" });
+        return;
+      }
+      const result = await refreshAccountSubscription(companyId);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[dashboard-accounts] refresh error:", err);
+      res.status(500).json({ message: err?.message ?? "Failed to refresh subscription" });
     }
   });
 

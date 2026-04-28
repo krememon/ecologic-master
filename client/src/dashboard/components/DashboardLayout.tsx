@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
   Users,
+  Building2,
   Compass,
   Megaphone,
   Sparkles,
@@ -17,6 +18,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Overview", Icon: LayoutDashboard },
+  { href: "/accounts", label: "Accounts", Icon: Building2 },
   { href: "/subscribers", label: "Subscribers", Icon: Users },
   { href: "/sources", label: "Sources", Icon: Compass },
   { href: "/campaigns", label: "Campaigns", Icon: Megaphone },

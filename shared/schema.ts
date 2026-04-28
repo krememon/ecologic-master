@@ -2305,6 +2305,24 @@ export const growthSubscribers = pgTable("growth_subscribers", {
   uniqueIndex("growth_subscribers_apple_orig_tx_unique").on(table.appleOriginalTransactionId),
 ]);
 
+// Internal admin metadata for a customer account (one row per company).
+// Surfaced only on the private dashboard. Status here does NOT block the
+// customer app — `blocked` is purely informational unless we explicitly
+// wire it into access checks later.
+export const growthAccountAdmin = pgTable("growth_account_admin", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("growth_account_admin_company_unique").on(table.companyId),
+]);
+
+export const ACCOUNT_ADMIN_STATUSES = ["active", "inactive", "test", "internal", "blocked"] as const;
+export type AccountAdminStatus = (typeof ACCOUNT_ADMIN_STATUSES)[number];
+
 // Insert schemas
 export const insertGrowthCampaignSchema = createInsertSchema(growthCampaigns).omit({
   id: true,
