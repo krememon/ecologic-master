@@ -1,0 +1,79 @@
+The onboarding signup flow is still broken after the previous fix.
+
+Current issue:
+When testing the tracking signup flow and selecting Owner, the app still brings me back to the signup/create account screen instead of continuing to the Industry onboarding page.
+
+Important observation:
+The logs show the host as a Replit preview URL:
+8fcd742c-7227-4bca-94ca-4cdd115e7c77-00-2xidmmov9gx8r.kirk.replit.dev
+
+But the session cookie is configured as:
+domain=.ecologicc.com
+
+That means cookies may not work correctly on the Replit preview domain. Please make sure the auth/session behavior supports both:
+- real staging domain: staging.ecologicc.com
+- Replit preview/dev domain: *.replit.dev / *.repl.co / kirk.replit.dev
+
+Goal:
+The signup flow should work on the real staging domain first:
+https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+
+Expected:
+1. User opens tracking signup link.
+2. User creates account.
+3. User selects Owner.
+4. App waits until the auth session is fully confirmed.
+5. App routes to /onboarding/industry.
+6. Industry onboarding page renders.
+7. It should NOT show the create account/sign in screen again.
+
+Please investigate:
+
+1. Confirm if the failure only happens on Replit preview because SESSION_COOKIE_DOMAIN=.ecologicc.com does not match the preview hostname.
+
+2. If host is a Replit preview/dev hostname, do not apply SESSION_COOKIE_DOMAIN=.ecologicc.com. Use host-scoped cookies in dev/preview.
+
+3. If host is staging.ecologicc.com or staging-dashboard.ecologicc.com, use SESSION_COOKIE_DOMAIN=.ecologicc.com.
+
+4. Confirm the cookie is actually being set after account creation.
+Check Set-Cookie response after the password/account creation step.
+
+5. Confirm /api/auth/user returns authenticated user immediately before redirecting to /onboarding/industry.
+
+6. In SignupWizard, before calling setLocation("/onboarding/industry"), explicitly verify:
+- auth user exists
+- user.id exists
+- onboardingChoice was saved as owner
+
+7. If /api/auth/user still returns unauthenticated, do not redirect yet. Show loading and retry/refetch briefly.
+
+8. Confirm AuthenticatedRouter does not render Welcome for /onboarding/industry while auth is still loading. It should show a loading state until auth is resolved.
+
+9. Add logs:
+[signup-flow] owner selected
+[signup-flow] onboarding choice saved
+[signup-flow] refetching auth user before onboarding redirect
+[signup-flow] auth user before redirect: ...
+[signup-flow] redirecting to onboarding /onboarding/industry
+[signup-flow] blocked redirect because auth user missing
+[signup-flow] cookie domain in use: ...
+[signup-flow] request host: ...
+
+10. Confirm this works on:
+- https://staging.ecologicc.com/signup?source=instagram_creator&ref=joeplumbing
+- Replit preview URL if possible
+
+Important:
+Do not break staging-dashboard.ecologicc.com login.
+Do not break SESSION_COOKIE_DOMAIN=.ecologicc.com for real staging subdomains.
+Do not break the normal customer app.
+Do not break attribution capture.
+Do not change Stripe, Apple, Google Play, billing, or jobs.
+
+Deliverables:
+- Root cause
+- Whether issue was staging domain or Replit preview cookie mismatch
+- Files changed
+- Cookie behavior for staging vs preview
+- Confirmation Owner signup reaches /onboarding/industry
+- Testing steps

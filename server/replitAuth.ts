@@ -179,8 +179,17 @@ export function getSessionMiddleware() {
   });
   // Optional: when set, the session cookie is scoped to the parent domain
   // (e.g. ".ecologicc.com") so a single login is shared across subdomains
-  // such as app.ecologicc.com and dashboard.ecologicc.com. Leave unset to
-  // keep cookies host-scoped (the previous default behaviour).
+  // such as app.ecologicc.com and dashboard.ecologicc.com.
+  //
+  // IMPORTANT: we deliberately DO NOT include the domain attribute in the
+  // base session config. A request from a host that is not under
+  // SESSION_COOKIE_DOMAIN (e.g. xxxx.kirk.replit.dev workspace previews,
+  // *.replit.app deploys, localhost) would otherwise emit a Set-Cookie with
+  // Domain=.ecologicc.com — which the browser rejects, silently dropping
+  // the session and making login appear to "succeed" but never persist.
+  // The host-aware patch middleware below sets req.session.cookie.domain
+  // per-request so the Domain attribute is always valid for the request's
+  // own hostname.
   const cookieDomain = process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined;
 
   _sessionMiddleware = session({
@@ -193,11 +202,40 @@ export function getSessionMiddleware() {
       secure: isSecure,
       sameSite: isSecure ? 'none' : 'lax',
       maxAge: sessionTtl,
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
+      // Domain intentionally omitted — see comment above and the per-request
+      // patch middleware in setupAuth(). Configured value is exposed via the
+      // log line below for debugging.
     },
   });
-  console.log(`[session] cookie secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}, domain=${cookieDomain ?? '(host-scoped)'}`);
+  console.log(`[session] cookie secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}, configuredDomain=${cookieDomain ?? '(none — host-scoped)'} (per-request host-aware)`);
   return _sessionMiddleware;
+}
+
+/**
+ * Pick the cookie Domain attribute to use for the given request host.
+ *
+ * Returns the configured SESSION_COOKIE_DOMAIN only when the request's
+ * hostname is actually equal to or a subdomain of that domain. Otherwise
+ * returns undefined so the cookie is host-scoped to whatever hostname the
+ * request arrived on (Replit preview/workspace, *.replit.app, localhost,
+ * etc.). The browser rejects Set-Cookie whose Domain does not match the
+ * request host, so emitting the wrong Domain silently breaks the session.
+ *
+ * Examples (with SESSION_COOKIE_DOMAIN=".ecologicc.com"):
+ *   staging.ecologicc.com           -> ".ecologicc.com"  (real staging)
+ *   staging-dashboard.ecologicc.com -> ".ecologicc.com"  (real dashboard)
+ *   ecologicc.com                   -> ".ecologicc.com"  (apex)
+ *   xxx.kirk.replit.dev             -> undefined         (workspace preview)
+ *   foo.replit.app                  -> undefined         (deploy preview)
+ *   localhost                       -> undefined
+ */
+export function pickCookieDomainForHost(host: string | undefined): string | undefined {
+  const desired = process.env.SESSION_COOKIE_DOMAIN?.trim();
+  if (!desired || !host) return undefined;
+  const hostname = host.split(":")[0].toLowerCase();
+  const norm = desired.startsWith(".") ? desired.slice(1).toLowerCase() : desired.toLowerCase();
+  if (hostname === norm || hostname.endsWith("." + norm)) return desired;
+  return undefined;
 }
 
 export function getSession() {
@@ -230,34 +268,45 @@ export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
 
-  // Auto-patch existing sessions to carry the configured cookie domain.
+  // Host-aware session cookie Domain enforcement.
   //
-  // Background: when SESSION_COOKIE_DOMAIN was added, sessions that already
-  // existed in the DB had been saved with no `domain` in their stored
-  // `sess.cookie`. express-session re-issues each Set-Cookie from the
-  // session's stored cookie config (NOT the middleware default), so those
-  // existing sessions kept getting host-scoped cookies — breaking
-  // cross-subdomain sharing between staging.ecologicc.com and
-  // staging-dashboard.ecologicc.com.
+  // express-session re-issues each Set-Cookie from the SESSION's stored
+  // cookie config (sess.cookie), NOT the middleware default. We rely on
+  // that here: for every request we set req.session.cookie.domain to the
+  // value returned by pickCookieDomainForHost(req.headers.host). This means:
   //
-  // This middleware checks each request's session and, if the configured
-  // SESSION_COOKIE_DOMAIN doesn't match what's stored, updates the session's
-  // cookie domain AND marks the session modified (express-session's
-  // shouldSetCookie() ignores cookie-only changes, so we need a real session
-  // mutation to force a save + a fresh Set-Cookie). The browser then writes
-  // a domain-scoped cookie alongside any older host-scoped one. Subsequent
-  // requests skip the patch entirely (idempotent: once saved, cookie.domain
-  // matches and the if-block is a no-op).
+  //   • Real subdomains of SESSION_COOKIE_DOMAIN (staging.ecologicc.com,
+  //     staging-dashboard.ecologicc.com, app.ecologicc.com, etc.) get a
+  //     domain-scoped cookie — a single login is shared across subdomains,
+  //     which is required for the dashboard ↔ app session.
+  //
+  //   • Replit workspace previews (*.kirk.replit.dev), Replit deploy URLs
+  //     (*.replit.app), and localhost get a host-scoped cookie. Without
+  //     this, the browser was rejecting Set-Cookie with Domain=.ecologicc.com
+  //     because the request hostname did not match — the session silently
+  //     failed to persist, and /api/auth/user kept returning 401, which
+  //     bounced the signup wizard back to the unauthenticated route tree
+  //     (and ultimately to <Welcome>).
+  //
+  // We only mark the session modified when we actually had to flip the
+  // domain, so this is idempotent for repeat requests on the same host.
   app.use((req: any, _res: any, next: any) => {
-    const desired = process.env.SESSION_COOKIE_DOMAIN?.trim();
-    if (desired && req.session && req.session.cookie) {
-      if (req.session.cookie.domain !== desired) {
-        req.session.cookie.domain = desired;
-        // Force isModified() to return true so the response includes a
-        // fresh Set-Cookie carrying the new Domain attribute. We stash a
-        // small migration marker — its presence then prevents this branch
-        // from re-firing on every subsequent request for the same session.
+    if (req.session && req.session.cookie) {
+      const desiredForThisHost = pickCookieDomainForHost(req.headers.host);
+      if (req.session.cookie.domain !== desiredForThisHost) {
+        const previous = req.session.cookie.domain;
+        req.session.cookie.domain = desiredForThisHost;
+        // Force isModified() to true so the response carries a fresh
+        // Set-Cookie reflecting the corrected Domain attribute. The marker
+        // is intentionally rewritten each time the domain actually changes
+        // (host swap, e.g. user opens both staging.ecologicc.com and the
+        // preview URL in the same browser).
         (req.session as any)._cookieDomainMigratedAt = Date.now();
+        console.log(
+          `[signup-flow] cookie domain in use: ${desiredForThisHost ?? '(host-scoped)'} ` +
+            `request host: ${req.headers.host} ` +
+            `(previous=${previous ?? '(host-scoped)'})`
+        );
       }
     }
     next();

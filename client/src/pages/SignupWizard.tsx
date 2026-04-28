@@ -476,8 +476,6 @@ export default function SignupWizard() {
     // Persist to DB and AWAIT it before navigating — without this, the
     // AuthenticatedRouter recomputes its next-route while user.onboardingChoice
     // is still null on the server, and the choice is lost across refreshes.
-    // We also re-fetch the auth user so the routing decision uses the
-    // freshly-persisted choice rather than a stale cache.
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/onboarding-choice", { choice: role });
@@ -485,13 +483,51 @@ export default function SignupWizard() {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as any).message || `HTTP ${res.status}`);
       }
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+      console.log("[signup-flow] onboarding choice saved", { role });
     } catch (err: any) {
       // Non-fatal: the localStorage value still drives the wizard locally.
       console.warn("[signup-flow] failed to persist onboarding choice to DB:", err?.message || err);
-    } finally {
-      setIsLoading(false);
     }
+
+    // Pre-redirect auth verification with brief retry. The session cookie
+    // sometimes lags by one tick after set-password (especially across
+    // domain/host edges). We refetch /api/auth/user up to 3 times with
+    // small backoffs and verify user.id exists before navigating. If we
+    // never get an authed user, we surface a toast and stay on the role
+    // step rather than redirecting into a route that would render Welcome.
+    console.log("[signup-flow] refetching auth user before onboarding redirect");
+    let authUser: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+        authUser = queryClient.getQueryData(["/api/auth/user"]) as any;
+      } catch (err: any) {
+        console.warn(`[signup-flow] auth refetch attempt ${attempt} failed:`, err?.message || err);
+      }
+      if (authUser?.id) break;
+      // Backoff before the next retry; helps when the Set-Cookie from
+      // set-password is still in flight on slow networks.
+      await new Promise((r) => setTimeout(r, 300 * attempt));
+    }
+
+    console.log("[signup-flow] auth user before redirect:", {
+      hasUser: !!authUser,
+      userId: authUser?.id ?? null,
+      onboardingChoice: authUser?.onboardingChoice ?? null,
+    });
+
+    if (!authUser?.id) {
+      console.warn("[signup-flow] blocked redirect because auth user missing");
+      setIsLoading(false);
+      toast({
+        title: "Still finishing sign-up…",
+        description: "We couldn't confirm your session. Please tap your role again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(false);
 
     if (role === "owner") {
       console.log("[signup-flow] redirecting to onboarding /onboarding/industry");
