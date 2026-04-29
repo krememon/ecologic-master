@@ -23,7 +23,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // Bump this string to force a new wipe on the next native launch:
     //   ecologic-wipe-2026-04-17-v1  ← cleared stale service-worker from web build
     //   ecologic-wipe-2026-04-29-appsflyer-v2  ← clears bundle cached before AppsFlyer Phase 2 diagnostic deploy
-    private static let webDataWipeVersion = "ecologic-wipe-2026-04-29-appsflyer-v2"
+    //   ecologic-wipe-2026-04-29-appsflyer-v3  ← force-reload after appsflyer.ts availability-gate rewrite
+    private static let webDataWipeVersion = "ecologic-wipe-2026-04-29-appsflyer-v3"
     private static let webDataWipeKey     = "EcoLogicLastWebDataWipe"
 
     func application(_ application: UIApplication,

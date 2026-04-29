@@ -186,7 +186,8 @@ initPushDebug();
 
 // App version for cache-busting (update this when deploying significant changes)
 // 2026.04.29.1 — bumped to force cache clear after AppsFlyer Phase 2 diagnostic deploy
-const APP_VERSION = "2026.04.29.1";
+// 2026.04.29.2 — force-reload after appsflyer.ts availability-gate rewrite
+const APP_VERSION = "2026.04.29.2";
 
 // Returns true when running inside the Capacitor native shell (iOS or Android).
 function isCapacitorNative(): boolean {

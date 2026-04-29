@@ -96,6 +96,9 @@ async function loadPluginAsync(): Promise<any | null> {
  * Returns `true` when initialised, `false` when skipped (web / missing config / plugin error).
  */
 export async function initAppsFlyer(): Promise<boolean> {
+  // Diagnostic build stamp — update version when deploying to confirm new JS is running.
+  console.log("[appsflyer] DIAGNOSTIC BUILD 2026.04.29.2 LOADED");
+
   if (_initDone) return true;
   if (_initStarted) {
     log("initAppsFlyer → init already in progress, skipping duplicate call");
