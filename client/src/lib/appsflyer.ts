@@ -14,9 +14,19 @@
  *      the call boundary and the exact error so the failing method is obvious
  *      in Xcode / Logcat.
  *   3. Single init guard.
- *   4. Bridge-availability check runs BEFORE any native call and bails
- *      cleanly when the plugin is not registered on the Capacitor bridge,
+ *   4. Bridge-availability check runs BEFORE any import or native call and
+ *      bails cleanly when the plugin is not registered on the Capacitor bridge,
  *      preventing UNIMPLEMENTED rejections entirely.
+ *
+ * WHY availability check must precede loadPluginAsync():
+ *   `import("appsflyer-capacitor-plugin")` evaluates the module, which calls
+ *   registerPlugin('AppsFlyerPlugin', ...) at module-scope.  On a native bridge
+ *   that has no AppsFlyerPlugin registration, Capacitor internally fires a
+ *   nativeCallback ping/load that resolves UNIMPLEMENTED with no internal
+ *   catch — becoming a global UnhandledRejection before our code resumes after
+ *   the await.  Checking Capacitor.isPluginAvailable() FIRST (it is a pure
+ *   synchronous registry lookup — no import required) lets us bail before the
+ *   import ever happens when the native side isn't ready.
  *
  * Required env vars (baked at Vite build time):
  *   - VITE_APPSFLYER_DEV_KEY     (required)
@@ -78,6 +88,14 @@ function describeError(method: string, err: unknown): string {
   return `${method} → ${code ? `[${code}] ` : ""}${message}`;
 }
 
+/**
+ * Dynamically imports the plugin JS module.
+ *
+ * IMPORTANT: Only call this AFTER confirming isPluginAvailable("AppsFlyerPlugin")
+ * returns true.  Importing the module when the native plugin is not on the bridge
+ * causes an UnhandledRejection because registerPlugin() fires an internal
+ * Capacitor ping that rejects with UNIMPLEMENTED and is never caught.
+ */
 async function loadPluginAsync(): Promise<any | null> {
   if (_pluginUnavailable) return null;
   try {
@@ -124,28 +142,19 @@ export async function initAppsFlyer(): Promise<boolean> {
       log("initAppsFlyer → WARNING: VITE_APPSFLYER_IOS_APP_ID missing — install attribution will be limited");
     }
 
-    // ── Step 1: Import the JS module facade (no native calls happen here) ───
-    const AppsFlyer = await loadPluginAsync();
-    if (!AppsFlyer) {
-      log("initAppsFlyer → plugin JS import failed, aborting");
-      return false;
-    }
-
-    // ── Step 2: Bridge availability check (MUST run before any native call) ─
+    // ── Step 1: Bridge availability check ────────────────────────────────────
     //
-    // Capacitor.isPluginAvailable(name) inspects the native bridge's plugin
-    // registry that was populated at app startup by CAPBridgeViewController's
-    // registerPlugins() method.  On iOS this works by:
-    //   1. Reading packageClassList from capacitor.config.json
-    //   2. NSClassFromString(className) — finds the Swift class
-    //   3. Casting to (CAPPlugin & CAPBridgedPlugin).Type
-    //   4. If cast succeeds → plugin registered + added to PluginHeaders
+    // THIS MUST HAPPEN BEFORE loadPluginAsync() / any import of the plugin.
     //
-    // With appsflyer-capacitor-plugin, CAPBridgedPlugin conformance comes
-    // ONLY from the ObjC category created by the CAP_PLUGIN() macro in
-    // AppsFlyerPlugin.m.  When building with use_frameworks! :linkage => :static
-    // the linker STRIPS ObjC categories unless -ObjC is in OTHER_LDFLAGS.
-    // Without -ObjC: cast fails → NOT in PluginHeaders → isPluginAvailable=false.
+    // Capacitor.isPluginAvailable(name) is a SYNCHRONOUS registry lookup that
+    // reads window.Capacitor.Plugins — populated at app startup by
+    // CAPBridgeViewController.registerPlugins() before any JS runs.  No import
+    // is required to call it.
+    //
+    // On iOS with use_frameworks! :linkage => :static, the linker strips ObjC
+    // categories (including the CAP_PLUGIN() macro in AppsFlyerPlugin.m) unless
+    // -ObjC is in OTHER_LDFLAGS.  Without -ObjC: cast to CAPBridgedPlugin fails
+    // → NOT in PluginHeaders → isPluginAvailable("AppsFlyerPlugin") = false.
     //
     // Fix: ios/App/Podfile post_install block must set -ObjC in aggregate_targets
     // xcconfigs, then pod install + Clean Build Folder + Run.
@@ -155,9 +164,8 @@ export async function initAppsFlyer(): Promise<boolean> {
       const av_af  = Capacitor.isPluginAvailable("AppsFlyer");
       const av_afp = Capacitor.isPluginAvailable("AppsFlyerPlugin");
       const av_pod = Capacitor.isPluginAvailable("AppsflyerCapacitorPlugin");
-      const bridgePlugins = Object.keys((window as any).Capacitor?.Plugins || {}).join(", ") || "(none)";
-      // Use console.log for ALL availability output — never console.warn here
-      // because console.warn is filtered in some Xcode log configurations.
+      const bridgePlugins =
+        Object.keys((window as any).Capacitor?.Plugins || {}).join(", ") || "(none)";
       console.log(
         `[appsflyer] plugin availability — AppsFlyer=${av_af} AppsFlyerPlugin=${av_afp} AppsflyerCapacitorPlugin=${av_pod}`
       );
@@ -169,13 +177,24 @@ export async function initAppsFlyer(): Promise<boolean> {
     }
 
     if (!bridgeHasPlugin) {
-      // The JS facade loaded successfully but AppsFlyerPlugin is NOT registered
-      // on the native Capacitor bridge.  Every native call would return
-      // UNIMPLEMENTED.  Bail out NOW so no native calls are attempted and no
-      // unhandled rejections can leak out.
-      console.log("[appsflyer-attribution] native plugin unavailable — AppsFlyerPlugin not on bridge, skipping AppsFlyer init");
-      console.log("[appsflyer] Action required: add -ObjC to Podfile post_install → pod install → Clean Build Folder → Run");
+      // The native plugin is NOT on the Capacitor bridge.  If we import the
+      // module now, registerPlugin() fires a Capacitor ping that rejects with
+      // UNIMPLEMENTED and has no internal catch → UnhandledRejection.
+      // Bail immediately; never call loadPluginAsync().
+      console.log(
+        "[appsflyer-attribution] native plugin unavailable — AppsFlyerPlugin not on bridge, skipping AppsFlyer init"
+      );
+      console.log(
+        "[appsflyer] Action required: add -ObjC to Podfile post_install → pod install → Clean Build Folder → Run"
+      );
       _pluginUnavailable = true;
+      return false;
+    }
+
+    // ── Step 2: Import the JS module facade — ONLY after availability confirmed ─
+    const AppsFlyer = await loadPluginAsync();
+    if (!AppsFlyer) {
+      log("initAppsFlyer → plugin JS import failed, aborting");
       return false;
     }
 
@@ -263,9 +282,6 @@ export async function initAppsFlyer(): Promise<boolean> {
       });
       // Attach .catch on the outer handle promise to suppress any rejection
       // that surfaces from addListenerNative's outer `p` promise.
-      // (The inner `call` orphan rejection from addListenerNative cannot be
-      // caught from here — it's internal to Capacitor — but bridgeHasPlugin=true
-      // means the native call should succeed so `call` should resolve.)
       Promise.resolve(handle)
         .catch((err: unknown) => {
           log("initAppsFlyer → addListener(udl_callback) handle-promise rejected:", describeError("addListener", err));
@@ -297,7 +313,7 @@ export async function initAppsFlyer(): Promise<boolean> {
       const { Device } = await import("@capacitor/device");
       const info = await Device.getId();
       const idfv = (info as any).identifier ?? (info as any).uuid ?? "(unknown)";
-      log(`initAppsFlyer → AFTER Device.getId() — 📱 IDFV: ${idfv}`);
+      log(`initAppsFlyer → AFTER Device.getId() — IDFV: ${idfv}`);
     } catch (err) {
       log("initAppsFlyer → Device.getId FAILED:", describeError("Device.getId", err));
     }
@@ -307,7 +323,7 @@ export async function initAppsFlyer(): Promise<boolean> {
       log("initAppsFlyer → BEFORE getAppsFlyerUID");
       const afid = await AppsFlyer.getAppsFlyerUID();
       const uid = (afid as any)?.uid ?? String(afid);
-      log(`initAppsFlyer → AFTER getAppsFlyerUID — 📱 AppsFlyer UID: ${uid}`);
+      log(`initAppsFlyer → AFTER getAppsFlyerUID — AppsFlyer UID: ${uid}`);
     } catch (err) {
       log("initAppsFlyer → getAppsFlyerUID FAILED:", describeError("getAppsFlyerUID", err));
     }
