@@ -149,7 +149,7 @@ function handleUdlEvent(rawEvent: unknown): void {
  */
 export async function initAppsFlyer(): Promise<boolean> {
   // Confirm this JS bundle is running (matches APP_VERSION in main.tsx).
-  console.log("[appsflyer] DIAGNOSTIC BUILD 2026.04.29.3 LOADED");
+  console.log("[appsflyer] DIAGNOSTIC BUILD 2026.04.29.3 LOADED"); // version-stamp
 
   if (_initDone)    return true;
   if (_initStarted) { log("already in progress, skipping duplicate call"); return false; }

@@ -646,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     res.json({
-      version: '2026.04.29.2',
+      version: '2026.04.29.3',
       diagnostic: 'appsflyer',
       builtAt: new Date().toISOString(),
     });
