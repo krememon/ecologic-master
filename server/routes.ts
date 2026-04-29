@@ -637,6 +637,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect(302, '/jobs');
   });
 
+  // BUILD-VERSION DIAGNOSTIC — public, uncached.
+  // Used to verify which JS bundle the deployed environment is actually serving.
+  // Bump the `version` string here whenever client APP_VERSION is bumped so
+  // that hitting /build-version.json proves the running server build matches.
+  app.get('/build-version.json', (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.json({
+      version: '2026.04.29.2',
+      diagnostic: 'appsflyer',
+      builtAt: new Date().toISOString(),
+    });
+  });
+
   // Auth middleware - MUST be set up before any authenticated routes
   await setupAuth(app);
 
