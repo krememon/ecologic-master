@@ -29,6 +29,9 @@ const config: CapacitorConfig = {
         androidScheme: 'https',
         allowNavigation: [
           'app.ecologicc.com',
+          'staging.ecologicc.com',
+          'dashboard.ecologicc.com',
+          'staging-dashboard.ecologicc.com',
           'ecologicc.com',
           'accounts.google.com',
           'appleid.apple.com',

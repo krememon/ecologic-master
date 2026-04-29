@@ -154,6 +154,19 @@ export async function initAppsFlyer(): Promise<boolean> {
       log("initAppsFlyer → AFTER initSDK success:", initRes);
       _initDone = true;
     } catch (err) {
+      const code = (err as any)?.code ?? (err as any)?.errorCode;
+      if (code === "UNIMPLEMENTED") {
+        // The JS facade is loaded (`appsflyer-capacitor-plugin` resolved) but
+        // the native iOS/Android class isn't linked into this app binary.
+        // Almost always means: pod install hasn't been re-run since the pod
+        // was added, OR the user opened App.xcodeproj instead of
+        // App.xcworkspace. Mark the plugin unavailable so subsequent
+        // trackAppsFlyerEvent / startSDK calls early-return cleanly instead
+        // of producing more unhandled rejections.
+        _pluginUnavailable = true;
+        console.warn("[appsflyer-attribution] native plugin unavailable", describeError("initSDK", err));
+        return false;
+      }
       warn("initAppsFlyer → initSDK FAILED:", describeError("initSDK", err));
       // Fatal — without initSDK nothing else will work.
       return false;
@@ -167,7 +180,11 @@ export async function initAppsFlyer(): Promise<boolean> {
     // (first-touch-wins; never overwrites existing attribution).
     try {
       log("initAppsFlyer → BEFORE addListener(udl_callback)");
-      AppsFlyer.addListener("udl_callback", (event: any) => {
+      // In Capacitor 6 `addListener` returns Promise<PluginListenerHandle>, not
+      // a sync handle. If the native plugin is missing we'd get an unhandled
+      // promise rejection here. Capture the return value and attach .catch
+      // defensively regardless of whether the runtime returns sync or async.
+      const handle = AppsFlyer.addListener("udl_callback", (event: any) => {
         try {
           const status = event?.status ?? "(unknown)";
           const dl = event?.deepLink ?? event?.deep_link ?? {};
@@ -210,6 +227,12 @@ export async function initAppsFlyer(): Promise<boolean> {
           warn("udl_callback → handler threw:", describeError("udl_callback handler", err));
         }
       });
+      // Defensively swallow rejection if `handle` is a Promise (Capacitor 6+).
+      if (handle && typeof (handle as any).catch === "function") {
+        (handle as any).catch((err: unknown) => {
+          warn("initAppsFlyer → addListener(udl_callback) async-rejected:", describeError("addListener", err));
+        });
+      }
       log("initAppsFlyer → AFTER addListener(udl_callback) registered");
     } catch (err) {
       warn("initAppsFlyer → addListener(udl_callback) FAILED:", describeError("addListener", err));
@@ -224,7 +247,16 @@ export async function initAppsFlyer(): Promise<boolean> {
       const startRes = await AppsFlyer.startSDK();
       log("initAppsFlyer → AFTER startSDK success:", startRes);
     } catch (err) {
-      warn("initAppsFlyer → startSDK FAILED:", describeError("startSDK", err));
+      const code = (err as any)?.code ?? (err as any)?.errorCode;
+      if (code === "UNIMPLEMENTED") {
+        // Should be unreachable (initSDK would have caught this first and
+        // returned early), but kept defensive so a partially-linked plugin
+        // can never produce an unhandled rejection.
+        _pluginUnavailable = true;
+        console.warn("[appsflyer-attribution] native plugin unavailable", describeError("startSDK", err));
+      } else {
+        warn("initAppsFlyer → startSDK FAILED:", describeError("startSDK", err));
+      }
       // Non-fatal for the boot path — the rest of the helpers will still
       // attempt to log events; AppsFlyer's native side queues until session
       // start succeeds on a subsequent call.
