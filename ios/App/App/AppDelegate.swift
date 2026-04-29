@@ -10,11 +10,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // Bumping this string forces a one-time native wipe of the shared
     // WKWebsiteDataStore (service workers, caches, cookies, local storage).
-    // Required because the previous remote-URL builds registered a service
-    // worker for app.ecologicc.com that can intercept requests and hang the
-    // app on a loading spinner. JS-side cleanup runs too late — WKWebView
-    // never reaches the JS if the SW is intercepting the navigation.
-    private static let webDataWipeVersion = "ecologic-wipe-2026-04-17-v1"
+    //
+    // WHY THIS EXISTS:
+    //   WKWebView maintains its own HTTP disk cache independently of any JS
+    //   code.  When the staging.ecologicc.com bundle is redeployed, WKWebView
+    //   may continue serving the previous cached index.html (and therefore
+    //   the previous JS chunks) because express.static's ETag support is
+    //   disabled and WKWebView does not always honour max-age=0 for resources
+    //   it already has in its persistent disk cache.  JS-side cache-clearing
+    //   cannot help here because the old JS is the code that runs.
+    //
+    // Bump this string to force a new wipe on the next native launch:
+    //   ecologic-wipe-2026-04-17-v1  ← cleared stale service-worker from web build
+    //   ecologic-wipe-2026-04-29-appsflyer-v2  ← clears bundle cached before AppsFlyer Phase 2 diagnostic deploy
+    private static let webDataWipeVersion = "ecologic-wipe-2026-04-29-appsflyer-v2"
     private static let webDataWipeKey     = "EcoLogicLastWebDataWipe"
 
     func application(_ application: UIApplication,
@@ -114,7 +123,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     /// One-time wipe of the shared WKWebsiteDataStore. Runs once per
     /// `webDataWipeVersion` value — bump that constant to force a re-wipe.
-    /// Synchronous flag write so the wipe can't run twice.
+    ///
+    /// The wipe is made SYNCHRONOUS via DispatchSemaphore so that the
+    /// WKWebView HTTP disk cache is guaranteed empty *before* Capacitor
+    /// creates the WKWebView and starts loading staging.ecologicc.com.
+    /// The async version had a race: removeData fires in the background,
+    /// didFinishLaunchingWithOptions returns, the scene is set up, the
+    /// WKWebView is created and begins its first HTTP fetch — all before the
+    /// wipe callback fires.  That means the first load after a version bump
+    /// still hit the stale cache.
+    ///
+    /// WKWebsiteDataStore.allWebsiteDataTypes() covers:
+    ///   • WKWebsiteDataTypeDiskCache          ← JS/CSS/image HTTP cache
+    ///   • WKWebsiteDataTypeMemoryCache        ← in-process response cache
+    ///   • WKWebsiteDataTypeCookies
+    ///   • WKWebsiteDataTypeSessionStorage
+    ///   • WKWebsiteDataTypeLocalStorage
+    ///   • WKWebsiteDataTypeIndexedDBDatabases
+    ///   • WKWebsiteDataTypeServiceWorkerRegistrations
+    ///   • WKWebsiteDataTypeOfflineWebApplicationCache
+    ///   (and any future types Apple adds)
     private func wipeStaleWebDataIfNeeded() {
         let defaults = UserDefaults.standard
         let last = defaults.string(forKey: AppDelegate.webDataWipeKey) ?? ""
@@ -122,20 +150,40 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             NSLog("[AppDelegate] web data wipe already done for version %@", AppDelegate.webDataWipeVersion)
             return
         }
-        NSLog("[AppDelegate] starting WKWebsiteDataStore wipe (version=%@, previous=%@)",
+
+        NSLog("[AppDelegate] forcing web data wipe for version %@ (previous: %@)",
               AppDelegate.webDataWipeVersion, last.isEmpty ? "(none)" : last)
 
         let allTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        let store = WKWebsiteDataStore.default()
-        let epoch = Date(timeIntervalSince1970: 0)
+        let store    = WKWebsiteDataStore.default()
+        let epoch    = Date(timeIntervalSince1970: 0)
+
+        // We need the wipe to finish BEFORE Capacitor creates the WKWebView.
+        // removeData's completion handler is dispatched to the main queue, so
+        // we CANNOT block the main thread (Thread.sleep / semaphore.wait on
+        // the main thread → deadlock because the callback can never fire).
+        //
+        // Correct pattern: spin the main RunLoop in .default mode.  This
+        // processes pending main-queue work (including the removeData callback)
+        // while still preventing wipeStaleWebDataIfNeeded() from returning
+        // until the wipe is truly done.  A 3-second safety timeout ensures
+        // the app starts even if the wipe hangs for any reason.
+        var wipeDone = false
         store.removeData(ofTypes: allTypes, modifiedSince: epoch) {
-            NSLog("[AppDelegate] WKWebsiteDataStore wipe COMPLETE — types=%d", allTypes.count)
+            NSLog("[AppDelegate] web data wipe complete (types=%d cleared)", allTypes.count)
+            wipeDone = true
+        }
+        let deadline = Date(timeIntervalSinceNow: 3.0)
+        while !wipeDone && Date() < deadline {
+            RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+        }
+        if !wipeDone {
+            NSLog("[AppDelegate] web data wipe WARNING — timed out after 3 s, proceeding anyway")
         }
 
-        // Mark as done immediately so we don't re-wipe on the next launch
-        // even though the async wipe is still finishing in the background.
         defaults.set(AppDelegate.webDataWipeVersion, forKey: AppDelegate.webDataWipeKey)
         defaults.synchronize()
+        NSLog("[AppDelegate] web data wipe flag persisted — will not re-wipe until version is bumped")
     }
 
     /// Print resolved server URL + native flag for diagnosis.
