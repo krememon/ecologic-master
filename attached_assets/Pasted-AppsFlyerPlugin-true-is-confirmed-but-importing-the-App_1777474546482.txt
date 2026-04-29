@@ -1,0 +1,45 @@
+AppsFlyerPlugin=true is confirmed, but importing the AppsFlyer module still triggers UNIMPLEMENTED.
+
+Current Xcode logs:
+[appsflyer] DIAGNOSTIC BUILD 2026.04.29.2 LOADED
+[appsflyer] plugin availability — AppsFlyer=false AppsFlyerPlugin=true AppsflyerCapacitorPlugin=false
+[appsflyer] registered bridge plugins: ..., AppsFlyerPlugin, ...
+[appsflyer] loadPlugin → method=import resolved
+[UnhandledRejection] {"code":"UNIMPLEMENTED"}
+
+This means the plugin is visible on the Capacitor bridge, but importing appsflyer-capacitor-plugin still triggers a native call internally that fails.
+
+Please stop using the JS import path entirely for iOS.
+
+New direction:
+Use window.Capacitor.nativeCallback / nativePromise directly for AppsFlyerPlugin methods instead of importing appsflyer-capacitor-plugin.
+
+Requirements:
+1. Do not import("appsflyer-capacitor-plugin") on iOS.
+2. If Capacitor.isPluginAvailable("AppsFlyerPlugin") is true, call native methods directly through Capacitor:
+   - initSDK
+   - startSDK
+   - addListener / udl_callback
+   - getAppsFlyerUID if needed
+3. Use Capacitor native bridge helpers directly:
+   - window.Capacitor.nativePromise("AppsFlyerPlugin", "initSDK", options)
+   - window.Capacitor.nativeCallback("AppsFlyerPlugin", "addListener", { eventName: "udl_callback" }, callback)
+   - window.Capacitor.nativePromise("AppsFlyerPlugin", "startSDK", {})
+   Adjust exact signatures if Capacitor expects methodName/params/callback differently.
+4. Add logs:
+   [appsflyer] BEFORE nativePromise initSDK
+   [appsflyer] AFTER nativePromise initSDK success
+   [appsflyer] BEFORE nativeCallback addListener udl_callback
+   [appsflyer] AFTER nativeCallback addListener registered
+   [appsflyer] BEFORE nativePromise startSDK
+   [appsflyer] AFTER nativePromise startSDK success
+5. If any method is still UNIMPLEMENTED, log exactly which method failed.
+6. Do not allow unhandled rejections.
+7. Search and remove/avoid all iOS imports of appsflyer-capacitor-plugin on startup.
+8. Keep Android/web behavior safe.
+9. Do not touch dashboard, billing, onboarding, account deletion, or production.
+
+Deliverables:
+- Files changed
+- Exact direct native bridge method signatures used
+- Expected Xcode logs
