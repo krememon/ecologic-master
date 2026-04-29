@@ -14,8 +14,9 @@
  *      the call boundary and the exact error so the failing method is obvious
  *      in Xcode / Logcat.
  *   3. Single init guard.
- *   4. UNIMPLEMENTED detection — surfaces a clear diagnostic when the native
- *      pod isn't actually linked into the app.
+ *   4. Bridge-availability check runs BEFORE any native call and bails
+ *      cleanly when the plugin is not registered on the Capacitor bridge,
+ *      preventing UNIMPLEMENTED rejections entirely.
  *
  * Required env vars (baked at Vite build time):
  *   - VITE_APPSFLYER_DEV_KEY     (required)
@@ -48,12 +49,11 @@ let _initStarted = false;
 let _initDone = false;
 let _pluginUnavailable = false;
 
-// Logs are intentionally UNCONDITIONAL while validating on real devices.
+// ALL diagnostic logs use console.log (not console.warn/error) so they are
+// visible in Xcode console regardless of log-level filters. console.warn is
+// invisible in some Xcode log configurations even when console.log shows fine.
 function log(...args: unknown[]): void {
   console.log("[appsflyer]", ...args);
-}
-function warn(...args: unknown[]): void {
-  console.warn("[appsflyer]", ...args);
 }
 
 /**
@@ -68,11 +68,10 @@ function describeError(method: string, err: unknown): string {
 
   if (code === "UNIMPLEMENTED") {
     return (
-      `${method} → UNIMPLEMENTED. The native AppsFlyer iOS class is not linked ` +
-      `into this app build. Fix on Mac: ` +
-      `(1) cd ios/App && pod install (must show "Installing AppsflyerCapacitorPlugin"); ` +
-      `(2) npx cap sync ios; ` +
-      `(3) in Xcode: Product → Clean Build Folder (⇧⌘K), then Run. ` +
+      `${method} → UNIMPLEMENTED. Fix on Mac: ` +
+      `(1) Update ios/App/Podfile — add -ObjC in post_install aggregate_targets block; ` +
+      `(2) cd ios/App && pod install; ` +
+      `(3) Xcode: Product → Clean Build Folder (⇧⌘K), then Run. ` +
       `Original error: ${message}`
     );
   }
@@ -87,7 +86,7 @@ async function loadPluginAsync(): Promise<any | null> {
     return AppsFlyer;
   } catch (err) {
     _pluginUnavailable = true;
-    warn("loadPlugin → import failed:", describeError("import", err));
+    log("loadPlugin → import FAILED:", describeError("import", err));
     return null;
   }
 }
@@ -111,7 +110,7 @@ export async function initAppsFlyer(): Promise<boolean> {
     }
 
     if (!DEV_KEY) {
-      warn("initAppsFlyer → VITE_APPSFLYER_DEV_KEY missing, skipping");
+      log("initAppsFlyer → VITE_APPSFLYER_DEV_KEY missing, skipping");
       return false;
     }
 
@@ -119,53 +118,72 @@ export async function initAppsFlyer(): Promise<boolean> {
     log(`initAppsFlyer → platform=${platform} devKey=${DEV_KEY.slice(0, 4)}… iosAppId=${IOS_APP_ID || "(none)"}`);
 
     if (platform === "ios" && !IOS_APP_ID) {
-      warn("initAppsFlyer → VITE_APPSFLYER_IOS_APP_ID missing — install attribution will be limited");
+      log("initAppsFlyer → WARNING: VITE_APPSFLYER_IOS_APP_ID missing — install attribution will be limited");
     }
 
+    // ── Step 1: Import the JS module facade (no native calls happen here) ───
     const AppsFlyer = await loadPluginAsync();
     if (!AppsFlyer) {
-      warn("initAppsFlyer → plugin unavailable, aborting");
+      log("initAppsFlyer → plugin JS import failed, aborting");
       return false;
     }
 
-    // ── Native plugin availability diagnostics ────────────────────────────────
-    // Log before every native call so Xcode/Logcat always shows bridge state.
-    // Capacitor.isPluginAvailable(name) checks whether the native bridge has a
-    // registered implementation for that plugin name.  If all three return
-    // false after pod install + clean build, it means the -ObjC linker flag is
-    // still missing (ObjC categories were stripped → CAPBridgedPlugin
-    // conformance not loaded → Capacitor's registerPlugins() silently skipped).
+    // ── Step 2: Bridge availability check (MUST run before any native call) ─
+    //
+    // Capacitor.isPluginAvailable(name) inspects the native bridge's plugin
+    // registry that was populated at app startup by CAPBridgeViewController's
+    // registerPlugins() method.  On iOS this works by:
+    //   1. Reading packageClassList from capacitor.config.json
+    //   2. NSClassFromString(className) — finds the Swift class
+    //   3. Casting to (CAPPlugin & CAPBridgedPlugin).Type
+    //   4. If cast succeeds → plugin registered + added to PluginHeaders
+    //
+    // With appsflyer-capacitor-plugin, CAPBridgedPlugin conformance comes
+    // ONLY from the ObjC category created by the CAP_PLUGIN() macro in
+    // AppsFlyerPlugin.m.  When building with use_frameworks! :linkage => :static
+    // the linker STRIPS ObjC categories unless -ObjC is in OTHER_LDFLAGS.
+    // Without -ObjC: cast fails → NOT in PluginHeaders → isPluginAvailable=false.
+    //
+    // Fix: ios/App/Podfile post_install block must set -ObjC in aggregate_targets
+    // xcconfigs, then pod install + Clean Build Folder + Run.
+
+    let bridgeHasPlugin = false;
     try {
-      const avail_af   = Capacitor.isPluginAvailable("AppsFlyer");
-      const avail_afp  = Capacitor.isPluginAvailable("AppsFlyerPlugin");
-      const avail_pod  = Capacitor.isPluginAvailable("AppsflyerCapacitorPlugin");
-      const pluginKeys = Object.keys((window as any).Capacitor?.Plugins || {});
+      const av_af  = Capacitor.isPluginAvailable("AppsFlyer");
+      const av_afp = Capacitor.isPluginAvailable("AppsFlyerPlugin");
+      const av_pod = Capacitor.isPluginAvailable("AppsflyerCapacitorPlugin");
+      const bridgePlugins = Object.keys((window as any).Capacitor?.Plugins || {}).join(", ") || "(none)";
+      // Use console.log for ALL availability output — never console.warn here
+      // because console.warn is filtered in some Xcode log configurations.
       console.log(
-        `[appsflyer] plugin availability — AppsFlyer=${avail_af} AppsFlyerPlugin=${avail_afp} AppsflyerCapacitorPlugin=${avail_pod}`
+        `[appsflyer] plugin availability — AppsFlyer=${av_af} AppsFlyerPlugin=${av_afp} AppsflyerCapacitorPlugin=${av_pod}`
       );
-      console.log(`[appsflyer] registered bridge plugins: ${pluginKeys.join(", ") || "(none)"}`);
-      // Expected when working:  AppsFlyerPlugin=true (the registered name)
-      // If AppsFlyerPlugin=false → ObjC category stripped → need -ObjC in
-      // ios/App/Podfile post_install block, then pod install + clean + run.
+      console.log(`[appsflyer] registered bridge plugins: ${bridgePlugins}`);
+      bridgeHasPlugin = av_afp;
     } catch (diagErr) {
-      console.warn("[appsflyer] diagnostics failed (non-fatal):", diagErr);
+      // isPluginAvailable should never throw, but guard just in case.
+      console.log("[appsflyer] availability check threw (non-fatal):", String(diagErr));
     }
 
-    // ── initSDK ───────────────────────────────────────────────────────────────
-    // Phase 2 (Unified Deep Linking):
-    //   • manualStart=true defers session-start until after the UDL listener
-    //     is registered. Without this, AppsFlyer auto-starts inside initSDK
-    //     and the cold-start UDL callback fires before our listener is attached
-    //     — so deferred-deep-link data is lost on first launch after install.
-    //   • registerOnDeepLink stays false because UDL supersedes the legacy
-    //     onDeepLink callback (mixing the two double-fires the handler).
+    if (!bridgeHasPlugin) {
+      // The JS facade loaded successfully but AppsFlyerPlugin is NOT registered
+      // on the native Capacitor bridge.  Every native call would return
+      // UNIMPLEMENTED.  Bail out NOW so no native calls are attempted and no
+      // unhandled rejections can leak out.
+      console.log("[appsflyer-attribution] native plugin unavailable — AppsFlyerPlugin not on bridge, skipping AppsFlyer init");
+      console.log("[appsflyer] Action required: add -ObjC to Podfile post_install → pod install → Clean Build Folder → Run");
+      _pluginUnavailable = true;
+      return false;
+    }
+
+    // ── Step 3: initSDK ──────────────────────────────────────────────────────
+    // manualStart=true defers session-start until after the UDL listener is
+    // registered so cold-start deep-link data isn't lost.
     try {
-      console.log('[appsflyer] Capacitor Plugins =', Object.keys((window as any).Capacitor?.Plugins || {}));
-      log("initAppsFlyer → BEFORE initSDK call");
-      console.log("[appsflyer-attribution] init");
+      log("initAppsFlyer → BEFORE initSDK");
       const initRes = await AppsFlyer.initSDK({
         devKey: DEV_KEY,
-        appID: IOS_APP_ID,        // ignored on Android
+        appID: IOS_APP_ID,
         isDebug: IS_DEV,
         waitForATTUserAuthorization: 10,
         minTimeBetweenSessions: 4,
@@ -178,48 +196,41 @@ export async function initAppsFlyer(): Promise<boolean> {
       _initDone = true;
     } catch (err) {
       const code = (err as any)?.code ?? (err as any)?.errorCode;
+      console.log(`[appsflyer] initSDK FAILED code=${code ?? "(none)"}:`, describeError("initSDK", err));
       if (code === "UNIMPLEMENTED") {
-        // The JS facade is loaded (`appsflyer-capacitor-plugin` resolved) but
-        // the native iOS/Android class isn't linked into this app binary.
-        // Almost always means: pod install hasn't been re-run since the pod
-        // was added, OR the user opened App.xcodeproj instead of
-        // App.xcworkspace. Mark the plugin unavailable so subsequent
-        // trackAppsFlyerEvent / startSDK calls early-return cleanly instead
-        // of producing more unhandled rejections.
         _pluginUnavailable = true;
-        console.warn("[appsflyer-attribution] native plugin unavailable", describeError("initSDK", err));
-        return false;
+        console.log("[appsflyer-attribution] native plugin unavailable — initSDK returned UNIMPLEMENTED");
       }
-      warn("initAppsFlyer → initSDK FAILED:", describeError("initSDK", err));
-      // Fatal — without initSDK nothing else will work.
       return false;
     }
 
-    // ── Unified Deep Linking listener ────────────────────────────────────────
-    // MUST be attached before startSDK() so the cold-start callback (carrying
-    // the deferred-deep-link payload after install from a OneLink) lands in
-    // our handler. The handler is best-effort: extracts deep_link_value /
-    // deep_link_sub1-4 and forwards them to saveAppsflyerAttribution()
-    // (first-touch-wins; never overwrites existing attribution).
+    // ── Step 4: Unified Deep Linking listener ────────────────────────────────
+    // MUST be registered before startSDK() so the cold-start deferred
+    // deep-link payload lands in our handler on the very first install launch.
+    //
+    // Capacitor 8 addListener on native calls addListenerNative() internally,
+    // which creates TWO promises: an inner `call` (the actual native bridge
+    // call) and an outer `p` (resolves to { remove } when `call` resolves).
+    // If `call` rejects (e.g. native error), `p` never settles and `call`'s
+    // rejection is orphaned inside Capacitor's internals — it cannot be caught
+    // from the outside via handle.catch().
+    //
+    // Mitigation: we only reach this code when bridgeHasPlugin=true, which
+    // means the native plugin IS registered and addListener should succeed.
+    // Belt-and-suspenders: wrap in a try/catch for any sync throw, and attach
+    // Promise.resolve(handle).catch() for the outer promise rejection path.
     try {
       log("initAppsFlyer → BEFORE addListener(udl_callback)");
-      // In Capacitor 6 `addListener` returns Promise<PluginListenerHandle>, not
-      // a sync handle. If the native plugin is missing we'd get an unhandled
-      // promise rejection here. Capture the return value and attach .catch
-      // defensively regardless of whether the runtime returns sync or async.
       const handle = AppsFlyer.addListener("udl_callback", (event: any) => {
         try {
           const status = event?.status ?? "(unknown)";
           const dl = event?.deepLink ?? event?.deep_link ?? {};
-          // AppsFlyer occasionally returns the payload as a JSON string on iOS.
           let parsed: Record<string, any> = {};
           if (typeof dl === "string") {
             try { parsed = JSON.parse(dl); } catch { parsed = {}; }
           } else if (dl && typeof dl === "object") {
             parsed = dl as Record<string, any>;
           }
-          // Case-insensitive lookup — Android tends to use snake_case, iOS
-          // sometimes camelCases the very same keys.
           const get = (key: string): string | null => {
             const want = key.toLowerCase();
             for (const [k, v] of Object.entries(parsed)) {
@@ -230,9 +241,6 @@ export async function initAppsFlyer(): Promise<boolean> {
             return null;
           };
           console.log("[appsflyer-attribution] deep link received status=" + status, parsed);
-
-          // Safely import the attribution helper — keeping it lazy avoids
-          // pulling attribution.ts into any code path that doesn't need it.
           import("@/lib/attribution")
             .then(({ saveAppsflyerAttribution }) => {
               saveAppsflyerAttribution({
@@ -244,48 +252,43 @@ export async function initAppsFlyer(): Promise<boolean> {
               });
             })
             .catch((err) => {
-              warn("udl_callback → attribution import failed:", describeError("import attribution", err));
+              log("udl_callback → attribution import failed:", describeError("import attribution", err));
             });
         } catch (err) {
-          warn("udl_callback → handler threw:", describeError("udl_callback handler", err));
+          log("udl_callback → handler threw:", describeError("udl_callback handler", err));
         }
       });
-      // Defensively swallow rejection if `handle` is a Promise (Capacitor 6+).
-      if (handle && typeof (handle as any).catch === "function") {
-        (handle as any).catch((err: unknown) => {
-          warn("initAppsFlyer → addListener(udl_callback) async-rejected:", describeError("addListener", err));
+      // Attach .catch on the outer handle promise to suppress any rejection
+      // that surfaces from addListenerNative's outer `p` promise.
+      // (The inner `call` orphan rejection from addListenerNative cannot be
+      // caught from here — it's internal to Capacitor — but bridgeHasPlugin=true
+      // means the native call should succeed so `call` should resolve.)
+      Promise.resolve(handle)
+        .catch((err: unknown) => {
+          log("initAppsFlyer → addListener(udl_callback) handle-promise rejected:", describeError("addListener", err));
         });
-      }
       log("initAppsFlyer → AFTER addListener(udl_callback) registered");
     } catch (err) {
-      warn("initAppsFlyer → addListener(udl_callback) FAILED:", describeError("addListener", err));
-      // Non-fatal — startSDK still proceeds so events keep flowing even if
-      // UDL never lands. We just won't capture deferred-deep-link attribution.
+      log("initAppsFlyer → addListener(udl_callback) sync-threw:", describeError("addListener", err));
+      // Non-fatal — continue to startSDK.
     }
 
-    // ── startSDK ─────────────────────────────────────────────────────────────
-    // Required because manualStart=true was passed to initSDK.
+    // ── Step 5: startSDK ─────────────────────────────────────────────────────
     try {
-      log("initAppsFlyer → BEFORE startSDK call");
+      log("initAppsFlyer → BEFORE startSDK");
       const startRes = await AppsFlyer.startSDK();
       log("initAppsFlyer → AFTER startSDK success:", startRes);
     } catch (err) {
       const code = (err as any)?.code ?? (err as any)?.errorCode;
+      console.log(`[appsflyer] startSDK FAILED code=${code ?? "(none)"}:`, describeError("startSDK", err));
       if (code === "UNIMPLEMENTED") {
-        // Should be unreachable (initSDK would have caught this first and
-        // returned early), but kept defensive so a partially-linked plugin
-        // can never produce an unhandled rejection.
         _pluginUnavailable = true;
-        console.warn("[appsflyer-attribution] native plugin unavailable", describeError("startSDK", err));
-      } else {
-        warn("initAppsFlyer → startSDK FAILED:", describeError("startSDK", err));
+        console.log("[appsflyer-attribution] native plugin unavailable — startSDK returned UNIMPLEMENTED");
       }
-      // Non-fatal for the boot path — the rest of the helpers will still
-      // attempt to log events; AppsFlyer's native side queues until session
-      // start succeeds on a subsequent call.
+      // Non-fatal — events still queue.
     }
 
-    // ── IDFV via @capacitor/device (separate plugin, separate failure mode) ──
+    // ── Step 6: IDFV via @capacitor/device ──────────────────────────────────
     try {
       log("initAppsFlyer → BEFORE Device.getId()");
       const { Device } = await import("@capacitor/device");
@@ -293,25 +296,23 @@ export async function initAppsFlyer(): Promise<boolean> {
       const idfv = (info as any).identifier ?? (info as any).uuid ?? "(unknown)";
       log(`initAppsFlyer → AFTER Device.getId() — 📱 IDFV: ${idfv}`);
     } catch (err) {
-      warn("initAppsFlyer → Device.getId FAILED:", describeError("Device.getId", err));
-      // Non-fatal — continue.
+      log("initAppsFlyer → Device.getId FAILED:", describeError("Device.getId", err));
     }
 
-    // ── AppsFlyer UID ─────────────────────────────────────────────────────────
+    // ── Step 7: AppsFlyer UID ────────────────────────────────────────────────
     try {
       log("initAppsFlyer → BEFORE getAppsFlyerUID");
       const afid = await AppsFlyer.getAppsFlyerUID();
       const uid = (afid as any)?.uid ?? String(afid);
       log(`initAppsFlyer → AFTER getAppsFlyerUID — 📱 AppsFlyer UID: ${uid}`);
     } catch (err) {
-      warn("initAppsFlyer → getAppsFlyerUID FAILED:", describeError("getAppsFlyerUID", err));
-      // Non-fatal — continue.
+      log("initAppsFlyer → getAppsFlyerUID FAILED:", describeError("getAppsFlyerUID", err));
     }
 
     log("initAppsFlyer → COMPLETE");
     return true;
   } catch (err) {
-    warn("initAppsFlyer → outer catch:", describeError("initAppsFlyer", err));
+    console.log("[appsflyer] initAppsFlyer → outer catch:", describeError("initAppsFlyer", err));
     return false;
   }
 }
@@ -326,17 +327,21 @@ export async function trackAppsFlyerEvent(
 ): Promise<void> {
   try {
     if (!isNativePlatform()) return;
+    if (_pluginUnavailable) {
+      log(`trackAppsFlyerEvent(${eventName}) → plugin unavailable, dropping event`);
+      return;
+    }
     if (!_initDone) {
       log(`trackAppsFlyerEvent(${eventName}) → SDK not ready, attempting lazy init`);
       const ok = await initAppsFlyer();
       if (!ok) {
-        warn(`trackAppsFlyerEvent(${eventName}) → lazy init failed, dropping event`);
+        log(`trackAppsFlyerEvent(${eventName}) → lazy init failed, dropping event`);
         return;
       }
     }
     const AppsFlyer = await loadPluginAsync();
     if (!AppsFlyer) {
-      warn(`trackAppsFlyerEvent(${eventName}) → plugin unavailable, dropping event`);
+      log(`trackAppsFlyerEvent(${eventName}) → plugin unavailable, dropping event`);
       return;
     }
 
@@ -344,14 +349,13 @@ export async function trackAppsFlyerEvent(
       log(`trackAppsFlyerEvent → BEFORE logEvent ${eventName}`, eventValues);
       const res = await AppsFlyer.logEvent({
         eventName,
-        // AppsFlyer expects string values; coerce loosely.
         eventValue: eventValues as Record<string, string>,
       });
       log(`trackAppsFlyerEvent → AFTER logEvent ${eventName} success:`, res);
     } catch (err) {
-      warn(`trackAppsFlyerEvent → logEvent ${eventName} FAILED:`, describeError("logEvent", err));
+      log(`trackAppsFlyerEvent → logEvent ${eventName} FAILED:`, describeError("logEvent", err));
     }
   } catch (err) {
-    warn(`trackAppsFlyerEvent(${eventName}) → outer catch:`, describeError("trackAppsFlyerEvent", err));
+    log(`trackAppsFlyerEvent(${eventName}) → outer catch:`, describeError("trackAppsFlyerEvent", err));
   }
 }
