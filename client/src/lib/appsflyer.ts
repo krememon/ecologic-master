@@ -128,6 +128,29 @@ export async function initAppsFlyer(): Promise<boolean> {
       return false;
     }
 
+    // ── Native plugin availability diagnostics ────────────────────────────────
+    // Log before every native call so Xcode/Logcat always shows bridge state.
+    // Capacitor.isPluginAvailable(name) checks whether the native bridge has a
+    // registered implementation for that plugin name.  If all three return
+    // false after pod install + clean build, it means the -ObjC linker flag is
+    // still missing (ObjC categories were stripped → CAPBridgedPlugin
+    // conformance not loaded → Capacitor's registerPlugins() silently skipped).
+    try {
+      const avail_af   = Capacitor.isPluginAvailable("AppsFlyer");
+      const avail_afp  = Capacitor.isPluginAvailable("AppsFlyerPlugin");
+      const avail_pod  = Capacitor.isPluginAvailable("AppsflyerCapacitorPlugin");
+      const pluginKeys = Object.keys((window as any).Capacitor?.Plugins || {});
+      console.log(
+        `[appsflyer] plugin availability — AppsFlyer=${avail_af} AppsFlyerPlugin=${avail_afp} AppsflyerCapacitorPlugin=${avail_pod}`
+      );
+      console.log(`[appsflyer] registered bridge plugins: ${pluginKeys.join(", ") || "(none)"}`);
+      // Expected when working:  AppsFlyerPlugin=true (the registered name)
+      // If AppsFlyerPlugin=false → ObjC category stripped → need -ObjC in
+      // ios/App/Podfile post_install block, then pod install + clean + run.
+    } catch (diagErr) {
+      console.warn("[appsflyer] diagnostics failed (non-fatal):", diagErr);
+    }
+
     // ── initSDK ───────────────────────────────────────────────────────────────
     // Phase 2 (Unified Deep Linking):
     //   • manualStart=true defers session-start until after the UDL listener

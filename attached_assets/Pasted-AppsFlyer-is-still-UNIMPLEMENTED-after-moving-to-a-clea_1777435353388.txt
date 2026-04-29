@@ -1,0 +1,67 @@
+AppsFlyer is still UNIMPLEMENTED after moving to a clean Git staging folder.
+
+Current confirmed status:
+- Local Mac project now comes from Git staging branch.
+- iOS build correctly loads staging:
+  serverUrl=https://staging.ecologicc.com
+- npx cap sync ios found appsflyer-capacitor-plugin@6.17.91
+- pod install completed
+- Xcode opened ios/App/App.xcworkspace
+- Clean Build Folder was run
+- Real iPhone run still logs:
+  [appsflyer] loadPlugin → AppsFlyer import resolved
+  [UnhandledRejection] {"code":"UNIMPLEMENTED"}
+
+This means the issue is not the local folder anymore and not the staging URL. Please deeply inspect native plugin registration.
+
+Please check/fix:
+
+1. Confirm exact JS import and plugin name for appsflyer-capacitor-plugin@6.17.91.
+   The current JS import resolves, but native bridge says UNIMPLEMENTED.
+
+2. Inspect node_modules/appsflyer-capacitor-plugin:
+   - package.json
+   - README usage
+   - iOS Swift/Obj-C plugin class name
+   - Capacitor plugin name
+   - exported methods
+
+3. Confirm whether the plugin methods are named exactly:
+   - initSDK
+   - startSDK
+   - addListener
+   or if the plugin uses different names/casing.
+
+4. Confirm whether Capacitor 8 supports this plugin version.
+   If appsflyer-capacitor-plugin@6.17.91 is not compatible with Capacitor 8, identify the correct compatible version or workaround.
+
+5. Add a temporary diagnostic in client/src/lib/appsflyer.ts:
+   - Capacitor.isPluginAvailable("AppsFlyer")
+   - Capacitor.isPluginAvailable("AppsFlyerPlugin")
+   - Capacitor.isPluginAvailable("AppsflyerCapacitorPlugin")
+   - log available Capacitor.Plugins keys if possible
+
+6. Fix unhandled rejection:
+   Even if plugin is unavailable, there should be no [UnhandledRejection].
+   It should log:
+   [appsflyer-attribution] native plugin unavailable
+
+7. If manual native registration is required, add it in the correct iOS Capacitor 8 location.
+
+8. Do not touch:
+   - staging URL config
+   - Stripe
+   - Apple IAP
+   - Google Play IAP
+   - dashboard
+   - account deletion
+   - onboarding
+   - smart links
+
+Deliverables:
+- Real root cause
+- Plugin name/method mismatch if found
+- Capacitor 8 compatibility answer
+- Files changed
+- Exact Mac commands after fix
+- Expected Xcode logs after fix
