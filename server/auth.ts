@@ -1356,8 +1356,58 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
 
   app.get("/api/auth/google/callback", (req, res, next) => {
     const rawState = (req.query.state as string) || "web";
-    console.log("[auth/google/callback] hit, rawState:", rawState.substring(0, 20));
-    passport.authenticate("google", async (err: any, user: any, info: any) => {
+
+    // ── Surface Google's own error (if it bounced us back without a code) ──
+    // When Google rejects the request itself (e.g. user denied consent,
+    // redirect_uri_mismatch, invalid_client) it appends ?error=… &error_description=…
+    // BEFORE passport-oauth2 even touches the token endpoint. Logging these
+    // first makes the real cause visible in production logs instead of the
+    // generic "[google-auth] Error: …" we used to print.
+    const googleErr = (req.query.error as string) || "";
+    const googleErrDesc = (req.query.error_description as string) || "";
+    const googleErrUri = (req.query.error_uri as string) || "";
+    if (googleErr) {
+      console.error(
+        `[GoogleAuth][callback] Google returned error BEFORE token exchange — ` +
+          `error=${googleErr} description=${googleErrDesc} uri=${googleErrUri} ` +
+          `host=${req.headers.host} state=${rawState.substring(0, 20)}`
+      );
+    }
+
+    // ── Recompute the SAME callbackURL the start handler sent to Google ──
+    // passport-oauth2's token-exchange step sends `redirect_uri` to Google
+    // which MUST be byte-for-byte identical to the one used at /authorize,
+    // otherwise Google returns redirect_uri_mismatch and we wind up here
+    // with an InternalOAuthError. The callback hits the same host the start
+    // ran on (Google redirects back to that host), so requestBase + the
+    // self-host check produce the same value as the start.
+    const requestBase = `${req.protocol}://${req.get("host")}`;
+    const productionBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL;
+    const currentHost = (req.headers.host || "").toLowerCase();
+    const currentHostname = currentHost.split(":")[0];
+    const isLocalhost = currentHostname === "localhost" || currentHostname.startsWith("127.0.0.1");
+    const isReplitPreview =
+      currentHostname.endsWith(".replit.dev") || currentHostname.endsWith(".replit.app");
+    const selfHostOverride = (process.env.OAUTH_SELF_HOSTS || "")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    const isEcologicSubdomain =
+      currentHostname === "ecologicc.com" || currentHostname.endsWith(".ecologicc.com");
+    const selfHostsOAuth =
+      !isLocalhost &&
+      !isReplitPreview &&
+      (isEcologicSubdomain || selfHostOverride.includes(currentHostname));
+    const resolvedBase = selfHostsOAuth ? requestBase : (productionBase || requestBase);
+    const callbackURL = `${resolvedBase}/api/auth/google/callback`;
+
+    console.log(
+      `[GoogleAuth][callback] hit — host=${req.headers.host} ` +
+        `selfHostsOAuth=${selfHostsOAuth} resolvedCallbackURL=${callbackURL} ` +
+        `rawState=${rawState.substring(0, 20)} hasCode=${!!req.query.code}`
+    );
+
+    passport.authenticate("google", { callbackURL }, async (err: any, user: any, info: any) => {
       const isIos = rawState === "ios" || rawState.startsWith("ios:");
       const isPopup = rawState === "popup" || rawState.startsWith("popup:");
       const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
@@ -1389,7 +1439,31 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
       console.log(`[auth/google/callback][debug] host=${req.headers.host} isIos=${isIos} isPopup=${isPopup} nonce=${nonce ? nonce.substring(0, 8) + "..." : "none"} returnTo=${returnTo || "(none)"} popupReturnTo=${popupReturnTo ? "set" : "(none)"} err=${!!err} user=${!!user}`);
 
       if (err) {
-        console.error("[google-auth] Error:", err);
+        // ── Detailed failure log so production can diagnose the real cause ──
+        // passport-oauth2 wraps Google's HTTP error response in InternalOAuthError.
+        // The useful bits (Google's JSON body) live on err.oauthError.data and
+        // err.oauthError.statusCode. Without printing them we just see "OAuth2…
+        // failed to obtain access token" which tells us nothing.
+        const oauthErr = (err as any).oauthError;
+        let oauthBody = "";
+        if (oauthErr?.data) {
+          try {
+            oauthBody = typeof oauthErr.data === "string" ? oauthErr.data : JSON.stringify(oauthErr.data);
+          } catch { oauthBody = String(oauthErr.data); }
+        }
+        console.error(
+          `[GoogleAuth][callback] FAILURE — name=${err.name} message=${err.message} ` +
+            `code=${(err as any).code || "(none)"} ` +
+            `oauthStatus=${oauthErr?.statusCode ?? "(none)"} oauthBody=${oauthBody || "(none)"} ` +
+            `host=${req.headers.host} resolvedCallbackURL=${callbackURL} ` +
+            `state=${rawState.substring(0, 20)} platform=${isIos ? "ios" : isPopup ? "popup" : "web"}`
+        );
+        if (oauthBody && oauthBody.includes("redirect_uri_mismatch")) {
+          console.error(
+            `[GoogleAuth][callback] redirect_uri_mismatch — Google rejected the redirect_uri. ` +
+              `MUST be added to Google Cloud Console OAuth client → Authorized redirect URIs: ${callbackURL}`
+          );
+        }
         if (isIos) {
           console.log("[google-auth] iOS: error — redirecting to bridge page");
           return res.redirect("/api/auth/google-complete?error=oauth_error");

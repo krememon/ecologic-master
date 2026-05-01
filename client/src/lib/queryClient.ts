@@ -52,25 +52,49 @@ export function resolveApiUrl(path: string): string {
   }
 }
 
-function getNativeAuthHeaders(): Record<string, string> {
+function getNativeAuthHeaders(): { headers: Record<string, string>; bearerAttached: boolean } {
   try {
-    if (!isNativeCapacitor()) return {};
+    if (!isNativeCapacitor()) return { headers: {}, bearerAttached: false };
     const sessionId = typeof localStorage !== "undefined"
       ? localStorage.getItem("nativeSessionId")
       : null;
     const headers: Record<string, string> = { "x-client-type": "mobile" };
-    if (sessionId) headers["Authorization"] = `Bearer ${sessionId}`;
-    return headers;
+    if (sessionId) {
+      headers["Authorization"] = `Bearer ${sessionId}`;
+      return { headers, bearerAttached: true };
+    }
+    return { headers, bearerAttached: false };
   } catch {
     // localStorage not available (e.g. SSR context)
   }
-  return {};
+  return { headers: {}, bearerAttached: false };
 }
 
 /** Call on logout to remove the native Bearer token from storage. */
 export function clearNativeSession(): void {
   try {
     localStorage.removeItem("nativeSessionId");
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * If a Bearer token was attached to a request that came back 401, the
+ * stored `nativeSessionId` is invalid/expired/revoked. Clearing it stops
+ * the app from re-attaching the dead token on every subsequent request,
+ * which would otherwise pin the user in a permanent 401 loop with
+ * `hasNativeSession=true attachBearer=true` in the logs.
+ */
+function clearNativeSessionIfBearerWasAttached(bearerAttached: boolean, status: number): void {
+  if (!bearerAttached || status !== 401) return;
+  try {
+    if (typeof localStorage !== "undefined" && localStorage.getItem("nativeSessionId")) {
+      console.warn(
+        "[auth/native] 401 received with Bearer attached — clearing stale nativeSessionId"
+      );
+      localStorage.removeItem("nativeSessionId");
+    }
   } catch {
     // ignore
   }
@@ -125,7 +149,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const nativeHeaders = getNativeAuthHeaders();
+  const { headers: nativeHeaders, bearerAttached } = getNativeAuthHeaders();
   const resolved = resolveApiUrl(url);
   const res = await fetch(resolved, {
     method,
@@ -138,6 +162,7 @@ export async function apiRequest(
     cache: "no-store",
   });
 
+  clearNativeSessionIfBearerWasAttached(bearerAttached, res.status);
   await throwIfResNotOk(res);
   return res;
 }
@@ -148,11 +173,14 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const { headers, bearerAttached } = getNativeAuthHeaders();
     const res = await fetch(resolveApiUrl(queryKey[0] as string), {
       credentials: "include",
       cache: "no-store",
-      headers: getNativeAuthHeaders(),
+      headers,
     });
+
+    clearNativeSessionIfBearerWasAttached(bearerAttached, res.status);
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
