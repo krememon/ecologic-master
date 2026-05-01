@@ -391,8 +391,22 @@ export async function startGoogleAuthNative(): Promise<void> {
       window.location.href = "/api/auth/google";
       return;
     }
-    // Web (non-iframe): use centered popup with postMessage handshake
-    await openGoogleAuthPopup();
+    // Web (non-iframe): full-page redirect to /api/auth/google.
+    //
+    // Why not a popup? The previous popup+postMessage handshake was unreliable
+    // in production (app.ecologicc.com): the popup completed Google OAuth and
+    // the server set Set-Cookie on the popup's response, but when the opener
+    // immediately refetched /api/auth/user the new connect.sid cookie wasn't
+    // always visible to the opener's cookie jar (browser-dependent: Safari ITP,
+    // Brave shields, and even Chrome under sameSite=none + secure can isolate
+    // popup-set cookies from the opener for a beat). Result: 401 in the opener
+    // even though the server thought login succeeded.
+    //
+    // A full-page redirect avoids the entire problem — the server's Set-Cookie
+    // lands on the same window that immediately navigates back to "/" and the
+    // very next request carries the new session cookie. Same-origin only
+    // (production), so no cross-domain handoff is needed.
+    window.location.href = "/api/auth/google";
     return;
   }
 
