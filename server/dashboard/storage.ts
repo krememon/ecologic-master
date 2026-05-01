@@ -1618,7 +1618,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const topCampaignRows = ((topCampaignResult as any).rows ?? []) as Array<{ campaign_id: number | null; name: string | null; cnt: string }>;
 
   const c = counts || ({} as any);
-  return {
+  const overview = {
     totalSubscribers: Number(c.total ?? 0),
     trialing: Number(c.trialing ?? 0),
     paid: Number(c.paid ?? 0),
@@ -1637,6 +1637,14 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       : null,
     generatedAt: new Date().toISOString(),
   };
+  console.log(
+    `[dashboard-overview] counts: total=${overview.totalSubscribers} ` +
+      `trialing=${overview.trialing} paid=${overview.paid} canceled=${overview.canceled} ` +
+      `mrr=$${overview.currentMrr} totalRevenue=$${overview.totalRevenue} ` +
+      `topSource=${overview.topSource?.sourceType ?? "(none)"}(${overview.topSource?.count ?? 0}) ` +
+      `topCampaign=${overview.topCampaign?.name ?? "(none)"}(${overview.topCampaign?.count ?? 0})`
+  );
+  return overview;
 }
 
 // ── Overview charts endpoint ────────────────────────────────────────────────

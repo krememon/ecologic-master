@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
 import { backfillReferralEarnings, backfillReceiverCollectionInvoices } from "./invoiceRecompute";
+import { backfillGrowthSubscribersFromCompanies } from "./dashboard/backfillGrowthSubscribers";
 import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
@@ -1280,6 +1281,12 @@ app.use((req, res, next) => {
   // Backfill missing subcontract payouts for succeeded Stripe payments (idempotent)
   stripeConnectService.backfillMissingSubcontractPayouts().catch(err =>
     console.error('[startup] backfillMissingSubcontractPayouts error:', err?.message));
+
+  // Backfill growth_subscribers from existing companies so the private dashboard
+  // overview shows real counts/MRR for accounts that pre-date attribution
+  // tracking. Idempotent — only inserts where company_id is missing.
+  backfillGrowthSubscribersFromCompanies().catch(err =>
+    console.error('[startup] backfillGrowthSubscribersFromCompanies error:', err?.message));
   
   const server = await registerRoutes(app);
 
