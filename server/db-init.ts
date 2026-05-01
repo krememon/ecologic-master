@@ -67,6 +67,25 @@ export async function initializeDatabase() {
       console.log('[db-init] ✅ Trigger enforce_dm_participant_limit_trigger already exists');
     }
     
+    // ── pending_new_email columns (email-change confirmation flow) ──
+    // The Drizzle schema declares users.pendingNewEmail / pendingNewEmailToken /
+    // pendingNewEmailExpires, but they were never pushed to the production
+    // database. Every SELECT against users (Drizzle generates an explicit
+    // column list) currently fails with:
+    //   error: column "pending_new_email" does not exist  (SQLSTATE 42703)
+    // breaking signup start, dashboard admin login, and the Google OAuth
+    // callback (getUserByEmail / getUserByGoogleId). Add the columns
+    // idempotently here so the next deploy self-heals without a separate
+    // `npm run db:push` against prod.
+    console.log('[db-init] Ensuring users.pending_new_email* columns exist…');
+    await db.execute(sql`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS pending_new_email varchar,
+        ADD COLUMN IF NOT EXISTS pending_new_email_token varchar,
+        ADD COLUMN IF NOT EXISTS pending_new_email_expires timestamp
+    `);
+    console.log('[db-init] ✅ users.pending_new_email* columns ensured');
+
     console.log('[db-init] Database initialization complete');
   } catch (error) {
     console.error('[db-init] ERROR during database initialization:', error);
