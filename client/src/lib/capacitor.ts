@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, resolveApiUrl } from "@/lib/queryClient";
 
 export function isNativePlatform(): boolean {
   try {
@@ -166,7 +166,7 @@ async function openGoogleAuthPopup(): Promise<void> {
               const data = await exchRes.json().catch(() => ({}));
               if (isCrossDomain && data.sessionId) {
                 // Adopt the production session into the local picard server
-                const adoptRes = await fetch("/api/auth/adopt-session", {
+                const adoptRes = await fetch(resolveApiUrl("/api/auth/adopt-session"), {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ sessionId: data.sessionId }),

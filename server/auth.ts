@@ -5,7 +5,7 @@ import { Express, Response } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { getResendFrom } from "./email";
+import { getResendFrom, sendOtpEmail } from "./email";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
@@ -148,9 +148,11 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-function generateToken() {
+export function generateToken() {
   return randomBytes(32).toString("hex");
 }
+
+export { sendPasswordResetEmail };
 
 function sendDeepLinkRedirect(res: Response, deepLinkUrl: string) {
   console.log("[deep-link-redirect] Redirecting to:", deepLinkUrl);
@@ -520,44 +522,28 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
-      // Check email provider configuration
-      if (!process.env.RESEND_API_KEY) {
-        console.error("[signup-code] RESEND_API_KEY not configured");
-        return res.status(500).json({ message: "Email provider not configured." });
-      }
-
       // Send verification code email via Resend
-      console.log("[signup-code] Attempting to send email to:", normalizedEmail);
-      try {
-        const { Resend } = await import("resend");
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        const { error } = await resend.emails.send({
-          from: getResendFrom(),
-          reply_to: 'no-reply@ecologicc.com',
-          to: normalizedEmail,
-          subject: "Your EcoLogic Verification Code",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Verify your email</h2>
-              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Hi ${firstName}, use this code to verify your email address:</p>
-              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
-                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
-              </div>
-              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+      const sendResult = await sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        context: 'signup-code',
+        subject: 'Your EcoLogic Verification Code',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Verify your email</h2>
+            <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Hi ${firstName}, use this code to verify your email address:</p>
+            <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
             </div>
-          `,
+            <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+          </div>
+        `,
+      });
+      if (!sendResult.ok) {
+        return res.status(500).json({
+          message: 'Failed to send verification email',
+          reason: sendResult.reason,
         });
-        
-        if (error) {
-          console.error("[signup-code] Resend API returned error:", error);
-          return res.status(500).json({ message: "Failed to send verification email" });
-        }
-        
-        console.log("[signup-code] Email sent successfully to:", normalizedEmail);
-      } catch (emailError) {
-        console.error("[signup-code] Email send failed:", emailError);
-        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       res.json({ ok: true });
@@ -740,44 +726,27 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
-      // Check email provider configuration
-      if (!process.env.RESEND_API_KEY) {
-        console.error("[signup-resend] RESEND_API_KEY not configured");
-        return res.status(500).json({ message: "Email provider not configured." });
-      }
-
-      // Send email
-      console.log("[signup-resend] Attempting to send email to:", normalizedEmail);
-      try {
-        const { Resend } = await import("resend");
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        const { error } = await resend.emails.send({
-          from: getResendFrom(),
-          reply_to: 'no-reply@ecologicc.com',
-          to: normalizedEmail,
-          subject: "Your New EcoLogic Verification Code",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New verification code</h2>
-              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
-              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
-                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
-              </div>
-              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+      const sendResult = await sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        context: 'signup-resend',
+        subject: 'Your New EcoLogic Verification Code',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New verification code</h2>
+            <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
+            <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
             </div>
-          `,
+            <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+          </div>
+        `,
+      });
+      if (!sendResult.ok) {
+        return res.status(500).json({
+          message: 'Failed to send verification email',
+          reason: sendResult.reason,
         });
-        
-        if (error) {
-          console.error("[signup-resend] Resend API returned error:", error);
-          return res.status(500).json({ message: "Failed to send verification email" });
-        }
-        
-        console.log("[signup-resend] Email sent successfully to:", normalizedEmail);
-      } catch (emailError) {
-        console.error("[signup-resend] Email send failed:", emailError);
-        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       res.json({ ok: true });
@@ -797,9 +766,11 @@ export function setupAuth(app: Express) {
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      console.log(`[auth/send-code][server] received email=${normalizedEmail} step=email-start origin=${req.headers.origin || "n/a"} clientType=${req.headers["x-client-type"] || "web"}`);
       const user = await storage.getUserByEmail(normalizedEmail);
       
       if (!user) {
+        console.warn(`[auth/send-code][server] failed email=${normalizedEmail} step=email-start reason=no_account`);
         return res.status(400).json({ message: "No account found with this email." });
       }
 
@@ -847,6 +818,7 @@ export function setupAuth(app: Express) {
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      console.log(`[auth/send-code][server] received email=${normalizedEmail} step=password origin=${req.headers.origin || "n/a"} clientType=${req.headers["x-client-type"] || "web"}`);
       
       // Check for valid login challenge
       const challenge = await storage.getLoginChallenge(normalizedEmail);
@@ -879,44 +851,32 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
-      // Check email provider configuration
-      if (!process.env.RESEND_API_KEY) {
-        console.error("[login-code] RESEND_API_KEY not configured");
-        return res.status(500).json({ message: "Email provider not configured." });
-      }
-
-      // Send verification code email
-      console.log("[login-code] Attempting to send email to:", normalizedEmail);
-      try {
-        const { Resend } = await import("resend");
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        const { error } = await resend.emails.send({
-          from: getResendFrom(),
-          reply_to: 'no-reply@ecologicc.com',
-          to: normalizedEmail,
-          subject: "Your EcoLogic Sign-In Code",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Sign-in verification</h2>
-              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Enter this code to complete your sign-in:</p>
-              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
-                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
-              </div>
-              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't try to sign in, please secure your account.</p>
+      const sendResult = await sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        context: 'login-code',
+        subject: 'Your EcoLogic Sign-In Code',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Sign-in verification</h2>
+            <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Enter this code to complete your sign-in:</p>
+            <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
             </div>
-          `,
+            <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't try to sign in, please secure your account.</p>
+          </div>
+        `,
+      });
+      if (sendResult.ok) {
+        console.log(`[auth/send-code][server] resend success email=${normalizedEmail} step=password id=${sendResult.messageId || "no-id"}`);
+      } else {
+        console.error(`[auth/send-code][server] resend failed email=${normalizedEmail} step=password reason=${sendResult.reason} error=${JSON.stringify((sendResult as any).details ?? null)}`);
+      }
+      if (!sendResult.ok) {
+        return res.status(500).json({
+          message: 'Failed to send verification email',
+          reason: sendResult.reason,
         });
-        
-        if (error) {
-          console.error("[login-code] Resend API returned error:", error);
-          return res.status(500).json({ message: "Failed to send verification email" });
-        }
-        
-        console.log("[login-code] Email sent successfully to:", normalizedEmail);
-      } catch (emailError) {
-        console.error("[login-code] Email send failed:", emailError);
-        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       res.json({ ok: true });
@@ -1055,6 +1015,7 @@ export function setupAuth(app: Express) {
 
       const normalizedEmail = email.toLowerCase().trim();
       console.log("[login-code] resend requested email=" + normalizedEmail);
+      console.log(`[auth/send-code][server] received email=${normalizedEmail} step=resend origin=${req.headers.origin || "n/a"} clientType=${req.headers["x-client-type"] || "web"}`);
       
       const challenge = await storage.getLoginChallenge(normalizedEmail);
 
@@ -1085,44 +1046,32 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
-      // Check email provider configuration
-      if (!process.env.RESEND_API_KEY) {
-        console.error("[login-resend] RESEND_API_KEY not configured");
-        return res.status(500).json({ message: "Email provider not configured." });
-      }
-
-      // Send new code email
-      console.log("[login-resend] Attempting to send email to:", normalizedEmail);
-      try {
-        const { Resend } = await import("resend");
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        const { error } = await resend.emails.send({
-          from: getResendFrom(),
-          reply_to: 'no-reply@ecologicc.com',
-          to: normalizedEmail,
-          subject: "Your New EcoLogic Sign-In Code",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New sign-in code</h2>
-              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
-              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
-                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
-              </div>
-              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+      const sendResult = await sendOtpEmail({
+        to: normalizedEmail,
+        code,
+        context: 'login-resend',
+        subject: 'Your New EcoLogic Sign-In Code',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+            <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New sign-in code</h2>
+            <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
+            <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
             </div>
-          `,
+            <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+          </div>
+        `,
+      });
+      if (sendResult.ok) {
+        console.log(`[auth/send-code][server] resend success email=${normalizedEmail} step=resend id=${sendResult.messageId || "no-id"}`);
+      } else {
+        console.error(`[auth/send-code][server] resend failed email=${normalizedEmail} step=resend reason=${sendResult.reason} error=${JSON.stringify((sendResult as any).details ?? null)}`);
+      }
+      if (!sendResult.ok) {
+        return res.status(500).json({
+          message: 'Failed to send verification email',
+          reason: sendResult.reason,
         });
-        
-        if (error) {
-          console.error("[login-resend] Resend API returned error:", error);
-          return res.status(500).json({ message: "Failed to send verification email" });
-        }
-        
-        console.log("[login-resend] Email sent successfully to:", normalizedEmail);
-      } catch (emailError) {
-        console.error("[login-resend] Email send failed:", emailError);
-        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       res.json({ ok: true });
@@ -1168,6 +1117,7 @@ export function setupAuth(app: Express) {
     const returnTo = req.query.returnTo as string || "";
 
     console.log(`[auth/google][debug] host=${req.headers.host} x-fwd-host=${req.headers["x-forwarded-host"] || "-"} origin=${req.headers.origin || "-"} referer=${req.headers.referer || "-"} platform=${platform}`);
+    console.log(`[signup-flow] request host: ${req.headers.host}`);
 
     let state: string;
     if (platform === "ios" && nonce) {
@@ -1193,11 +1143,44 @@ export function setupAuth(app: Express) {
     // 3. APP_BASE_URL — the Replit deployment URL, used only as a last resort
     const requestBase = `${req.protocol}://${req.get("host")}`;
     const productionBase = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL;
-    if (productionBase) {
+
+    // ── Self-hosted OAuth detection ──────────────────────────────────────────
+    // Real subdomains of ecologicc.com (staging.ecologicc.com,
+    // staging-dashboard.ecologicc.com, app.ecologicc.com, …) host the
+    // Google OAuth flow themselves so the callback returns to the SAME host
+    // the user signed in on. Only Replit canvas/preview hostnames
+    // (*.replit.dev, *.replit.app) and localhost are trampolined through the
+    // canonical APP_PUBLIC_BASE_URL — those hostnames are not registered as
+    // authorized redirect URIs in Google Cloud Console, so they must borrow
+    // the production callback.
+    //
+    // An optional env override OAUTH_SELF_HOSTS (comma-separated hostnames)
+    // forces specific hosts into self-hosted mode without touching code.
+    const currentHost = (req.headers.host || "").toLowerCase();
+    const currentHostname = currentHost.split(":")[0];
+    const isLocalhost = currentHostname === "localhost" || currentHostname.startsWith("127.0.0.1");
+    const isReplitPreview =
+      currentHostname.endsWith(".replit.dev") || currentHostname.endsWith(".replit.app");
+    const selfHostOverride = (process.env.OAUTH_SELF_HOSTS || "")
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    const isEcologicSubdomain =
+      currentHostname === "ecologicc.com" || currentHostname.endsWith(".ecologicc.com");
+    const selfHostsOAuth =
+      !isLocalhost &&
+      !isReplitPreview &&
+      (isEcologicSubdomain || selfHostOverride.includes(currentHostname));
+
+    console.log(
+      `[signup-flow] OAuth host decision — host=${currentHost} ` +
+        `selfHostsOAuth=${selfHostsOAuth} (ecologic=${isEcologicSubdomain} ` +
+        `replit=${isReplitPreview} localhost=${isLocalhost} override=${selfHostOverride.includes(currentHostname)})`
+    );
+
+    if (productionBase && !selfHostsOAuth) {
       try {
         const prodHost = new URL(productionBase).host;
-        const currentHost = req.headers.host || "";
-        const isLocalhost = currentHost.includes("localhost") || currentHost.includes("127.0.0.1");
         if (!isLocalhost && currentHost !== prodHost) {
           const qs = new URLSearchParams();
           if (platform && platform !== "web") qs.set("platform", platform);
@@ -1243,12 +1226,21 @@ a:hover{background:#15803d}.sub{color:#64748b;font-size:0.875rem;margin-top:0.75
       } catch (_) {}
     }
 
-    // Resolve the base URL: prefer APP_PUBLIC_BASE_URL, then the request-derived origin,
-    // then APP_BASE_URL as a last resort. This ensures the Google consent screen always
-    // shows app.ecologicc.com regardless of which host the internal request arrived on.
-    const resolvedBase = productionBase || requestBase;
+    // Resolve the base URL:
+    //   • Self-hosted real ecologicc subdomains (staging.ecologicc.com,
+    //     app.ecologicc.com, …) → use the current request host so Google
+    //     redirects the user back to the SAME host they signed in on.
+    //   • Replit canvas/preview/localhost → the trampoline above already
+    //     forwarded them to APP_PUBLIC_BASE_URL; if we somehow reach here
+    //     anyway (e.g. trampoline disabled / no productionBase) fall back
+    //     to APP_PUBLIC_BASE_URL when present so the Google consent screen
+    //     still shows the branded domain, otherwise use requestBase.
+    const resolvedBase = selfHostsOAuth
+      ? requestBase
+      : (productionBase || requestBase);
     const callbackURL = `${resolvedBase}/api/auth/google/callback`;
-    console.log(`[OAuth] baseUrl resolved to: ${resolvedBase}`);
+    console.log(`[OAuth] baseUrl resolved to: ${resolvedBase} (selfHostsOAuth=${selfHostsOAuth})`);
+    console.log(`[signup-flow] [GoogleAuth] callback URL chosen: ${callbackURL}`);
     console.log(`[auth/google][debug] starting OAuth: host=${req.headers.host} requestBase=${requestBase} state=${state.substring(0, 12)} callbackURL=${callbackURL} platform=${platform} returnTo=${returnTo || "(none)"}`);
     passport.authenticate("google", {
       scope: ["profile", "email"],
@@ -1956,6 +1948,30 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
     } catch (error) {
       console.error("[reset-password] Error:", error);
       res.status(500).json({ message: "Password reset failed" });
+    }
+  });
+
+  // ── Email change verification (initiated by dashboard admin) ─────────────
+  // Public endpoint — user clicks link from email to confirm their new address.
+  app.get("/api/auth/verify-email-change", async (req, res) => {
+    const token = String(req.query.token ?? "").trim();
+    if (!token) {
+      return res.status(400).send("Missing token.");
+    }
+    try {
+      const { completePendingEmailChangeByToken } = await import("./dashboard/storage");
+      const result = await completePendingEmailChangeByToken(token);
+      if (!result) {
+        console.warn("[verify-email-change] Invalid or expired token");
+        const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || "https://app.ecologicc.com";
+        return res.redirect(302, `${baseUrl}/login?error=email_change_expired`);
+      }
+      console.log(`[verify-email-change] Email updated for userId=${result.userId}: ${result.oldEmail} → ${result.newEmail}`);
+      const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || "https://app.ecologicc.com";
+      return res.redirect(302, `${baseUrl}/login?notice=email_updated`);
+    } catch (err) {
+      console.error("[verify-email-change] error:", err);
+      res.status(500).send("An error occurred verifying your email change. Please contact support.");
     }
   });
 

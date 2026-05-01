@@ -29,6 +29,9 @@ const config: CapacitorConfig = {
         androidScheme: 'https',
         allowNavigation: [
           'app.ecologicc.com',
+          'staging.ecologicc.com',
+          'dashboard.ecologicc.com',
+          'staging-dashboard.ecologicc.com',
           'ecologicc.com',
           'accounts.google.com',
           'appleid.apple.com',
@@ -39,6 +42,20 @@ const config: CapacitorConfig = {
     // status bar (when overlaysWebView=false) defaults to black, producing the
     // black strip across the top of the screen on iPhone.
     backgroundColor: '#FFFFFF',
+    // Disable the WKWebView outer UIScrollView entirely. This is the only
+    // reliable way to kill the rubber-band/bounce effect at the native layer
+    // on iOS — `overscroll-behavior: none` in CSS is not respected by every
+    // iOS version for the document root. With this flag, the WebView itself
+    // never scrolls, never bounces, and the header (which lives outside the
+    // app's inner scroll container) cannot be dragged. CSS `overflow-y: auto`
+    // on inner panes still works because WebKit handles those scrolls
+    // independently of the outer UIScrollView.
+    scrollEnabled: false,
+    // Tell WKWebView never to apply automatic safe-area content insets — the
+    // app handles safe-area padding itself via env(safe-area-inset-*). This
+    // also prevents iOS from injecting any phantom top/bottom inset that
+    // could re-introduce a scrollable region above the header.
+    contentInset: 'never',
   },
   plugins: {
     StatusBar: {

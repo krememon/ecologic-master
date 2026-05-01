@@ -15,6 +15,8 @@ import { startJobScheduler } from "./jobScheduler";
 import { sendReceiptForPayment } from "./receiptService";
 import * as stripeConnectService from "./services/stripeConnect";
 import { syncSubscriptionToCompany, resolveCompanyFromStripeEvent } from "./billingService";
+import { bootstrapDashboardAdminPassword } from "./dashboard/authRoutes";
+import { syncStripeSubscriptionToGrowthSubscriber } from "./dashboard/storage";
 
 const app = express();
 
@@ -1015,6 +1017,16 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           customer: customerId,
         });
         console.log(`[billing-webhook] ${event.type} synced → companyId=${companyId} status=${sub.status}`);
+
+        await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+          id: sub.id,
+          status: sub.status,
+          customer: customerId,
+          items: sub.items as any,
+          trial_start: (sub as any).trial_start ?? null,
+          trial_end: (sub as any).trial_end ?? null,
+          metadata: sub.metadata as Record<string, string>,
+        });
       }
     } catch (err: any) {
       console.error(`[billing-webhook] ${event.type} error:`, err.message);
@@ -1045,6 +1057,15 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                 customer: customerId,
               });
               console.log(`[billing-webhook] invoice.paid synced → companyId=${companyId} subId=${freshSub.id}`);
+              await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+                id: freshSub.id,
+                status: freshSub.status,
+                customer: customerId,
+                items: freshSub.items as any,
+                trial_start: (freshSub as any).trial_start ?? null,
+                trial_end: (freshSub as any).trial_end ?? null,
+                metadata: freshSub.metadata as Record<string, string>,
+              });
             } catch (subErr: any) {
               console.error('[billing-webhook] invoice.paid: could not retrieve subscription:', subErr.message);
             }
@@ -1081,6 +1102,15 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                 customer: customerId,
               });
               console.log(`[billing-webhook] invoice.payment_failed synced → companyId=${companyId} status=${freshSub.status}`);
+              await syncStripeSubscriptionToGrowthSubscriber(companyId, {
+                id: freshSub.id,
+                status: freshSub.status,
+                customer: customerId,
+                items: freshSub.items as any,
+                trial_start: (freshSub as any).trial_start ?? null,
+                trial_end: (freshSub as any).trial_end ?? null,
+                metadata: freshSub.metadata as Record<string, string>,
+              });
             } catch (subErr: any) {
               console.error('[billing-webhook] invoice.payment_failed: could not retrieve subscription:', subErr.message);
             }
@@ -1151,7 +1181,22 @@ app.use((req, res, next) => {
       process.env.APP_BASE_URL,           // Replit deployment domain fallback
       ...(process.env.REPLIT_DOMAINS || '').split(',').filter(Boolean).map(d => `https://${d}`),
     ].filter(Boolean);
-    if (allowed.includes(origin) || origin.endsWith('.replit.dev') || origin.endsWith('.replit.app')) {
+    // Capacitor native (iOS/Android) WebViews report origin as
+    // capacitor://localhost or ionic://localhost when loading bundled JS
+    // (CAP_LOCAL_DEBUG builds, or the default WKWebView scheme on iOS).
+    // Without these in the allowlist, every API call from the native app
+    // fails CORS preflight and the WebView silently hangs the request.
+    // Limit to the exact `localhost` form — Capacitor never uses any other
+    // host on this scheme, so we don't open up `capacitor://*` broadly.
+    const isNativeAppOrigin =
+      origin === 'capacitor://localhost' ||
+      origin === 'ionic://localhost';
+    if (
+      allowed.includes(origin) ||
+      origin.endsWith('.replit.dev') ||
+      origin.endsWith('.replit.app') ||
+      isNativeAppOrigin
+    ) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -1222,6 +1267,10 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize database constraints and triggers
   await initializeDatabase();
+
+  // Seed dashboard admin password hash from env vars (idempotent, no-op when vars absent)
+  bootstrapDashboardAdminPassword().catch(err =>
+    console.error('[startup] bootstrapDashboardAdminPassword error:', err?.message));
 
   // Backfill sender earnings records for completed referrals (idempotent)
   backfillReferralEarnings().catch(err =>

@@ -347,8 +347,14 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
   return (
     <>
-      {/* Mobile Header */}
-      <div className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+      {/* Mobile Header — touch-action:none prevents the browser from
+          initiating a pan/scroll gesture on this element, which would
+          otherwise cause the document root to rubber-band and move the
+          header. Buttons inside still receive click/tap events normally. */}
+      <div
+        className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3"
+        style={{ touchAction: 'none', overscrollBehavior: 'none', flexShrink: 0 }}
+      >
         <div className="flex items-center justify-between">
           <div 
             onClick={handleToggle}

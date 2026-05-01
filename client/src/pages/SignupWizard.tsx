@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
 import { openInAppBrowser } from "@/lib/capacitor";
+import { getAttribution } from "@/lib/attribution";
 
 interface GooglePendingProfile {
   pendingCode: string;
@@ -103,6 +104,24 @@ export default function SignupWizard() {
   const [step, setStep] = useState<WizardStep>("identity");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [userPath, setUserPath] = useState<UserPath>(null);
+
+  // ── Diagnostic logs for the signup → onboarding flow ──────────────────────
+  // These [signup-flow] logs let us trace where attribution-link signups
+  // diverge from the normal flow without having to recreate state by hand.
+  useEffect(() => {
+    console.log("[signup-flow] signup page loaded", {
+      pathname: window.location.pathname,
+      search: window.location.search,
+    });
+    const attribution = getAttribution();
+    if (attribution && (attribution.referralCode || attribution.sourceType || attribution.campaignParam)) {
+      console.log("[signup-flow] attribution params present", {
+        ref: attribution.referralCode,
+        source: attribution.sourceType,
+        campaign: attribution.campaignParam,
+      });
+    }
+  }, []);
   
   // Set when the user arrived via Google OAuth (new Google user flow)
   const [isGoogleSignup, setIsGoogleSignup] = useState(false);
@@ -199,7 +218,7 @@ export default function SignupWizard() {
 
         // For cross-domain (picard canvas) adopt the production session locally
         if (profile.senderOrigin) {
-          const adoptRes = await fetch("/api/auth/adopt-session", {
+          const adoptRes = await fetch(resolveApiUrl("/api/auth/adopt-session"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sessionId: regData.sessionId }),
@@ -415,6 +434,7 @@ export default function SignupWizard() {
     
     setIsLoading(true);
     try {
+      console.log("[signup-flow] account creation started", { email: formData.email });
       const res = await apiRequest("POST", "/api/auth/signup/set-password", {
         email: formData.email,
         password: formData.password,
@@ -425,32 +445,95 @@ export default function SignupWizard() {
         throw new Error(data.message || "Failed to create account");
       }
       
-      // Invalidate and refetch auth state to reflect new login
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      console.log("[signup] Account created, session established");
+      // Force a fresh fetch of the auth user (not just an invalidation) so
+      // that by the time we move to the role step, isAuthenticated is true
+      // and the AuthenticatedRouter will route post-auth pages correctly.
+      // refetchQueries returns a promise that resolves only AFTER the network
+      // response is back — invalidateQueries can resolve before the refetch
+      // settles when there are no active observers in some edge cases.
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+      console.log("[signup-flow] account creation success");
       
       goToStep("role");
     } catch (error: any) {
+      console.error("[signup-flow] account creation failed", error?.message || error);
       setErrors({ password: error.message });
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleRoleSelect = (role: "owner" | "employee") => {
+  const handleRoleSelect = async (role: "owner" | "employee") => {
+    if (isLoading) return; // prevent double-clicks during the await window
     setUserPath(role);
     localStorage.setItem("onboardingChoice", role);
-    console.log("[signup-wizard] role selected:", role);
+    if (role === "owner") {
+      console.log("[signup-flow] owner selected");
+    } else {
+      console.log("[signup-flow] employee selected");
+    }
 
-    // Persist to DB immediately so the auth router always sees the correct
-    // onboardingChoice even if the user refreshes mid-flow.
-    apiRequest("POST", "/api/auth/onboarding-choice", { choice: role }).catch((err) => {
-      console.warn("[signup-wizard] failed to persist onboarding choice to DB:", err);
+    // Persist to DB and AWAIT it before navigating — without this, the
+    // AuthenticatedRouter recomputes its next-route while user.onboardingChoice
+    // is still null on the server, and the choice is lost across refreshes.
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/onboarding-choice", { choice: role });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as any).message || `HTTP ${res.status}`);
+      }
+      console.log("[signup-flow] onboarding choice saved", { role });
+    } catch (err: any) {
+      // Non-fatal: the localStorage value still drives the wizard locally.
+      console.warn("[signup-flow] failed to persist onboarding choice to DB:", err?.message || err);
+    }
+
+    // Pre-redirect auth verification with brief retry. The session cookie
+    // sometimes lags by one tick after set-password (especially across
+    // domain/host edges). We refetch /api/auth/user up to 3 times with
+    // small backoffs and verify user.id exists before navigating. If we
+    // never get an authed user, we surface a toast and stay on the role
+    // step rather than redirecting into a route that would render Welcome.
+    console.log("[signup-flow] refetching auth user before onboarding redirect");
+    let authUser: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+        authUser = queryClient.getQueryData(["/api/auth/user"]) as any;
+      } catch (err: any) {
+        console.warn(`[signup-flow] auth refetch attempt ${attempt} failed:`, err?.message || err);
+      }
+      if (authUser?.id) break;
+      // Backoff before the next retry; helps when the Set-Cookie from
+      // set-password is still in flight on slow networks.
+      await new Promise((r) => setTimeout(r, 300 * attempt));
+    }
+
+    console.log("[signup-flow] auth user before redirect:", {
+      hasUser: !!authUser,
+      userId: authUser?.id ?? null,
+      onboardingChoice: authUser?.onboardingChoice ?? null,
     });
 
+    if (!authUser?.id) {
+      console.warn("[signup-flow] blocked redirect because auth user missing");
+      setIsLoading(false);
+      toast({
+        title: "Still finishing sign-up…",
+        description: "We couldn't confirm your session. Please tap your role again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(false);
+
     if (role === "owner") {
+      console.log("[signup-flow] redirecting to onboarding /onboarding/industry");
       setLocation("/onboarding/industry");
     } else {
+      console.log("[signup-flow] redirecting to onboarding (employee invite step)");
       goToStep("invite");
     }
   };

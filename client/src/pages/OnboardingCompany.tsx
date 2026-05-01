@@ -10,6 +10,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { getPlanForTeamSize, subscriptionPlans } from "@/config/subscriptionPlans";
 import LocationInput, { type Address } from "@/components/LocationInput";
 import { formatPhoneInput } from "@shared/phoneUtils";
+import { getAttribution } from "@/lib/attribution";
+import { ONBOARDING_SOURCE_OPTIONS, type GrowthSourceType } from "@shared/growthSources";
 
 const EMPLOYEE_RANGES = [
   { value: "1", label: "Just me (1)" },
@@ -29,8 +31,22 @@ export default function OnboardingCompany() {
   const [addressText, setAddressText] = useState("");
   const [addressParsed, setAddressParsed] = useState<Address | null>(null);
   const [employeeRange, setEmployeeRange] = useState("");
+  const [sourceAnswer, setSourceAnswer] = useState<GrowthSourceType | "">("");
+  const [referralCodeInput, setReferralCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Prefill source/referral from saved attribution (first-touch from URL params).
+  useEffect(() => {
+    const saved = getAttribution();
+    if (!saved) return;
+    if (saved.referralCode) {
+      setReferralCodeInput((prev) => prev || saved.referralCode!.toUpperCase());
+    }
+    if (saved.sourceType) {
+      setSourceAnswer((prev) => (prev ? prev : saved.sourceType!));
+    }
+  }, []);
 
   const onboardingChoice = localStorage.getItem("onboardingChoice");
 
@@ -94,6 +110,9 @@ export default function OnboardingCompany() {
       const planKey = getPlanForTeamSize(employeeRange);
       const plan = subscriptionPlans[planKey];
 
+      const savedAttribution = getAttribution();
+      const trimmedReferral = referralCodeInput.trim();
+
       const res = await apiRequest("POST", "/api/companies", {
         name: companyName,
         industry,
@@ -108,6 +127,20 @@ export default function OnboardingCompany() {
         state: addressParsed?.state || undefined,
         postalCode: addressParsed?.postalCode || undefined,
         country: addressParsed?.country || undefined,
+        // Attribution payload — server uses this to write growth_subscribers.
+        // None of these fields are required and an invalid code will not block
+        // company creation.
+        sourceAnswer: sourceAnswer || undefined,
+        referralCode: trimmedReferral || undefined,
+        attribution: savedAttribution
+          ? {
+              referralCode: savedAttribution.referralCode,
+              sourceType: savedAttribution.sourceType,
+              campaignParam: savedAttribution.campaignParam,
+              firstSeenAt: savedAttribution.firstSeenAt,
+              landingPath: savedAttribution.landingPath,
+            }
+          : undefined,
       });
 
       if (!res.ok) {
@@ -255,6 +288,45 @@ export default function OnboardingCompany() {
                   ))}
                 </div>
                 {errors.employeeRange && <p className="text-xs text-red-500 mt-1">{errors.employeeRange}</p>}
+              </div>
+
+              <div>
+                <Label>How did you hear about EcoLogic? <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {ONBOARDING_SOURCE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setSourceAnswer((prev) => (prev === opt.value ? "" : opt.value))
+                      }
+                      className={`p-2.5 border-2 rounded-lg text-sm font-medium transition-all ${
+                        sourceAnswer === opt.value
+                          ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                          : "border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 text-slate-700 dark:text-slate-300"
+                      }`}
+                      data-testid={`source-option-${opt.value}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="referralCode">
+                  Referral or creator code <span className="text-slate-400 font-normal">(optional)</span>
+                </Label>
+                <Input
+                  id="referralCode"
+                  value={referralCodeInput}
+                  onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. JOEPLUMBING"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-testid="referral-code-input"
+                />
               </div>
 
               {selectedPlan && (

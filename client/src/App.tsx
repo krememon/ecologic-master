@@ -1,13 +1,16 @@
 import * as React from "react";
 import { Capacitor } from "@capacitor/core";
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, resolveApiUrl } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Layout from "@/components/Layout";
+import DashboardApp from "@/dashboard/DashboardApp";
+import { getAppMode } from "@/dashboard/lib/host";
 import { useAuth } from "@/hooks/useAuth";
+import { peekReturnTo as peekDashboardReturnTo, consumeReturnTo as consumeDashboardReturnTo } from "@/lib/dashboardReturnTo";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useSubscriptionGate } from "@/hooks/useSubscriptionGate";
@@ -392,7 +395,7 @@ function AuthenticatedRouter() {
           console.log("[auth] webAuthCode exchange succeeded — stored nativeSessionId (native)");
         } else if (isCrossDomain && data.sessionId) {
           // Adopt the production session into the local picard-domain session
-          const adoptRes = await fetch("/api/auth/adopt-session", {
+          const adoptRes = await fetch(resolveApiUrl("/api/auth/adopt-session"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sessionId: data.sessionId }),
@@ -499,7 +502,7 @@ function AuthenticatedRouter() {
         );
         console.log("[ECOLOGIC-GPLAY-RESTORE] sending validate for restored purchase");
 
-        const res = await fetch("/api/subscriptions/validate", {
+        const res = await fetch(resolveApiUrl("/api/subscriptions/validate"), {
           method: "POST",
           headers,
           credentials: "include",
@@ -569,6 +572,29 @@ function AuthenticatedRouter() {
   }
 
   if (!isAuthenticated) {
+    // Defensive guard: post-signup routes (/onboarding/*, /join-company,
+    // /paywall) require authentication. If a user lands on one of them while
+    // unauthenticated — typically a transient race right after set-password
+    // returns but before /api/auth/user has refetched — falling through to
+    // <Welcome> made the screen show "Create account / Sign in" again, which
+    // looks like the signup flow bounced back to auth. Instead, send them to
+    // /signup and preserve the original query string so attribution
+    // (?source=, ?ref=, ?campaign=) is not lost.
+    const path = typeof window !== "undefined" ? window.location.pathname : "/";
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const isPostAuthRoute =
+      path.startsWith("/onboarding/") || path === "/join-company" || path === "/paywall";
+    if (isPostAuthRoute) {
+      const target = `/signup${search || ""}`;
+      console.log(
+        `[signup-flow] onboarding auth guard result — unauthenticated at ${path}, redirecting to ${target}`
+      );
+      return (
+        <Switch>
+          <Route>{() => <Redirect to={target} />}</Route>
+        </Switch>
+      );
+    }
     return (
       <Switch>
         <Route path="/billing/success" component={BillingSuccess} />
@@ -766,7 +792,27 @@ function Router() {
   const [location] = useLocation();
   const path = location;
   const windowPath = window.location.pathname;
-  
+  const { isAuthenticated, isLoading: routerAuthLoading } = useAuth();
+
+  // Dashboard returnTo short-circuit:
+  // If a user who is already authenticated lands on /login carrying a
+  // safe `?returnTo=` pointing at a dashboard subdomain, send them
+  // straight back to the dashboard instead of letting the authenticated
+  // shell drop them on /jobs. This must run BEFORE the AuthenticatedRouter
+  // catch-all because that catch-all is what swallows /login otherwise.
+  if (
+    !routerAuthLoading &&
+    isAuthenticated &&
+    (path === "/login" || windowPath === "/login")
+  ) {
+    const returnTo = peekDashboardReturnTo();
+    if (returnTo) {
+      consumeDashboardReturnTo();
+      window.location.replace(returnTo);
+      return null;
+    }
+  }
+
   // Password reset is PUBLIC - check BOTH wouter and window.location
   // Note: main.tsx now handles /reset-password directly, but keep this as backup
   if (path.startsWith('/reset-password') || windowPath.startsWith('/reset-password')) {
@@ -1100,12 +1146,23 @@ function App() {
   useAppsFlyerInit();
   useSuperwallInit();
 
+  // ── Hostname-based app routing ────────────────────────────────────────────
+  // The same SPA bundle ships to both the customer hostnames (app.* /
+  // staging.*) and the internal dashboard hostnames (dashboard.* /
+  // staging-dashboard.*). We pick which app shell to mount based on the
+  // hostname (with a query/localStorage override for local dev).
+  const appMode = React.useMemo(() => getAppMode(), []);
+  const isDashboard = appMode === "dashboard";
+  React.useEffect(() => {
+    console.log(`[main] appMode = ${appMode} host = ${window.location.hostname}`);
+  }, [appMode]);
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          {isDashboard ? <DashboardApp /> : <Router />}
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

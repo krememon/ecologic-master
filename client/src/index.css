@@ -2,9 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* App shell viewport lock.
+
+   The DOCUMENT (html + body) MUST NOT scroll. That is the only way to
+   stop iOS WKWebView from rubber-banding the header when the user drags
+   on it. Without this, the browser walks up the DOM from the header
+   looking for a scroll container, finds <html>, and bounces the entire
+   page — taking the static-flow header with it.
+
+   #root is allowed to scroll internally (overflow-y:auto) so pre-login
+   pages that use `min-h-screen` and rely on natural page scrolling
+   (sign-up wizard, paywall, onboarding flows, public invoice/unsub
+   pages, etc.) still work. When the authenticated Layout is mounted it
+   fills #root exactly with `h-full` and an inner `overflow-hidden`
+   shell, so #root has no overflow → cannot scroll → cannot bounce →
+   header stays locked. `overscroll-behavior: contain` on #root makes
+   sure that even if #root does scroll (pre-login page taller than
+   viewport), the overscroll never propagates up to the document.
+
+   On iOS Capacitor, the WKWebView's outer UIScrollView is also disabled
+   (capacitor.config.ts → ios.scrollEnabled:false). That removes the
+   native bounce at the WebView layer too, which is the only fully
+   reliable fix across all iOS versions. */
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
 html {
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
+  /* No scrollbar gutter needed — html never scrolls now. */
+  scrollbar-gutter: auto;
 }
 
 html body.with-scroll-bars-hidden {
@@ -69,8 +106,8 @@ html, body {
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
-  min-height: 100vh;
-  overflow-x: hidden;
+  /* Sizing/overflow/overscroll are owned by the App-shell viewport-lock
+     block at the top of this file. Do not redeclare them here. */
 }
 
 /* Smooth dialog animations with hardware acceleration */
@@ -220,7 +257,12 @@ html, body {
 
   #root {
     background-color: #FFFFFF;
-    @apply bg-background min-h-screen;
+    @apply bg-background;
+    /* height/width/overflow are pinned by the viewport-lock block at the
+       top of this file. We deliberately do NOT use min-h-screen here — that
+       would let #root grow taller than the viewport on iOS native (where
+       html.native #root adds env(safe-area-inset-top) padding) and re-create
+       the document-level scroll/bounce. */
   }
 
   html.dark,

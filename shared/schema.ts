@@ -86,6 +86,9 @@ export const users = pgTable("users", {
   emailVerificationToken: varchar("email_verification_token"),
   resetPasswordToken: varchar("reset_password_token"),
   resetPasswordExpires: timestamp("reset_password_expires"),
+  pendingNewEmail: varchar("pending_new_email"),
+  pendingNewEmailToken: varchar("pending_new_email_token"),
+  pendingNewEmailExpires: timestamp("pending_new_email_expires"),
   googleId: varchar("google_id").unique(), // Google OAuth sub ID for account linking
   googleLinked: boolean("google_linked").default(false), // Track Google account linking (derived from googleId presence)
   appleSub: varchar("apple_sub").unique(), // Apple Sign-In subject ID
@@ -2168,3 +2171,277 @@ export const subcontractPayoutAudit = pgTable("subcontract_payout_audit", {
 
 export type SubcontractPayoutAudit = typeof subcontractPayoutAudit.$inferSelect;
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// PRIVATE INTERNAL DASHBOARD — Growth / Subscriber Attribution
+// ────────────────────────────────────────────────────────────────────────────
+// These tables back the EcoLogic owner/admin dashboard at
+// dashboard.ecologicc.com (staging-dashboard.ecologicc.com in staging).
+// They are NOT exposed to customers. Read-only for normal users; write access
+// is gated to dashboard admins only via DASHBOARD_ADMIN_EMAILS env var.
+// Names are prefixed `growth_` to avoid colliding with the existing customer
+// `campaigns` table (which is for company → customer email/SMS marketing).
+
+export const growthPlatformEnum = pgEnum("growth_platform", [
+  "stripe",
+  "apple",
+  "google_play",
+  "manual",
+  "unknown",
+]);
+
+export const growthSubStatusEnum = pgEnum("growth_sub_status", [
+  "trialing",
+  "active",
+  "canceled",
+  "past_due",
+  "unpaid",
+  "expired",
+  "unknown",
+]);
+
+export const growthSourceTypeEnum = pgEnum("growth_source_type", [
+  "instagram_creator",
+  "tiktok_creator",
+  "supply_house",
+  "flyer",
+  "customer_referral",
+  "cold_call",
+  "google",
+  "app_store",
+  "organic",
+  "other",
+]);
+
+export const growthCampaignStatusEnum = pgEnum("growth_campaign_status", [
+  "active",
+  "inactive",
+]);
+
+// Marketing campaigns / source registrations (admin-managed)
+export const growthCampaigns = pgTable("growth_campaigns", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  sourceType: growthSourceTypeEnum("source_type").notNull(),
+  sourceName: varchar("source_name", { length: 255 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  trackingUrl: varchar("tracking_url", { length: 500 }),
+  cost: decimal("cost", { precision: 12, scale: 2 }),
+  status: growthCampaignStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  // ── Branch.io deferred deep-link fields (Phase 1, staging only) ──────────
+  // These are populated by POST /api/admin/dashboard/campaigns/:id/branch-link
+  // when an admin enables mobile tracking on a campaign. All fields are
+  // optional and the campaign continues to function with web-only tracking
+  // when Branch is unconfigured or hasn't been generated yet.
+  branchLinkUrl: varchar("branch_link_url", { length: 500 }),
+  branchLinkId: varchar("branch_link_id", { length: 255 }),
+  branchAlias: varchar("branch_alias", { length: 255 }),
+  mobileTrackingEnabled: boolean("mobile_tracking_enabled").notNull().default(false),
+  branchChannel: varchar("branch_channel", { length: 128 }),
+  branchFeature: varchar("branch_feature", { length: 128 }),
+  branchCampaign: varchar("branch_campaign", { length: 128 }),
+  branchCreatedAt: timestamp("branch_created_at"),
+  branchUpdatedAt: timestamp("branch_updated_at"),
+  // ── AppsFlyer OneLink (Phase 1, staging only) ────────────────────────────
+  // Optional URL for deferred-deep-link mobile attribution via AppsFlyer.
+  // Either pasted from the AppsFlyer dashboard (e.g. branded short link) or
+  // left null — when null, the dashboard derives a OneLink URL on the fly
+  // from APPSFLYER_ONELINK_TEMPLATE_ID + APPSFLYER_ONELINK_DOMAIN + this
+  // campaign's referralCode/sourceType/id/name. Persisting only the override
+  // means changing the template later automatically propagates to existing
+  // campaigns that haven't pasted a custom URL.
+  appsflyerOneLinkUrl: varchar("appsflyer_onelink_url", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  // Case-insensitive uniqueness enforced at the application layer by lowercasing
+  // referralCode before insert/update. The DB unique index is on the literal
+  // value, which combined with normalization gives us case-insensitive unique.
+  uniqueIndex("growth_campaigns_referral_code_unique").on(table.referralCode),
+  index("growth_campaigns_source_type_idx").on(table.sourceType),
+  index("growth_campaigns_status_idx").on(table.status),
+]);
+
+// ── Branch / mobile-attribution event types ────────────────────────────────
+export const growthMobileEventTypeEnum = pgEnum("growth_mobile_event_type", [
+  "click",
+  "install",
+  "open",
+  "signup",
+  "subscribe",
+  "unknown",
+]);
+
+export const growthMobilePlatformEnum = pgEnum("growth_mobile_platform", [
+  "ios",
+  "android",
+  "web",
+  "unknown",
+]);
+
+// Per-event log of mobile activity coming from Branch.io webhooks. Used to
+// power the Clicks / Installs / Opens columns on the dashboard Campaigns page.
+// Signup / subscribe attribution still lives in growth_subscribers — these
+// rows are an *event log*, not a source-of-truth for revenue.
+export const growthMobileEvents = pgTable("growth_mobile_events", {
+  id: serial("id").primaryKey(),
+  // Resolved from the Branch payload. May be null if no campaign matched.
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  // Snapshot of the campaign's referral code / source at event-receipt time
+  // so historical events stay attributable even if the campaign is later
+  // edited or deactivated.
+  referralCode: varchar("referral_code", { length: 64 }),
+  sourceType: varchar("source_type", { length: 64 }),
+  sourceName: varchar("source_name", { length: 255 }),
+  branchLinkUrl: varchar("branch_link_url", { length: 500 }),
+  eventType: growthMobileEventTypeEnum("event_type").notNull().default("unknown"),
+  platform: growthMobilePlatformEnum("platform").notNull().default("unknown"),
+  // Branch identifiers — used for idempotency + cross-event correlation.
+  branchEventId: varchar("branch_event_id", { length: 255 }),
+  branchIdentityId: varchar("branch_identity_id", { length: 255 }),
+  deviceId: varchar("device_id", { length: 255 }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
+  // Sanitized Branch payload (PII-stripped: email/ip/user_agent removed).
+  rawPayload: jsonb("raw_payload"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("growth_mobile_events_campaign_idx").on(table.campaignId),
+  index("growth_mobile_events_event_type_idx").on(table.eventType),
+  index("growth_mobile_events_referral_code_idx").on(table.referralCode),
+  index("growth_mobile_events_created_idx").on(table.createdAt),
+  // Unique-when-present so duplicate webhook deliveries are rejected at the
+  // DB layer without forcing a NOT-NULL constraint on Branch event ids.
+  uniqueIndex("growth_mobile_events_branch_event_id_unique").on(table.branchEventId),
+]);
+
+// Creators / influencers (separate from campaigns so one creator can have many)
+export const growthCreators = pgTable("growth_creators", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  instagramHandle: varchar("instagram_handle", { length: 128 }),
+  tiktokHandle: varchar("tiktok_handle", { length: 128 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  cost: decimal("cost", { precision: 12, scale: 2 }),
+  status: growthCampaignStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("growth_creators_referral_code_unique").on(table.referralCode),
+  index("growth_creators_campaign_idx").on(table.campaignId),
+  index("growth_creators_status_idx").on(table.status),
+]);
+
+// Unified subscriber attribution — one row per subscriber across all platforms
+export const growthSubscribers = pgTable("growth_subscribers", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "set null" }),
+  ownerEmail: varchar("owner_email", { length: 255 }),
+  companyName: varchar("company_name", { length: 255 }),
+  // Attribution
+  sourceType: growthSourceTypeEnum("source_type"),
+  sourceName: varchar("source_name", { length: 255 }),
+  referralCode: varchar("referral_code", { length: 64 }),
+  campaignId: integer("campaign_id").references(() => growthCampaigns.id, { onDelete: "set null" }),
+  creatorId: integer("creator_id").references(() => growthCreators.id, { onDelete: "set null" }),
+  // Subscription
+  platform: growthPlatformEnum("platform").notNull().default("unknown"),
+  plan: varchar("plan", { length: 64 }),
+  subscriptionStatus: growthSubStatusEnum("subscription_status").notNull().default("unknown"),
+  monthlyRevenue: decimal("monthly_revenue", { precision: 12, scale: 2 }),
+  totalRevenue: decimal("total_revenue", { precision: 12, scale: 2 }),
+  currency: varchar("currency", { length: 8 }).default("USD"),
+  // Lifecycle
+  signupAt: timestamp("signup_at"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  trialStartedAt: timestamp("trial_started_at"),
+  becamePaidAt: timestamp("became_paid_at"),
+  canceledAt: timestamp("canceled_at"),
+  // Platform IDs
+  stripeCustomerId: varchar("stripe_customer_id", { length: 128 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 128 }),
+  appleOriginalTransactionId: varchar("apple_original_transaction_id", { length: 128 }),
+  appleTransactionId: varchar("apple_transaction_id", { length: 128 }),
+  googlePurchaseToken: text("google_purchase_token"),
+  googleOrderId: varchar("google_order_id", { length: 128 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("growth_subscribers_user_idx").on(table.userId),
+  index("growth_subscribers_company_idx").on(table.companyId),
+  index("growth_subscribers_owner_email_idx").on(table.ownerEmail),
+  index("growth_subscribers_platform_idx").on(table.platform),
+  index("growth_subscribers_status_idx").on(table.subscriptionStatus),
+  index("growth_subscribers_referral_code_idx").on(table.referralCode),
+  index("growth_subscribers_source_type_idx").on(table.sourceType),
+  index("growth_subscribers_campaign_idx").on(table.campaignId),
+  index("growth_subscribers_creator_idx").on(table.creatorId),
+  uniqueIndex("growth_subscribers_stripe_sub_unique").on(table.stripeSubscriptionId),
+  uniqueIndex("growth_subscribers_apple_orig_tx_unique").on(table.appleOriginalTransactionId),
+]);
+
+// Internal admin metadata for a customer account (one row per company).
+// Surfaced only on the private dashboard. Status here does NOT block the
+// customer app — `blocked` is purely informational unless we explicitly
+// wire it into access checks later.
+export const growthAccountAdmin = pgTable("growth_account_admin", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("growth_account_admin_company_unique").on(table.companyId),
+]);
+
+export const ACCOUNT_ADMIN_STATUSES = ["active", "inactive", "test", "internal", "blocked"] as const;
+export type AccountAdminStatus = (typeof ACCOUNT_ADMIN_STATUSES)[number];
+
+// Insert schemas
+export const insertGrowthCampaignSchema = createInsertSchema(growthCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGrowthCreatorSchema = createInsertSchema(growthCreators).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGrowthSubscriberSchema = createInsertSchema(growthSubscribers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGrowthMobileEventSchema = createInsertSchema(growthMobileEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type GrowthCampaign = typeof growthCampaigns.$inferSelect;
+export type InsertGrowthCampaign = z.infer<typeof insertGrowthCampaignSchema>;
+
+export type GrowthCreator = typeof growthCreators.$inferSelect;
+export type InsertGrowthCreator = z.infer<typeof insertGrowthCreatorSchema>;
+
+export type GrowthSubscriber = typeof growthSubscribers.$inferSelect;
+export type InsertGrowthSubscriber = z.infer<typeof insertGrowthSubscriberSchema>;
+
+export type GrowthMobileEvent = typeof growthMobileEvents.$inferSelect;
+export type InsertGrowthMobileEvent = z.infer<typeof insertGrowthMobileEventSchema>;
+export type GrowthMobileEventType = typeof growthMobileEventTypeEnum.enumValues[number];
+export type GrowthMobilePlatform = typeof growthMobilePlatformEnum.enumValues[number];
+
+export type GrowthPlatform = typeof growthPlatformEnum.enumValues[number];
+export type GrowthSubStatus = typeof growthSubStatusEnum.enumValues[number];
+export type GrowthSourceType = typeof growthSourceTypeEnum.enumValues[number];
+export type GrowthCampaignStatus = typeof growthCampaignStatusEnum.enumValues[number];

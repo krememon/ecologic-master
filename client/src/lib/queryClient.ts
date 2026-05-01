@@ -15,6 +15,43 @@ function isNativeCapacitor(): boolean {
   }
 }
 
+/**
+ * When the WebView is loading bundled JS (origin starts with capacitor://,
+ * ionic://, file://, etc.), relative URLs like /api/... resolve to a
+ * non-existent capacitor://localhost/api/... and the fetch hangs forever.
+ * In that case we MUST use an absolute URL pointing at the real backend.
+ *
+ * For production iOS builds (server.url=https://app.ecologicc.com in
+ * capacitor.config), origin is https://app.ecologicc.com and relative
+ * URLs work fine — this helper is a no-op.
+ *
+ * Override the default backend at build time:
+ *   VITE_NATIVE_API_BASE_URL=https://staging.ecologicc.com npm run build
+ */
+function getNativeApiBase(): string {
+  const fromEnv = (import.meta as any).env?.VITE_NATIVE_API_BASE_URL as
+    | string
+    | undefined;
+  return (fromEnv && fromEnv.trim()) || "https://app.ecologicc.com";
+}
+
+export function resolveApiUrl(path: string): string {
+  // Already absolute — leave it alone.
+  if (/^https?:\/\//i.test(path)) return path;
+  try {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    // http(s):* origins → relative URL is fine (web + production native that
+    // loads from the real https origin).
+    if (/^https?:/i.test(origin)) return path;
+    // Non-http origin (capacitor://, ionic://, file://, app://, etc.) →
+    // prepend absolute base so the request reaches a real server.
+    if (path.startsWith("/")) return getNativeApiBase() + path;
+    return getNativeApiBase() + "/" + path;
+  } catch {
+    return path;
+  }
+}
+
 function getNativeAuthHeaders(): Record<string, string> {
   try {
     if (!isNativeCapacitor()) return {};
@@ -89,7 +126,8 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const nativeHeaders = getNativeAuthHeaders();
-  const res = await fetch(url, {
+  const resolved = resolveApiUrl(url);
+  const res = await fetch(resolved, {
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
@@ -110,7 +148,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
+    const res = await fetch(resolveApiUrl(queryKey[0] as string), {
       credentials: "include",
       cache: "no-store",
       headers: getNativeAuthHeaders(),

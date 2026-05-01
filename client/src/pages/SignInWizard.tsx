@@ -6,8 +6,14 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
 import { Capacitor } from "@capacitor/core";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  captureReturnToFromUrl,
+  consumeReturnTo,
+  peekReturnTo,
+} from "@/lib/dashboardReturnTo";
 
 type WizardStep = "email" | "password" | "code";
 
@@ -90,7 +96,28 @@ function StepTransition({ children, direction, stepKey }: StepTransitionProps) {
 export default function SignInWizard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Persist any safe ?returnTo= query so it survives the multi-step wizard
+  // and any OAuth round-trip. The dashboard "Sign in" button sends users
+  // here with returnTo=https://staging-dashboard.ecologicc.com/...
+  useEffect(() => {
+    captureReturnToFromUrl();
+  }, []);
+
+  // Already-authenticated short-circuit: if the user lands on /login but is
+  // already signed in AND there is a safe returnTo waiting, send them
+  // straight back to the dashboard instead of dropping them on /jobs.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) return;
+    const returnTo = peekReturnTo();
+    if (returnTo) {
+      consumeReturnTo();
+      window.location.replace(returnTo);
+    }
+  }, [authLoading, isAuthenticated]);
+
   const [step, setStep] = useState<WizardStep>("email");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   
@@ -134,13 +161,16 @@ export default function SignInWizard() {
     }
     
     setIsLoading(true);
+    console.log(`[auth/send-code][client] starting email=${email} step=email-start endpoint=/api/auth/login/start`);
     try {
       const res = await apiRequest("POST", "/api/auth/login/start", { email });
       const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      console.log(`[auth/send-code][client] success step=email-start firstName=${data?.firstName ? "yes" : "no"} stagingAutoLogin=${!!data?.stagingAutoLogin}`);
 
       // Staging-only: server auto-logged us in (Google account, no password set).
       if (data?.stagingAutoLogin) {
-        window.location.href = "/";
+        const returnTo = consumeReturnTo();
+        window.location.href = returnTo || "/";
         return;
       }
 
@@ -150,6 +180,7 @@ export default function SignInWizard() {
       
       goToStep("password");
     } catch (err: any) {
+      console.error(`[auth/send-code][client] failed step=email-start status=${err?.status || "n/a"} body=${err?.message || String(err)}`);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -166,13 +197,16 @@ export default function SignInWizard() {
     }
     
     setIsLoading(true);
+    console.log(`[auth/send-code][client] starting email=${email} step=password endpoint=/api/auth/login/password`);
     try {
       const res = await apiRequest("POST", "/api/auth/login/password", { email, password });
       await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      console.log(`[auth/send-code][client] success step=password (verification code email queued at server)`);
       
       setResendCooldown(30);
       goToStep("code");
     } catch (err: any) {
+      console.error(`[auth/send-code][client] failed step=password status=${err?.status || "n/a"} body=${err?.message || String(err)}`);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -244,9 +278,12 @@ export default function SignInWizard() {
       // Invalidate auth cache and force refresh
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       
-      // Small delay to ensure session cookie is set, then redirect
+      // Small delay to ensure session cookie is set, then redirect.
+      // Honor a captured dashboard returnTo so we land back on the
+      // dashboard subdomain instead of the default customer landing.
+      const returnTo = consumeReturnTo();
       setTimeout(() => {
-        window.location.href = "/";
+        window.location.href = returnTo || "/";
       }, 100);
     } catch (err: any) {
       setError(err.message);
@@ -258,14 +295,17 @@ export default function SignInWizard() {
     if (resendCooldown > 0) return;
     
     setIsLoading(true);
+    console.log(`[auth/send-code][client] starting email=${email} step=resend endpoint=/api/auth/login/resend-code`);
     try {
       const res = await apiRequest("POST", "/api/auth/login/resend-code", { email });
       await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      console.log(`[auth/send-code][client] success step=resend (verification code email queued at server)`);
       
       setResendCooldown(30);
       setVerificationCode(["", "", "", "", "", ""]);
       toast({ title: "Code sent", description: "Check your email for the new code" });
     } catch (err: any) {
+      console.error(`[auth/send-code][client] failed step=resend status=${err?.status || "n/a"} body=${err?.message || String(err)}`);
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -294,7 +334,9 @@ export default function SignInWizard() {
   const handleAppleAuth = async () => {
     setIsAppleLoading(true);
     try {
-      const res = await fetch("/api/auth/apple/start");
+      // Use resolveApiUrl so the request reaches a real backend when the
+      // WebView is loading bundled JS from capacitor://localhost.
+      const res = await fetch(resolveApiUrl("/api/auth/apple/start"));
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;

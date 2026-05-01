@@ -26,7 +26,12 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="h-screen bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
+      {/* h-full (not h-screen) so the shell exactly fills #root, which is
+          itself pinned to the viewport. h-screen=100vh would overflow #root
+          on iOS native because #root has env(safe-area-inset-top) padding,
+          and that overflow would re-create a scrollable document and let
+          the header rubber-band. */}
+      <div className="h-full bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
         {/* Desktop Sidebar */}
         <div className="hidden sm:block">
           <Sidebar 
@@ -42,7 +47,10 @@ export default function Layout({ children }: LayoutProps) {
           {!hideMobileNav && <MobileNav user={user} company={company} />}
 
           {/* Main Content - no padding for fullscreen routes */}
-          <main className={`flex-1 min-h-0 overflow-hidden ${isFullscreenRoute ? '' : 'px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto'}`}>
+          <main
+            className={`flex-1 min-h-0 overflow-hidden ${isFullscreenRoute ? '' : 'px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto'}`}
+            style={{ overscrollBehavior: 'contain' }}
+          >
             <div className={isFullscreenRoute ? 'h-full' : 'w-full max-w-7xl mx-auto'}>
               {children}
             </div>

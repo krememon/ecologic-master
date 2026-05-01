@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Universal Links / Associated Domains
+		────────────────────────────────────
+		Each `applinks:<host>` entry tells iOS that tapping a https://<host>/...
+		URL should open this app (Bundle ID: com.ecologic.app) instead of
+		opening Safari or the App Store. iOS verifies each domain by fetching
+		https://<host>/.well-known/apple-app-site-association at install time
+		(and periodically thereafter) and matching the appID in that file
+		(M9WJ473PV5.com.ecologic.app) against this entitlement.
+
+		Required hosts:
+		  • ecologic.onelink.me        → AppsFlyer OneLink shortener; the
+		                                  domain that hosts the AASA file
+		                                  AppsFlyer auto-generates from the
+		                                  OneLink template's "iOS app" tab.
+		  • ecologicc.com              → root marketing/landing host
+		  • staging.ecologicc.com      → staging customer app host
+		  • app.ecologicc.com          → production customer app host
+
+		If any one of these is missing here, tapping a link on that host on a
+		device with the app installed will silently fall back to the web URL
+		(or to the App Store, in the OneLink case) instead of being delivered
+		to the AppsFlyer Unified Deep Linking listener inside the app.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:ecologic.onelink.me</string>
+		<string>applinks:ecologicc.com</string>
+		<string>applinks:staging.ecologicc.com</string>
+		<string>applinks:app.ecologicc.com</string>
+	</array>
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

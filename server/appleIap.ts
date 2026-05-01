@@ -134,6 +134,15 @@ export interface AppleTransactionInfo {
   expiresDate: Date;
   environment: string;
   bundleId: string;
+  /**
+   * True when StoreKit reports the user is in a free-trial introductory offer.
+   * Derived from the JWS `offerDiscountType === "FREE_TRIAL"` (StoreKit 2 string
+   * enum). Falls back to `offerType === 1` (introductory offer) when the
+   * discount-type field is absent on older payloads. Used to drive the
+   * `growth_subscribers.subscriptionStatus = trialing / monthlyRevenue = $0`
+   * branch in the dashboard sync; never affects entitlement gating.
+   */
+  isTrial: boolean;
 }
 
 /**
@@ -169,6 +178,21 @@ export async function verifyAppleTransaction(jwsTransaction: string): Promise<Ap
     );
   }
 
+  // ── Trial detection ─────────────────────────────────────────────────────
+  // StoreKit 2 JWS may include any of these fields:
+  //   offerDiscountType: "FREE_TRIAL" | "PAY_AS_YOU_GO" | "PAY_UP_FRONT"
+  //   offerType:         1 (introductory) | 2 (promotional) | 3 (offer code)
+  //   type:              "Auto-Renewable Subscription" | "Non-Renewing Subscription" | …
+  // Free-trial signal is `offerDiscountType === "FREE_TRIAL"`. As a fallback for
+  // older payloads that omit offerDiscountType but populate offerType=1 (intro),
+  // we treat that as trial too. Used for dashboard reporting only — never gates
+  // entitlement.
+  const offerDiscountType = (decoded.offerDiscountType as string | undefined) ?? "";
+  const offerType = decoded.offerType as number | undefined;
+  const isTrial =
+    offerDiscountType === "FREE_TRIAL" ||
+    (!offerDiscountType && offerType === 1);
+
   return {
     originalTransactionId: (decoded.originalTransactionId as string) ?? (decoded.transactionId as string) ?? "",
     transactionId: (decoded.transactionId as string) ?? "",
@@ -178,6 +202,7 @@ export async function verifyAppleTransaction(jwsTransaction: string): Promise<Ap
     expiresDate: new Date(expiresMs),
     environment: (decoded.environment as string) ?? "Unknown",
     bundleId,
+    isTrial,
   };
 }
 

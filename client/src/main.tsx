@@ -2,7 +2,18 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import PublicSignApp from "./public/PublicSignApp";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { captureAttributionFromUrl } from "@/lib/attribution";
 import "./index.css";
+
+// ── Attribution capture (first-touch, runs before any React mount) ──────────
+// Reads ?ref / ?source / ?campaign from the URL and persists them to
+// localStorage + cookie for 90 days. First-touch wins. Skipped on dashboard
+// hostnames. Wrapped in try/catch — must never block app boot.
+try {
+  captureAttributionFromUrl();
+} catch (e) {
+  console.warn("[attribution] boot-time capture failed (ignored):", e);
+}
 
 // Global error handlers to catch any crashes
 window.addEventListener("error", (e) => {
@@ -174,7 +185,10 @@ console.log("[main.tsx] Starting app initialization, pathname:", window.location
 initPushDebug();
 
 // App version for cache-busting (update this when deploying significant changes)
-const APP_VERSION = "2026.04.05.1";
+// 2026.04.29.1 — bumped to force cache clear after AppsFlyer Phase 2 diagnostic deploy
+// 2026.04.29.2 — force-reload after appsflyer.ts availability-gate rewrite
+// 2026.04.29.3 — bypass appsflyer-capacitor-plugin import; use nativePromise/nativeCallback directly
+const APP_VERSION = "2026.04.29.3";
 
 // Returns true when running inside the Capacitor native shell (iOS or Android).
 function isCapacitorNative(): boolean {
@@ -202,11 +216,25 @@ const checkAndClearCache = async () => {
         console.log("[cache] Cleared browser caches");
       }
 
-      // In Capacitor native, skip the service-worker unregister + reload entirely.
-      // The remote URL always serves the latest assets, so a reload is unnecessary.
-      // More importantly, window.location.reload() in WKWebView can return false
-      // before React mounts, leaving the screen permanently blank.
-      if (!isCapacitorNative() && storedVersion && 'serviceWorker' in navigator) {
+      if (isCapacitorNative()) {
+        // On native (iOS/Android) the WKWebView / WebView loads from a remote
+        // staging URL.  When a new bundle is deployed the WKWebView HTTP disk
+        // cache may still serve the old index.html (and therefore old JS
+        // hashes) regardless of max-age=0 headers.  The AppDelegate native
+        // wipe clears the disk cache on first launch after a version bump, but
+        // as a belt-and-suspenders measure we reload here too so the fresh
+        // assets are guaranteed to load once the wipe has fired.
+        //
+        // This runs BEFORE ReactDOM.createRoot(), so there is no partially-
+        // mounted React tree to worry about — reload is safe at this point.
+        if (storedVersion) {
+          // Only reload on upgrade (storedVersion != null) to avoid an
+          // infinite reload loop on first install where storedVersion is null.
+          console.log("[cache] Native version change — reloading WKWebView to fetch fresh bundle");
+          window.location.reload();
+          return false;
+        }
+      } else if (storedVersion && 'serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map(reg => reg.unregister()));
         console.log("[cache] Unregistered old service workers, reloading...");

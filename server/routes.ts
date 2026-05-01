@@ -12,6 +12,7 @@ import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentRec
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive, markReferralCompleted, ensureReceiverCollectionInvoice } from "./invoiceRecompute";
 import { sendReceiptForPayment } from "./receiptService";
+import { registerDashboardRoutes } from "./dashboard/routes";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
@@ -595,6 +596,29 @@ async function generateInvoicePdfForJob(
 export async function registerRoutes(app: Express): Promise<Server> {
   // Note: uploads directory and static route handled in index.ts (before all middleware)
 
+  // ── Smart-link redirector ──────────────────────────────────────────────
+  // Mounted FIRST so that:
+  //   • The smart-link hostname (go.ecologicc.com / staging-go.ecologicc.com)
+  //     never falls through to the React SPA.
+  //   • `/go/:referralCode` works on every hostname (Replit preview included).
+  // Read more in server/smartLinks.ts. Custom (Branch-free) implementation.
+  const { mountSmartLinkRoutes } = await import("./smartLinks");
+  mountSmartLinkRoutes(app);
+
+  // Hostname diagnostic — helps verify routing for the private dashboard
+  // domains (staging-dashboard.ecologicc.com / dashboard.ecologicc.com).
+  // Customer-app paths are unaffected; this is observational only.
+  app.use((req, _res, next) => {
+    const host = req.get("host") || "";
+    if (/(^|\.)dashboard(\.|-)/i.test(host) || /^staging-dashboard\./i.test(host)) {
+      // Light log: only on /api/dashboard or root navigation, never per asset.
+      if (req.path === "/" || req.path.startsWith("/api/dashboard")) {
+        console.log(`[dashboard] hostname detected host=${host} path=${req.path}`);
+      }
+    }
+    next();
+  });
+
   // Redirect /auth to /login (no Replit auth screen)
   app.get('/auth', (req, res) => {
     res.redirect(302, '/login');
@@ -611,6 +635,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/pay/cancel', (req, res) => {
     console.log('[PayCancel] Server-side hit:', req.originalUrl);
     res.redirect(302, '/jobs');
+  });
+
+  // BUILD-VERSION DIAGNOSTIC — public, uncached.
+  // Used to verify which JS bundle the deployed environment is actually serving.
+  // Bump the `version` string here whenever client APP_VERSION is bumped so
+  // that hitting /build-version.json proves the running server build matches.
+  app.get('/build-version.json', (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.json({
+      version: '2026.04.29.3',
+      diagnostic: 'appsflyer',
+      builtAt: new Date().toISOString(),
+    });
   });
 
   // Auth middleware - MUST be set up before any authenticated routes
@@ -4333,7 +4372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ code: 'ALREADY_HAS_COMPANY', message: 'You already belong to a company' });
       }
 
-      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country } = req.body;
+      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit, phone, email, addressLine1, city, state, postalCode, country, sourceAnswer, referralCode, attribution } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
       const inviteCode = await generateUniqueInviteCode(async (code) => {
@@ -4359,7 +4398,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
         postalCode: postalCode || null,
         country: country || null,
       });
-      
+
+      // ── Attribution save (best-effort, never blocks company creation) ─────
+      // Reads source/referral fields from the onboarding form and the optional
+      // saved-attribution snapshot from the customer-app. First-touch wins.
+      try {
+        const { saveOrKeepSubscriberAttribution, findActiveCampaignByReferralCode, normalizeReferralCode } =
+          await import("./dashboard/storage");
+        const { coerceGrowthSourceType, isGrowthSourceType, GROWTH_SOURCE_LABELS } =
+          await import("@shared/growthSources");
+
+        // Resolve referral code: prefer URL-captured first-touch, then form input.
+        const codeFromAttribution = normalizeReferralCode(attribution?.referralCode ?? null);
+        const codeFromForm = normalizeReferralCode(referralCode ?? null);
+        const finalReferralCode = codeFromAttribution || codeFromForm || null;
+
+        // Resolve source type: prefer URL-captured first-touch, then form answer.
+        const sourceFromAttribution = coerceGrowthSourceType(attribution?.sourceType ?? null);
+        const sourceFromForm = isGrowthSourceType(sourceAnswer) ? sourceAnswer : coerceGrowthSourceType(sourceAnswer);
+        const finalSourceType = sourceFromAttribution || sourceFromForm || null;
+
+        const matchedCampaign = await findActiveCampaignByReferralCode(finalReferralCode);
+
+        console.log(
+          `[attribution] onboarding attribution received companyId=${company.id} userId=${userId} ` +
+          `referralCode=${finalReferralCode ?? "—"} sourceType=${finalSourceType ?? "—"} ` +
+          `formSourceAnswer=${sourceAnswer ?? "—"} hasAttribution=${!!attribution}`
+        );
+
+        if (matchedCampaign) {
+          console.log(
+            `[attribution] matched campaign id=${matchedCampaign.id} name="${matchedCampaign.name}" sourceType=${matchedCampaign.sourceType}`
+          );
+        } else if (finalReferralCode) {
+          console.log(`[attribution] no campaign match for referralCode="${finalReferralCode}"`);
+        }
+
+        // Resolve owner email + display name for the subscriber row.
+        let ownerEmail: string | null = (req.user as any)?.email ?? null;
+        if (!ownerEmail) {
+          try {
+            const u = await storage.getUser(userId);
+            ownerEmail = u?.email ?? null;
+          } catch { /* ignore */ }
+        }
+
+        // Effective source: matched-campaign sourceType overrides the form answer.
+        const effectiveSourceType = matchedCampaign?.sourceType ?? finalSourceType;
+        // Effective sourceName: campaign sourceName wins; otherwise human label of the form answer.
+        const effectiveSourceName =
+          matchedCampaign?.sourceName ??
+          (effectiveSourceType ? GROWTH_SOURCE_LABELS[effectiveSourceType as keyof typeof GROWTH_SOURCE_LABELS] ?? null : null);
+
+        // Only write a row if we actually have *some* attribution signal. A user
+        // who submits onboarding with no source/referral and no URL touch
+        // should not generate an empty subscriber row.
+        if (effectiveSourceType || finalReferralCode || matchedCampaign) {
+          await saveOrKeepSubscriberAttribution({
+            userId,
+            companyId: company.id,
+            ownerEmail,
+            companyName: company.name,
+            sourceType: effectiveSourceType,
+            sourceName: effectiveSourceName,
+            referralCode: finalReferralCode,
+            campaignId: matchedCampaign?.id ?? null,
+            signupAt: new Date(),
+            onboardingCompletedAt: null, // company onboarding completed flag is set elsewhere
+          });
+        } else {
+          console.log("[attribution] no attribution signal — skipping subscriber row");
+        }
+      } catch (attrErr) {
+        // CRITICAL: never fail company creation because attribution failed.
+        console.error("[attribution] failed to save attribution but onboarding continued:", attrErr);
+      }
+
       res.status(201).json(company);
     } catch (error) {
       console.error("Error creating company:", error);
@@ -4995,6 +5109,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           onboardingCompleted: true,
         });
 
+        // ── Mirror into growth_subscribers (private dashboard) ─────────────
+        // Best-effort: never throw, never block the validate response.
+        try {
+          const { syncAppleSubscriptionToGrowthSubscriber } = await import('./dashboard/storage');
+          await syncAppleSubscriptionToGrowthSubscriber({
+            companyId: company.id,
+            userId,
+            originalTransactionId: txInfo.originalTransactionId,
+            transactionId: (txInfo as any).transactionId ?? null,
+            planKey: planToWrite,
+            // Trial state derived inside verifyAppleTransaction from the JWS
+            // payload's `offerDiscountType === "FREE_TRIAL"` (StoreKit 2) with
+            // a fallback to `offerType === 1` (introductory). Drives the
+            // `trialing / $0 MRR` branch of the dashboard sync.
+            isTrial: txInfo.isTrial === true,
+            expiresDate: txInfo.expiresDate,
+          });
+        } catch (growthErr: any) {
+          console.error('[growth-dashboard] Apple sync threw (ignored):', growthErr?.message ?? growthErr);
+        }
+
         return res.json({
           ok: true,
           active: true,
@@ -5102,6 +5237,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           billingUpdatedAt: new Date(),
           onboardingCompleted: true,
         });
+
+        // ── Mirror into growth_subscribers (private dashboard) ─────────────
+        // Best-effort: never throw, never block the validate response.
+        try {
+          const { syncGoogleSubscriptionToGrowthSubscriber } = await import('./dashboard/storage');
+          await syncGoogleSubscriptionToGrowthSubscriber({
+            companyId: company.id,
+            userId,
+            purchaseToken: txInfo.purchaseToken,
+            orderId: (txInfo as any).orderId ?? null,
+            planKey: txInfo.planKey,
+            paymentState: txInfo.paymentState,
+            expiresDate: txInfo.expiresDate,
+            autoRenewing: (txInfo as any).autoRenewing ?? null,
+          });
+        } catch (growthErr: any) {
+          console.error('[growth-dashboard] Google Play sync threw (ignored):', growthErr?.message ?? growthErr);
+        }
 
         const { getEffectiveBillingAccess: postWriteCheck } = await import('./billingResolver');
         const postWriteBilling = postWriteCheck(updatedCompany);
@@ -20126,6 +20279,11 @@ setTimeout(function() { window.location.replace('${fallbackUrl}'); }, 1500);
     }
   }, 15 * 60 * 1000);
 
+  // ── Private internal dashboard routes (DASHBOARD_ADMIN_EMAILS gated) ──────
+  // Mount last so customer-app routes are not affected. All /api/dashboard/*
+  // paths go through requireAuth + requireDashboardAdmin.
+  registerDashboardRoutes(app);
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
@@ -21708,6 +21866,17 @@ window.location.href = '${deepLink}';
         customer: sessionCustomerId,
       });
 
+      const { syncStripeSubscriptionToGrowthSubscriber: syncGrowthVerify } = await import('./dashboard/storage');
+      await syncGrowthVerify(company.id, {
+        id: fullSub.id,
+        status: fullSub.status,
+        customer: sessionCustomerId ?? null,
+        items: fullSub.items as any,
+        trial_start: (fullSub as any).trial_start ?? null,
+        trial_end: (fullSub as any).trial_end ?? null,
+        metadata: fullSub.metadata as Record<string, string>,
+      });
+
       console.log(`[billing/verify-session] ✅ synced companyId=${company.id} subId=${fullSub.id} status=${fullSub.status}`);
       return res.json({ ok: true, synced: true, status: fullSub.status, subId: fullSub.id });
     } catch (err: any) {
@@ -21791,6 +21960,17 @@ window.location.href = '${deepLink}';
         items: updatedSub.items,
         metadata: updatedSub.metadata as Record<string, string>,
         customer: typeof updatedSub.customer === 'string' ? updatedSub.customer : undefined,
+      });
+
+      const { syncStripeSubscriptionToGrowthSubscriber: syncGrowthSwitch } = await import('./dashboard/storage');
+      await syncGrowthSwitch(company.id, {
+        id: updatedSub.id,
+        status: updatedSub.status,
+        customer: typeof updatedSub.customer === 'string' ? updatedSub.customer : null,
+        items: updatedSub.items as any,
+        trial_start: (updatedSub as any).trial_start ?? null,
+        trial_end: (updatedSub as any).trial_end ?? null,
+        metadata: updatedSub.metadata as Record<string, string>,
       });
 
       console.log(`[billing/switch-plan] ✅ done — company=${company.id} now on plan=${planKey} sub=${updatedSub.id}`);

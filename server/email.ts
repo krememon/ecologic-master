@@ -11,6 +11,131 @@ export function getResendFrom(): string {
   return from;
 }
 
+// ── OTP / sign-in code email sender ──────────────────────────────────────────
+//
+// Single source of truth for sending the 6-digit codes used by signup +
+// login. Replaces the 4 inline copies that previously lived in server/auth.ts
+// (signup-code, signup-resend, login-password, login-resend).
+//
+// Why this helper exists (root-cause of the staging "no code arrived" bug):
+//
+//   The previous code did:
+//       const { error } = await resend.emails.send({ ... })
+//       if (error) { ... return 500 }
+//       console.log("[login-code] Email sent successfully to:", to)
+//
+//   It threw away `data` (the Resend message id), and on failure logged the
+//   raw error object — which Node prints as `{}` for many Resend errors,
+//   making it impossible to tell from production logs whether Resend
+//   rejected the send (unverified domain, sandbox mode, invalid recipient,
+//   etc.) or accepted it but failed to deliver later.
+//
+//   Critically, "Resend returned no error" only means Resend QUEUED the
+//   message — it does NOT mean the recipient's mailbox received it.
+//   Bounces, spam-folder routing, and asynchronous rejections all happen
+//   AFTER the API call returns success and were invisible.
+//
+// This helper:
+//   • Always logs the FROM/TO and whether the API key is configured.
+//   • On success, logs the Resend message id so it can be traced in the
+//     Resend dashboard for real delivery status.
+//   • On failure, logs JSON.stringify(error) so the actual reason
+//     (`validation_error`, `not_found`, `restricted_api_key`, etc.) is
+//     visible in deployment logs.
+//   • Differentiates "accepted by Resend" from "delivered" in log text.
+//   • If STAGING_LOG_OTP_CODES=true (or NODE_ENV !== 'production'), also
+//     logs the plaintext 6-digit code so a developer can complete sign-in
+//     from server logs while email-delivery issues are being resolved.
+//     This is OFF by default in production.
+export type OtpEmailContext =
+  | 'signup-code'
+  | 'signup-resend'
+  | 'login-code'
+  | 'login-resend';
+
+export interface SendOtpEmailParams {
+  to: string;
+  code: string;
+  context: OtpEmailContext;
+  subject: string;
+  /** Full HTML body. The 6-digit code should already be embedded by the caller. */
+  html: string;
+}
+
+export type SendOtpEmailResult =
+  | { ok: true; messageId: string | null }
+  | { ok: false; reason: string; details?: unknown };
+
+function shouldLogOtpCode(): boolean {
+  if (process.env.STAGING_LOG_OTP_CODES === 'true') return true;
+  // Replit Deployments set NODE_ENV=production for both staging and prod, so
+  // we only auto-log when not on a deployed environment.
+  if (process.env.NODE_ENV !== 'production') return true;
+  return false;
+}
+
+export async function sendOtpEmail(
+  params: SendOtpEmailParams,
+): Promise<SendOtpEmailResult> {
+  const { to, code, context, subject, html } = params;
+  const tag = `[email/${context}]`;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = getResendFrom();
+
+  console.log(
+    `${tag} preparing send | to=${to} | from=${from} | apiKeyPresent=${!!apiKey} | subject="${subject}"`,
+  );
+
+  if (shouldLogOtpCode()) {
+    // Diagnostic-only log so the user can complete sign-in from server logs
+    // when email delivery is being investigated. Gated behind an env flag
+    // (or non-production NODE_ENV) so this never fires on real production.
+    console.log(`${tag} [DIAG] OTP code for ${to} = ${code}`);
+  }
+
+  if (!apiKey) {
+    console.error(`${tag} RESEND_API_KEY is not configured`);
+    return { ok: false, reason: 'email_provider_not_configured' };
+  }
+
+  try {
+    const client = new Resend(apiKey);
+    const { data, error } = await client.emails.send({
+      from,
+      reply_to: 'no-reply@ecologicc.com',
+      to,
+      subject,
+      html,
+    });
+
+    if (error) {
+      // Resend errors are objects like { name, message, statusCode } that
+      // Node's default console.error prints as "{}". JSON.stringify gives
+      // us the real fields so the cause is actually readable in logs.
+      console.error(
+        `${tag} Resend rejected send | to=${to} | from=${from} | error=${JSON.stringify(
+          error,
+        )}`,
+      );
+      return { ok: false, reason: 'resend_rejected', details: error };
+    }
+
+    const messageId = data?.id ?? null;
+    console.log(
+      `${tag} queued at Resend (delivery is asynchronous — check Resend dashboard for actual delivery status) | to=${to} | from=${from} | messageId=${messageId}`,
+    );
+    return { ok: true, messageId };
+  } catch (err: any) {
+    console.error(
+      `${tag} Resend send threw | to=${to} | from=${from} | message=${
+        err?.message ?? String(err)
+      } | stack=${err?.stack ?? '(no stack)'}`,
+    );
+    return { ok: false, reason: 'resend_exception', details: err?.message ?? String(err) };
+  }
+}
+
 export function getAppBaseUrl(): string | null {
   // Priority: canonical branded domain first, then legacy APP_BASE_URL
   const raw = (
@@ -400,4 +525,60 @@ export async function sendSupportEmail(params: SupportEmailParams): Promise<stri
     console.error('[SupportEmail] failed:', err?.message || err);
     return null;
   }
+}
+
+// ── Admin-initiated email change verification email ────────────────────────
+
+export async function sendEmailChangeVerificationEmail(
+  newEmail: string,
+  token: string,
+): Promise<void> {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    console.warn('[email-change] RESEND_API_KEY not configured — cannot send email change verification');
+    throw new Error('Email service not configured');
+  }
+
+  const baseUrl = process.env.APP_PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://app.ecologicc.com';
+  const verifyUrl = `${baseUrl}/api/auth/verify-email-change?token=${token}`;
+
+  const resendClient = new Resend(resendApiKey);
+  const from = getResendFrom();
+
+  console.log('[email-change] Sending verification email — to:', newEmail);
+
+  const { data, error } = await resendClient.emails.send({
+    from,
+    reply_to: 'no-reply@ecologicc.com',
+    to: newEmail,
+    subject: 'Confirm your new email address — EcoLogic',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600; color: #1f2937;">Confirm your new email</h2>
+        <p style="margin: 0 0 16px; color: #666; font-size: 16px;">
+          An admin has requested that your EcoLogic account email be changed to this address.
+        </p>
+        <p style="margin: 0 0 24px; color: #666; font-size: 16px;">
+          Click the button below to confirm the change. If you did not expect this, you can safely ignore this email.
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${verifyUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+            Confirm new email
+          </a>
+        </div>
+        <p style="margin: 0 0 16px; color: #666; font-size: 14px;">Or copy and paste this link:</p>
+        <p style="margin: 0 0 24px; word-break: break-all; font-size: 12px; color: #999;">${verifyUrl}</p>
+        <p style="margin: 0; color: #999; font-size: 14px;">
+          This link expires in 24 hours. After confirming, you can sign in with your new email address.
+        </p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    console.error('[email-change] Resend API error:', JSON.stringify(error));
+    throw new Error('Failed to send email change verification');
+  }
+
+  console.log('[email-change] Verification email sent — messageId:', data?.id, 'to:', newEmail);
 }
