@@ -12,6 +12,7 @@ import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
+import { pickCookieDomainForHost } from "./replitAuth";
 
 // SECURITY: Rate limiters for auth endpoints to prevent brute force attacks
 const authRateLimiter = rateLimit({
@@ -1674,14 +1675,44 @@ a{display:inline-block;padding:10px 24px;background:#16a34a;color:#fff;border-ra
         });
       }
       
+      console.log(`[google-auth] web req.login start userId=${user?.id} email=${user?.email} preLoginSessionID=${req.sessionID?.substring(0, 8)}…`);
       req.login(makeSessionUser(user), (loginErr) => {
         if (loginErr) {
-          console.error("[google-auth] Login error:", loginErr);
+          console.error(`[google-auth] web req.login failed userId=${user?.id}:`, loginErr);
           return res.redirect("/auth?error=login_failed");
         }
-        console.log(`[auth/google/callback][debug] login success, userId=${user?.id} email=${user?.email} tokenVersion=${user?.tokenVersion}, redirecting to /`);
+        console.log(`[google-auth] web req.login success userId=${user?.id} postLoginSessionID=${req.sessionID?.substring(0, 8)}… (passport regenerated session)`);
+
+        // ── CRITICAL: re-apply host-aware cookie Domain after passport regenerated the session ──
+        //
+        // Passport 0.7's req.login() calls req.session.regenerate() to prevent
+        // session fixation. express-session's regenerate() resets req.session.cookie
+        // to the middleware defaults, which intentionally OMIT the Domain attribute
+        // (so non-ecologic hosts don't emit invalid Set-Cookie). The host-aware
+        // middleware in replitAuth.ts only runs once at the start of the request,
+        // BEFORE regenerate, so by the time express-session writes the post-login
+        // Set-Cookie at end-of-response the Domain has been wiped.
+        //
+        // Without this re-apply, app.ecologicc.com gets:
+        //   Pre-login  Set-Cookie: connect.sid=A; Domain=.ecologicc.com  (anonymous)
+        //   Post-login Set-Cookie: connect.sid=B                          (host-scoped, no Domain)
+        // The browser stores BOTH cookies. On the next request to app.ecologicc.com
+        // it sends both, the server's cookie parser picks the stale .ecologicc.com
+        // one (no passport.user), and /api/auth/user returns 401 — which is exactly
+        // the production symptom we're seeing.
+        const desiredDomain = pickCookieDomainForHost(req.headers.host);
+        if (desiredDomain && req.session?.cookie) {
+          req.session.cookie.domain = desiredDomain;
+          console.log(`[google-auth] web cookie domain re-applied: ${desiredDomain} (after regenerate)`);
+        }
+
         req.session.save((saveErr) => {
-          if (saveErr) console.error("[google-auth] Session save warning:", saveErr);
+          if (saveErr) {
+            console.error(`[google-auth] web session save failed userId=${user?.id} sessionID=${req.sessionID?.substring(0, 8)}…:`, saveErr);
+            return res.redirect("/auth?error=session_save_failed");
+          }
+          console.log(`[google-auth] web session save success sessionID=${req.sessionID?.substring(0, 8)}… userId=${user?.id} cookieDomain=${req.session?.cookie?.domain ?? "(host-scoped)"}`);
+          console.log(`[google-auth] web redirecting to /`);
           return res.redirect("/");
         });
       });
